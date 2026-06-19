@@ -1,0 +1,7 @@
+# File temporanei di deploy
+c1.txt
+c2.txt
+deploy_v4_b64.txt
+
+# Archivi ZIP di deploy (binari - non necessari nel repository)
+*.zip
