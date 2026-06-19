@@ -1,0 +1,2544 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mango Srl — Gestione Produzione</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap');
+
+:root {
+  --bg:       #F2EDE6;
+  --surface:  #FDFAF6;
+  --border:   #D9CFC4;
+  --wood:     #8B5E3C;
+  --wood-lt:  #C4926A;
+  --ink:      #1C1714;
+  --muted:    #7A6E65;
+  --ok:       #3A7D44;
+  --warn:     #C27B00;
+  --alert:    #B03A2E;
+  --phase-bg: #EDE4D8;
+  --info:     #2563EB;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink); min-height: 100vh; font-size: 14px; }
+
+/* ── LOGIN ── */
+#login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ink);
+}
+.login-card {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 48px;
+  width: 380px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+}
+.login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 36px; }
+.logo-mark { width: 36px; height: 36px; background: var(--wood); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
+.login-logo span { font-family: 'DM Mono', monospace; font-size: 18px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink); }
+.login-card h2 { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+.login-card p { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+.form-group input, .form-group select, .form-group textarea {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); color: var(--ink); font-family: 'Inter', sans-serif; font-size: 14px;
+  outline: none; transition: border-color 0.15s;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--wood); }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 18px; border-radius: 6px; border: none; cursor: pointer;
+  font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500; transition: opacity 0.15s;
+}
+.btn:hover { opacity: 0.85; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary { background: var(--wood); color: white; }
+.btn-secondary { background: var(--phase-bg); color: var(--ink); border: 1px solid var(--border); }
+.btn-danger { background: var(--alert); color: white; }
+.btn-ok { background: var(--ok); color: white; }
+.btn-full { width: 100%; justify-content: center; padding: 12px; }
+.err-msg { color: var(--alert); font-size: 12px; margin-top: 12px; display: none; }
+
+/* ── HEADER ── */
+#app-screen { display: none; }
+header {
+  background: var(--ink); color: #F2EDE6;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 28px; height: 52px; position: sticky; top: 0; z-index: 100;
+}
+.logo { font-family: 'DM Mono', monospace; font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; display: flex; align-items: center; gap: 10px; }
+.logo .logo-mark { width: 26px; height: 26px; }
+.header-right { display: flex; align-items: center; gap: 16px; font-size: 12px; color: #9E9189; font-family: 'DM Mono', monospace; }
+.notif-btn {
+  position: relative; background: none; border: none; cursor: pointer; color: #9E9189;
+  font-size: 18px; padding: 4px;
+}
+.notif-badge {
+  position: absolute; top: 0; right: 0; background: var(--alert); color: white;
+  border-radius: 50%; width: 16px; height: 16px; font-size: 10px; display: flex;
+  align-items: center; justify-content: center; font-family: 'Inter', sans-serif;
+}
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); display: inline-block; margin-right: 4px; }
+
+/* ── LAYOUT ── */
+.shell { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 52px); }
+
+/* ── SIDEBAR ── */
+nav { background: var(--surface); border-right: 1px solid var(--border); padding: 20px 0; display: flex; flex-direction: column; gap: 2px; }
+.nav-section { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; padding: 14px 20px 6px; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px; padding: 9px 20px;
+  cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 500;
+  border-left: 3px solid transparent; transition: all 0.1s;
+}
+.nav-item:hover { background: var(--phase-bg); color: var(--ink); }
+.nav-item.active { background: var(--phase-bg); color: var(--wood); border-left-color: var(--wood); }
+.nav-item .icon { width: 16px; text-align: center; font-size: 15px; }
+
+/* ── MAIN ── */
+main { padding: 28px; overflow-y: auto; max-height: calc(100vh - 52px); }
+.section { display: none; }
+.section.active { display: block; }
+
+/* ── PAGE HEADER ── */
+.page-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.page-hdr h1 { font-size: 22px; font-weight: 600; }
+.page-hdr .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+/* ── KPI CARDS ── */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+.kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; }
+.kpi-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-family: 'DM Mono', monospace; margin-bottom: 8px; }
+.kpi-card .value { font-size: 32px; font-weight: 600; font-family: 'DM Mono', monospace; }
+.kpi-card.warn .value { color: var(--warn); }
+.kpi-card.alert .value { color: var(--alert); }
+.kpi-card.ok .value { color: var(--ok); }
+
+/* ── TABLE ── */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+.card-hdr { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.card-hdr h3 { font-size: 14px; font-weight: 600; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead { background: var(--phase-bg); }
+th { padding: 10px 14px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 500; }
+td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--phase-bg); }
+.clickable { cursor: pointer; }
+
+/* ── BADGES ── */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 500;
+}
+.badge-aperto { background: #D1FAE5; color: #065F46; }
+.badge-sospeso { background: #FEF3C7; color: #92400E; }
+.badge-spedito { background: #E0E7FF; color: #3730A3; }
+.badge-normale { background: #F3F4F6; color: #374151; }
+.badge-urgente { background: #FEF9C3; color: #713F12; }
+.badge-extra_urgente { background: #FEE2E2; color: #991B1B; }
+.badge-disponibile { background: var(--phase-bg); color: var(--muted); }
+.badge-in_corso { background: #DBEAFE; color: #1E40AF; }
+.badge-in_attesa { background: #FFF7ED; color: #C2410C; }
+.badge-completata { background: #D1FAE5; color: #065F46; }
+.badge-aperta { background: #FEE2E2; color: #991B1B; }
+
+/* ── KPI ── */
+.kpi-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 18px 20px; display: flex; flex-direction: column; gap: 4px;
+}
+.kpi-card .kpi-label { font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.kpi-card .kpi-value { font-size: 28px; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--ink); line-height: 1.1; }
+.kpi-card .kpi-sub { font-size: 11px; color: var(--muted); }
+.kpi-card.kpi-alert { border-color: var(--alert); background: #FEF2F2; }
+.kpi-card.kpi-ok { border-color: var(--ok); background: #F0FDF4; }
+.kpi-card.kpi-warn { border-color: var(--warn); background: #FFFBEB; }
+.kpi-bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 12px; }
+.kpi-bar-row .kpi-bar-label { width: 140px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+.kpi-bar-track { flex: 1; background: var(--phase-bg); border-radius: 4px; height: 10px; overflow: hidden; }
+.kpi-bar-fill { height: 100%; border-radius: 4px; background: var(--wood); transition: width .4s; }
+.kpi-bar-val { width: 54px; flex-shrink: 0; text-align: right; font-family: 'DM Mono', monospace; color: var(--muted); font-size: 11px; }
+.kpi-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.kpi-table th { color: var(--muted); font-weight: 500; text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border); font-size: 11px; }
+.kpi-table td { padding: 7px 8px; border-bottom: 1px solid var(--phase-bg); }
+.kpi-table tr:last-child td { border-bottom: none; }
+.kpi-empty { color: var(--muted); font-size: 12px; text-align: center; padding: 16px 0; }
+.badge-approvata { background: #FEF9C3; color: #713F12; }
+.badge-chiusa { background: #E0E7FF; color: #3730A3; }
+
+/* ── FILTRI ── */
+.filters { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+.filters input, .filters select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; outline: none; }
+.filters input:focus, .filters select:focus { border-color: var(--wood); }
+
+/* ── MODALE ── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(28,23,20,0.65); z-index: 200;
+  display: none; align-items: center; justify-content: center; padding: 20px;
+}
+.modal-overlay.open { display: flex; }
+.modal { background: var(--surface); border-radius: 12px; max-width: 620px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 80px rgba(0,0,0,0.3); }
+.modal-hdr { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.modal-hdr h3 { font-size: 16px; font-weight: 600; }
+.modal-close { background: none; border: none; cursor: pointer; font-size: 20px; color: var(--muted); line-height: 1; }
+.modal-body { padding: 24px; }
+.modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* ── DETTAGLIO ORDINE ── */
+.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+.detail-field { }
+.detail-field label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); display: block; margin-bottom: 4px; }
+.detail-field span { font-size: 14px; font-weight: 500; }
+
+.fasi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+.fase-card {
+  border: 1px solid var(--border); border-radius: 8px; padding: 12px;
+  background: var(--surface); cursor: pointer; transition: border-color 0.15s;
+}
+.fase-card:hover { border-color: var(--wood-lt); }
+.fase-card.disponibile { background: var(--surface); }
+.fase-card.in_corso { background: #EFF6FF; border-color: #93C5FD; }
+.fase-card.in_attesa { background: #FFF7ED; border-color: #FDBA74; }
+.fase-card.completata { background: #F0FDF4; border-color: #86EFAC; }
+.fase-card.non_applicabile { background: #F5F5F5; border-color: #E0E0E0; cursor: default; opacity: 0.6; }
+.fase-card.non_applicabile:hover { border-color: #E0E0E0; }
+.fase-num { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); margin-bottom: 4px; }
+.fase-nome { font-size: 12px; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.fase-op { font-size: 11px; color: var(--muted); }
+.badge-cnc { font-size: 9px; font-weight: 700; background: #7C3AED; color: #fff; padding: 2px 5px; border-radius: 3px; letter-spacing: 0.04em; flex-shrink: 0; }
+.badge-esterna { font-size: 9px; font-weight: 700; background: #0369A1; color: #fff; padding: 2px 5px; border-radius: 3px; letter-spacing: 0.04em; flex-shrink: 0; }
+.badge-na { font-size: 9px; font-weight: 700; background: #9E9E9E; color: #fff; padding: 2px 5px; border-radius: 3px; letter-spacing: 0.04em; flex-shrink: 0; }
+
+/* ── LOG ── */
+.log-list { list-style: none; }
+.log-item { display: flex; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.log-item:last-child { border-bottom: none; }
+.log-icon { width: 28px; height: 28px; border-radius: 50%; background: var(--phase-bg); display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+.log-content { flex: 1; }
+.log-content .action { font-weight: 500; font-size: 13px; }
+.log-content .meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+/* ── FASI DETTAGLIO MODALE ── */
+.fase-detail { }
+.fase-detail .badge { margin-bottom: 12px; }
+.note-box { background: var(--phase-bg); border-radius: 6px; padding: 12px; font-size: 13px; color: var(--ink); margin-bottom: 12px; }
+.note-box strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); display: block; margin-bottom: 6px; }
+.foto-grid { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.foto-thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); cursor: pointer; }
+
+/* ── OPERATORI ── */
+.ops-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.op-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+.op-card .op-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+.op-card .op-role { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-family: 'DM Mono', monospace; }
+.op-card .op-status { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.op-card .op-actions { display: flex; gap: 6px; margin-top: 14px; }
+.inactive { opacity: 0.5; }
+
+/* ── CONFIGURAZIONE FASI ── */
+.fase-config-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.fase-config-item:last-child { border-bottom: none; }
+.fase-config-num { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); width: 28px; flex-shrink: 0; }
+.fase-config-inputs { flex: 1; display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
+.fase-config-inputs input { padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-family: 'Inter', sans-serif; font-size: 13px; background: var(--bg); color: var(--ink); outline: none; }
+.fase-config-inputs input:focus { border-color: var(--wood); }
+
+/* ── ARCHIVIO / EXPORT ── */
+.export-btn { display: flex; align-items: center; gap: 8px; }
+
+/* ── NOTIFICHE ── */
+.notif-item { display: flex; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+.notif-item:last-child { border-bottom: none; }
+.notif-item.unread { background: #FFFBF0; margin: 0 -20px; padding: 14px 20px; }
+.notif-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); flex-shrink: 0; margin-top: 5px; }
+.notif-dot.read { background: transparent; }
+.notif-text { flex: 1; font-size: 13px; }
+.notif-time { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed; bottom: 28px; right: 28px; z-index: 300;
+  background: var(--ink); color: white; padding: 12px 20px; border-radius: 8px;
+  font-size: 13px; opacity: 0; transform: translateY(10px);
+  transition: all 0.25s; pointer-events: none; max-width: 320px;
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.err { background: var(--alert); }
+.toast.ok { background: var(--ok); }
+
+/* ── SPINNER ── */
+.spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.empty-state { text-align: center; padding: 48px 20px; color: var(--muted); }
+.empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+.empty-state p { font-size: 14px; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-mark"></div>
+      <span>Mango Srl</span>
+    </div>
+    <h2>Accesso Responsabile</h2>
+    <p>Area riservata alla gestione della produzione</p>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="login-email" placeholder="antonio@mangosrl.it" value="antonio@mangosrl.it">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="login-pwd" placeholder="••••••••">
+    </div>
+    <div id="login-err" class="err-msg"></div>
+    <button class="btn btn-primary btn-full" style="margin-top:20px" onclick="doLogin()">
+      Accedi
+    </button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen">
+  <header>
+    <div class="logo">
+      <div class="logo-mark"></div>
+      Mango Srl
+    </div>
+    <div class="header-right">
+      <span><span class="status-dot"></span>connesso</span>
+      <button class="notif-btn" onclick="showSection('notifiche')" title="Notifiche">
+        🔔
+        <div class="notif-badge" id="notif-badge" style="display:none">0</div>
+      </button>
+      <span id="user-label" style="color:#F2EDE6"></span>
+      <a href="#" onclick="doLogout()" style="color:var(--muted);font-size:11px;text-decoration:none">esci</a>
+    </div>
+  </header>
+
+  <div class="shell">
+    <nav>
+      <div class="nav-section">Produzione</div>
+      <div class="nav-item active" onclick="showSection('dashboard')" id="nav-dashboard">
+        <span class="icon">📊</span> Dashboard
+      </div>
+      <div class="nav-item" onclick="showSection('ordini')" id="nav-ordini">
+        <span class="icon">📋</span> Ordini
+      </div>
+      <div class="nav-item" onclick="showSection('nc')" id="nav-nc">
+        <span class="icon">⚠️</span> Non Conformità
+      </div>
+
+      <div class="nav-item" onclick="showSection('kpi')" id="nav-kpi">
+        <span class="icon">📈</span> KPI & Analisi
+      </div>
+
+      <div class="nav-section">Gestione</div>
+      <div class="nav-item" onclick="showSection('operatori')" id="nav-operatori">
+        <span class="icon">👥</span> Operatori
+      </div>
+      <div class="nav-item" onclick="showSection('archivio')" id="nav-archivio">
+        <span class="icon">📦</span> Archivio
+      </div>
+      <div class="nav-item" onclick="showSection('notifiche')" id="nav-notifiche">
+        <span class="icon">🔔</span> Notifiche
+      </div>
+
+      <div class="nav-section">Impostazioni</div>
+      <div class="nav-item" onclick="showSection('fasi-config')" id="nav-fasi-config">
+        <span class="icon">⚙️</span> Config. Fasi
+      </div>
+    </nav>
+
+    <main>
+      <!-- DASHBOARD -->
+      <section class="section active" id="sec-dashboard">
+        <div class="page-hdr">
+          <div>
+            <h1>Dashboard</h1>
+            <div class="sub" id="dash-subtitle">Panoramica produzione in tempo reale</div>
+          </div>
+          <button class="btn btn-primary" onclick="openModalNuovoOrdine()">+ Nuovo Ordine</button>
+        </div>
+        <div class="kpi-grid">
+          <div class="kpi-card"><div class="label">Ordini Aperti</div><div class="value" id="kpi-aperti">—</div></div>
+          <div class="kpi-card warn"><div class="label">In Ritardo</div><div class="value" id="kpi-ritardo">—</div></div>
+          <div class="kpi-card alert"><div class="label">NC Aperte</div><div class="value" id="kpi-nc">—</div></div>
+          <div class="kpi-card ok"><div class="label">Spediti (30gg)</div><div class="value" id="kpi-spediti">—</div></div>
+        </div>
+        <div class="card">
+          <div class="card-hdr">
+            <h3>Ordini Attivi</h3>
+          </div>
+          <table>
+            <thead>
+              <tr><th>Cliente / N° Ordine</th><th>Tipologia</th><th>Priorità</th><th>Qtà</th><th>Scadenza</th><th>Stato</th><th>Avanzamento</th><th></th></tr>
+            </thead>
+            <tbody id="dash-ordini-tbody">
+              <tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">Caricamento…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ORDINI -->
+      <section class="section" id="sec-ordini">
+        <div class="page-hdr">
+          <div><h1>Ordini</h1></div>
+          <button class="btn btn-primary" onclick="openModalNuovoOrdine()">+ Nuovo Ordine</button>
+        </div>
+        <div class="filters">
+          <input type="text" id="ord-search" placeholder="Cerca cliente o codice…" oninput="renderOrdiniTable()">
+          <select id="ord-stato" onchange="renderOrdiniTable()">
+            <option value="">Tutti gli stati</option>
+            <option value="aperto">Aperto</option>
+            <option value="sospeso">Sospeso</option>
+          </select>
+          <select id="ord-priorita" onchange="renderOrdiniTable()">
+            <option value="">Tutte le priorità</option>
+            <option value="normale">Normale</option>
+            <option value="urgente">Urgente</option>
+            <option value="extra_urgente">Extra Urgente</option>
+          </select>
+          <select id="flt-struttura" onchange="renderOrdiniTable()">
+            <option value="">Tutte le strutture</option>
+            <option value="quattro_lati">4 Lati</option>
+            <option value="barra_l">Barra ad L</option>
+            <option value="complanare">Complanare</option>
+          </select>
+          <select id="flt-tipo-prodotto" onchange="renderOrdiniTable()">
+            <option value="">Tutti i tipi</option>
+            <option value="portoncino">Portoncino</option>
+            <option value="battente">Battente</option>
+          </select>
+        </div>
+        <div class="card">
+          <table>
+            <thead>
+              <tr><th>Cliente / N° Ordine</th><th>Struttura / Tipo</th><th>Priorità</th><th>Qtà</th><th>Scadenza</th><th>Stato</th><th>Avanzamento</th><th>Azioni</th></tr>
+            </thead>
+            <tbody id="ordini-tbody">
+              <tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted)">Caricamento…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- DETTAGLIO ORDINE -->
+      <section class="section" id="sec-dettaglio">
+        <div class="page-hdr">
+          <div>
+            <button class="btn btn-secondary" onclick="showSection('ordini')" style="margin-bottom:12px">← Torna agli ordini</button>
+            <h1 id="det-title">Dettaglio Ordine</h1>
+          </div>
+          <div style="display:flex;gap:8px" id="det-actions"></div>
+        </div>
+        <div class="card" style="padding:20px">
+          <div class="detail-grid" id="det-info"></div>
+        </div>
+        <div class="card">
+          <div class="card-hdr"><h3>Fasi di Produzione</h3></div>
+          <div style="padding:16px">
+            <div class="fasi-grid" id="det-fasi"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hdr"><h3>Log Attività</h3></div>
+          <div style="padding:16px">
+            <ul class="log-list" id="det-log"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- NC -->
+      <section class="section" id="sec-nc">
+        <div class="page-hdr">
+          <div><h1>Non Conformità</h1></div>
+        </div>
+        <div class="filters">
+          <select id="nc-stato" onchange="renderNcTable()">
+            <option value="">Tutti gli stati</option>
+            <option value="aperta">Aperta</option>
+            <option value="approvata">Approvata</option>
+            <option value="chiusa">Chiusa</option>
+          </select>
+        </div>
+        <div class="card">
+          <table>
+            <thead>
+              <tr><th>Ordine</th><th>Fase</th><th>Descrizione</th><th>Segnalata da</th><th>Data</th><th>Stato</th><th>Azioni</th></tr>
+            </thead>
+            <tbody id="nc-tbody">
+              <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted)">Caricamento…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- OPERATORI -->
+      <section class="section" id="sec-operatori">
+        <div class="page-hdr">
+          <div><h1>Operatori</h1></div>
+          <button class="btn btn-primary" onclick="openModalNuovoOperatore()">+ Nuovo Operatore</button>
+        </div>
+        <div class="ops-grid" id="ops-grid">
+          <div style="color:var(--muted);padding:20px">Caricamento…</div>
+        </div>
+      </section>
+
+      <!-- ARCHIVIO -->
+      <section class="section" id="sec-archivio">
+        <div class="page-hdr">
+          <div><h1>Archivio Spediti</h1></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary export-btn" onclick="exportCSV()">⬇ Esporta CSV</button>
+            <button class="btn" style="background:var(--alert);color:#fff" onclick="svuotaArchivio()">🗑 Svuota archivio</button>
+          </div>
+        </div>
+        <div class="filters">
+          <input type="text" id="arch-search" placeholder="Cliente…" oninput="renderArchivioTable()">
+          <select id="arch-tipo" onchange="renderArchivioTable()">
+            <option value="">Tutti i tipi</option>
+            <option value="standard">Standard</option>
+            <option value="extra">Extra</option>
+          </select>
+          <input type="date" id="arch-dal" onchange="renderArchivioTable()" title="Dal">
+          <input type="date" id="arch-al" onchange="renderArchivioTable()" title="Al">
+        </div>
+        <div class="card">
+          <table>
+            <thead>
+              <tr><th>Cliente / N° Ordine</th><th>Tipo</th><th>Priorità</th><th>Creato</th><th>Spedito</th><th>Foto</th></tr>
+            </thead>
+            <tbody id="arch-tbody">
+              <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted)">Caricamento…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- NOTIFICHE -->
+      <section class="section" id="sec-notifiche">
+        <div class="page-hdr">
+          <div><h1>Notifiche</h1></div>
+          <button class="btn btn-secondary" onclick="markAllRead()">Segna tutte come lette</button>
+        </div>
+        <div class="card" style="padding:0 20px" id="notif-list">
+          <div style="text-align:center;padding:24px;color:var(--muted)">Caricamento…</div>
+        </div>
+      </section>
+
+      <!-- KPI -->
+      <section class="section" id="sec-kpi">
+        <div class="page-hdr">
+          <h1>KPI & Analisi</h1>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="kpi-periodo" onchange="loadKpi()" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);font-size:13px">
+              <option value="30">Ultimi 30 giorni</option>
+              <option value="90">Ultimi 90 giorni</option>
+              <option value="180">Ultimi 6 mesi</option>
+              <option value="365">Ultimo anno</option>
+              <option value="0">Tutto</option>
+            </select>
+            <button class="btn btn-secondary" onclick="loadKpi()" style="padding:7px 14px;font-size:13px">↻ Aggiorna</button>
+          </div>
+        </div>
+
+        <!-- CARD RIEPILOGO -->
+        <div id="kpi-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px"></div>
+
+        <!-- RIGA 1: Fasi per operatore + Fasi più lente -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div class="card" style="padding:20px">
+            <h3 style="font-size:13px;font-weight:600;margin-bottom:16px;color:var(--wood)">⚡ Produttività operatori</h3>
+            <div id="kpi-operatori"></div>
+          </div>
+          <div class="card" style="padding:20px">
+            <h3 style="font-size:13px;font-weight:600;margin-bottom:16px;color:var(--wood)">⏱ Tempo medio per fase</h3>
+            <div id="kpi-fasi-tempo"></div>
+          </div>
+        </div>
+
+        <!-- RIGA 2: Trend mensile + NC per fase -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div class="card" style="padding:20px">
+            <h3 style="font-size:13px;font-weight:600;margin-bottom:16px;color:var(--wood)">📅 Ordini completati per mese</h3>
+            <div id="kpi-trend"></div>
+          </div>
+          <div class="card" style="padding:20px">
+            <h3 style="font-size:13px;font-weight:600;margin-bottom:16px;color:var(--wood)">⚠️ Non conformità per fase</h3>
+            <div id="kpi-nc-fase"></div>
+          </div>
+        </div>
+
+        <!-- RIGA 3: Tempo medio ordine per struttura + Ordini in ritardo -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div class="card" style="padding:20px">
+            <h3 style="font-size:13px;font-weight:600;margin-bottom:16px;color:var(--wood)">🏗 Tempo medio ordine per tipologia</h3>
+            <div id="kpi-struttura"></div>
+          </div>
+          <div class="card" style="padding:20px">
+            <h3 style="font-size:13px;font-weight:600;margin-bottom:16px;color:var(--wood)">🔴 Ordini aperti in ritardo</h3>
+            <div id="kpi-ritardo"></div>
+          </div>
+        </div>
+
+        <!-- RIGA 4: Fasi in attesa attualmente + Tasso NC -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div class="card" style="padding:20px">
+            <h3 style="font-size:13px;font-weight:600;margin-bottom:16px;color:var(--wood)">⏸ Fasi attualmente in attesa</h3>
+            <div id="kpi-in-attesa"></div>
+          </div>
+          <div class="card" style="padding:20px">
+            <h3 style="font-size:13px;font-weight:600;margin-bottom:16px;color:var(--wood)">📊 Distribuzione priorità ordini</h3>
+            <div id="kpi-priorita"></div>
+          </div>
+        </div>
+
+        <!-- RIGA 5: Top operatori mese + Fasi bloccate più a lungo -->
+        <div class="card" style="padding:20px;margin-bottom:16px">
+          <h3 style="font-size:13px;font-weight:600;margin-bottom:16px;color:var(--wood)">🏆 Classifica operatori — fasi completate nel periodo</h3>
+          <div id="kpi-classifica"></div>
+        </div>
+
+      </section>
+
+      <!-- CONFIG FASI -->
+      <section class="section" id="sec-fasi-config">
+        <div class="page-hdr">
+          <div>
+            <h1>Configurazione Fasi</h1>
+            <div class="sub">Rinomina le fasi standard — le modifiche si riflettono ovunque</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <label class="btn btn-secondary" style="cursor:pointer" title="Importa nomi fasi da Excel (.xlsx) — colonna A = numero, colonna B = nome, colonna C = descrizione">
+              📥 Importa da Excel
+              <input type="file" id="excel-import-input" accept=".xlsx,.xls,.xlsm,.csv" style="display:none" onchange="importaFasiDaExcel(this)">
+            </label>
+            <button class="btn btn-primary" onclick="saveFasiConfig()">Salva modifiche</button>
+          </div>
+        </div>
+        <div class="card" style="padding:4px 20px 16px">
+          <div style="font-size:12px;color:var(--muted);padding:10px 0 12px;border-bottom:1px solid var(--border);margin-bottom:12px">
+            💡 Per importare da Excel: il file deve avere colonna A = numero fase (1-20), colonna B = nome, colonna C = descrizione (opzionale). Le righe intestazione vengono ignorate automaticamente.
+          </div>
+          <div id="fasi-config-list">Caricamento…</div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- MODALE NUOVO ORDINE -->
+<div class="modal-overlay" id="modal-ordine">
+  <div class="modal">
+    <div class="modal-hdr">
+      <h3 id="modal-ordine-title">Nuovo Ordine</h3>
+      <button class="modal-close" onclick="closeModal('modal-ordine')">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Tipo ordine -->
+      <div class="form-group" style="margin-bottom:16px">
+        <label>Tipo ordine</label>
+        <div style="display:flex;gap:8px">
+          <button type="button" id="tipo-btn-standard" class="btn btn-primary" style="flex:1;justify-content:center" onclick="setTipoOrdine('standard')">📋 Standard (20 fasi)</button>
+          <button type="button" id="tipo-btn-extra" class="btn btn-secondary" style="flex:1;justify-content:center" onclick="setTipoOrdine('extra')">✏️ Extra (fasi libere)</button>
+        </div>
+        <input type="hidden" id="modal-tipo" value="standard">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Cliente *</label>
+          <input type="text" id="ord-cliente" placeholder="Nome cliente">
+        </div>
+        <div class="form-group">
+          <label>N° Ordine *</label>
+          <input type="text" id="ord-codice" placeholder="es. L 115 B">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Priorità</label>
+          <select id="ord-prio">
+            <option value="normale">Normale</option>
+            <option value="urgente">Urgente</option>
+            <option value="extra_urgente">Extra Urgente</option>
+          </select>
+        </div>
+      </div>
+      <!-- Campi visibili solo per ordini standard -->
+      <div id="standard-fields-section">
+        <div class="form-row">
+          <div class="form-group">
+            <label>Struttura *</label>
+            <select id="ord-struttura">
+              <option value="quattro_lati">4 Lati</option>
+              <option value="barra_l">Barra ad L</option>
+              <option value="complanare">Complanare</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Tipo Prodotto *</label>
+            <select id="ord-tipo-prodotto">
+              <option value="portoncino">Portoncino</option>
+              <option value="battente">Battente</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Materiale *</label>
+          <select id="ord-materiale">
+            <option value="placcato">Placcato</option>
+            <option value="hdf">HDF</option>
+            <option value="grezzo">Grezzo</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Scadenza</label>
+          <input type="date" id="ord-scadenza">
+        </div>
+        <div class="form-group">
+          <label>Quantità</label>
+          <input type="number" id="ord-quantita" value="1" min="1" style="width:100%">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Note Generali</label>
+        <textarea id="ord-note" rows="2" placeholder="Istruzioni speciali, materiali, riferimenti…" style="resize:vertical"></textarea>
+      </div>
+      <!-- Fasi extra (visibile solo se tipo=extra) -->
+      <div id="extra-fasi-section" style="display:none;margin-top:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <label style="font-size:12px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">Fasi personalizzate</label>
+          <div style="display:flex;gap:6px">
+            <button type="button" class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="addFaseExtra()">+ Aggiungi fase</button>
+            <button type="button" class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="removeFaseExtra()">− Rimuovi</button>
+          </div>
+        </div>
+        <div id="extra-fasi-list" style="display:flex;flex-direction:column;gap:6px"></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px">Min. 1, max. 20 fasi. Trascina per riordinare.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-ordine')">Annulla</button>
+      <button class="btn btn-primary" onclick="creaOrdine()">Crea Ordine</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE MODIFICA ORDINE -->
+<div class="modal-overlay" id="modal-modifica">
+  <div class="modal">
+    <div class="modal-hdr">
+      <h3>Modifica Ordine</h3>
+      <button class="modal-close" onclick="closeModal('modal-modifica')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Cliente *</label>
+          <input type="text" id="mod-cliente">
+        </div>
+        <div class="form-group">
+          <label>N° Ordine *</label>
+          <input type="text" id="mod-codice">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Tipo Prodotto</label>
+          <select id="mod-tipo-prodotto">
+            <option value="portoncino">Portoncino</option>
+            <option value="battente">Battente</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Struttura</label>
+          <select id="mod-struttura">
+            <option value="quattro_lati">4 Lati</option>
+            <option value="barra_l">Barra ad L</option>
+            <option value="complanare">Complanare</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Materiale</label>
+          <select id="mod-materiale">
+            <option value="placcato">Placcato</option>
+            <option value="hdf">HDF</option>
+            <option value="grezzo">Grezzo</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Priorità</label>
+          <select id="mod-prio">
+            <option value="normale">Normale</option>
+            <option value="urgente">Urgente</option>
+            <option value="extra_urgente">Extra Urgente</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Quantità</label>
+          <input type="number" id="mod-quantita" min="1">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Scadenza</label>
+          <input type="date" id="mod-scadenza">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Note Generali</label>
+        <textarea id="mod-note" rows="2" style="resize:vertical"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-modifica')">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaModificaOrdine()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE DETTAGLIO FASE -->
+<div class="modal-overlay" id="modal-fase">
+  <div class="modal">
+    <div class="modal-hdr">
+      <h3 id="modal-fase-title">Dettaglio Fase</h3>
+      <button class="modal-close" onclick="closeModal('modal-fase')">✕</button>
+    </div>
+    <div class="modal-body" id="modal-fase-body"></div>
+    <div class="modal-footer" id="modal-fase-footer"></div>
+  </div>
+</div>
+
+<!-- MODALE NC CHIUSURA -->
+<div class="modal-overlay" id="modal-nc">
+  <div class="modal">
+    <div class="modal-hdr">
+      <h3 id="modal-nc-title">Non Conformità</h3>
+      <button class="modal-close" onclick="closeModal('modal-nc')">✕</button>
+    </div>
+    <div class="modal-body" id="modal-nc-body"></div>
+    <div class="modal-footer" id="modal-nc-footer"></div>
+  </div>
+</div>
+
+<!-- MODALE NUOVO OPERATORE -->
+<div class="modal-overlay" id="modal-operatore">
+  <div class="modal">
+    <div class="modal-hdr">
+      <h3>Nuovo Operatore</h3>
+      <button class="modal-close" onclick="closeModal('modal-operatore')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nome *</label>
+          <input type="text" id="op-nome" placeholder="Nome">
+        </div>
+        <div class="form-group">
+          <label>Cognome *</label>
+          <input type="text" id="op-cognome" placeholder="Cognome">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>PIN (4 cifre) *</label>
+          <input type="password" id="op-pin" placeholder="••••" maxlength="4" pattern="[0-9]{4}">
+        </div>
+        <div class="form-group">
+          <label>Ruolo</label>
+          <select id="op-ruolo">
+            <option value="operatore">Operatore</option>
+            <option value="sola_lettura">Sola Lettura</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-operatore')">Annulla</button>
+      <button class="btn btn-primary" onclick="creaOperatore()">Crea</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE COMPLETA FASE (da responsabile) -->
+<div class="modal-overlay" id="modal-completa-fase">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-hdr">
+      <h3>Completa Fase</h3>
+      <button class="modal-close" onclick="closeModal('modal-completa-fase')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Registra chi ha eseguito questa fase. Tutti i dati vengono salvati nel log.</p>
+      <div class="form-group">
+        <label style="margin-bottom:6px;display:block">Operatori che hanno lavorato <span style="font-size:11px;color:var(--muted)">(seleziona uno o più)</span></label>
+        <div id="cf-operatori-list" style="display:flex;flex-direction:column;gap:6px;max-height:180px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:10px"></div>
+      </div>
+      <div class="form-group">
+        <label>Note (opzionale)</label>
+        <textarea id="cf-note" rows="2" style="resize:vertical"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-completa-fase')">Annulla</button>
+      <button class="btn btn-ok" onclick="confermaConclusioneFase()">✓ Conferma completata</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE RIASSEGNA FASE -->
+<div class="modal-overlay" id="modal-riassegna">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-hdr">
+      <h3>Riassegna Fase</h3>
+      <button class="modal-close" onclick="closeModal('modal-riassegna')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Nuovo Operatore *</label>
+        <select id="riassegna-op-select"></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-riassegna')">Annulla</button>
+      <button class="btn btn-primary" onclick="confermRiassegna()">Riassegna</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+// CONFIGURAZIONE SUPABASE
+// ═══════════════════════════════════════════════
+const SUPABASE_URL = 'https://mtpzfxnyfkzikzlkomwz.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10cHpmeG55Zmt6aWt6bGtvbXd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2NzczNzEsImV4cCI6MjA5NzI1MzM3MX0.3JxpgQORCSUUdSgawmcizNgaJhpDnmQ_zT_c41WfJbs';
+
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+let currentUser = null;
+let currentUserRow = null;
+let fasi = []; // [{id, nome, descrizione}]
+let ordiniCache = [];
+let ordiniSpeditiCache = [];
+let ncCache = [];
+let operatoriCache = [];
+let notificheCache = [];
+let currentOrdineId = null;
+let currentFaseId = null; // per riassegna
+let riassegnaOrdFaseId = null;
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    currentUser = session.user;
+    await postLogin();
+  }
+
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session) {
+      currentUser = session.user;
+      await postLogin();
+    } else if (event === 'SIGNED_OUT') {
+      currentUser = null;
+      document.getElementById('login-screen').style.display = 'flex';
+      document.getElementById('app-screen').style.display = 'none';
+    }
+  });
+}
+
+async function postLogin() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'block';
+  // Fetch user row
+  const { data } = await sb.from('users').select('*').eq('email', currentUser.email).single();
+  currentUserRow = data;
+  document.getElementById('user-label').textContent = data ? `${data.nome} ${data.cognome}` : currentUser.email;
+  // Load fasi
+  await loadFasi();
+  // Load data
+  await Promise.all([loadOrdini(), loadNc(), loadOperatori(), loadNotifiche()]);
+  // Realtime
+  setupRealtime();
+  // Render
+  showSection('dashboard');
+  renderDashboard();
+}
+
+// ═══════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pwd = document.getElementById('login-pwd').value;
+  const errEl = document.getElementById('login-err');
+  errEl.style.display = 'none';
+
+  const { error } = await sb.auth.signInWithPassword({ email, password: pwd });
+  if (error) {
+    errEl.textContent = 'Credenziali non valide. Riprova.';
+    errEl.style.display = 'block';
+  }
+}
+
+document.getElementById('login-pwd').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+async function doLogout() {
+  await sb.auth.signOut();
+}
+
+// ═══════════════════════════════════════════════
+// DATA LOADING
+// ═══════════════════════════════════════════════
+async function loadFasi() {
+  const { data } = await sb.from('fasi').select('*').order('id');
+  fasi = data || [];
+}
+
+async function loadOrdini() {
+  const { data } = await sb.from('ordini')
+    .select('*, creato_da_user:users!creato_da(nome, cognome)')
+    .in('stato', ['aperto', 'sospeso'])
+    .eq('eliminato', false);
+  const prioOrd = { 'extra_urgente': 0, 'urgente': 1, 'normale': 2 };
+  ordiniCache = (data || []).sort((a, b) => {
+    const pd = prioOrd[a.priorita] - prioOrd[b.priorita];
+    if (pd !== 0) return pd;
+    if (a.scadenza && b.scadenza) return new Date(a.scadenza) - new Date(b.scadenza);
+    if (a.scadenza) return -1;
+    if (b.scadenza) return 1;
+    return new Date(b.creato_il) - new Date(a.creato_il);
+  });
+
+  const { data: spediti } = await sb.from('ordini')
+    .select('*')
+    .eq('stato', 'spedito')
+    .eq('eliminato', false)
+    .order('spedito_il', { ascending: false });
+  ordiniSpeditiCache = spediti || [];
+}
+
+async function loadNc() {
+  const { data } = await sb.from('non_conformita')
+    .select('*, ordini(codice, cliente), fasi(nome), users!segnalata_da(nome, cognome)')
+    .order('segnalata_il', { ascending: false });
+  ncCache = data || [];
+}
+
+async function loadOperatori() {
+  const { data } = await sb.from('users')
+    .select('*')
+    .in('ruolo', ['operatore', 'sola_lettura'])
+    .eq('eliminato', false)
+    .order('cognome');
+  operatoriCache = data || [];
+}
+
+async function loadNotifiche() {
+  const { data } = await sb.from('notifiche')
+    .select('*, ordini(codice)')
+    .eq('destinatario_id', currentUserRow?.id)
+    .order('creata_il', { ascending: false })
+    .limit(50);
+
+  notificheCache = data || [];
+  const unread = notificheCache.filter(n => !n.letta).length;
+  const badge = document.getElementById('notif-badge');
+  if (unread > 0) {
+    badge.textContent = unread;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// ═══════════════════════════════════════════════
+// REALTIME
+// ═══════════════════════════════════════════════
+function setupRealtime() {
+  sb.channel('production')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'ordini' }, async () => {
+      await loadOrdini();
+      renderDashboard();
+      renderOrdiniTable();
+      renderArchivioTable();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'ordine_fasi' }, async () => {
+      if (currentOrdineId) renderDettaglioOrdine(currentOrdineId);
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'non_conformita' }, async () => {
+      await loadNc();
+      renderNcTable();
+      const kpi = document.getElementById('kpi-nc');
+      if (kpi) kpi.textContent = ncCache.filter(n => n.stato === 'aperta').length;
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'notifiche' }, async () => {
+      await loadNotifiche();
+      renderNotifiche();
+    })
+    .subscribe();
+}
+
+// ═══════════════════════════════════════════════
+// NAVIGAZIONE
+// ═══════════════════════════════════════════════
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('sec-' + name)?.classList.add('active');
+  document.getElementById('nav-' + name)?.classList.add('active');
+
+  if (name === 'dashboard') renderDashboard();
+  else if (name === 'ordini') renderOrdiniTable();
+  else if (name === 'nc') renderNcTable();
+  else if (name === 'operatori') renderOperatori();
+  else if (name === 'archivio') renderArchivioTable();
+  else if (name === 'notifiche') renderNotifiche();
+  else if (name === 'fasi-config') renderFasiConfig();
+  else if (name === 'kpi') loadKpi();
+}
+
+// ═══════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════
+function renderDashboard() {
+  const oggi = new Date().toISOString().split('T')[0];
+  const aperti = ordiniCache.filter(o => o.stato === 'aperto').length;
+  const ritardo = ordiniCache.filter(o => o.stato === 'aperto' && o.scadenza && o.scadenza < oggi).length;
+  const ncAperte = ncCache.filter(n => n.stato === 'aperta').length;
+  const trenta = new Date(); trenta.setDate(trenta.getDate() - 30);
+  const spediti30 = ordiniSpeditiCache.filter(o => new Date(o.spedito_il) >= trenta).length;
+
+  document.getElementById('kpi-aperti').textContent = aperti;
+  document.getElementById('kpi-ritardo').textContent = ritardo;
+  document.getElementById('kpi-nc').textContent = ncAperte;
+  document.getElementById('kpi-spediti').textContent = spediti30;
+  document.getElementById('dash-subtitle').textContent =
+    `${new Date().toLocaleDateString('it-IT', {weekday:'long', day:'numeric', month:'long', year:'numeric'})}`;
+
+  const tbody = document.getElementById('dash-ordini-tbody');
+  const visible = ordiniCache.slice(0, 15);
+  if (!visible.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state"><div class="icon">📋</div><p>Nessun ordine attivo</p></td></tr>';
+    return;
+  }
+  tbody.innerHTML = visible.map(o => ordineRow(o, true)).join('');
+  loadAvanzamenti(visible.map(o => o.id));
+}
+
+function ordineRow(o, mini = false) {
+  const scad = o.scadenza ? formatDate(o.scadenza) : '—';
+  const isLate = o.scadenza && o.scadenza < new Date().toISOString().split('T')[0] && o.stato === 'aperto';
+  return `<tr class="clickable" onclick="openDettaglioOrdine('${o.id}')">
+    <td><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div></td>
+    <td>${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}</td>
+    <td><span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span></td>
+    <td style="text-align:center;font-weight:600">${o.quantita || 1}</td>
+    <td style="color:${isLate ? 'var(--alert)' : 'inherit'}">${scad}${isLate ? ' ⚠️' : ''}</td>
+    <td><span class="badge badge-${o.stato}">${statoLabel(o.stato)}</span></td>
+    <td id="prog-${o.id}" style="min-width:120px">—</td>
+    <td>
+      ${o.stato === 'aperto'
+        ? `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();sospendi('${o.id}')">Sospendi</button>`
+        : `<button class="btn btn-ok" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();riattiva('${o.id}')">Riattiva</button>`}
+    </td>
+  </tr>`;
+}
+
+// Carica avanzamento fasi per tutti gli ordini visibili
+async function loadAvanzamenti(ids) {
+  if (!ids.length) return;
+  const { data } = await sb.from('ordine_fasi')
+    .select('ordine_id, stato')
+    .in('ordine_id', ids);
+  if (!data) return;
+  // Group by ordine
+  const map = {};
+  data.forEach(f => {
+    if (!map[f.ordine_id]) map[f.ordine_id] = { tot: 0, done: 0, inCorso: 0 };
+    if (f.stato === 'non_applicabile') return; // escludi N/A dal conteggio
+    map[f.ordine_id].tot++;
+    if (f.stato === 'completata') map[f.ordine_id].done++;
+    if (f.stato === 'in_corso') map[f.ordine_id].inCorso++;
+  });
+  ids.forEach(id => {
+    const el = document.getElementById('prog-' + id);
+    if (!el) return;
+    const s = map[id] || { tot: 20, done: 0, inCorso: 0 };
+    const pct = s.tot > 0 ? Math.round((s.done / s.tot) * 100) : 0;
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1;background:var(--border);border-radius:4px;height:6px">
+          <div style="width:${pct}%;background:var(--ok);border-radius:4px;height:100%"></div>
+        </div>
+        <span style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap">${s.done}/${s.tot}${s.inCorso > 0 ? ` (${s.inCorso} ▶)` : ''}</span>
+      </div>`;
+  });
+}
+
+// Render ordini e carica avanzamenti
+function renderOrdiniTable() {
+  const search = document.getElementById('ord-search')?.value.toLowerCase() || '';
+  const stato = document.getElementById('ord-stato')?.value || '';
+  const prio = document.getElementById('ord-priorita')?.value || '';
+  const struttura = document.getElementById('flt-struttura')?.value || '';
+  const tipoProd = document.getElementById('flt-tipo-prodotto')?.value || '';
+
+  let filtered = ordiniCache.filter(o => {
+    if (stato && o.stato !== stato) return false;
+    if (prio && o.priorita !== prio) return false;
+    if (struttura && o.struttura !== struttura) return false;
+    if (tipoProd && o.tipo_prodotto !== tipoProd) return false;
+    if (search && !o.cliente.toLowerCase().includes(search) && !o.codice.toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('ordini-tbody');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="icon">📋</div><p>Nessun ordine trovato</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map(o => ordineRow(o)).join('');
+  loadAvanzamenti(filtered.map(o => o.id));
+}
+
+// ═══════════════════════════════════════════════
+// DETTAGLIO ORDINE
+// ═══════════════════════════════════════════════
+async function openDettaglioOrdine(id) {
+  currentOrdineId = id;
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('sec-dettaglio').classList.add('active');
+  document.getElementById('nav-ordini').classList.add('active');
+  await renderDettaglioOrdine(id);
+}
+
+async function renderDettaglioOrdine(id) {
+  const ordine = [...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === id);
+  if (!ordine) { showSection('ordini'); return; }
+
+  document.getElementById('det-title').textContent = `${ordine.cliente} — ${ordine.codice || ''}`;
+
+  // Info
+  const oggi = new Date().toISOString().split('T')[0];
+  const isLate = ordine.scadenza && ordine.scadenza < oggi && ordine.stato === 'aperto';
+  document.getElementById('det-info').innerHTML = `
+    <div class="detail-field"><label>Cliente</label><span>${escapeHtml(ordine.cliente)}</span></div>
+    <div class="detail-field"><label>N° Ordine</label><span style="font-family:'DM Mono',monospace">${escapeHtml(ordine.codice||'—')}</span></div>
+    <div class="detail-field"><label>Struttura</label><span>${strutturaLabel(ordine.struttura)}</span></div>
+    <div class="detail-field"><label>Tipo Prodotto</label><span>${tipoProdLabel(ordine.tipo_prodotto)}</span></div>
+    <div class="detail-field"><label>Materiale</label><span>${escapeHtml(ordine.materiale || '—')}</span></div>
+    <div class="detail-field"><label>Priorità</label><span class="badge badge-${ordine.priorita}">${prioLabel(ordine.priorita)}</span></div>
+    <div class="detail-field"><label>Stato</label><span class="badge badge-${ordine.stato}">${statoLabel(ordine.stato)}</span></div>
+    <div class="detail-field"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}${isLate ? ' ⚠️ In ritardo' : ''}</span></div>
+    <div class="detail-field"><label>Quantità</label><span>${ordine.quantita || 1}</span></div>
+    <div class="detail-field"><label>Creato il</label><span>${formatDateTime(ordine.creato_il)}</span></div>
+    ${ordine.note_generali ? `<div class="detail-field" style="grid-column:1/-1"><label>Note generali</label><span>${escapeHtml(ordine.note_generali)}</span></div>` : ''}
+  `;
+
+  // Actions
+  const actEl = document.getElementById('det-actions');
+  if (ordine.stato === 'aperto') {
+    actEl.innerHTML = `
+      <button class="btn btn-secondary" onclick="sospendi('${id}')">⏸ Sospendi</button>
+      <button class="btn btn-ok" onclick="segnaSpedito('${id}')">✓ Segna Spedito</button>
+    `;
+  } else if (ordine.stato === 'sospeso') {
+    actEl.innerHTML = `<button class="btn btn-ok" onclick="riattiva('${id}')">▶ Riattiva</button>`;
+  } else {
+    actEl.innerHTML = `<span class="badge badge-spedito">Spedito ${ordine.spedito_il ? formatDate(ordine.spedito_il) : ''}</span>`;
+  }
+  // Pulsante modifica e elimina: solo su ordini non ancora spediti
+  if (ordine.stato !== 'spedito') {
+    actEl.innerHTML += `<button class="btn btn-secondary" onclick="openModificaOrdine('${id}')">✏️ Modifica</button>`;
+    actEl.innerHTML += `<button class="btn" style="background:var(--alert);color:#fff;margin-left:auto" onclick="eliminaOrdine('${id}')">🗑 Elimina ordine</button>`;
+  }
+
+  // Fasi — standard o extra
+  const fasiEl = document.getElementById('det-fasi');
+  const readonly = ordine.stato === 'sospeso' || ordine.stato === 'spedito';
+
+  if (ordine.tipo === 'extra') {
+    const { data: fasiExt } = await sb.from('fasi_ordine_extra')
+      .select('*, users!operatore_id(nome, cognome)')
+      .eq('ordine_id', id)
+      .order('numero');
+    fasiEl.innerHTML = (fasiExt || []).map(f => {
+      const opNome = f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '';
+      return `<div class="fase-card ${f.stato}" onclick="openFaseExtraDetail('${f.id}', '${id}', ${readonly})">
+        <div class="fase-num">${f.numero}. ${f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '▶' : '○'}</div>
+        <div class="fase-nome">${escapeHtml(f.nome)}</div>
+        <div class="fase-op">${opNome || (f.stato === 'disponibile' ? 'Disponibile' : '')}</div>
+        ${f.completata_il ? `<div class="fase-op" style="margin-top:4px;font-size:10px">${formatDateTime(f.completata_il)}</div>` : ''}
+      </div>`;
+    }).join('');
+  } else {
+    const { data: ordFasi } = await sb.from('ordine_fasi')
+      .select('*, users!operatore_id(nome, cognome)')
+      .eq('ordine_id', id)
+      .order('fase_id');
+    fasiEl.innerHTML = (ordFasi || []).map(f => {
+      const nomeFase = getFaseNome(f.fase_id);
+      const opNome = f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '';
+      const isNA = f.stato === 'non_applicabile';
+      const cnc = isCNC(f.fase_id);
+      const est = isEsterna(f.fase_id);
+      const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '▶' : f.stato === 'in_attesa' ? '⏸' : isNA ? '—' : '○';
+      const clickAttr = isNA ? '' : `onclick="openFaseDetail('${f.id}', '${id}', ${readonly})"`;
+      return `<div class="fase-card ${f.stato}" ${clickAttr} style="${isNA ? 'cursor:default;opacity:0.5' : ''}">
+        <div class="fase-num">${f.fase_id}. ${icon}</div>
+        <div class="fase-nome">${nomeFase}${cnc ? '<span class="badge-cnc">CNC</span>' : ''}${est ? '<span class="badge-esterna">EXT</span>' : ''}${isNA ? '<span class="badge-na">N/A</span>' : ''}</div>
+        <div class="fase-op">${isNA ? 'Non applicabile' : opNome || (f.stato === 'disponibile' ? 'Disponibile' : '')}</div>
+        ${f.completata_il ? `<div class="fase-op" style="margin-top:4px;font-size:10px">${formatDateTime(f.completata_il)}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  // Log
+  const { data: log } = await sb.from('archivio_log')
+    .select('*, users!utente_id(nome, cognome), fasi(nome)')
+    .eq('ordine_id', id)
+    .order('timestamp', { ascending: false })
+    .limit(30);
+
+  const logEl = document.getElementById('det-log');
+  if (!log?.length) {
+    logEl.innerHTML = '<li style="color:var(--muted);font-size:13px;padding:12px 0">Nessuna attività registrata</li>';
+  } else {
+    logEl.innerHTML = log.map(l => {
+      const u = l['users'] ? `${l['users'].nome} ${l['users'].cognome}` : 'Sistema';
+      const fase = l['fasi'] ? l['fasi'].nome : '';
+      return `<li class="log-item">
+        <div class="log-icon">${logIcon(l.azione)}</div>
+        <div class="log-content">
+          <div class="action">${logLabel(l.azione)}${fase ? ` — ${fase}` : ''}</div>
+          <div class="meta">${u} · ${formatDateTime(l.timestamp)}</div>
+        </div>
+      </li>`;
+    }).join('');
+  }
+}
+
+async function openFaseDetail(ordFaseId, ordineId, readonly) {
+  const [{ data: f }, { data: opMulti }, { data: allegati }] = await Promise.all([
+    sb.from('ordine_fasi').select('*, users!operatore_id(nome, cognome)').eq('id', ordFaseId).single(),
+    sb.from('ordine_fasi_operatori').select('operatore_id, users(nome, cognome)').eq('ordine_fase_id', ordFaseId),
+    sb.from('allegati').select('*').eq('ordine_fase_id', ordFaseId),
+  ]);
+  if (!f) return;
+  if (f.stato === 'non_applicabile') return; // N/A — non aprire modal
+  const ordine = [...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === ordineId);
+  const nomeFase = getFaseNome(f.fase_id);
+  const fase = { nome: nomeFase };
+
+  document.getElementById('modal-fase-title').textContent = `${f.fase_id}. ${fase.nome}`;
+
+  // Operatori multipli
+  const opList = (opMulti || []);
+  const opNomiHtml = opList.length
+    ? opList.map(o => `<span style="display:inline-block;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:12px;margin:2px">${escapeHtml(o.users?.nome || '')} ${escapeHtml(o.users?.cognome || '')}</span>`).join('')
+    : (f['users'] ? `<span>${f['users'].nome} ${f['users'].cognome}</span>` : '<span style="color:var(--muted)">—</span>');
+
+  const fotoHtml = (allegati || []).length
+    ? `<div class="foto-grid">${(allegati || []).map(a => `<img src="${SUPABASE_URL}/storage/v1/object/public/allegati-fasi/${a.url_file}" class="foto-thumb" onerror="this.style.display='none'">`).join('')}</div>`
+    : '';
+
+  document.getElementById('modal-fase-body').innerHTML = `
+    <div class="fase-detail">
+      <span class="badge badge-${f.stato}">${statoFaseLabel(f.stato)}</span>
+      ${f.note_responsabile ? `<div class="note-box"><strong>Note Responsabile</strong>${escapeHtml(f.note_responsabile)}</div>` : ''}
+      ${f.note_operatore ? `<div class="note-box"><strong>Note Operatore</strong>${escapeHtml(f.note_operatore)}</div>` : ''}
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Operatori</div>
+        <div>${opNomiHtml}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        ${f.iniziata_il ? `<div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Iniziata</div><div>${formatDateTime(f.iniziata_il)}</div></div>` : ''}
+        ${f.completata_il ? `<div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Completata</div><div>${formatDateTime(f.completata_il)}</div></div>` : ''}
+      </div>
+      ${fotoHtml}
+      ${!readonly ? `
+      <div class="form-group" style="margin-top:16px">
+        <label>Note Responsabile (modifica)</label>
+        <textarea id="note-resp-edit" rows="3" style="resize:vertical">${f.note_responsabile || ''}</textarea>
+      </div>` : ''}
+    </div>
+  `;
+
+  const footerEl = document.getElementById('modal-fase-footer');
+  if (readonly) {
+    footerEl.innerHTML = `<button class="btn btn-secondary" onclick="closeModal('modal-fase')">Chiudi</button>`;
+  } else {
+    const puoCompletare = ['disponibile','in_corso','in_attesa'].includes(f.stato);
+    const puoRiaprire  = f.stato === 'completata';
+    footerEl.innerHTML = `
+      <button class="btn btn-secondary" onclick="closeModal('modal-fase')">Annulla</button>
+      ${f.stato === 'in_corso' ? `<button class="btn btn-secondary" onclick="openRiassegnaModal('${ordFaseId}')">Riassegna</button>` : ''}
+      ${puoCompletare ? `<button class="btn btn-ok" onclick="apriCompletaFase('${ordFaseId}','${ordineId}')">✓ Segna completata</button>` : ''}
+      ${puoRiaprire   ? `<button class="btn btn-secondary" onclick="riaprieFaseResp('${ordFaseId}','${ordineId}')">↩ Riapri fase</button>` : ''}
+      <button class="btn btn-primary" onclick="salvaNoteResp('${ordFaseId}', '${ordineId}')">Salva Note</button>
+    `;
+  }
+
+  const modalFase = document.getElementById('modal-fase');
+  modalFase.dataset.operatoreId = f.operatore_id || '';
+  modalFase.classList.add('open');
+}
+
+async function apriCompletaFase(ordFaseId, ordineId) {
+  const m = document.getElementById('modal-completa-fase');
+  m.dataset.ordFaseId = ordFaseId;
+  m.dataset.ordineId  = ordineId;
+
+  // Operatori già nella junction table
+  const { data: giàAssegnati } = await sb.from('ordine_fasi_operatori')
+    .select('operatore_id').eq('ordine_fase_id', ordFaseId);
+  const preSelezionati = new Set((giàAssegnati || []).map(r => r.operatore_id));
+
+  // Fallback: operatore singolo dal campo principale
+  const opIdPrincipale = document.getElementById('modal-fase').dataset.operatoreId || '';
+  if (opIdPrincipale) preSelezionati.add(opIdPrincipale);
+
+  document.getElementById('cf-operatori-list').innerHTML = operatoriCache.map(o => `
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:4px 0">
+      <input type="checkbox" value="${o.id}" ${preSelezionati.has(o.id) ? 'checked' : ''}
+        style="width:16px;height:16px;cursor:pointer">
+      <span>${escapeHtml(o.nome)} ${escapeHtml(o.cognome)}</span>
+    </label>
+  `).join('');
+
+  document.getElementById('cf-note').value = '';
+  m.classList.add('open');
+}
+
+async function confermaConclusioneFase() {
+  const m = document.getElementById('modal-completa-fase');
+  const ordFaseId = m.dataset.ordFaseId;
+  const ordineId  = m.dataset.ordineId;
+  const note = document.getElementById('cf-note').value.trim() || null;
+
+  const selezionati = [...document.querySelectorAll('#cf-operatori-list input[type=checkbox]:checked')]
+    .map(cb => cb.value);
+
+  if (!selezionati.length) { toast('Seleziona almeno un operatore', 'err'); return; }
+
+  const now = new Date().toISOString();
+  const { error } = await sb.from('ordine_fasi').update({
+    stato: 'completata',
+    operatore_id: selezionati[0], // principale = primo selezionato
+    iniziata_il: now,
+    completata_il: now,
+    note_operatore: note,
+  }).eq('id', ordFaseId);
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+
+  // Aggiorna junction table: rimuovi vecchi, inserisci selezionati
+  await sb.from('ordine_fasi_operatori').delete().eq('ordine_fase_id', ordFaseId);
+  await sb.from('ordine_fasi_operatori').insert(
+    selezionati.map(opId => ({ ordine_fase_id: ordFaseId, operatore_id: opId }))
+  );
+
+  await sb.from('archivio_log').insert({
+    ordine_id: ordineId,
+    utente_id: currentUserRow.id,
+    azione: 'fase_completata',
+    dettaglio: { manuale_responsabile: true, ordine_fase_id: ordFaseId, operatori: selezionati }
+  });
+
+  closeModal('modal-completa-fase');
+  closeModal('modal-fase');
+  toast('Fase segnata come completata', 'ok');
+  renderDettaglioOrdine(ordineId);
+}
+
+async function svuotaArchivio() {
+  const n = ordiniSpeditiCache.length;
+  if (!n) { toast('Archivio già vuoto', 'ok'); return; }
+  if (!confirm(`Eliminare definitivamente tutti i ${n} ordini spediti dall'archivio?\n\nQuesta azione non può essere annullata.`)) return;
+  const ids = ordiniSpeditiCache.map(o => o.id);
+  const { error } = await sb.from('ordini').update({ eliminato: true }).in('id', ids);
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  toast(`${n} ordini eliminati dall'archivio`, 'ok');
+  await loadOrdini();
+  renderArchivioTable();
+}
+
+async function riaprieFaseResp(ordFaseId, ordineId) {
+  if (!confirm('Riaprire questa fase impostandola su "disponibile"?')) return;
+  const { error } = await sb.from('ordine_fasi').update({ stato: 'disponibile', operatore_id: null, iniziata_il: null, completata_il: null }).eq('id', ordFaseId);
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  await sb.from('archivio_log').insert({ ordine_id: ordineId, utente_id: currentUserRow.id, azione: 'fase_iniziata', dettaglio: { riapertura_responsabile: true, ordine_fase_id: ordFaseId } });
+  closeModal('modal-fase');
+  toast('Fase riaperta', 'ok');
+  renderDettaglioOrdine(ordineId);
+}
+
+async function salvaNoteResp(ordFaseId, ordineId) {
+  const note = document.getElementById('note-resp-edit').value;
+  await sb.from('ordine_fasi').update({ note_responsabile: note }).eq('id', ordFaseId);
+  closeModal('modal-fase');
+  toast('Note aggiornate', 'ok');
+  renderDettaglioOrdine(ordineId);
+}
+
+// ═══════════════════════════════════════════════
+// ORDINI: CREA / SOSPENDI / RIATTIVA / SPEDITO
+// ═══════════════════════════════════════════════
+// ── TIPO ORDINE ──────────────────────────────────
+function setTipoOrdine(tipo) {
+  document.getElementById('modal-tipo').value = tipo;
+  document.getElementById('tipo-btn-standard').className = tipo === 'standard' ? 'btn btn-primary' : 'btn btn-secondary';
+  document.getElementById('tipo-btn-extra').className = tipo === 'extra' ? 'btn btn-primary' : 'btn btn-secondary';
+  document.getElementById('standard-fields-section').style.display = tipo === 'standard' ? '' : 'none';
+  const extraSec = document.getElementById('extra-fasi-section');
+  if (tipo === 'extra') {
+    extraSec.style.display = 'block';
+    if (!document.querySelectorAll('.extra-fase-row').length) {
+      // Inizializza con 1 fase vuota
+      for (let i = 0; i < 3; i++) addFaseExtra();
+    }
+  } else {
+    extraSec.style.display = 'none';
+  }
+}
+
+let extraFaseCounter = 0;
+function addFaseExtra() {
+  const list = document.getElementById('extra-fasi-list');
+  const count = list.querySelectorAll('.extra-fase-row').length;
+  if (count >= 20) { toast('Massimo 20 fasi', 'err'); return; }
+  extraFaseCounter++;
+  const row = document.createElement('div');
+  row.className = 'extra-fase-row';
+  row.style.cssText = 'display:flex;gap:6px;align-items:center';
+  row.innerHTML = `
+    <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);min-width:20px;text-align:right">${count + 1}</span>
+    <input type="text" class="extra-fase-nome" placeholder="Nome fase ${count + 1}…"
+      style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-family:'Inter',sans-serif;font-size:13px;background:var(--bg);color:var(--ink);outline:none">
+    <input type="text" class="extra-fase-note" placeholder="Note (opz.)"
+      style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-family:'Inter',sans-serif;font-size:13px;background:var(--bg);color:var(--ink);outline:none">
+  `;
+  list.appendChild(row);
+  renumberExtraFasi();
+}
+
+function removeFaseExtra() {
+  const list = document.getElementById('extra-fasi-list');
+  const rows = list.querySelectorAll('.extra-fase-row');
+  if (rows.length <= 1) { toast('Almeno una fase è richiesta', 'err'); return; }
+  rows[rows.length - 1].remove();
+  renumberExtraFasi();
+}
+
+function renumberExtraFasi() {
+  document.querySelectorAll('.extra-fase-row').forEach((row, i) => {
+    row.querySelector('span').textContent = i + 1;
+  });
+}
+
+function openModalNuovoOrdine() {
+  document.getElementById('ord-cliente').value = '';
+  document.getElementById('ord-codice').value = '';
+  document.getElementById('ord-note').value = '';
+  document.getElementById('ord-scadenza').value = '';
+  document.getElementById('extra-fasi-list').innerHTML = '';
+  const struEl = document.getElementById('ord-struttura');
+  const tipoPEl = document.getElementById('ord-tipo-prodotto');
+  const matEl = document.getElementById('ord-materiale');
+  if (struEl) struEl.value = 'quattro_lati';
+  if (tipoPEl) tipoPEl.value = 'portoncino';
+  if (matEl) matEl.value = 'placcato';
+  setTipoOrdine('standard');
+  document.getElementById('modal-ordine').classList.add('open');
+}
+
+async function creaOrdine() {
+  const cliente = document.getElementById('ord-cliente').value.trim();
+  if (!cliente) { toast('Inserisci il nome del cliente', 'err'); return; }
+  const codice = document.getElementById('ord-codice').value.trim();
+  if (!codice) { toast('Inserisci il numero ordine', 'err'); return; }
+  const tipo = document.getElementById('modal-tipo').value;
+
+  // Valida fasi extra
+  let fasiExtra = [];
+  if (tipo === 'extra') {
+    const rows = document.querySelectorAll('.extra-fase-row');
+    fasiExtra = Array.from(rows).map((row, i) => ({
+      numero: i + 1,
+      nome: row.querySelector('.extra-fase-nome').value.trim(),
+      note_responsabile: row.querySelector('.extra-fase-note').value.trim() || null
+    }));
+    if (fasiExtra.some(f => !f.nome)) { toast('Inserisci il nome di tutte le fasi', 'err'); return; }
+    if (!fasiExtra.length) { toast('Aggiungi almeno una fase', 'err'); return; }
+  }
+
+  const insertPayload = {
+    cliente,
+    codice,
+    tipo,
+    priorita: document.getElementById('ord-prio').value,
+    scadenza: document.getElementById('ord-scadenza').value || null,
+    quantita: parseInt(document.getElementById('ord-quantita').value) || 1,
+    note_generali: document.getElementById('ord-note').value.trim() || null,
+    creato_da: currentUserRow.id
+  };
+  if (tipo === 'standard') {
+    insertPayload.struttura = document.getElementById('ord-struttura').value;
+    insertPayload.tipo_prodotto = document.getElementById('ord-tipo-prodotto').value;
+    insertPayload.materiale = document.getElementById('ord-materiale').value;
+  }
+  const { data: newOrdine, error } = await sb.from('ordini').insert(insertPayload).select().single();
+
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+
+  // Inserisci fasi extra
+  if (tipo === 'extra' && fasiExtra.length) {
+    const { error: eErr } = await sb.from('fasi_ordine_extra').insert(
+      fasiExtra.map(f => ({ ordine_id: newOrdine.id, ...f }))
+    );
+    if (eErr) { toast('Errore fasi extra: ' + eErr.message, 'err'); return; }
+  }
+
+  await sb.from('archivio_log').insert({ ordine_id: newOrdine.id, utente_id: currentUserRow.id, azione: 'ordine_creato' });
+
+  closeModal('modal-ordine');
+  toast('Ordine creato con successo', 'ok');
+  await loadOrdini();
+  renderDashboard();
+  renderOrdiniTable();
+}
+
+async function sospendi(id) {
+  if (!confirm('Sospendere questo ordine?')) return;
+  await sb.from('ordini').update({ stato: 'sospeso' }).eq('id', id);
+  await sb.from('archivio_log').insert({ ordine_id: id, utente_id: currentUserRow.id, azione: 'ordine_sospeso' });
+  toast('Ordine sospeso', 'ok');
+  await loadOrdini();
+  renderDashboard();
+  renderOrdiniTable();
+  if (currentOrdineId === id) renderDettaglioOrdine(id);
+}
+
+async function riattiva(id) {
+  await sb.from('ordini').update({ stato: 'aperto' }).eq('id', id);
+  await sb.from('archivio_log').insert({ ordine_id: id, utente_id: currentUserRow.id, azione: 'ordine_riattivato' });
+  toast('Ordine riattivato', 'ok');
+  await loadOrdini();
+  renderDashboard();
+  renderOrdiniTable();
+  if (currentOrdineId === id) renderDettaglioOrdine(id);
+}
+
+async function segnaSpedito(id) {
+  if (!confirm('Segnare questo ordine come spedito? L\'azione è irreversibile.')) return;
+  const { data } = await sb.rpc('segna_spedito', { p_ordine_id: id, p_utente_id: currentUserRow.id });
+  if (data?.ok) {
+    toast('Ordine segnato come spedito', 'ok');
+    await loadOrdini();
+    renderDashboard();
+    showSection('ordini');
+  } else {
+    toast(data?.errore || 'Errore', 'err');
+  }
+}
+
+// ═══════════════════════════════════════════════
+// RIASSEGNA FASE
+// ═══════════════════════════════════════════════
+function openRiassegnaModal(ordFaseId) {
+  riassegnaOrdFaseId = ordFaseId;
+  const sel = document.getElementById('riassegna-op-select');
+  sel.innerHTML = operatoriCache
+    .filter(o => o.ruolo === 'operatore' && o.attivo)
+    .map(o => `<option value="${o.id}">${o.nome} ${o.cognome}</option>`)
+    .join('');
+  closeModal('modal-fase');
+  document.getElementById('modal-riassegna').classList.add('open');
+}
+
+async function confermRiassegna() {
+  const nuovoOp = document.getElementById('riassegna-op-select').value;
+  const { data } = await sb.rpc('riassegna_fase', {
+    p_ordine_fase_id: riassegnaOrdFaseId,
+    p_nuovo_operatore: nuovoOp,
+    p_responsabile_id: currentUserRow.id
+  });
+  if (data?.ok) {
+    toast('Fase riassegnata', 'ok');
+    closeModal('modal-riassegna');
+    if (currentOrdineId) renderDettaglioOrdine(currentOrdineId);
+  } else {
+    toast(data?.errore || 'Errore', 'err');
+  }
+}
+
+// ═══════════════════════════════════════════════
+// NON CONFORMITÀ
+// ═══════════════════════════════════════════════
+function renderNcTable() {
+  const statoFil = document.getElementById('nc-stato')?.value || '';
+  let filtered = ncCache.filter(n => !statoFil || n.stato === statoFil);
+
+  const tbody = document.getElementById('nc-tbody');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="icon">✅</div><p>Nessuna non conformità</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map(n => {
+    const ord = n.ordini ? n.ordini.codice + ' – ' + n.ordini.cliente : '—';
+    const fase = n.fasi ? n.fasi.nome : '—';
+    const segnalata = n.users ? `${n.users.nome} ${n.users.cognome}` : '—';
+    return `<tr>
+      <td>${ord}</td>
+      <td>${fase}</td>
+      <td>${n.descrizione.substring(0, 60)}${n.descrizione.length > 60 ? '…' : ''}</td>
+      <td>${segnalata}</td>
+      <td>${formatDate(n.segnalata_il)}</td>
+      <td><span class="badge badge-${n.stato}">${n.stato}</span></td>
+      <td>
+        ${n.stato !== 'chiusa'
+          ? `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="openNcModal('${n.id}')">Gestisci</button>`
+          : `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="openNcModal('${n.id}')">Dettaglio</button>`
+        }
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function openNcModal(ncId) {
+  const nc = ncCache.find(n => n.id === ncId);
+  if (!nc) return;
+  const fase = nc.fasi ? nc.fasi.nome : '—';
+  const segnalata = nc.users ? `${nc.users.nome} ${nc.users.cognome}` : '—';
+  const ord = nc.ordini ? `${nc.ordini.codice} – ${nc.ordini.cliente}` : '—';
+
+  document.getElementById('modal-nc-title').textContent = `NC – ${ord}`;
+  document.getElementById('modal-nc-body').innerHTML = `
+    <div style="margin-bottom:16px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Ordine</div>${ord}</div>
+        <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Fase</div>${fase}</div>
+        <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Segnalata da</div>${segnalata}</div>
+        <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Data</div>${formatDateTime(nc.segnalata_il)}</div>
+      </div>
+      <div class="note-box"><strong>Descrizione</strong>${nc.descrizione}</div>
+      ${nc.note_chiusura ? `<div class="note-box"><strong>Note Chiusura</strong>${nc.note_chiusura}</div>` : ''}
+    </div>
+    ${nc.stato !== 'chiusa' ? `
+    <div class="form-group">
+      <label>Note di chiusura *</label>
+      <textarea id="nc-note-chiusura" rows="3" placeholder="Descrivi come è stata gestita la NC…" style="resize:vertical">${nc.note_chiusura || ''}</textarea>
+    </div>` : ''}
+  `;
+
+  const footer = document.getElementById('modal-nc-footer');
+  if (nc.stato === 'chiusa') {
+    footer.innerHTML = `<button class="btn btn-secondary" onclick="closeModal('modal-nc')">Chiudi</button>`;
+  } else {
+    footer.innerHTML = `
+      <button class="btn btn-secondary" onclick="closeModal('modal-nc')">Annulla</button>
+      ${nc.stato === 'aperta' ? `<button class="btn btn-secondary" onclick="approvaNC('${ncId}')">Approva</button>` : ''}
+      <button class="btn btn-ok" onclick="chiudiNC('${ncId}')">Chiudi NC</button>
+    `;
+  }
+  document.getElementById('modal-nc').classList.add('open');
+}
+
+async function approvaNC(id) {
+  await sb.from('non_conformita').update({ stato: 'approvata', gestita_da: currentUserRow.id, gestita_il: new Date().toISOString() }).eq('id', id);
+  await sb.from('archivio_log').insert({
+    ordine_id: ncCache.find(n => n.id === id)?.ordine_id,
+    utente_id: currentUserRow.id,
+    azione: 'nc_chiusa',
+    dettaglio: { nc_id: id, azione: 'approvata' }
+  });
+  closeModal('modal-nc');
+  toast('NC approvata', 'ok');
+  await loadNc();
+  renderNcTable();
+}
+
+async function chiudiNC(id) {
+  const note = document.getElementById('nc-note-chiusura')?.value.trim();
+  if (!note) { toast('Inserisci le note di chiusura', 'err'); return; }
+  const nc = ncCache.find(n => n.id === id);
+  await sb.from('non_conformita').update({
+    stato: 'chiusa', note_chiusura: note,
+    gestita_da: currentUserRow.id, gestita_il: new Date().toISOString()
+  }).eq('id', id);
+  await sb.from('archivio_log').insert({
+    ordine_id: nc?.ordine_id, utente_id: currentUserRow.id,
+    azione: 'nc_chiusa', dettaglio: { nc_id: id, note }
+  });
+  closeModal('modal-nc');
+  toast('NC chiusa', 'ok');
+  await loadNc();
+  renderNcTable();
+}
+
+// ═══════════════════════════════════════════════
+// OPERATORI
+// ═══════════════════════════════════════════════
+function renderOperatori() {
+  const grid = document.getElementById('ops-grid');
+  if (!operatoriCache.length) {
+    grid.innerHTML = '<div class="empty-state"><div class="icon">👥</div><p>Nessun operatore configurato</p></div>';
+    return;
+  }
+  grid.innerHTML = operatoriCache.map(op => `
+    <div class="op-card ${op.attivo ? '' : 'inactive'}">
+      <div class="op-name">${op.nome} ${op.cognome}</div>
+      <div class="op-role">${op.ruolo === 'operatore' ? 'Operatore' : 'Sola Lettura'}</div>
+      <div class="op-actions">
+        ${op.attivo
+          ? `<button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="toggleOperatore('${op.id}', false)">Disattiva</button>`
+          : `<button class="btn btn-ok" style="padding:5px 10px;font-size:12px" onclick="toggleOperatore('${op.id}', true)">Attiva</button>`
+        }
+        <button class="btn" style="padding:5px 10px;font-size:12px;background:var(--alert);color:#fff;margin-left:4px" onclick="eliminaOperatore('${op.id}', '${op.nome} ${op.cognome}')">🗑</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openModalNuovoOperatore() {
+  document.getElementById('op-nome').value = '';
+  document.getElementById('op-cognome').value = '';
+  document.getElementById('op-pin').value = '';
+  document.getElementById('modal-operatore').classList.add('open');
+}
+
+async function creaOperatore() {
+  const nome = document.getElementById('op-nome').value.trim();
+  const cognome = document.getElementById('op-cognome').value.trim();
+  const pin = document.getElementById('op-pin').value.trim();
+  const ruolo = document.getElementById('op-ruolo').value;
+
+  if (!nome || !cognome) { toast('Nome e cognome obbligatori', 'err'); return; }
+  if (!/^\d{4}$/.test(pin)) { toast('Il PIN deve essere 4 cifre numeriche', 'err'); return; }
+
+  const { data, error } = await sb.rpc('crea_operatore', { p_nome: nome, p_cognome: cognome, p_pin: pin, p_ruolo: ruolo });
+  if (error || !data?.ok) { toast(error?.message || data?.errore || 'Errore', 'err'); return; }
+
+  closeModal('modal-operatore');
+  toast('Operatore creato', 'ok');
+  await loadOperatori();
+  renderOperatori();
+}
+
+async function toggleOperatore(id, attivo) {
+  await sb.from('users').update({ attivo }).eq('id', id);
+  toast(attivo ? 'Operatore attivato' : 'Operatore disattivato', 'ok');
+  await loadOperatori();
+  renderOperatori();
+}
+
+async function eliminaOperatore(id, nome) {
+  if (!confirm(`Eliminare il profilo di "${nome}"?\n\nIl profilo verrà disattivato e non potrà più accedere all'app.`)) return;
+  const { error } = await sb.from('users').update({ attivo: false, eliminato: true }).eq('id', id);
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  toast('Profilo eliminato', 'ok');
+  await loadOperatori();
+  renderOperatori();
+}
+
+// ═══════════════════════════════════════════════
+// ARCHIVIO
+// ═══════════════════════════════════════════════
+function renderArchivioTable() {
+  const search = document.getElementById('arch-search')?.value.toLowerCase() || '';
+  const tipo = document.getElementById('arch-tipo')?.value || '';
+  const dal = document.getElementById('arch-dal')?.value || '';
+  const al = document.getElementById('arch-al')?.value || '';
+
+  let filtered = ordiniSpeditiCache.filter(o => {
+    if (tipo && o.tipo !== tipo) return false;
+    if (search && !o.cliente.toLowerCase().includes(search) && !o.codice.toLowerCase().includes(search)) return false;
+    if (dal && o.spedito_il && o.spedito_il.split('T')[0] < dal) return false;
+    if (al && o.spedito_il && o.spedito_il.split('T')[0] > al) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('arch-tbody');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="icon">📦</div><p>Nessun ordine archiviato</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map(o => `
+    <tr class="clickable" onclick="openDettaglioOrdine('${o.id}')">
+      <td><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div></td>
+      <td>${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}</td>
+      <td><span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span></td>
+      <td>${formatDate(o.creato_il)}</td>
+      <td>${o.spedito_il ? formatDate(o.spedito_il) : '—'}</td>
+      <td onclick="event.stopPropagation()">
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="scaricaEliminaFoto('${o.id}','${escapeHtml(o.codice||o.id)}','${escapeHtml(o.cliente)}')">📥 Scarica & elimina foto</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function scaricaEliminaFoto(ordineId, codice, cliente) {
+  if (!confirm(`Scaricare tutte le foto dell'ordine ${codice} — ${cliente} e eliminarle dal cloud?`)) return;
+
+  // Recupera tutte le fasi dell'ordine
+  const { data: fasi } = await sb.from('ordine_fasi').select('id').eq('ordine_id', ordineId);
+  const fasiIds = (fasi || []).map(f => f.id);
+  if (!fasiIds.length) { toast('Nessuna fase trovata per questo ordine', 'err'); return; }
+
+  // Recupera tutti gli allegati
+  const { data: allegati } = await sb.from('allegati').select('*').in('ordine_fase_id', fasiIds);
+  if (!allegati?.length) { toast('Nessuna foto da scaricare per questo ordine', 'ok'); return; }
+
+  toast('Download in corso…', 'ok');
+
+  const zip = new JSZip();
+  for (const a of allegati) {
+    const { data: { publicUrl } } = sb.storage.from('allegati-fasi').getPublicUrl(a.url_file);
+    try {
+      const resp = await fetch(publicUrl);
+      const blob = await resp.blob();
+      const nomeFile = a.url_file.split('/').pop();
+      zip.file(nomeFile, blob);
+    } catch (e) { console.error('Errore download foto:', e); }
+  }
+
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(zipBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${codice}_${cliente}_foto.zip`.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+  a.click();
+  URL.revokeObjectURL(url);
+
+  // Elimina file dallo storage
+  const paths = allegati.map(a => a.url_file);
+  await sb.storage.from('allegati-fasi').remove(paths);
+
+  // Elimina record dalla tabella
+  await sb.from('allegati').delete().in('ordine_fase_id', fasiIds);
+
+  toast(`${allegati.length} foto scaricate ed eliminate dal cloud`, 'ok');
+}
+
+function exportCSV() {
+  const headers = ['Codice', 'Cliente', 'Struttura', 'Tipo Prodotto', 'Materiale', 'Priorità', 'Stato', 'Creato il', 'Spedito il'];
+  const rows = ordiniSpeditiCache.map(o => [
+    o.codice, o.cliente, strutturaLabel(o.struttura), tipoProdLabel(o.tipo_prodotto), o.materiale || '',
+    o.priorita, o.stato, formatDate(o.creato_il), o.spedito_il ? formatDate(o.spedito_il) : ''
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `mango-archivio-${new Date().toISOString().split('T')[0]}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  toast('CSV esportato', 'ok');
+}
+
+// ═══════════════════════════════════════════════
+// NOTIFICHE
+// ═══════════════════════════════════════════════
+async function renderNotifiche() {
+  await loadNotifiche();
+  const el = document.getElementById('notif-list');
+  if (!notificheCache.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">🔔</div><p>Nessuna notifica</p></div>';
+    return;
+  }
+  el.innerHTML = notificheCache.map(n => `
+    <div class="notif-item ${n.letta ? '' : 'unread'}">
+      <div class="notif-dot ${n.letta ? 'read' : ''}"></div>
+      <div class="notif-text">
+        ${n.testo}
+        ${n.ordini ? `<span style="font-size:11px;color:var(--muted);margin-left:6px">(${n.ordini.codice})</span>` : ''}
+        <div class="notif-time">${formatDateTime(n.creata_il)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function markAllRead() {
+  if (!currentUserRow) return;
+  await sb.from('notifiche').update({ letta: true }).eq('destinatario_id', currentUserRow.id).eq('letta', false);
+  toast('Tutte le notifiche segnate come lette', 'ok');
+  await renderNotifiche();
+}
+
+// ═══════════════════════════════════════════════
+// DETTAGLIO FASE EXTRA (ordini custom)
+// ═══════════════════════════════════════════════
+async function openFaseExtraDetail(faseExtraId, ordineId, readonly) {
+  const { data: f } = await sb.from('fasi_ordine_extra')
+    .select('*, users!operatore_id(nome, cognome)')
+    .eq('id', faseExtraId).single();
+  if (!f) return;
+  const ordine = [...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === ordineId);
+
+  document.getElementById('modal-fase-title').textContent = `${f.numero}. ${f.nome}`;
+  const opNome = f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '';
+
+  let body = `<span class="badge badge-${f.stato}" style="margin-bottom:12px;display:inline-flex">${f.stato}</span>`;
+  if (opNome) body += `<div class="detail-field" style="margin-bottom:8px"><label>Operatore</label><span>${opNome}</span></div>`;
+  if (f.iniziata_il) body += `<div class="detail-field" style="margin-bottom:8px"><label>Iniziata</label><span>${formatDateTime(f.iniziata_il)}</span></div>`;
+  if (f.completata_il) body += `<div class="detail-field" style="margin-bottom:8px"><label>Completata</label><span>${formatDateTime(f.completata_il)}</span></div>`;
+
+  if (!readonly) {
+    body += `<div class="form-group" style="margin-top:12px">
+      <label>Note Responsabile</label>
+      <textarea id="note-resp-extra" rows="3">${escapeHtml(f.note_responsabile || '')}</textarea>
+    </div>`;
+    if (f.note_operatore) {
+      body += `<div class="form-group"><label>Note Operatore</label><div style="background:var(--phase-bg);padding:10px;border-radius:6px;font-size:13px">${escapeHtml(f.note_operatore)}</div></div>`;
+    }
+  } else {
+    if (f.note_responsabile) body += `<div class="form-group"><label>Note Responsabile</label><div style="background:var(--phase-bg);padding:10px;border-radius:6px;font-size:13px">${escapeHtml(f.note_responsabile)}</div></div>`;
+    if (f.note_operatore) body += `<div class="form-group"><label>Note Operatore</label><div style="background:var(--phase-bg);padding:10px;border-radius:6px;font-size:13px">${escapeHtml(f.note_operatore)}</div></div>`;
+  }
+
+  document.getElementById('modal-fase-body').innerHTML = body;
+  const footer = document.getElementById('modal-fase-footer');
+  footer.innerHTML = '';
+  if (!readonly) {
+    footer.innerHTML = `<button class="btn btn-secondary" onclick="closeModal('modal-fase')">Chiudi</button>
+      <button class="btn btn-primary" onclick="salvaNotaFaseExtra('${faseExtraId}','${ordineId}')">Salva note</button>`;
+    if (f.stato === 'in_corso' && f.operatore_id) {
+      footer.innerHTML += `<button class="btn btn-secondary" onclick="riassegnaFaseExtra('${faseExtraId}','${ordineId}')">Riassegna</button>`;
+    }
+  } else {
+    footer.innerHTML = `<button class="btn btn-secondary" onclick="closeModal('modal-fase')">Chiudi</button>`;
+  }
+  document.getElementById('modal-fase').classList.add('open');
+}
+
+async function salvaNotaFaseExtra(faseExtraId, ordineId) {
+  const note = document.getElementById('note-resp-extra')?.value || '';
+  await sb.from('fasi_ordine_extra').update({ note_responsabile: note }).eq('id', faseExtraId);
+  closeModal('modal-fase');
+  toast('Note aggiornate', 'ok');
+  renderDettaglioOrdine(ordineId);
+}
+
+// ═══════════════════════════════════════════════
+// CONFIGURAZIONE FASI
+// ═══════════════════════════════════════════════
+function renderFasiConfig() {
+  const el = document.getElementById('fasi-config-list');
+  el.innerHTML = fasi.map(f => `
+    <div class="fase-config-item">
+      <span class="fase-config-num">${f.id}</span>
+      <div class="fase-config-inputs">
+        <input type="text" id="fase-nome-${f.id}" value="${escapeHtml(f.nome)}" placeholder="Nome fase">
+        <input type="text" id="fase-desc-${f.id}" value="${escapeHtml(f.descrizione || '')}" placeholder="Descrizione (opzionale)">
+      </div>
+    </div>
+  `).join('');
+}
+
+async function saveFasiConfig() {
+  const updates = fasi.map(f => ({
+    id: f.id,
+    nome: document.getElementById(`fase-nome-${f.id}`)?.value.trim() || f.nome,
+    descrizione: document.getElementById(`fase-desc-${f.id}`)?.value.trim() || null
+  }));
+  for (const u of updates) {
+    await sb.from('fasi').update({ nome: u.nome, descrizione: u.descrizione }).eq('id', u.id);
+  }
+  await loadFasi();
+  toast('Configurazione fasi salvata', 'ok');
+}
+
+async function importaFasiDaExcel(input) {
+  const file = input.files[0];
+  if (!file) return;
+  toast('Lettura file Excel…');
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      // Cerca righe con numero 1-16 in colonna A (o B se col A è vuota)
+      const parsed = [];
+      for (const row of rows) {
+        const numRaw = row[0];
+        const num = parseInt(numRaw);
+        if (!isNaN(num) && num >= 1 && num <= 20) {
+          const nome = String(row[1] || '').trim();
+          const desc = String(row[2] || '').trim();
+          if (nome) parsed.push({ id: num, nome, descrizione: desc || null });
+        }
+      }
+
+      if (!parsed.length) {
+        toast('Nessuna fase trovata. Assicurati che col. A = numero (1-16), col. B = nome', 'err');
+        input.value = '';
+        return;
+      }
+
+    
+      // Aggiorna i campi visibili nell'UI senza salvare ancora
+      for (const p of parsed) {
+        const nEl = document.getElementById(`fase-nome-${p.id}`);
+        const dEl = document.getElementById(`fase-desc-${p.id}`);
+        if (nEl) nEl.value = p.nome;
+        if (dEl) dEl.value = p.descrizione || '';
+      }
+      toast(`${parsed.length} fasi caricate. Premi "Salva" per confermare.`, 'ok');
+      input.value = '';
+    } catch (err) {
+      toast('Errore lettura file: ' + err.message, 'err');
+      input.value = '';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ═══════════════════════════════════════════════
+// UTILITY
+// ═══════════════════════════════════════════════
+function closeModal(id) {
+  document.getElementById(id)?.classList.remove('open');
+}
+
+function escapeHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function formatDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function formatDateTime(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function prioLabel(p) {
+  return { 'normale': 'Normale', 'urgente': 'Urgente', 'extra_urgente': 'Extra Urgente' }[p] || p;
+}
+
+function statoLabel(s) {
+  return { 'aperto': 'Aperto', 'sospeso': 'Sospeso', 'spedito': 'Spedito' }[s] || s;
+}
+
+function statoFaseLabel(s) {
+  return { 'disponibile': 'Disponibile', 'in_corso': 'In Corso', 'in_attesa': 'In Attesa', 'completata': 'Completata', 'non_applicabile': 'N/A' }[s] || s;
+}
+
+function logIcon(a) {
+  const m = { 'fase_iniziata': '▶', 'fase_completata': '✓', 'fase_riassegnata': '↔', 'fase_messa_in_attesa': '⏸', 'fase_ripresa': '↩', 'nc_segnalata': '⚠', 'nc_chiusa': '✓', 'ordine_sospeso': '⏸', 'ordine_riattivato': '▶', 'ordine_spedito': '📦', 'ordine_creato': '✚' };
+  return m[a] || '●';
+}
+
+function logLabel(a) {
+  const m = { 'fase_iniziata': 'Fase iniziata', 'fase_completata': 'Fase completata', 'fase_riassegnata': 'Fase riassegnata', 'fase_messa_in_attesa': 'Fase messa in attesa', 'fase_ripresa': 'Fase ripresa', 'nc_segnalata': 'NC segnalata', 'nc_chiusa': 'NC chiusa', 'ordine_sospeso': 'Ordine sospeso', 'ordine_riattivato': 'Ordine riattivato', 'ordine_spedito': 'Ordine spedito', 'ordine_creato': 'Ordine creato' };
+  return m[a] || a;
+}
+
+function toast(msg, type = 'info') {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.className = 'toast show' + (type === 'ok' ? ' ok' : type === 'err' ? ' err' : '');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+async function riassegnaFaseExtra(faseExtraId, ordineId) {
+  const opId = document.getElementById('riassegna-op-select')?.value;
+  if (!opId) { toast('Seleziona un operatore', 'err'); return; }
+  await sb.from('fasi_ordine_extra').update({ operatore_id: opId }).eq('id', faseExtraId);
+  closeModal('modal-riassegna');
+  toast('Fase riassegnata', 'ok');
+  renderDettaglioOrdine(ordineId);
+}
+
+// ═══════════════════════════════════════════════
+// START
+// ═══════════════════════════════════════════════
+function strutturaLabel(s) { return { "quattro_lati": "4 Lati", "barra_l": "Barra ad L", "complanare": "Complanare" }[s] || (s || "—"); }
+function tipoProdLabel(t) { return { "portoncino": "Portoncino", "battente": "Battente" }[t] || (t || "—"); }
+function tipoLabel(t) { return strutturaLabel(t); }
+function getFaseNome(faseId) {
+  const f = fasi.find(x => x.id === faseId);
+  return f ? f.nome : `Fase ${faseId}`;
+}
+const isCNC = (id) => [3, 6, 14, 19].includes(id);
+const isEsterna = (id) => id === 9;
+
+async function eliminaOrdine(id) {
+  const ordine = [...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === id);
+  const label = ordine ? `${ordine.cliente} — ${ordine.codice || ''}` : id;
+  if (!confirm(`Eliminare definitivamente l'ordine "${label}"?\n\nQuesta azione non può essere annullata.`)) return;
+  const { error } = await sb.from('ordini').update({ eliminato: true }).eq('id', id);
+  if (error) { toast('Errore eliminazione: ' + error.message, 'err'); return; }
+  toast('Ordine eliminato', 'ok');
+  showSection('ordini');
+  await loadOrdini();
+  renderDashboard();
+  renderOrdiniTable();
+}
+
+// ═══════════════════════════════════════════════
+// KPI
+// ═══════════════════════════════════════════════
+async function loadKpi() {
+  const giorni = parseInt(document.getElementById('kpi-periodo').value);
+  const dal = giorni > 0 ? new Date(Date.now() - giorni * 86400000).toISOString() : null;
+
+  // Fetch parallelo di tutti i dati necessari
+  const [
+    { data: ordFasi },
+    { data: ordini },
+    { data: nc },
+    { data: users },
+    { data: fasiCfg }
+  ] = await Promise.all([
+    sb.from('ordine_fasi')
+      .select('*, users!operatore_id(nome, cognome), ordini(codice, cliente, struttura, tipo_prodotto, priorita, scadenza, creato_il, spedito_il, eliminato)')
+      .not('completata_il', 'is', null)
+      .gte('completata_il', dal || '2000-01-01'),
+    sb.from('ordini')
+      .select('id, codice, cliente, stato, priorita, struttura, tipo_prodotto, scadenza, creato_il, spedito_il, eliminato')
+      .eq('eliminato', false),
+    sb.from('non_conformita')
+      .select('id, stato, fase_id, segnalata_il, ordine_id')
+      .gte('segnalata_il', dal || '2000-01-01'),
+    sb.from('users').select('id, nome, cognome').in('ruolo', ['operatore']),
+    sb.from('fasi').select('id, nome').order('id')
+  ]);
+
+  const fasi = ordFasi || [];
+  const tuttiOrdini = ordini || [];
+  const tutteNc = nc || [];
+  const operatori = users || [];
+  const fasiNomi = Object.fromEntries((fasiCfg || []).map(f => [f.id, f.nome]));
+
+  const oggi = new Date().toISOString().split('T')[0];
+
+  // ── CARDS RIEPILOGO ──
+  const aperti = tuttiOrdini.filter(o => o.stato === 'aperto').length;
+  const speditiPeriodo = tuttiOrdini.filter(o => o.stato === 'spedito' && (!dal || (o.spedito_il && o.spedito_il >= dal))).length;
+  const inRitardo = tuttiOrdini.filter(o => o.stato === 'aperto' && o.scadenza && o.scadenza < oggi).length;
+  const ncAperte = (nc || []).filter(n => n.stato === 'aperta').length;
+  const fasiCompletate = fasi.length;
+
+  // Tempo medio ordine (dalla prima fase completata all'ultima)
+  const tempiOrdine = [];
+  const perOrdine = {};
+  fasi.forEach(f => {
+    if (!f.ordini || f.ordini.eliminato) return;
+    const oid = f.ordine_id;
+    if (!perOrdine[oid]) perOrdine[oid] = { min: f.iniziata_il, max: f.completata_il, ord: f.ordini };
+    else {
+      if (f.iniziata_il && f.iniziata_il < perOrdine[oid].min) perOrdine[oid].min = f.iniziata_il;
+      if (f.completata_il && f.completata_il > perOrdine[oid].max) perOrdine[oid].max = f.completata_il;
+    }
+  });
+  Object.values(perOrdine).forEach(o => {
+    if (o.min && o.max) {
+      const h = (new Date(o.max) - new Date(o.min)) / 3600000;
+      if (h > 0) tempiOrdine.push(h);
+    }
+  });
+  const tmOrdine = tempiOrdine.length ? tempiOrdine.reduce((a, b) => a + b, 0) / tempiOrdine.length : null;
+
+  document.getElementById('kpi-cards').innerHTML = `
+    <div class="kpi-card"><div class="kpi-label">Ordini aperti</div><div class="kpi-value">${aperti}</div><div class="kpi-sub">attualmente in produzione</div></div>
+    <div class="kpi-card kpi-ok"><div class="kpi-label">Spediti nel periodo</div><div class="kpi-value">${speditiPeriodo}</div><div class="kpi-sub">ordini completati</div></div>
+    <div class="kpi-card ${inRitardo > 0 ? 'kpi-alert' : ''}"><div class="kpi-label">In ritardo</div><div class="kpi-value">${inRitardo}</div><div class="kpi-sub">oltre la scadenza</div></div>
+    <div class="kpi-card ${ncAperte > 0 ? 'kpi-warn' : ''}"><div class="kpi-label">NC aperte</div><div class="kpi-value">${ncAperte}</div><div class="kpi-sub">non conformità attive</div></div>
+    <div class="kpi-card"><div class="kpi-label">Fasi completate</div><div class="kpi-value">${fasiCompletate}</div><div class="kpi-sub">nel periodo selezionato</div></div>
+    <div class="kpi-card"><div class="kpi-label">Tempo medio ordine</div><div class="kpi-value">${tmOrdine ? formatOre(tmOrdine) : '—'}</div><div class="kpi-sub">dalla prima all'ultima fase</div></div>
+  `;
+
+  // ── PRODUTTIVITÀ OPERATORI ──
+  const opStats = {};
+  operatori.forEach(u => { opStats[u.id] = { nome: u.nome + ' ' + u.cognome, count: 0, ore: [] }; });
+  fasi.forEach(f => {
+    const uid = f.operatore_id;
+    if (!uid || !opStats[uid]) return;
+    opStats[uid].count++;
+    if (f.iniziata_il && f.completata_il) {
+      const h = (new Date(f.completata_il) - new Date(f.iniziata_il)) / 3600000;
+      if (h > 0 && h < 200) opStats[uid].ore.push(h);
+    }
+  });
+  const opArr = Object.values(opStats).filter(o => o.count > 0).sort((a, b) => b.count - a.count);
+  const maxCount = opArr[0]?.count || 1;
+  document.getElementById('kpi-operatori').innerHTML = opArr.length ? opArr.map(o => {
+    const tm = o.ore.length ? o.ore.reduce((a, b) => a + b, 0) / o.ore.length : null;
+    return `<div class="kpi-bar-row">
+      <div class="kpi-bar-label" title="${o.nome}">${o.nome}</div>
+      <div class="kpi-bar-track"><div class="kpi-bar-fill" style="width:${Math.round(o.count/maxCount*100)}%"></div></div>
+      <div class="kpi-bar-val">${o.count} fasi</div>
+    </div>
+    <div style="font-size:10px;color:var(--muted);margin:-6px 0 10px 150px">Tempo medio fase: ${tm ? formatOre(tm) : '—'}</div>`;
+  }).join('') : '<div class="kpi-empty">Nessun dato nel periodo</div>';
+
+  // ── TEMPO MEDIO PER FASE ──
+  const faseTempo = {};
+  fasi.forEach(f => {
+    if (!f.fase_id || !f.iniziata_il || !f.completata_il) return;
+    const h = (new Date(f.completata_il) - new Date(f.iniziata_il)) / 3600000;
+    if (h <= 0 || h > 200) return;
+    if (!faseTempo[f.fase_id]) faseTempo[f.fase_id] = [];
+    faseTempo[f.fase_id].push(h);
+  });
+  const faseTempoArr = Object.entries(faseTempo)
+    .map(([id, ore]) => ({ id: parseInt(id), nome: fasiNomi[parseInt(id)] || `Fase ${id}`, media: ore.reduce((a,b)=>a+b,0)/ore.length, count: ore.length }))
+    .sort((a, b) => b.media - a.media);
+  const maxOre = faseTempoArr[0]?.media || 1;
+  document.getElementById('kpi-fasi-tempo').innerHTML = faseTempoArr.length ? faseTempoArr.slice(0, 12).map(f =>
+    `<div class="kpi-bar-row">
+      <div class="kpi-bar-label" title="${f.nome}">${f.id}. ${f.nome}</div>
+      <div class="kpi-bar-track"><div class="kpi-bar-fill" style="width:${Math.round(f.media/maxOre*100)}%;background:${f.media > 8 ? 'var(--alert)' : f.media > 4 ? 'var(--warn)' : 'var(--ok)'}"></div></div>
+      <div class="kpi-bar-val">${formatOre(f.media)}</div>
+    </div>`
+  ).join('') : '<div class="kpi-empty">Nessun dato nel periodo</div>';
+
+  // ── TREND MENSILE ──
+  const mesiMap = {};
+  tuttiOrdini.filter(o => o.stato === 'spedito' && o.spedito_il && (!dal || o.spedito_il >= dal)).forEach(o => {
+    const m = o.spedito_il.substring(0, 7);
+    mesiMap[m] = (mesiMap[m] || 0) + 1;
+  });
+  const mesiArr = Object.entries(mesiMap).sort((a, b) => a[0].localeCompare(b[0]));
+  const maxM = Math.max(...mesiArr.map(m => m[1]), 1);
+  document.getElementById('kpi-trend').innerHTML = mesiArr.length ? mesiArr.map(([m, v]) => {
+    const [y, mo] = m.split('-');
+    const label = new Date(y, mo - 1).toLocaleString('it-IT', { month: 'short', year: '2-digit' });
+    return `<div class="kpi-bar-row">
+      <div class="kpi-bar-label">${label}</div>
+      <div class="kpi-bar-track"><div class="kpi-bar-fill" style="width:${Math.round(v/maxM*100)}%"></div></div>
+      <div class="kpi-bar-val">${v} ord.</div>
+    </div>`;
+  }).join('') : '<div class="kpi-empty">Nessun ordine spedito nel periodo</div>';
+
+  // ── NC PER FASE ──
+  const ncFase = {};
+  tutteNc.forEach(n => {
+    if (!n.fase_id) return;
+    ncFase[n.fase_id] = (ncFase[n.fase_id] || 0) + 1;
+  });
+  const ncFaseArr = Object.entries(ncFase).map(([id, c]) => ({ id: parseInt(id), nome: fasiNomi[parseInt(id)] || `Fase ${id}`, count: c })).sort((a,b) => b.count - a.count);
+  const maxNc = ncFaseArr[0]?.count || 1;
+  document.getElementById('kpi-nc-fase').innerHTML = ncFaseArr.length ? ncFaseArr.map(f =>
+    `<div class="kpi-bar-row">
+      <div class="kpi-bar-label" title="${f.nome}">${f.id}. ${f.nome}</div>
+      <div class="kpi-bar-track"><div class="kpi-bar-fill" style="width:${Math.round(f.count/maxNc*100)}%;background:var(--alert)"></div></div>
+      <div class="kpi-bar-val">${f.count} NC</div>
+    </div>`
+  ).join('') : '<div class="kpi-empty">Nessuna NC nel periodo</div>';
+
+  // ── TEMPO MEDIO PER STRUTTURA ──
+  const strMap = {};
+  Object.values(perOrdine).forEach(o => {
+    if (!o.ord || !o.min || !o.max) return;
+    const s = o.ord.struttura || 'extra';
+    const h = (new Date(o.max) - new Date(o.min)) / 3600000;
+    if (h <= 0) return;
+    if (!strMap[s]) strMap[s] = [];
+    strMap[s].push(h);
+  });
+  const strArr = Object.entries(strMap).map(([s, ore]) => ({ s, media: ore.reduce((a,b)=>a+b,0)/ore.length, count: ore.length })).sort((a,b)=>b.media-a.media);
+  document.getElementById('kpi-struttura').innerHTML = strArr.length ?
+    `<table class="kpi-table"><thead><tr><th>Tipologia</th><th>Ordini</th><th>Tempo medio</th></tr></thead><tbody>` +
+    strArr.map(r => `<tr><td>${strutturaLabel(r.s)}</td><td>${r.count}</td><td style="font-family:'DM Mono',monospace">${formatOre(r.media)}</td></tr>`).join('') +
+    `</tbody></table>` : '<div class="kpi-empty">Nessun dato</div>';
+
+  // ── ORDINI IN RITARDO ──
+  const ritardoList = tuttiOrdini.filter(o => o.stato === 'aperto' && o.scadenza && o.scadenza < oggi).sort((a,b) => a.scadenza.localeCompare(b.scadenza));
+  document.getElementById('kpi-ritardo').innerHTML = ritardoList.length ?
+    `<table class="kpi-table"><thead><tr><th>Cliente</th><th>Codice</th><th>Scadenza</th><th>Giorni</th></tr></thead><tbody>` +
+    ritardoList.map(o => {
+      const gg = Math.floor((new Date(oggi) - new Date(o.scadenza)) / 86400000);
+      return `<tr><td>${escapeHtml(o.cliente)}</td><td style="font-family:'DM Mono',monospace;font-size:11px">${escapeHtml(o.codice||'')}</td><td>${formatDate(o.scadenza)}</td><td style="color:var(--alert);font-weight:600">+${gg}gg</td></tr>`;
+    }).join('') + `</tbody></table>` : '<div class="kpi-empty" style="color:var(--ok)">✓ Nessun ordine in ritardo</div>';
+
+  // ── FASI IN ATTESA ──
+  const { data: inAttesa } = await sb.from('ordine_fasi')
+    .select('*, users!operatore_id(nome, cognome), ordini(codice, cliente)')
+    .eq('stato', 'in_attesa');
+  document.getElementById('kpi-in-attesa').innerHTML = (inAttesa || []).length ?
+    `<table class="kpi-table"><thead><tr><th>Ordine</th><th>Fase</th><th>Operatore</th></tr></thead><tbody>` +
+    inAttesa.map(f => `<tr>
+      <td>${escapeHtml(f.ordini?.cliente||'')} <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">${escapeHtml(f.ordini?.codice||'')}</span></td>
+      <td>${fasiNomi[f.fase_id] || `Fase ${f.fase_id}`}</td>
+      <td>${f.users ? f.users.nome + ' ' + f.users.cognome : '—'}</td>
+    </tr>`).join('') + `</tbody></table>` : '<div class="kpi-empty" style="color:var(--ok)">✓ Nessuna fase in attesa</div>';
+
+  // ── DISTRIBUZIONE PRIORITÀ ──
+  const prioCount = { normale: 0, urgente: 0, extra_urgente: 0 };
+  tuttiOrdini.filter(o => o.stato === 'aperto').forEach(o => { if (prioCount[o.priorita] !== undefined) prioCount[o.priorita]++; });
+  const totPrio = Object.values(prioCount).reduce((a,b)=>a+b,0) || 1;
+  const prioColors = { normale: 'var(--ok)', urgente: 'var(--warn)', extra_urgente: 'var(--alert)' };
+  const prioLabels = { normale: 'Normale', urgente: 'Urgente', extra_urgente: 'Extra Urgente' };
+  document.getElementById('kpi-priorita').innerHTML = `
+    ${Object.entries(prioCount).map(([k, v]) => `
+      <div class="kpi-bar-row">
+        <div class="kpi-bar-label">${prioLabels[k]}</div>
+        <div class="kpi-bar-track"><div class="kpi-bar-fill" style="width:${Math.round(v/totPrio*100)}%;background:${prioColors[k]}"></div></div>
+        <div class="kpi-bar-val">${v} (${Math.round(v/totPrio*100)}%)</div>
+      </div>`).join('')}
+    <div style="font-size:11px;color:var(--muted);margin-top:8px">Totale ordini aperti: ${totPrio}</div>`;
+
+  // ── CLASSIFICA ──
+  const classifica = Object.values(opStats).filter(o => o.count > 0).sort((a,b) => b.count - a.count);
+  document.getElementById('kpi-classifica').innerHTML = classifica.length ?
+    `<table class="kpi-table"><thead><tr><th>#</th><th>Operatore</th><th>Fasi completate</th><th>Tempo medio/fase</th><th>Totale ore lavorate</th></tr></thead><tbody>` +
+    classifica.map((o, i) => {
+      const tm = o.ore.length ? o.ore.reduce((a,b)=>a+b,0)/o.ore.length : null;
+      const tot = o.ore.reduce((a,b)=>a+b,0);
+      const medals = ['🥇','🥈','🥉'];
+      return `<tr>
+        <td style="font-weight:700;font-size:14px">${medals[i] || (i+1)}</td>
+        <td style="font-weight:500">${o.nome}</td>
+        <td style="font-family:'DM Mono',monospace;text-align:center">${o.count}</td>
+        <td style="font-family:'DM Mono',monospace">${tm ? formatOre(tm) : '—'}</td>
+        <td style="font-family:'DM Mono',monospace">${tot > 0 ? formatOre(tot) : '—'}</td>
+      </tr>`;
+    }).join('') + `</tbody></table>` : '<div class="kpi-empty">Nessun dato nel periodo</div>';
+}
+
+function formatOre(h) {
+  if (h < 1) return Math.round(h * 60) + 'm';
+  if (h < 24) return h.toFixed(1).replace('.', ',') + 'h';
+  const gg = Math.floor(h / 24);
+  const rem = Math.round(h % 24);
+  return gg + 'g ' + (rem > 0 ? rem + 'h' : '');
+}
+
+function openModificaOrdine(id) {
+  const ordine = [...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === id);
+  if (!ordine) return;
+  document.getElementById('mod-cliente').value = ordine.cliente || '';
+  document.getElementById('mod-codice').value = ordine.codice || '';
+  document.getElementById('mod-tipo-prodotto').value = ordine.tipo_prodotto || 'portoncino';
+  document.getElementById('mod-struttura').value = ordine.struttura || 'quattro_lati';
+  document.getElementById('mod-materiale').value = ordine.materiale || 'placcato';
+  document.getElementById('mod-prio').value = ordine.priorita || 'normale';
+  document.getElementById('mod-quantita').value = ordine.quantita || 1;
+  document.getElementById('mod-scadenza').value = ordine.scadenza || '';
+  document.getElementById('mod-note').value = ordine.note_generali || '';
+  document.getElementById('modal-modifica').dataset.ordineId = id;
+  document.getElementById('modal-modifica').dataset.tipoProdOld = ordine.tipo_prodotto || 'portoncino';
+  document.getElementById('modal-modifica').dataset.strutturaOld = ordine.struttura || 'quattro_lati';
+  document.getElementById('modal-modifica').dataset.materialeOld = ordine.materiale || 'placcato';
+  document.getElementById('modal-modifica').classList.add('open');
+}
+
+async function salvaModificaOrdine() {
+  const id = document.getElementById('modal-modifica').dataset.ordineId;
+  const cliente = document.getElementById('mod-cliente').value.trim();
+  const codice = document.getElementById('mod-codice').value.trim();
+  if (!cliente) { toast('Inserisci il nome del cliente', 'err'); return; }
+  if (!codice) { toast('Inserisci il numero ordine', 'err'); return; }
+
+  const nuovoTipo = document.getElementById('mod-tipo-prodotto').value;
+  const nuovaStruttura = document.getElementById('mod-struttura').value;
+  const nuovoMateriale = document.getElementById('mod-materiale').value;
+  const vecchioTipo = document.getElementById('modal-modifica').dataset.tipoProdOld;
+  const vecchiaStruttura = document.getElementById('modal-modifica').dataset.strutturaOld;
+  const vecchioMateriale = document.getElementById('modal-modifica').dataset.materialeOld;
+
+  const { error } = await sb.from('ordini').update({
+    cliente,
+    codice,
+    tipo_prodotto: nuovoTipo,
+    struttura: nuovaStruttura,
+    materiale: nuovoMateriale,
+    priorita: document.getElementById('mod-prio').value,
+    quantita: parseInt(document.getElementById('mod-quantita').value) || 1,
+    scadenza: document.getElementById('mod-scadenza').value || null,
+    note_generali: document.getElementById('mod-note').value.trim() || null,
+  }).eq('id', id);
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+
+  // Ricalcola fasi N/A se tipo_prodotto, struttura o materiale sono cambiati
+  if (nuovoTipo !== vecchioTipo || nuovaStruttura !== vecchiaStruttura || nuovoMateriale !== vecchioMateriale) {
+    await ricalcolaFasiNA(id, nuovoTipo, nuovaStruttura, nuovoMateriale);
+  }
+
+  await sb.from('archivio_log').insert({ ordine_id: id, utente_id: currentUserRow.id, azione: 'ordine_modificato' });
+  closeModal('modal-modifica');
+  toast('Ordine aggiornato', 'ok');
+  await loadOrdini();
+  renderDashboard();
+  renderOrdiniTable();
+  renderDettaglioOrdine(id);
+}
+
+// Ricalcola fasi N/A dopo cambio tipo_prodotto, struttura o materiale
+// Non tocca fasi in_corso, in_attesa o completata
+async function ricalcolaFasiNA(ordineId, tipoProd, struttura, materiale) {
+  const { data: fasiOrdine } = await sb.from('ordine_fasi')
+    .select('id, fase_id, stato')
+    .eq('ordine_id', ordineId);
+  if (!fasiOrdine) return;
+
+  const isBattente   = tipoProd === 'battente';
+  const isBarraOComp = struttura === 'barra_l' || struttura === 'complanare';
+  const isMdf        = (materiale || '').toLowerCase() === 'hdf';
+
+  for (const f of fasiOrdine) {
+    let dovrebbeEssereNA = false;
+
+    // F8 → N/A se HDF
+    if (f.fase_id === 8 && isMdf) dovrebbeEssereNA = true;
+    // F9, F11 → N/A se barra_l o complanare
+    if ((f.fase_id === 9 || f.fase_id === 11) && isBarraOComp) dovrebbeEssereNA = true;
+    // F17-F20 → N/A se battente
+    if (f.fase_id >= 17 && f.fase_id <= 20 && isBattente) dovrebbeEssereNA = true;
+
+    const eNA = f.stato === 'non_applicabile';
+
+    if (dovrebbeEssereNA && !eNA && f.stato === 'disponibile') {
+      await sb.from('ordine_fasi').update({ stato: 'non_applicabile' }).eq('id', f.id);
+    } else if (!dovrebbeEssereNA && eNA) {
+      await sb.from('ordine_fasi').update({ stato: 'disponibile' }).eq('id', f.id);
+    }
+  }
+}
+
+init();
+</script>
+</body>
+</html>

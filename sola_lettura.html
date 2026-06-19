@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1C1714">
+<title>Mango — Produzione</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap');
+
+:root {
+  --bg:      #F2EDE6;
+  --surface: #FDFAF6;
+  --border:  #D9CFC4;
+  --wood:    #8B5E3C;
+  --ink:     #1C1714;
+  --muted:   #7A6E65;
+  --ok:      #3A7D44;
+  --warn:    #C27B00;
+  --alert:   #B03A2E;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; }
+body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink); font-size: 15px; }
+
+/* LOGIN */
+#login-screen { height: 100vh; display: flex; align-items: center; justify-content: center; flex-direction: column; background: var(--ink); padding: 24px; }
+.login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 40px; }
+.logo-mark { width: 40px; height: 40px; background: var(--wood); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
+.login-logo span { font-family: 'DM Mono', monospace; font-size: 20px; letter-spacing: 0.12em; text-transform: uppercase; color: #F2EDE6; }
+.login-sub { font-family: 'DM Mono', monospace; font-size: 11px; letter-spacing: 0.1em; color: #9E9189; text-transform: uppercase; margin-bottom: 36px; }
+.login-card { background: var(--surface); border-radius: 16px; padding: 28px; width: 100%; max-width: 360px; }
+.login-card h2 { font-size: 18px; font-weight: 600; margin-bottom: 20px; }
+.form-group { margin-bottom: 14px; }
+.form-group label { display: block; font-size: 11px; font-weight: 500; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+.form-group select { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--ink); font-family: 'Inter', sans-serif; font-size: 15px; outline: none; -webkit-appearance: none; }
+.form-group select:focus { border-color: var(--wood); }
+.pin-input { display: flex; gap: 10px; justify-content: center; }
+.pin-digit { width: 56px; height: 56px; border: 2px solid var(--border); border-radius: 10px; text-align: center; font-size: 22px; font-family: 'DM Mono', monospace; background: var(--bg); color: var(--ink); outline: none; -webkit-text-security: disc; }
+.pin-digit:focus { border-color: var(--wood); }
+.btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px; border-radius: 10px; border: none; cursor: pointer; font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600; transition: opacity 0.15s; }
+.btn:active { opacity: 0.75; }
+.btn-primary { background: var(--wood); color: white; margin-top: 20px; }
+.err-msg { color: var(--alert); font-size: 13px; text-align: center; margin-top: 10px; }
+
+/* APP */
+#app-screen { display: none; flex-direction: column; height: 100vh; }
+.app-header { background: var(--ink); color: #F2EDE6; padding: 0 16px; height: 52px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.logo-sm { font-family: 'DM Mono', monospace; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+.logo-mark-sm { width: 22px; height: 22px; background: var(--wood); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
+.header-actions { display: flex; align-items: center; gap: 12px; }
+.rt-indicator { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #9E9189; }
+.rt-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); animation: pulse 2s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.app-content { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+/* SEARCH / FILTER */
+.filter-bar { padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; gap: 8px; }
+.filter-bar input { flex: 1; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font-family: 'Inter', sans-serif; font-size: 14px; outline: none; color: var(--ink); }
+.filter-bar input:focus { border-color: var(--wood); }
+.filter-bar select { padding: 9px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); font-family: 'Inter', sans-serif; font-size: 13px; outline: none; color: var(--ink); -webkit-appearance: none; }
+
+/* ORDINI LIST */
+.ordini-list { padding: 12px 16px; }
+.ordine-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 10px; overflow: hidden; cursor: pointer; }
+.ordine-card:active { opacity: 0.85; }
+.ordine-hdr { padding: 13px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+.ordine-hdr .cod { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; }
+.ordine-hdr .cliente { font-size: 14px; font-weight: 600; flex: 1; margin: 0 10px; }
+.ordine-body { padding: 12px 16px; }
+.meta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; }
+.meta-item label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); display: block; margin-bottom: 2px; }
+.meta-item span { font-size: 13px; font-weight: 500; }
+.badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+.badge-aperto { background: #D1FAE5; color: #065F46; }
+.badge-sospeso { background: #FEF3C7; color: #92400E; }
+.badge-normale { background: #F3F4F6; color: #374151; }
+.badge-urgente { background: #FEF9C3; color: #713F12; }
+.badge-extra_urgente { background: #FEE2E2; color: #991B1B; }
+
+/* PROGRESS BAR FASI */
+.progress-bar { display: flex; gap: 2px; height: 6px; border-radius: 3px; overflow: hidden; }
+.pb-seg { flex: 1; border-radius: 2px; }
+.pb-seg.completata { background: var(--ok); }
+.pb-seg.in_corso { background: #3B82F6; }
+.pb-seg.disponibile { background: var(--border); }
+.progress-label { font-size: 11px; color: var(--muted); margin-top: 5px; }
+
+/* DETTAGLIO */
+#detail-overlay { display: none; position: fixed; inset: 0; background: rgba(28,23,20,0.55); z-index: 200; backdrop-filter: blur(2px); }
+#detail-panel { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-radius: 20px 20px 0 0; max-height: 85vh; overflow-y: auto; z-index: 201; transform: translateY(100%); transition: transform 0.3s ease; }
+#detail-panel.open { transform: translateY(0); }
+.detail-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 12px auto 16px; }
+.detail-content { padding: 0 20px 40px; }
+.section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-family: 'DM Mono', monospace; margin: 18px 0 8px; }
+.fasi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.fase-chip { padding: 8px 10px; border-radius: 8px; font-size: 12px; }
+.fase-chip.completata { background: #D1FAE5; color: #065F46; }
+.fase-chip.in_corso { background: #DBEAFE; color: #1E40AF; }
+.fase-chip.in_attesa { background: #FFF7ED; color: #C2410C; }
+.fase-chip.disponibile { background: var(--phase-bg); color: var(--muted); }
+--phase-bg: #EDE4D8;
+.fase-chip .fc-num { font-family: 'DM Mono', monospace; font-size: 10px; display: block; margin-bottom: 2px; opacity: 0.7; }
+.fase-chip .fc-nome { font-weight: 600; font-size: 11px; display: block; margin-bottom: 2px; }
+.fase-chip .fc-op { font-size: 10px; opacity: 0.75; }
+.nc-item { padding: 10px 12px; background: #FEF2F2; border: 1px solid #FECACA; border-radius: 8px; margin-bottom: 6px; }
+.nc-item .nc-desc { font-size: 13px; font-weight: 500; margin-bottom: 3px; }
+.nc-item .nc-meta { font-size: 11px; color: var(--alert); }
+.badge-nc-aperta { background: #FEE2E2; color: #991B1B; }
+.badge-nc-approvata { background: #FEF3C7; color: #92400E; }
+.badge-nc-chiusa { background: #D1FAE5; color: #065F46; }
+
+/* LOADING */
+.loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: var(--muted); font-size: 14px; gap: 10px; }
+.spinner { width: 18px; height: 18px; border: 2px solid var(--border); border-top-color: var(--wood); border-radius: 50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty-state { text-align: center; padding: 48px 20px; color: var(--muted); }
+.empty-state .icon { font-size: 36px; margin-bottom: 10px; }
+
+.chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.chip { padding: 4px 10px; border-radius: 20px; font-size: 11px; background: var(--phase-bg); color: var(--muted); border: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-logo">
+    <div class="logo-mark"></div>
+    <span>Mango</span>
+  </div>
+  <div class="login-sub">Vista produzione</div>
+  <div class="login-card">
+    <h2>Accesso</h2>
+    <div class="form-group">
+      <label>Seleziona account</label>
+      <select id="login-user-select">
+        <option value="">Caricamento…</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>PIN</label>
+      <div class="pin-input">
+        <input class="pin-digit" type="number" maxlength="1" id="pin0" inputmode="numeric" oninput="pinNext(0)">
+        <input class="pin-digit" type="number" maxlength="1" id="pin1" inputmode="numeric" oninput="pinNext(1)">
+        <input class="pin-digit" type="number" maxlength="1" id="pin2" inputmode="numeric" oninput="pinNext(2)">
+        <input class="pin-digit" type="number" maxlength="1" id="pin3" inputmode="numeric" oninput="pinNext(3)">
+      </div>
+    </div>
+    <div id="login-err" class="err-msg"></div>
+    <button class="btn btn-primary" onclick="doLogin()">Accedi</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen">
+  <div class="app-header">
+    <div class="logo-sm">
+      <div class="logo-mark-sm"></div>
+      Mango Produzione
+    </div>
+    <div class="header-actions">
+      <div class="rt-indicator" id="rt-indicator">
+        <div class="rt-dot"></div>
+        <span>live</span>
+      </div>
+      <button onclick="doLogout()" style="background:none;border:none;color:#9E9189;font-size:12px;cursor:pointer">esci</button>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <input type="text" id="search-input" placeholder="Cerca ordine, cliente…" oninput="filterOrdini()">
+    <select id="filter-prio" onchange="filterOrdini()">
+      <option value="">Tutte</option>
+      <option value="extra_urgente">Extra Urgente</option>
+      <option value="urgente">Urgente</option>
+      <option value="normale">Normale</option>
+    </select>
+  </div>
+
+  <div class="app-content">
+    <div class="ordini-list" id="ordini-list">
+      <div class="loading"><div class="spinner"></div> Caricamento ordini…</div>
+    </div>
+  </div>
+</div>
+
+<!-- DETTAGLIO OVERLAY -->
+<div id="detail-overlay" onclick="closeDetail()"></div>
+<div id="detail-panel">
+  <div class="detail-handle"></div>
+  <div class="detail-content" id="detail-content"></div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://mtpzfxnyfkzikzlkomwz.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10cHpmeG55Zmt6aWt6bGtvbXd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2NzczNzEsImV4cCI6MjA5NzI1MzM3MX0.3JxpgQORCSUUdSgawmcizNgaJhpDnmQ_zT_c41WfJbs';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+let currentUser = null;
+let fasi = [];
+let ordiniAll = [];
+let ordiniFiltered = [];
+
+// ── LOGIN ──────────────────────────────────────────────────────────────────
+async function loadLoginUsers() {
+  const { data } = await sb.from('users').select('id, nome, cognome').eq('ruolo', 'sola_lettura').eq('attivo', true).order('cognome');
+  const sel = document.getElementById('login-user-select');
+  if (!data?.length) {
+    sel.innerHTML = '<option value="">Nessun utente sola_lettura trovato</option>';
+    return;
+  }
+  sel.innerHTML = '<option value="">— Scegli —</option>' + data.map(u => `<option value="${u.id}">${u.cognome} ${u.nome}</option>`).join('');
+}
+
+function pinNext(idx) {
+  if (document.getElementById('pin' + idx).value.length >= 1 && idx < 3) document.getElementById('pin' + (idx + 1)).focus();
+}
+
+async function doLogin() {
+  const userId = document.getElementById('login-user-select').value;
+  if (!userId) { document.getElementById('login-err').textContent = 'Seleziona il tuo nome'; return; }
+  const pin = [0,1,2,3].map(i => document.getElementById('pin' + i).value).join('');
+  if (pin.length !== 4) { document.getElementById('login-err').textContent = 'Inserisci il PIN completo'; return; }
+
+  const { data } = await sb.rpc('verifica_pin', { p_user_id: userId, p_pin: pin });
+  if (!data?.ok) { document.getElementById('login-err').textContent = data?.errore || 'PIN errato'; return; }
+  currentUser = data.user;
+  showApp();
+}
+
+function doLogout() {
+  currentUser = null;
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  [0,1,2,3].forEach(i => document.getElementById('pin' + i).value = '');
+}
+
+// ── APP INIT ───────────────────────────────────────────────────────────────
+async function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'flex';
+  document.getElementById('app-screen').style.flexDirection = 'column';
+  document.getElementById('app-screen').style.height = '100vh';
+
+  await loadFasi();
+  await loadOrdini();
+  setupRealtime();
+}
+
+async function loadFasi() {
+  const { data } = await sb.from('fasi').select('*').order('id');
+  fasi = data || [];
+}
+
+async function loadOrdini() {
+  const { data } = await sb.from('ordini')
+    .select('*, ordine_fasi(id, fase_id, stato, operatore_id)')
+    .in('stato', ['aperto', 'sospeso'])
+    .eq('eliminato', false)
+    .order('priorita', { ascending: false })
+    .order('scadenza', { ascending: true, nullsFirst: false });
+
+  ordiniAll = data || [];
+  filterOrdini();
+}
+
+// ── REALTIME ───────────────────────────────────────────────────────────────
+function setupRealtime() {
+  sb.channel('sola-lettura')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'ordini' }, async () => {
+      await loadOrdini();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'ordine_fasi' }, async () => {
+      await loadOrdini();
+      // Aggiorna dettaglio se aperto
+      const panel = document.getElementById('detail-panel');
+      if (panel.classList.contains('open') && currentDetailId) {
+        openDetail(currentDetailId);
+      }
+    })
+    .subscribe((status) => {
+      const dot = document.querySelector('.rt-dot');
+      const lbl = document.querySelector('.rt-indicator span');
+      if (status === 'SUBSCRIBED') {
+        dot.style.background = 'var(--ok)';
+        lbl.textContent = 'live';
+      } else {
+        dot.style.background = 'var(--warn)';
+        lbl.textContent = 'reconnecting…';
+      }
+    });
+}
+
+// ── FILTER ─────────────────────────────────────────────────────────────────
+function filterOrdini() {
+  const q = document.getElementById('search-input').value.toLowerCase();
+  const prio = document.getElementById('filter-prio').value;
+
+  ordiniFiltered = ordiniAll.filter(o => {
+    const matchQ = !q || o.codice?.toLowerCase().includes(q) || o.cliente?.toLowerCase().includes(q);
+    const matchP = !prio || o.priorita === prio;
+    return matchQ && matchP;
+  });
+  renderOrdini();
+}
+
+// ── RENDER LISTA ─────────────────────────────────────────────────────────────
+function renderOrdini() {
+  const el = document.getElementById('ordini-list');
+  if (!ordiniFiltered.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>Nessun ordine trovato</p></div>';
+    return;
+  }
+
+  el.innerHTML = ordiniFiltered.map(o => {
+    const faseArr = o.ordine_fasi || [];
+    const faseConteggiate = faseArr.filter(f => f.stato !== 'non_applicabile');
+    const completate = faseConteggiate.filter(f => f.stato === 'completata').length;
+    const in_corso = faseConteggiate.filter(f => f.stato === 'in_corso').length;
+    const pct = faseConteggiate.length ? Math.round(completate / faseConteggiate.length * 100) : 0;
+    const oggi = new Date().toISOString().split('T')[0];
+    const isLate = o.scadenza && o.scadenza < oggi;
+
+    const progressSegs = faseArr.map(f => `<div class="pb-seg ${f.stato}"></div>`).join('');
+
+    return `<div class="ordine-card" onclick="openDetail('${o.id}')">
+      <div class="ordine-hdr">
+        <span class="cliente">${o.cliente}</span>
+        <span class="cod">${o.codice || ''}</span>
+        <span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span>
+      </div>
+      <div class="ordine-body">
+        <div class="meta-row">
+          <div class="meta-item"><label>Stato</label><span class="badge badge-${o.stato}">${o.stato}</span></div>
+          <div class="meta-item"><label>Tipo</label><span>${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}</span></div>
+          <div class="meta-item"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${o.scadenza ? formatDate(o.scadenza) : '—'}</span></div>
+          <div class="meta-item"><label>Avanzamento</label><span>${completate}/${faseConteggiate.length} fasi · ${pct}%</span></div>
+          ${in_corso > 0 ? `<div class="meta-item"><label>In lavorazione</label><span style="color:#1E40AF">${in_corso} fase(i)</span></div>` : ''}
+        </div>
+        <div class="progress-bar">${progressSegs}</div>
+        <div class="progress-label">${pct}% completato</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── DETTAGLIO ──────────────────────────────────────────────────────────────
+let currentDetailId = null;
+
+async function openDetail(ordineId) {
+  currentDetailId = ordineId;
+  const overlay = document.getElementById('detail-overlay');
+  const panel = document.getElementById('detail-panel');
+  overlay.style.display = 'block';
+  setTimeout(() => panel.classList.add('open'), 10);
+
+  const content = document.getElementById('detail-content');
+  content.innerHTML = '<div class="loading"><div class="spinner"></div> Caricamento…</div>';
+
+  const ordine = ordiniAll.find(o => o.id === ordineId);
+  if (!ordine) return;
+
+  // Carica fasi con operatori e NC
+  const [{ data: fasiOrd }, { data: nc }] = await Promise.all([
+    sb.from('ordine_fasi')
+      .select('*, users!operatore_id(nome, cognome)')
+      .eq('ordine_id', ordineId)
+      .order('fase_id'),
+    sb.from('non_conformita')
+      .select('*, users!segnalata_da(nome, cognome), fasi(nome)')
+      .eq('ordine_id', ordineId)
+      .order('creato_il', { ascending: false })
+  ]);
+
+  const oggi = new Date().toISOString().split('T')[0];
+  const isLate = ordine.scadenza && ordine.scadenza < oggi;
+  const completate = fasiOrd?.filter(f => f.stato === 'completata').length || 0;
+
+  let html = `
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:20px;font-weight:700">${ordine.cliente}</div>
+        <div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);margin-top:4px">${ordine.codice || ''}</div>
+      </div>
+      <span class="badge badge-${ordine.stato}" style="font-size:13px">${ordine.stato}</span>
+    </div>
+
+    <div class="chip-row" style="margin-top:14px">
+      <span class="badge badge-${ordine.priorita}">${prioLabel(ordine.priorita)}</span>
+      <span class="chip">${strutturaLabel(ordine.struttura)} / ${tipoProdLabel(ordine.tipo_prodotto)}</span>
+      <span class="chip" style="${isLate ? 'color:var(--alert);border-color:var(--alert)' : ''}">📅 ${ordine.scadenza ? formatDate(ordine.scadenza) : 'Nessuna scadenza'}</span>
+      <span class="chip">✅ ${completate}/${fasiOrd?.filter(f => f.stato !== 'non_applicabile').length || 0} fasi</span>
+    </div>
+
+    ${ordine.note_generali ? `<div style="background:var(--bg);border-radius:8px;padding:12px;margin-top:10px;font-size:13px;color:var(--muted)">📝 ${ordine.note_generali}</div>` : ''}
+
+    <div class="section-title">Fasi di produzione</div>
+    <div class="fasi-grid">`;
+
+  const fasiOrdArr = fasiOrd || [];
+  for (const f of fasiOrdArr) {
+    const nomeFase = getFaseNome(f.fase_id);
+    const opNome = f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '';
+    const isNA = f.stato === 'non_applicabile';
+    const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '▶' : f.stato === 'in_attesa' ? '⏸' : isNA ? '—' : '';
+    const cncBadge = isCNC(f.fase_id) ? '<span style="font-size:9px;font-weight:700;background:#7C3AED;color:#fff;padding:1px 4px;border-radius:3px;margin-left:4px">CNC</span>' : '';
+    html += `<div class="fase-chip ${f.stato}" style="${isNA ? 'opacity:0.45' : ''}">
+      <span class="fc-num">${icon || f.fase_id}</span>
+      <span class="fc-nome">${nomeFase}${cncBadge}</span>
+      ${isNA ? '<span class="fc-op" style="color:#9E9E9E">N/A</span>' : f.stato === 'in_attesa' ? '<span class="fc-op">⏸ In attesa</span>' : opNome ? `<span class="fc-op">👷 ${opNome}</span>` : ''}
+    </div>`;
+  }
+
+  html += `</div>`;
+
+  // NC
+  if (nc?.length) {
+    html += `<div class="section-title">Non Conformità (${nc.length})</div>`;
+    html += nc.map(n => `
+      <div class="nc-item">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <span class="badge badge-nc-${n.stato}">${n.stato}</span>
+          <span style="font-size:11px;color:var(--muted)">${n.fasi?.nome || ''}</span>
+        </div>
+        <div class="nc-desc">${n.descrizione}</div>
+        <div class="nc-meta">Segnalata da ${n['users']?.nome || ''} ${n['users']?.cognome || ''} · ${formatDateTime(n.creato_il)}</div>
+      </div>
+    `).join('');
+  }
+
+  content.innerHTML = html;
+}
+
+function closeDetail() {
+  document.getElementById('detail-overlay').style.display = 'none';
+  document.getElementById('detail-panel').classList.remove('open');
+  currentDetailId = null;
+}
+
+// ── UTILITIES ──────────────────────────────────────────────────────────────
+function strutturaLabel(s) { return { 'quattro_lati': '4 Lati', 'barra_l': 'Barra ad L', 'complanare': 'Complanare' }[s] || (s || '—'); }
+function tipoProdLabel(t) { return { 'portoncino': 'Portoncino', 'battente': 'Battente' }[t] || (t || '—'); }
+function prioLabel(p) { return { 'normale': 'Normale', 'urgente': 'Urgente', 'extra_urgente': 'Extra Urgente' }[p] || p; }
+
+function getFaseNome(faseId) {
+  const f = fasi.find(x => x.id === faseId);
+  return f ? f.nome : `Fase ${faseId}`;
+}
+const isCNC = (id) => [3, 6, 14, 19].includes(id);
+function formatDate(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
+function formatDateTime(d) { if (!d) return '—'; return new Date(d).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+
+// ── START ──────────────────────────────────────────────────────────────────
+loadLoginUsers();
+</script>
+</body>
+</html>

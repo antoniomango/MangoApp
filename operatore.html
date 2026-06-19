@@ -1,0 +1,1426 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1C1714">
+<title>Mango — Operatore</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap');
+
+:root {
+  --bg:       #F2EDE6;
+  --surface:  #FDFAF6;
+  --border:   #D9CFC4;
+  --wood:     #8B5E3C;
+  --wood-lt:  #C4926A;
+  --ink:      #1C1714;
+  --muted:    #7A6E65;
+  --ok:       #3A7D44;
+  --warn:     #C27B00;
+  --alert:    #B03A2E;
+  --phase-bg: #EDE4D8;
+  --navh:     60px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body { height: 100%; overflow: hidden; }
+
+body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink); font-size: 15px; }
+
+/* ── LOGIN ── */
+#login-screen {
+  height: 100vh; display: flex; align-items: center; justify-content: center;
+  flex-direction: column; background: var(--ink); padding: 24px;
+}
+.login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 40px; }
+.logo-mark { width: 40px; height: 40px; background: var(--wood); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
+.login-logo span { font-family: 'DM Mono', monospace; font-size: 20px; letter-spacing: 0.12em; text-transform: uppercase; color: #F2EDE6; }
+.login-card { background: var(--surface); border-radius: 16px; padding: 28px; width: 100%; max-width: 360px; }
+.login-card h2 { font-size: 20px; font-weight: 600; margin-bottom: 20px; }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+.form-group select, .form-group input {
+  width: 100%; padding: 13px 14px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg); color: var(--ink); font-family: 'Inter', sans-serif; font-size: 16px;
+  outline: none; -webkit-appearance: none; appearance: none;
+}
+.form-group select:focus, .form-group input:focus { border-color: var(--wood); }
+.pin-input {
+  display: flex; gap: 10px; justify-content: center;
+}
+.pin-digit {
+  width: 56px; height: 56px; border: 2px solid var(--border); border-radius: 10px;
+  text-align: center; font-size: 22px; font-family: 'DM Mono', monospace;
+  background: var(--bg); color: var(--ink); outline: none;
+  -webkit-text-security: disc;
+}
+.pin-digit:focus { border-color: var(--wood); }
+.btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px; border-radius: 10px; border: none; cursor: pointer; font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600; transition: opacity 0.15s; }
+.btn:active { opacity: 0.75; }
+.btn:disabled { opacity: 0.5; }
+.btn-primary { background: var(--wood); color: white; }
+.btn-ok { background: var(--ok); color: white; }
+.btn-alert { background: var(--alert); color: white; }
+.btn-secondary { background: var(--phase-bg); color: var(--ink); border: 1px solid var(--border); }
+.err-msg { color: var(--alert); font-size: 13px; text-align: center; margin-top: 12px; }
+
+/* ── APP LAYOUT ── */
+#app-screen { display: none; height: 100vh; display: none; flex-direction: column; }
+.app-header {
+  background: var(--ink); color: #F2EDE6;
+  padding: 0 16px; height: 52px; display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+.app-header .logo-sm { font-family: 'DM Mono', monospace; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+.app-header .logo-mark-sm { width: 22px; height: 22px; background: var(--wood); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
+.user-chip { background: rgba(255,255,255,0.1); padding: 5px 10px; border-radius: 20px; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+.online-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+.offline-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); }
+
+.app-content { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: var(--navh); }
+
+/* ── BOTTOM NAV ── */
+.bottom-nav {
+  height: var(--navh); background: var(--ink); position: fixed; bottom: 0; left: 0; right: 0;
+  display: flex; align-items: center; justify-content: space-around; z-index: 100;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+.nav-tab { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 20px; cursor: pointer; color: #6B6460; transition: color 0.15s; }
+.nav-tab.active { color: var(--wood-lt); }
+.nav-tab .tab-icon { font-size: 20px; }
+.nav-tab .tab-label { font-size: 10px; font-family: 'DM Mono', monospace; letter-spacing: 0.06em; text-transform: uppercase; }
+
+/* ── SCREEN ── */
+.screen { display: none; padding: 16px; }
+.screen.active { display: block; }
+
+/* ── CARDS ── */
+.page-title { font-size: 20px; font-weight: 600; margin-bottom: 16px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
+.card-hdr { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.card-hdr h3 { font-size: 14px; font-weight: 600; }
+.card-body { padding: 14px 16px; }
+.card-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.card-row:last-child { border-bottom: none; }
+.card-row:active { background: var(--phase-bg); }
+.card-row .row-main { flex: 1; }
+.card-row .row-title { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+.card-row .row-sub { font-size: 12px; color: var(--muted); }
+.card-row .row-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.arrow { color: var(--muted); font-size: 16px; margin-left: 8px; }
+
+/* ── BADGES ── */
+.badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+.badge-aperto { background: #D1FAE5; color: #065F46; }
+.badge-sospeso { background: #FEF3C7; color: #92400E; }
+.badge-normale { background: #F3F4F6; color: #374151; }
+.badge-urgente { background: #FEF9C3; color: #713F12; }
+.badge-extra_urgente { background: #FEE2E2; color: #991B1B; }
+.badge-disponibile { background: var(--phase-bg); color: var(--muted); }
+.badge-in_corso { background: #DBEAFE; color: #1E40AF; }
+.badge-in_attesa { background: #FFF7ED; color: #C2410C; }
+.badge-completata { background: #D1FAE5; color: #065F46; }
+
+/* ── FASI LISTA ── */
+.fasi-list { }
+.fase-row {
+  display: flex; align-items: center; gap: 12px; padding: 13px 16px;
+  border-bottom: 1px solid var(--border); cursor: pointer;
+}
+.fase-row:last-child { border-bottom: none; }
+.fase-row:active { background: var(--phase-bg); }
+.fase-row.disponibile .fase-num-circle { background: var(--phase-bg); color: var(--muted); }
+.fase-row.in_corso .fase-num-circle { background: #DBEAFE; color: #1E40AF; }
+.fase-row.in_attesa .fase-num-circle { background: #FFF7ED; color: #C2410C; }
+.fase-row.completata .fase-num-circle { background: #D1FAE5; color: #065F46; }
+.fase-num-circle { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; flex-shrink: 0; }
+.fase-info { flex: 1; }
+.fase-info .fn { font-size: 14px; font-weight: 600; }
+.fase-info .fo { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+/* ── DETTAGLIO ORDINE ── */
+.back-btn { display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--wood); margin-bottom: 16px; cursor: pointer; background: none; border: none; }
+.order-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.meta-item label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); display: block; margin-bottom: 3px; }
+.meta-item span { font-size: 14px; font-weight: 500; }
+
+/* ── AZIONE FASE ── */
+.azione-box { background: var(--surface); border: 2px solid var(--wood); border-radius: 12px; padding: 16px; margin-top: 12px; }
+.azione-box h4 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+.note-box { background: var(--phase-bg); border-radius: 8px; padding: 12px; font-size: 13px; margin-bottom: 12px; }
+.note-box strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); display: block; margin-bottom: 6px; }
+textarea { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 14px; background: var(--bg); color: var(--ink); resize: vertical; outline: none; min-height: 80px; }
+textarea:focus { border-color: var(--wood); }
+.upload-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; border: 2px dashed var(--border); border-radius: 8px; background: var(--phase-bg); color: var(--muted); font-size: 14px; cursor: pointer; margin-bottom: 12px; }
+.upload-btn:active { background: var(--border); }
+.foto-preview { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.foto-thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+
+/* ── NC FORM ── */
+.nc-form select { margin-bottom: 12px; }
+
+/* ── ATTIVITÀ ── */
+.attivita-item { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.attivita-item:last-child { border-bottom: none; }
+.attivita-item .at-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.attivita-item .at-sub { font-size: 12px; color: var(--muted); }
+
+/* ── TOAST ── */
+.toast { position: fixed; bottom: 72px; left: 16px; right: 16px; z-index: 300; background: var(--ink); color: white; padding: 13px 18px; border-radius: 10px; font-size: 14px; opacity: 0; transform: translateY(6px); transition: all 0.25s; pointer-events: none; text-align: center; }
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.err { background: var(--alert); }
+.toast.ok { background: var(--ok); }
+.offline-banner { background: var(--warn); color: white; padding: 8px 16px; font-size: 13px; text-align: center; display: none; }
+.offline-banner.show { display: block; }
+
+.section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-family: 'DM Mono', monospace; margin: 20px 0 8px; }
+.progress-bar-wrap { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin: 6px 0 4px; }
+.progress-bar-fill { height: 100%; border-radius: 4px; background: var(--wood); transition: width 0.3s; }
+.progress-bar-fill.done { background: var(--ok); }
+.av-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; }
+.av-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.av-title { font-size: 14px; font-weight: 600; }
+.av-meta { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+.av-fasi-mini { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 8px; }
+.av-fase-dot { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
+.av-fase-dot.completata { background: var(--ok); }
+.av-fase-dot.in_corso { background: #3B82F6; }
+.av-fase-dot.in_attesa { background: #F59E0B; }
+.av-fase-dot.disponibile { background: var(--border); }
+.av-fase-dot.non_applicabile { background: transparent; border: 1px solid var(--border); opacity: 0.3; }
+.empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
+.empty-state .icon { font-size: 36px; margin-bottom: 10px; }
+.queue-badge { background: var(--warn); color: white; border-radius: 12px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-logo">
+    <div class="logo-mark"></div>
+    <span>Mango</span>
+  </div>
+  <div class="login-card">
+    <h2>Accesso Operatore</h2>
+    <div class="form-group">
+      <label>Seleziona il tuo nome</label>
+      <select id="login-user-select">
+        <option value="">Caricamento…</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>PIN</label>
+      <div class="pin-input">
+        <input class="pin-digit" type="number" maxlength="1" id="pin0" inputmode="numeric" oninput="pinNext(0)">
+        <input class="pin-digit" type="number" maxlength="1" id="pin1" inputmode="numeric" oninput="pinNext(1)">
+        <input class="pin-digit" type="number" maxlength="1" id="pin2" inputmode="numeric" oninput="pinNext(2)">
+        <input class="pin-digit" type="number" maxlength="1" id="pin3" inputmode="numeric" oninput="pinNext(3)">
+      </div>
+    </div>
+    <div id="login-err" class="err-msg"></div>
+    <button class="btn btn-primary" style="margin-top:20px" onclick="doLoginPin()">Accedi</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen" style="display:none;flex-direction:column;height:100vh">
+  <div class="offline-banner" id="offline-banner">⚡ Offline — le azioni verranno sincronizzate alla riconnessione</div>
+  <div class="app-header">
+    <div class="logo-sm">
+      <div class="logo-mark-sm"></div>
+      Mango
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="user-chip">
+        <div class="online-dot" id="conn-dot"></div>
+        <span id="user-chip-name"></span>
+      </div>
+      <button onclick="doLogout()" style="background:none;border:none;color:#9E9189;font-size:12px;cursor:pointer">esci</button>
+    </div>
+  </div>
+
+  <div class="app-content">
+    <!-- HOME -->
+    <div class="screen active" id="screen-home">
+      <div style="padding:16px">
+        <div class="page-title">Ciao, <span id="home-name"></span> 👋</div>
+
+        <!-- In corso -->
+        <div class="section-title">Le mie fasi in corso</div>
+        <div class="card" id="mie-fasi-card">
+          <div class="empty-state"><div class="icon">✅</div><p>Nessuna fase in corso</p></div>
+        </div>
+
+        <!-- Ricerca ordini -->
+        <div style="margin-bottom:12px">
+          <input type="text" id="ordini-search" placeholder="🔍 Cerca cliente o codice ordine…" oninput="filtraOrdini()"
+            style="width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:10px;font-size:15px;background:var(--surface);color:var(--ink);outline:none">
+        </div>
+
+        <!-- Disponibili -->
+        <div class="section-title">Ordini con fasi disponibili</div>
+        <div id="ordini-disponibili-list">
+          <div class="empty-state"><div class="icon">📋</div><p>Caricamento…</p></div>
+        </div>
+
+        <!-- NC rapido -->
+        <div class="section-title">Azioni rapide</div>
+        <button class="btn btn-alert" onclick="showScreen('nc')">⚠️ Segnala Non Conformità</button>
+        <div id="queue-info" style="margin-top:12px;text-align:center;display:none">
+          <span class="queue-badge" id="queue-count"></span>
+          <span style="font-size:12px;color:var(--muted);margin-left:6px">azioni in coda offline</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- DETTAGLIO ORDINE -->
+    <div class="screen" id="screen-ordine">
+      <div style="padding:16px">
+        <button class="back-btn" onclick="showScreen('home')">← Torna alla home</button>
+        <div class="page-title" id="ord-det-title"></div>
+        <div class="order-meta" id="ord-det-meta"></div>
+        <div class="section-title">Fasi di produzione</div>
+        <div class="card" id="ord-det-fasi"></div>
+      </div>
+    </div>
+
+    <!-- DETTAGLIO FASE -->
+    <div class="screen" id="screen-fase">
+      <div style="padding:16px">
+        <button class="back-btn" id="fase-back-btn">← Torna all'ordine</button>
+        <div class="page-title" id="fase-det-title"></div>
+        <span class="badge" id="fase-det-badge"></span>
+        <div id="fase-det-body" style="margin-top:16px"></div>
+      </div>
+    </div>
+
+    <!-- SEGNALA NC -->
+    <div class="screen" id="screen-nc">
+      <div style="padding:16px">
+        <div class="page-title">Segnala NC</div>
+        <div class="card" style="padding:16px">
+          <div class="form-group">
+            <label>Ordine *</label>
+            <select id="nc-ordine-sel"></select>
+          </div>
+          <div class="form-group">
+            <label>Fase *</label>
+            <select id="nc-fase-sel"></select>
+          </div>
+          <div class="form-group">
+            <label>Descrizione *</label>
+            <textarea id="nc-descrizione" placeholder="Descrivi il problema riscontrato…"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Foto (opzionale)</label>
+            <label class="upload-btn" for="nc-foto-input">📷 Allega foto</label>
+            <input type="file" id="nc-foto-input" accept="image/*" style="display:none" onchange="previewNcFoto(this)">
+            <div id="nc-foto-preview"></div>
+          </div>
+          <button class="btn btn-alert" onclick="inviaNC()">⚠️ Invia Segnalazione</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- AVANZAMENTO ORDINI -->
+    <div class="screen" id="screen-avanzamento">
+      <div style="padding:16px">
+        <div class="page-title">Avanzamento Ordini</div>
+        <div id="avanzamento-list">
+          <div class="empty-state"><div class="icon">📈</div><p>Caricamento…</p></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LE MIE ATTIVITÀ -->
+    <div class="screen" id="screen-attivita">
+      <div style="padding:16px">
+        <div class="page-title">Le mie attività</div>
+        <div class="section-title">Fasi completate</div>
+        <div class="card" id="attivita-list">
+          <div class="empty-state"><div class="icon">📊</div><p>Caricamento…</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <div class="bottom-nav">
+    <div class="nav-tab active" id="tab-home" onclick="showScreen('home')">
+      <span class="tab-icon">🏠</span>
+      <span class="tab-label">Home</span>
+    </div>
+    <div class="nav-tab" id="tab-avanzamento" onclick="showScreen('avanzamento')">
+      <span class="tab-icon">📈</span>
+      <span class="tab-label">Avanzamento</span>
+    </div>
+    <div class="nav-tab" id="tab-nc" onclick="showScreen('nc')">
+      <span class="tab-icon">⚠️</span>
+      <span class="tab-label">NC</span>
+    </div>
+    <div class="nav-tab" id="tab-attivita" onclick="showScreen('attivita')">
+      <span class="tab-icon">📊</span>
+      <span class="tab-label">Attività</span>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+// SUPABASE
+// ═══════════════════════════════════════════════
+const SUPABASE_URL = 'https://mtpzfxnyfkzikzlkomwz.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10cHpmeG55Zmt6aWt6bGtvbXd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2NzczNzEsImV4cCI6MjA5NzI1MzM3MX0.3JxpgQORCSUUdSgawmcizNgaJhpDnmQ_zT_c41WfJbs';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+let currentUser = null; // {id, nome, cognome, ruolo}
+let fasi = [];
+let ordiniCache = [];
+let isOnline = navigator.onLine;
+let currentOrdineId = null;
+let currentFaseDetId = null; // ordine_fasi.id
+
+// ═══════════════════════════════════════════════
+// INDEXEDDB — OFFLINE QUEUE
+// ═══════════════════════════════════════════════
+let db = null;
+
+async function initDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('mango-op', 2);
+    req.onupgradeneeded = (e) => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains('queue')) d.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
+      if (!d.objectStoreNames.contains('cache')) d.createObjectStore('cache', { keyPath: 'key' });
+    };
+    req.onsuccess = (e) => { db = e.target.result; resolve(); };
+    req.onerror = reject;
+  });
+}
+
+async function queueAction(action) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('queue', 'readwrite');
+    tx.objectStore('queue').add({ ...action, ts: Date.now() });
+    tx.oncomplete = resolve;
+    tx.onerror = reject;
+  });
+}
+
+async function getQueue() {
+  return new Promise((resolve) => {
+    const tx = db.transaction('queue', 'readonly');
+    const req = tx.objectStore('queue').getAll();
+    req.onsuccess = () => resolve(req.result);
+  });
+}
+
+async function deleteQueued(id) {
+  return new Promise((resolve) => {
+    const tx = db.transaction('queue', 'readwrite');
+    tx.objectStore('queue').delete(id);
+    tx.oncomplete = resolve;
+  });
+}
+
+async function cacheSet(key, value) {
+  return new Promise((resolve) => {
+    const tx = db.transaction('cache', 'readwrite');
+    tx.objectStore('cache').put({ key, value, ts: Date.now() });
+    tx.oncomplete = resolve;
+  });
+}
+
+async function cacheGet(key) {
+  return new Promise((resolve) => {
+    const tx = db.transaction('cache', 'readonly');
+    const req = tx.objectStore('cache').get(key);
+    req.onsuccess = () => resolve(req.result?.value);
+  });
+}
+
+// ═══════════════════════════════════════════════
+// ONLINE/OFFLINE
+// ═══════════════════════════════════════════════
+window.addEventListener('online', () => {
+  isOnline = true;
+  document.getElementById('offline-banner').classList.remove('show');
+  document.getElementById('conn-dot').className = 'online-dot';
+  syncQueue();
+});
+window.addEventListener('offline', () => {
+  isOnline = false;
+  document.getElementById('offline-banner').classList.add('show');
+  document.getElementById('conn-dot').className = 'offline-dot';
+});
+
+async function syncQueue() {
+  if (!isOnline || !currentUser) return;
+  const queue = await getQueue();
+  if (!queue.length) return;
+  toast(`Sincronizzazione ${queue.length} azione(i)…`);
+
+  for (const item of queue) {
+    try {
+      let ok = false;
+      if (item.type === 'prendi_fase') {
+        const { data } = await sb.rpc('prendi_in_carico_fase', { p_ordine_fase_id: item.ordFaseId, p_operatore_id: currentUser.id });
+        ok = data?.ok;
+      } else if (item.type === 'completa_fase') {
+        const { data } = await sb.rpc('completa_fase', { p_ordine_fase_id: item.ordFaseId, p_operatore_id: currentUser.id, p_note_operatore: item.note });
+        ok = data?.ok;
+      } else if (item.type === 'prendi_fase_extra') {
+        const { error } = await sb.from('fasi_ordine_extra').update({
+          stato: 'in_corso', operatore_id: currentUser.id, iniziata_il: new Date().toISOString()
+        }).eq('id', item.faseExtraId).eq('stato', 'disponibile');
+        ok = !error;
+      } else if (item.type === 'completa_fase_extra') {
+        const { error } = await sb.from('fasi_ordine_extra').update({
+          stato: 'completata', completata_il: new Date().toISOString(), note_operatore: item.note
+        }).eq('id', item.faseExtraId).eq('operatore_id', currentUser.id);
+        ok = !error;
+      } else if (item.type === 'nc') {
+        const { error } = await sb.from('non_conformita').insert(item.payload);
+        ok = !error;
+      }
+      if (ok) await deleteQueued(item.id);
+    } catch (e) { console.warn('sync error', e); }
+  }
+  await loadOrdini();
+  renderHome();
+  updateQueueBadge();
+  toast('Sincronizzazione completata', 'ok');
+}
+
+async function updateQueueBadge() {
+  const q = await getQueue();
+  const el = document.getElementById('queue-info');
+  const cnt = document.getElementById('queue-count');
+  if (q.length) {
+    el.style.display = 'block';
+    cnt.textContent = q.length;
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+// ═══════════════════════════════════════════════
+// LOGIN
+// ═══════════════════════════════════════════════
+async function loadLoginUsers() {
+  let users;
+  if (isOnline) {
+    const { data } = await sb.from('users').select('id, nome, cognome, ruolo').in('ruolo', ['operatore', 'sola_lettura']).eq('attivo', true).order('cognome');
+    users = data || [];
+    await cacheSet('users-login', users);
+  } else {
+    users = await cacheGet('users-login') || [];
+  }
+  const sel = document.getElementById('login-user-select');
+  sel.innerHTML = '<option value="">— Scegli il tuo nome —</option>' + users.map(u => `<option value="${u.id}">${u.cognome} ${u.nome} (${u.ruolo === 'sola_lettura' ? 'Sola lettura' : 'Operatore'})</option>`).join('');
+}
+
+function pinNext(idx) {
+  const val = document.getElementById('pin' + idx).value;
+  if (val.length >= 1 && idx < 3) document.getElementById('pin' + (idx + 1)).focus();
+}
+
+async function doLoginPin() {
+  const userId = document.getElementById('login-user-select').value;
+  if (!userId) { showErr('Seleziona il tuo nome'); return; }
+  const pin = [0, 1, 2, 3].map(i => document.getElementById('pin' + i).value).join('');
+  if (pin.length !== 4) { showErr('Inserisci il PIN completo (4 cifre)'); return; }
+
+  if (isOnline) {
+    const { data } = await sb.rpc('verifica_pin', { p_user_id: userId, p_pin: pin });
+    if (!data?.ok) { showErr(data?.errore || 'PIN errato'); return; }
+    currentUser = data.user;
+    await cacheSet('current-user', currentUser);
+    await cacheSet('current-pin-hash', null); // non salviamo PIN in chiaro
+  } else {
+    const cached = await cacheGet('current-user');
+    if (cached && cached.id === userId) {
+      currentUser = cached;
+    } else {
+      showErr('Impossibile verificare il PIN offline. Connettiti per il primo accesso.'); return;
+    }
+  }
+  showApp();
+}
+
+function showErr(msg) {
+  document.getElementById('login-err').textContent = msg;
+}
+
+// ═══════════════════════════════════════════════
+// APP INIT
+// ═══════════════════════════════════════════════
+async function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  const app = document.getElementById('app-screen');
+  app.style.display = 'flex';
+  document.getElementById('user-chip-name').textContent = `${currentUser.nome} ${currentUser.cognome}`;
+  document.getElementById('home-name').textContent = currentUser.nome;
+
+  await loadFasi();
+  await loadOrdini();
+  setupRealtime();
+  updateQueueBadge();
+  syncQueue();
+  renderHome();
+  populateNcSelects();
+  renderAttivita();
+}
+
+async function doLogout() {
+  currentUser = null;
+  await cacheSet('current-user', null);
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  [0, 1, 2, 3].forEach(i => document.getElementById('pin' + i).value = '');
+}
+
+// ═══════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════
+async function loadFasi() {
+  if (isOnline) {
+    const { data } = await sb.from('fasi').select('*').order('id');
+    fasi = data || [];
+    await cacheSet('fasi', fasi);
+  } else {
+    fasi = await cacheGet('fasi') || [];
+  }
+}
+
+async function loadOrdini() {
+  if (isOnline) {
+    const { data } = await sb.from('ordini').select('*').in('stato', ['aperto', 'sospeso']).eq('eliminato', false);
+    const prioOrd = { 'extra_urgente': 0, 'urgente': 1, 'normale': 2 };
+    ordiniCache = (data || []).sort((a, b) => {
+      const pd = prioOrd[a.priorita] - prioOrd[b.priorita];
+      if (pd !== 0) return pd;
+      if (a.scadenza && b.scadenza) return new Date(a.scadenza) - new Date(b.scadenza);
+      if (a.scadenza) return -1;
+      if (b.scadenza) return 1;
+      return new Date(b.creato_il) - new Date(a.creato_il);
+    });
+    await cacheSet('ordini', ordiniCache);
+  } else {
+    ordiniCache = await cacheGet('ordini') || [];
+  }
+}
+
+// ═══════════════════════════════════════════════
+// REALTIME
+// ═══════════════════════════════════════════════
+function setupRealtime() {
+  if (!isOnline) return;
+  sb.channel('operatore')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'ordini' }, async () => {
+      await loadOrdini();
+      renderHome();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'ordine_fasi' }, async () => {
+      if (currentOrdineId) await renderOrdineDetail(currentOrdineId);
+      renderHome();
+    })
+    .subscribe();
+}
+
+// ═══════════════════════════════════════════════
+// NAVIGAZIONE
+// ═══════════════════════════════════════════════
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('screen-' + name)?.classList.add('active');
+  document.getElementById('tab-' + name)?.classList.add('active');
+
+  if (name === 'home') renderHome();
+  else if (name === 'avanzamento') renderAvanzamento();
+  else if (name === 'attivita') renderAttivita();
+  else if (name === 'nc') populateNcSelects();
+}
+
+// ═══════════════════════════════════════════════
+// HOME
+// ═══════════════════════════════════════════════
+async function renderHome() {
+  // Mie fasi in corso
+  let mieFasi = [];
+  if (isOnline) {
+    const { data } = await sb.from('ordine_fasi')
+      .select('*, ordini(codice, cliente, stato), fasi(nome)')
+      .eq('operatore_id', currentUser.id)
+      .in('stato', ['in_corso', 'in_attesa']);
+    mieFasi = data || [];
+  }
+
+  const mieEl = document.getElementById('mie-fasi-card');
+  if (!mieFasi.length) {
+    mieEl.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>Nessuna fase in corso</p></div>';
+  } else {
+    mieEl.innerHTML = mieFasi.map(f => `
+      <div class="card-row" onclick="openFaseDetail('${f.id}', '${f.ordine_id}')">
+        <div class="row-main">
+          <div class="row-title">${f.fasi?.nome || 'Fase'}</div>
+          <div class="row-sub">${f.ordini?.cliente} · ${f.ordini?.codice || ''}</div>
+        </div>
+        <span class="badge badge-in_corso">In corso</span>
+        <span class="arrow">›</span>
+      </div>
+    `).join('');
+  }
+
+  // Ordini disponibili
+  const aperti = ordiniCache.filter(o => o.stato === 'aperto');
+  let conDisp = new Set();
+  if (isOnline && aperti.length) {
+    const { data: fasiDisp } = await sb.from('ordine_fasi')
+      .select('ordine_id').eq('stato', 'disponibile')
+      .in('ordine_id', aperti.map(o => o.id));
+    conDisp = new Set((fasiDisp || []).map(f => f.ordine_id));
+  }
+  window._ordiniAperti = aperti;
+  window._conDisp = conDisp;
+  filtraOrdini();
+}
+
+async function renderAvanzamento() {
+  const el = document.getElementById('avanzamento-list');
+  if (!isOnline) { el.innerHTML = '<div class="empty-state"><div class="icon">📵</div><p>Disponibile solo online</p></div>'; return; }
+
+  const aperti = ordiniCache.filter(o => o.stato === 'aperto' || o.stato === 'sospeso');
+  if (!aperti.length) { el.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>Nessun ordine aperto</p></div>'; return; }
+
+  const { data: tutteLeFasi } = await sb.from('ordine_fasi')
+    .select('ordine_id, fase_id, stato')
+    .in('ordine_id', aperti.map(o => o.id));
+
+  const fasiPerOrdine = {};
+  for (const f of tutteLeFasi || []) {
+    if (!fasiPerOrdine[f.ordine_id]) fasiPerOrdine[f.ordine_id] = [];
+    fasiPerOrdine[f.ordine_id].push(f);
+  }
+
+  const oggi = new Date().toISOString().split('T')[0];
+
+  el.innerHTML = aperti.map(o => {
+    const fasi = fasiPerOrdine[o.id] || [];
+    const applicabili = fasi.filter(f => f.stato !== 'non_applicabile');
+    const completate = applicabili.filter(f => f.stato === 'completata').length;
+    const totale = applicabili.length || 1;
+    const pct = Math.round((completate / totale) * 100);
+    const isLate = o.scadenza && o.scadenza < oggi;
+    const isDone = pct === 100;
+
+    const dots = fasi.map(f =>
+      `<div class="av-fase-dot ${f.stato}" title="Fase ${f.fase_id}: ${f.stato}"></div>`
+    ).join('');
+
+    return `<div class="av-card" style="${o.stato === 'sospeso' ? 'opacity:0.6' : ''}">
+      <div class="av-header">
+        <div class="av-title">${escapeHtml(o.cliente)}</div>
+        <span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span>
+      </div>
+      <div class="av-meta">
+        ${escapeHtml(o.codice || '—')} · ${strutturaLabel(o.struttura)} · ${tipoProdLabel(o.tipo_prodotto)}
+        ${o.scadenza ? ` · <span style="color:${isLate ? 'var(--alert)' : 'var(--muted)'}">Scad. ${formatDate(o.scadenza)}${isLate ? ' ⚠️' : ''}</span>` : ''}
+        ${o.stato === 'sospeso' ? ' · <span style="color:var(--alert)">SOSPESO</span>' : ''}
+      </div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill ${isDone ? 'done' : ''}" style="width:${pct}%"></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);text-align:right">${completate}/${totale} fasi · ${pct}%</div>
+      <div class="av-fasi-mini">${dots}</div>
+    </div>`;
+  }).join('');
+}
+
+function filtraOrdini() {
+  const dispEl = document.getElementById('ordini-disponibili-list');
+  const q = (document.getElementById('ordini-search')?.value || '').toLowerCase().trim();
+  const aperti = window._ordiniAperti || [];
+  const conDisp = window._conDisp || new Set();
+
+  const filtrati = q ? aperti.filter(o =>
+    (o.cliente || '').toLowerCase().includes(q) ||
+    (o.codice  || '').toLowerCase().includes(q)
+  ) : aperti;
+
+  if (!filtrati.length) {
+    dispEl.innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>${q ? 'Nessun risultato' : 'Nessun ordine aperto'}</p></div>`;
+    return;
+  }
+  dispEl.innerHTML = filtrati.map(o => `
+    <div class="card card-row" onclick="openOrdineDetail('${o.id}')">
+      <div class="row-main">
+        <div class="row-title">${escapeHtml(o.cliente)} — ${escapeHtml(o.codice || '')}</div>
+        <div class="row-sub">${strutturaLabel(o.struttura)} · ${tipoProdLabel(o.tipo_prodotto)}</div>
+      </div>
+      <div class="row-right">
+        <span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span>
+        ${conDisp.has(o.id) ? '<span style="font-size:11px;color:var(--ok)">fasi libere ✓</span>' : ''}
+      </div>
+      <span class="arrow">›</span>
+    </div>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════
+// DETTAGLIO ORDINE
+// ═══════════════════════════════════════════════
+async function openOrdineDetail(ordineId) {
+  currentOrdineId = ordineId;
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-ordine').classList.add('active');
+  await renderOrdineDetail(ordineId);
+}
+
+async function renderOrdineDetail(ordineId) {
+  const ordine = ordiniCache.find(o => o.id === ordineId);
+  if (!ordine) { showScreen('home'); return; }
+
+  document.getElementById('ord-det-title').textContent = `${ordine.cliente} — ${ordine.codice || ''}`;
+  const oggi = new Date().toISOString().split('T')[0];
+  const isLate = ordine.scadenza && ordine.scadenza < oggi;
+  document.getElementById('ord-det-meta').innerHTML = `
+    <div class="meta-item"><label>Struttura</label><span>${strutturaLabel(ordine.struttura)}</span></div>
+    <div class="meta-item"><label>Tipo</label><span>${tipoProdLabel(ordine.tipo_prodotto)}</span></div>
+    <div class="meta-item"><label>Priorità</label><span class="badge badge-${ordine.priorita}">${prioLabel(ordine.priorita)}</span></div>
+    <div class="meta-item"><label>Stato</label><span class="badge badge-${ordine.stato}">${ordine.stato}</span></div>
+    <div class="meta-item"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}</span></div>
+    ${ordine.note_generali ? `<div class="meta-item" style="grid-column:1/-1"><label>Note</label><span>${ordine.note_generali}</span></div>` : ''}
+  `;
+
+  // Fasi — standard o extra
+  const el = document.getElementById('ord-det-fasi');
+  if (ordine.tipo === 'extra') {
+    // Ordine extra: fasi_ordine_extra
+    let fasiExt = [];
+    if (isOnline) {
+      const { data } = await sb.from('fasi_ordine_extra')
+        .select('*, users!operatore_id(nome, cognome)')
+        .eq('ordine_id', ordineId).order('numero');
+      fasiExt = data || [];
+      await cacheSet('fasi-extra-' + ordineId, fasiExt);
+    } else {
+      fasiExt = await cacheGet('fasi-extra-' + ordineId) || [];
+    }
+    el.innerHTML = fasiExt.map(f => {
+      const opNome = f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '';
+      const isMia = f.operatore_id === currentUser.id;
+      return `<div class="fase-row ${f.stato}" onclick="openFaseExtraDetail('${f.id}', '${ordineId}')">
+        <div class="fase-num-circle">${f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '▶' : f.numero}</div>
+        <div class="fase-info">
+          <div class="fn">${f.nome}</div>
+          <div class="fo">${opNome ? opNome + (isMia ? ' (tu)' : '') : 'Disponibile'}</div>
+        </div>
+        <span class="badge badge-${f.stato}" style="font-size:10px">${statoFaseLabel(f.stato)}</span>
+        <span class="arrow">›</span>
+      </div>`;
+    }).join('');
+  } else {
+    // Ordine standard: ordine_fasi
+    let ordFasi = [];
+    if (isOnline) {
+      const { data } = await sb.from('ordine_fasi')
+        .select('*, users!operatore_id(nome, cognome)')
+        .eq('ordine_id', ordineId).order('fase_id');
+      ordFasi = data || [];
+      await cacheSet('fasi-' + ordineId, ordFasi);
+    } else {
+      ordFasi = await cacheGet('fasi-' + ordineId) || [];
+    }
+    const struttura = ordine?.struttura || '';
+    el.innerHTML = ordFasi.map(f => {
+      const nomeFase = getFaseNome(f.fase_id);
+      const opNome = f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '';
+      const isMia = f.operatore_id === currentUser.id;
+      const isNA = f.stato === 'non_applicabile';
+      const est = isEsterna(f.fase_id);
+      const cnc = isCNC(f.fase_id);
+      const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '▶' : f.stato === 'in_attesa' ? '⏸' : isNA ? '—' : f.fase_id;
+      const clickAttr = isNA ? '' : `onclick="openFaseDetail('${f.id}', '${ordineId}')"`;
+      const extraBadges = [
+        cnc ? '<span style="font-size:9px;font-weight:700;background:#7C3AED;color:#fff;padding:1px 4px;border-radius:3px;margin-left:4px">CNC</span>' : '',
+        est ? '<span style="font-size:9px;font-weight:700;background:#0369A1;color:#fff;padding:1px 4px;border-radius:3px;margin-left:4px">EXT</span>' : ''
+      ].join('');
+      return `<div class="fase-row ${f.stato}" ${clickAttr} style="${isNA ? 'opacity:0.5;cursor:default' : ''}">
+        <div class="fase-num-circle">${icon}</div>
+        <div class="fase-info">
+          <div class="fn">${nomeFase}${extraBadges}</div>
+          <div class="fo">${isNA ? 'Non applicabile' : opNome ? opNome + (isMia ? ' (tu)' : '') : est ? 'Fase esterna' : 'Disponibile'}</div>
+        </div>
+        <span class="badge badge-${f.stato}" style="font-size:10px">${statoFaseLabel(f.stato)}</span>
+        ${isNA ? '' : '<span class="arrow">›</span>'}
+      </div>`;
+    }).join('');
+  }
+}
+
+// ═══════════════════════════════════════════════
+// DETTAGLIO FASE EXTRA
+// ═══════════════════════════════════════════════
+async function openFaseExtraDetail(faseExtraId, ordineId) {
+  currentFaseDetId = faseExtraId;
+  currentOrdineId = ordineId;
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-fase').classList.add('active');
+  document.getElementById('fase-back-btn').onclick = () => openOrdineDetail(ordineId);
+  await renderFaseExtraDetail(faseExtraId, ordineId);
+}
+
+async function renderFaseExtraDetail(faseExtraId, ordineId) {
+  let f;
+  if (isOnline) {
+    const { data } = await sb.from('fasi_ordine_extra')
+      .select('*, users!operatore_id(nome, cognome)').eq('id', faseExtraId).single();
+    f = data;
+  } else {
+    const cached = await cacheGet('fasi-extra-' + ordineId) || [];
+    f = cached.find(x => x.id === faseExtraId);
+  }
+  if (!f) return;
+
+  const ordine = ordiniCache.find(o => o.id === ordineId);
+  const isMia = f.operatore_id === currentUser.id;
+  const opNome = f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '';
+  const sospeso = ordine?.stato === 'sospeso';
+
+  document.getElementById('fase-det-title').textContent = `${f.numero}. ${f.nome}`;
+  const badgeEl = document.getElementById('fase-det-badge');
+  badgeEl.className = `badge badge-${f.stato}`;
+  badgeEl.textContent = statoFaseLabel(f.stato);
+
+  let bodyHtml = '';
+  if (f.note_responsabile) bodyHtml += `<div class="note-box"><strong>Note Responsabile</strong>${escapeHtml(f.note_responsabile)}</div>`;
+  if (f.note_operatore && isMia) bodyHtml += `<div class="note-box"><strong>Le tue note</strong>${escapeHtml(f.note_operatore)}</div>`;
+  if (opNome && !isMia) bodyHtml += `<div class="note-box"><strong>In carico a</strong>${escapeHtml(opNome)}</div>`;
+  if (f.iniziata_il) bodyHtml += `<div class="meta-item" style="margin-bottom:10px"><label>Iniziata</label><span>${formatDateTime(f.iniziata_il)}</span></div>`;
+  if (f.completata_il) bodyHtml += `<div class="meta-item" style="margin-bottom:10px"><label>Completata</label><span>${formatDateTime(f.completata_il)}</span></div>`;
+
+  if (currentUser.ruolo === 'sola_lettura') {
+    // nessuna azione
+  } else if (!sospeso) {
+    if (f.stato === 'disponibile') {
+      bodyHtml += `<div class="azione-box"><h4>Prendi in carico questa fase</h4>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Prendendo in carico la fase, gli altri operatori non potranno iniziarla.</p>
+        <button class="btn btn-primary" onclick="prendiInCaricoExtra('${faseExtraId}','${ordineId}')">▶ Prendi in carico</button></div>`;
+    } else if (f.stato === 'in_corso' && isMia) {
+      bodyHtml += `<div class="azione-box"><h4>Completa fase</h4>
+        <div class="form-group" style="margin-bottom:12px"><label>Le tue note (opzionale)</label>
+          <textarea id="note-op-extra" placeholder="Scrivi eventuali note…">${f.note_operatore || ''}</textarea></div>
+        <button class="btn btn-ok" onclick="completaFaseExtra('${faseExtraId}','${ordineId}')">✓ Segna come completata</button></div>`;
+    } else if (f.stato === 'in_corso' && !isMia) {
+      bodyHtml += `<div class="note-box" style="border:1px solid #93C5FD"><strong>In corso</strong>In carico a ${opNome}.</div>`;
+    }
+  } else {
+    bodyHtml += `<div class="note-box" style="border:1px solid var(--warn)"><strong>Ordine Sospeso</strong>Contatta il responsabile.</div>`;
+  }
+
+  document.getElementById('fase-det-body').innerHTML = bodyHtml;
+}
+
+async function prendiInCaricoExtra(faseExtraId, ordineId) {
+  if (isOnline) {
+    const { error } = await sb.from('fasi_ordine_extra').update({
+      stato: 'in_corso', operatore_id: currentUser.id, iniziata_il: new Date().toISOString()
+    }).eq('id', faseExtraId).eq('stato', 'disponibile');
+    if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  } else {
+    await queueAction({ type: 'prendi_fase_extra', faseExtraId, ordineId });
+    await updateQueueBadge();
+  }
+  toast('Fase presa in carico!', 'ok');
+  await renderFaseExtraDetail(faseExtraId, ordineId);
+}
+
+async function completaFaseExtra(faseExtraId, ordineId) {
+  const note = document.getElementById('note-op-extra')?.value.trim() || null;
+  if (isOnline) {
+    const { error } = await sb.from('fasi_ordine_extra').update({
+      stato: 'completata', completata_il: new Date().toISOString(), note_operatore: note
+    }).eq('id', faseExtraId).eq('operatore_id', currentUser.id);
+    if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  } else {
+    await queueAction({ type: 'completa_fase_extra', faseExtraId, note });
+    await updateQueueBadge();
+  }
+  toast('Fase completata!', 'ok');
+  await renderFaseExtraDetail(faseExtraId, ordineId);
+}
+
+// ═══════════════════════════════════════════════
+// DETTAGLIO FASE
+// ═══════════════════════════════════════════════
+async function openFaseDetail(ordFaseId, ordineId) {
+  currentFaseDetId = ordFaseId;
+  currentOrdineId = ordineId;
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-fase').classList.add('active');
+  document.getElementById('fase-back-btn').onclick = () => openOrdineDetail(ordineId);
+  await renderFaseDetail(ordFaseId, ordineId);
+}
+
+async function renderFaseDetail(ordFaseId, ordineId) {
+  let f, opMulti = [];
+  if (isOnline) {
+    const [{ data: fd }, { data: om }] = await Promise.all([
+      sb.from('ordine_fasi').select('*, users!operatore_id(nome, cognome)').eq('id', ordFaseId).single(),
+      sb.from('ordine_fasi_operatori').select('operatore_id, users(nome, cognome)').eq('ordine_fase_id', ordFaseId),
+    ]);
+    f = fd;
+    opMulti = om || [];
+  } else {
+    const cached = await cacheGet('fasi-' + ordineId) || [];
+    f = cached.find(x => x.id === ordFaseId);
+  }
+  if (!f) return;
+
+  if (f.stato === 'non_applicabile') return;
+  const ordine = ordiniCache.find(o => o.id === ordineId);
+  const nomeFase = getFaseNome(f.fase_id);
+
+  // isMia = sono nella junction table O sono il primary operatore_id
+  const isMia = opMulti.some(o => o.operatore_id === currentUser.id) || f.operatore_id === currentUser.id;
+
+  document.getElementById('fase-det-title').textContent = `${f.fase_id}. ${nomeFase}`;
+  const badgeEl = document.getElementById('fase-det-badge');
+  badgeEl.className = `badge badge-${f.stato}`;
+  badgeEl.textContent = statoFaseLabel(f.stato);
+
+  let bodyHtml = '';
+
+  if (f.note_responsabile) {
+    bodyHtml += `<div class="note-box"><strong>Note Responsabile</strong>${escapeHtml(f.note_responsabile)}</div>`;
+  }
+  if (f.note_operatore) {
+    bodyHtml += `<div class="note-box"><strong>Note Operatore</strong>${escapeHtml(f.note_operatore)}</div>`;
+  }
+
+  // Lista operatori
+  if (opMulti.length > 0) {
+    const nomi = opMulti.map(o => {
+      const n = `${o.users?.nome || ''} ${o.users?.cognome || ''}`.trim();
+      return o.operatore_id === currentUser.id ? `<strong>${escapeHtml(n)} (tu)</strong>` : escapeHtml(n);
+    }).join(', ');
+    bodyHtml += `<div class="note-box" style="border-color:var(--wood)"><strong>Operatori su questa fase</strong>${nomi}</div>`;
+  } else if (f['users']) {
+    const n = `${f['users'].nome} ${f['users'].cognome}`;
+    bodyHtml += `<div class="note-box"><strong>In carico a</strong>${escapeHtml(n)}</div>`;
+  }
+
+  if (f.iniziata_il) bodyHtml += `<div class="meta-item" style="margin-bottom:10px"><label>Iniziata</label><span>${formatDateTime(f.iniziata_il)}</span></div>`;
+  if (f.completata_il) bodyHtml += `<div class="meta-item" style="margin-bottom:10px"><label>Completata</label><span>${formatDateTime(f.completata_il)}</span></div>`;
+
+  // Foto allegate
+  if (isOnline) {
+    const { data: allegati } = await sb.from('allegati').select('url_file').eq('ordine_fase_id', ordFaseId);
+    if (allegati?.length) {
+      bodyHtml += `<div class="note-box" style="margin-bottom:12px"><strong>Foto allegate (${allegati.length})</strong><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">`;
+      for (const a of allegati) {
+        const { data: { publicUrl } } = sb.storage.from('allegati-fasi').getPublicUrl(a.url_file);
+        bodyHtml += `<a href="${publicUrl}" target="_blank"><img src="${publicUrl}" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--border)"></a>`;
+      }
+      bodyHtml += `</div></div>`;
+    }
+  }
+
+  const sospeso = ordine?.stato === 'sospeso';
+  const solaLettura = currentUser.ruolo === 'sola_lettura';
+
+  // AZIONE BOX
+  if (solaLettura) {
+    // nessuna azione
+  } else if (f.stato === 'disponibile' && !sospeso) {
+    bodyHtml += `
+      <div class="azione-box">
+        <h4>Prendi in carico questa fase</h4>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Puoi lavorarci insieme a un collega — entrambi dovete prendere in carico.</p>
+        <button class="btn btn-primary" onclick="prendiInCarico('${ordFaseId}', '${ordineId}')">▶ Prendi in carico</button>
+      </div>`;
+  } else if (f.stato === 'in_corso' && isMia) {
+    bodyHtml += `
+      <div class="azione-box">
+        <h4>Completa fase</h4>
+        <div class="form-group" style="margin-bottom:12px">
+          <label>Le tue note (opzionale)</label>
+          <textarea id="note-op" placeholder="Scrivi eventuali note sul lavoro svolto…">${f.note_operatore || ''}</textarea>
+        </div>
+        <div class="form-group">
+          <label>Foto (opzionale)</label>
+          <label class="upload-btn" for="fase-foto-input">📷 Scatta/allega foto</label>
+          <input type="file" id="fase-foto-input" accept="image/*" capture="environment" style="display:none" onchange="previewFaseFoto(this)">
+          <div class="foto-preview" id="fase-foto-preview"></div>
+        </div>
+        <button class="btn btn-ok" onclick="completaFase('${ordFaseId}', '${ordineId}')">✓ Segna come completata</button>
+        <button class="btn btn-secondary" style="margin-top:10px" onclick="mettiInAttesa('${ordFaseId}', '${ordineId}')">⏸ Metti in attesa</button>
+        <button class="btn btn-alert" style="margin-top:10px;font-size:12px;opacity:0.8" onclick="annullaPresaInCarico('${ordFaseId}', '${ordineId}')">✕ Annulla presa in carico</button>
+      </div>`;
+  } else if (f.stato === 'in_corso' && !isMia && !sospeso) {
+    const altriNomi = opMulti.filter(o => o.operatore_id !== currentUser.id)
+      .map(o => `${o.users?.nome || ''} ${o.users?.cognome || ''}`.trim()).join(', ')
+      || (f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '');
+    bodyHtml += `
+      <div class="note-box" style="border:1px solid #93C5FD">
+        <strong>In corso</strong>${altriNomi ? `In carico a: ${escapeHtml(altriNomi)}` : 'Fase in corso.'}
+      </div>
+      <div class="azione-box" style="margin-top:12px">
+        <h4>Unisciti a questa fase</h4>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Puoi affiancare ${escapeHtml(altriNomi || 'il collega')} senza togliergli la fase.</p>
+        <button class="btn btn-primary" onclick="uniscitiAFase('${ordFaseId}', '${ordineId}')">+ Unisciti</button>
+      </div>`;
+  } else if (f.stato === 'in_attesa' && !sospeso) {
+    bodyHtml += `
+      <div class="azione-box" style="border-color:#FDBA74">
+        <h4>⏸ Fase in attesa</h4>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">
+          ${isMia ? 'Hai messo questa fase in attesa. Puoi riprenderla tu o lasciare che un collega la continui.' : 'Questa fase è in attesa. Puoi riprenderla tu.'}
+        </p>
+        <button class="btn btn-primary" onclick="riprendi('${ordFaseId}', '${ordineId}', false)">▶ Riprendi fase</button>
+      </div>`;
+  } else if (f.stato === 'completata') {
+    // Mostra pulsante spedizione se l'ultima fase applicabile è completata
+    if (ordine?.stato === 'aperto') {
+      const { data: allFasi } = await sb.from('ordine_fasi').select('stato').eq('ordine_id', ordineId);
+      const allDone = (allFasi || []).every(x => x.stato === 'completata' || x.stato === 'non_applicabile');
+      if (allDone && currentUser.ruolo !== 'sola_lettura') {
+        bodyHtml += `
+          <div class="azione-box" style="border-color:var(--ok)">
+            <h4>📦 Pronto per la spedizione</h4>
+            <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Tutte le fasi di produzione sono completate. Segna l'ordine come spedito.</p>
+            <button class="btn btn-ok" onclick="segnaSpedito('${ordineId}')">✓ Segna come spedito</button>
+          </div>`;
+      }
+    }
+  }
+
+  if (sospeso) {
+    bodyHtml += `<div class="note-box" style="border:1px solid var(--warn)"><strong>Ordine Sospeso</strong>Il responsabile ha sospeso questo ordine. Contatta il responsabile per informazioni.</div>`;
+  }
+
+  document.getElementById('fase-det-body').innerHTML = bodyHtml;
+}
+
+async function prendiInCarico(ordFaseId, ordineId) {
+  if (isOnline) {
+    const { data } = await sb.rpc('prendi_in_carico_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id });
+    if (!data?.ok) { toast(data?.errore || 'Errore', 'err'); return; }
+    // Registra nella junction table
+    await sb.from('ordine_fasi_operatori').upsert(
+      { ordine_fase_id: ordFaseId, operatore_id: currentUser.id },
+      { onConflict: 'ordine_fase_id,operatore_id' }
+    );
+  } else {
+    await queueAction({ type: 'prendi_fase', ordFaseId, ts: Date.now() });
+    toast('Azione salvata offline — sarà sincronizzata alla riconnessione', 'ok');
+    await updateQueueBadge();
+  }
+  toast('Fase presa in carico!', 'ok');
+  await renderFaseDetail(ordFaseId, ordineId);
+  await renderOrdineDetail(ordineId);
+}
+
+async function uniscitiAFase(ordFaseId, ordineId) {
+  if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
+  const { error } = await sb.from('ordine_fasi_operatori').upsert(
+    { ordine_fase_id: ordFaseId, operatore_id: currentUser.id },
+    { onConflict: 'ordine_fase_id,operatore_id' }
+  );
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  await sb.from('archivio_log').insert({
+    ordine_id: ordineId, utente_id: currentUser.id,
+    azione: 'fase_iniziata', dettaglio: { unione: true, ordine_fase_id: ordFaseId }
+  });
+  toast('Ti sei unito alla fase!', 'ok');
+  await renderFaseDetail(ordFaseId, ordineId);
+  await renderOrdineDetail(ordineId);
+  renderHome();
+}
+
+async function completaFase(ordFaseId, ordineId) {
+  const note = document.getElementById('note-op')?.value.trim() || null;
+  // Upload foto se presente
+  const fotoInput = document.getElementById('fase-foto-input');
+  if (fotoInput?.files?.length && isOnline) {
+    for (const file of fotoInput.files) {
+      const ext = file.name.split('.').pop();
+      const path = `${ordineId}/${ordFaseId}/${Date.now()}.${ext}`;
+      const { error: upErr } = await sb.storage.from('allegati-fasi').upload(path, file, { upsert: true });
+      if (upErr) { console.error('Upload foto:', upErr); toast('Errore upload foto: ' + upErr.message, 'err'); continue; }
+      const { error: insErr } = await sb.from('allegati').insert({ ordine_fase_id: ordFaseId, url_file: path, caricato_da: currentUser.id });
+      if (insErr) console.error('Insert allegato:', insErr);
+    }
+  }
+
+  if (isOnline) {
+    const { data } = await sb.rpc('completa_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_note_operatore: note });
+    if (!data?.ok) { toast(data?.errore || 'Errore', 'err'); return; }
+  } else {
+    await queueAction({ type: 'completa_fase', ordFaseId, note });
+    await updateQueueBadge();
+  }
+  toast('Fase completata!', 'ok');
+  await renderFaseDetail(ordFaseId, ordineId);
+}
+
+async function annullaPresaInCarico(ordFaseId, ordineId) {
+  if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
+  if (!confirm('Annullare la tua presa in carico?\nL\'azione verrà registrata nel log.')) return;
+
+  // Rimuovi dalla junction table
+  await sb.from('ordine_fasi_operatori')
+    .delete().eq('ordine_fase_id', ordFaseId).eq('operatore_id', currentUser.id);
+
+  // Controlla se restano altri operatori
+  const { data: rimasti } = await sb.from('ordine_fasi_operatori')
+    .select('operatore_id').eq('ordine_fase_id', ordFaseId);
+
+  if (!rimasti || rimasti.length === 0) {
+    // Nessun altro — riporta la fase a disponibile
+    const { error } = await sb.from('ordine_fasi').update({
+      stato: 'disponibile', operatore_id: null, iniziata_il: null,
+    }).eq('id', ordFaseId);
+    if (error) { toast('Errore: ' + error.message, 'err'); return; }
+    toast('Presa in carico annullata — fase tornata disponibile', 'ok');
+  } else {
+    // Restano altri — aggiorna solo il primary operatore_id con il primo rimasto
+    await sb.from('ordine_fasi').update({ operatore_id: rimasti[0].operatore_id }).eq('id', ordFaseId);
+    toast('Hai lasciato la fase — i tuoi colleghi continuano', 'ok');
+  }
+
+  await sb.from('archivio_log').insert({
+    ordine_id: ordineId, utente_id: currentUser.id,
+    azione: 'fase_iniziata',
+    dettaglio: { annullo_presa_in_carico: true, rimasti: rimasti?.length || 0, ordine_fase_id: ordFaseId }
+  });
+
+  await renderFaseDetail(ordFaseId, ordineId);
+  await renderOrdineDetail(ordineId);
+  renderHome();
+}
+
+async function mettiInAttesa(ordFaseId, ordineId) {
+  if (isOnline) {
+    const { data } = await sb.rpc('metti_in_attesa', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id });
+    if (!data?.ok) { toast(data?.errore || 'Errore', 'err'); return; }
+  } else {
+    toast('Non disponibile offline', 'err'); return;
+  }
+  toast('Fase messa in attesa', 'ok');
+  await renderFaseDetail(ordFaseId, ordineId);
+  await renderOrdineDetail(ordineId);
+}
+
+async function riprendi(ordFaseId, ordineId, forza) {
+  if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
+
+  if (forza) {
+    // Subentro su fase in_corso di un collega: mostra confirm
+    const confermato = confirm('Stai per subentrare su una fase in carico a un tuo collega.\nIl collega riceverà una notifica.\n\nConfermi?');
+    if (!confermato) return;
+  }
+
+  const { data } = await sb.rpc('riprendi_fase', {
+    p_ordine_fase_id: ordFaseId,
+    p_operatore_id: currentUser.id,
+    p_forza: forza
+  });
+  if (!data?.ok) { toast(data?.errore || 'Errore', 'err'); return; }
+  toast('Fase ripresa!', 'ok');
+  await renderFaseDetail(ordFaseId, ordineId);
+  await renderOrdineDetail(ordineId);
+}
+
+async function segnaSpedito(ordineId) {
+  if (!confirm('Segnare questo ordine come spedito?')) return;
+  if (isOnline) {
+    const { data } = await sb.rpc('segna_spedito', { p_ordine_id: ordineId, p_utente_id: currentUser.id });
+    if (!data?.ok) { toast(data?.errore || 'Errore', 'err'); return; }
+    toast('Ordine spedito!', 'ok');
+    await loadOrdini();
+    showScreen('home');
+  } else {
+    toast('Non disponibile offline', 'err');
+  }
+}
+
+// ═══════════════════════════════════════════════
+// NC
+// ═══════════════════════════════════════════════
+async function populateNcSelects() {
+  const ordSel = document.getElementById('nc-ordine-sel');
+  ordSel.innerHTML = '<option value="">— Seleziona ordine —</option>' + ordiniCache.filter(o => o.stato === 'aperto').map(o => `<option value="${o.id}">${o.cliente} – ${o.codice || ''}</option>`).join('');
+  ordSel.onchange = () => {
+    const faseSel = document.getElementById('nc-fase-sel');
+    faseSel.innerHTML = '<option value="">— Seleziona fase —</option>' + fasi.map(f => `<option value="${f.id}">${f.id}. ${f.nome}</option>`).join('');
+  };
+  document.getElementById('nc-descrizione').value = '';
+  document.getElementById('nc-foto-preview').innerHTML = '';
+}
+
+function previewNcFoto(input) {
+  const el = document.getElementById('nc-foto-preview');
+  el.innerHTML = '';
+  for (const file of input.files) {
+    const img = document.createElement('img');
+    img.className = 'foto-thumb';
+    img.src = URL.createObjectURL(file);
+    el.appendChild(img);
+  }
+}
+
+function previewFaseFoto(input) {
+  const el = document.getElementById('fase-foto-preview');
+  el.innerHTML = '';
+  for (const file of input.files) {
+    const img = document.createElement('img');
+    img.className = 'foto-thumb';
+    img.src = URL.createObjectURL(file);
+    el.appendChild(img);
+  }
+}
+
+async function inviaNC() {
+  const ordineId = document.getElementById('nc-ordine-sel').value;
+  const faseId = document.getElementById('nc-fase-sel').value;
+  const desc = document.getElementById('nc-descrizione').value.trim();
+  if (!ordineId || !faseId) { toast('Seleziona ordine e fase', 'err'); return; }
+  if (!desc) { toast('Inserisci la descrizione', 'err'); return; }
+
+  let fotoUrl = null;
+  const fotoInput = document.getElementById('nc-foto-input');
+  if (fotoInput?.files?.length && isOnline) {
+    const file = fotoInput.files[0];
+    const path = `nc/${ordineId}/${Date.now()}_${file.name}`;
+    const { error } = await sb.storage.from('allegati-fasi').upload(path, file);
+    if (!error) fotoUrl = path;
+  }
+
+  const payload = {
+    ordine_id: ordineId,
+    fase_id: parseInt(faseId),
+    descrizione: desc,
+    foto_url: fotoUrl,
+    segnalata_da: currentUser.id,
+    stato: 'aperta'
+  };
+
+  if (isOnline) {
+    const { error } = await sb.from('non_conformita').insert(payload);
+    if (error) { toast('Errore: ' + error.message, 'err'); return; }
+    // Notifica al responsabile
+    const { data: resp } = await sb.from('users').select('id').eq('ruolo', 'responsabile').single();
+    if (resp) {
+      const ordine = ordiniCache.find(o => o.id === ordineId);
+      await sb.from('notifiche').insert({
+        destinatario_id: resp.id,
+        tipo: 'nc_segnalata',
+        testo: `NC segnalata su ${ordine?.codice || 'ordine'} — ${desc.substring(0, 60)}`,
+        ordine_id: ordineId
+      });
+    }
+    await sb.from('archivio_log').insert({ ordine_id: ordineId, fase_id: parseInt(faseId), utente_id: currentUser.id, azione: 'nc_segnalata' });
+  } else {
+    await queueAction({ type: 'nc', payload });
+    await updateQueueBadge();
+  }
+
+  toast('NC segnalata', 'ok');
+  document.getElementById('nc-ordine-sel').value = '';
+  document.getElementById('nc-descrizione').value = '';
+  document.getElementById('nc-foto-preview').innerHTML = '';
+  showScreen('home');
+}
+
+// ═══════════════════════════════════════════════
+// ATTIVITÀ PERSONALI
+// ═══════════════════════════════════════════════
+async function renderAttivita() {
+  const el = document.getElementById('attivita-list');
+  if (!currentUser || !isOnline) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">📡</div><p>Disponibile solo online</p></div>';
+    return;
+  }
+  const { data } = await sb.from('ordine_fasi')
+    .select('*, ordini(codice, cliente), fasi(nome)')
+    .eq('operatore_id', currentUser.id)
+    .eq('stato', 'completata')
+    .order('completata_il', { ascending: false })
+    .limit(30);
+
+  if (!data?.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>Nessuna fase completata</p></div>';
+    return;
+  }
+  el.innerHTML = data.map(f => {
+    const durata = f.iniziata_il && f.completata_il
+      ? Math.round((new Date(f.completata_il) - new Date(f.iniziata_il)) / 60000) + ' min'
+      : '—';
+    return `<div class="attivita-item">
+      <div class="at-title">${f.fasi?.nome || 'Fase'} — ${f.ordini?.codice}</div>
+      <div class="at-sub">${f.ordini?.cliente} · ${formatDate(f.completata_il)} · ⏱ ${durata}</div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════
+function escapeHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function strutturaLabel(s) { return { 'quattro_lati': '4 Lati', 'barra_l': 'Barra ad L', 'complanare': 'Complanare' }[s] || (s || '—'); }
+function tipoProdLabel(t) { return { 'portoncino': 'Portoncino', 'battente': 'Battente' }[t] || (t || '—'); }
+function prioLabel(p) { return { 'normale': 'Normale', 'urgente': 'Urgente', 'extra_urgente': 'Extra Urgente' }[p] || p; }
+function statoFaseLabel(s) { return { 'disponibile': 'Disponibile', 'in_corso': 'In corso', 'in_attesa': 'In attesa', 'completata': 'Completata', 'non_applicabile': 'N/A' }[s] || s; }
+
+function getFaseNome(faseId) {
+  const f = fasi.find(x => x.id === faseId);
+  return f ? f.nome : `Fase ${faseId}`;
+}
+const isCNC = (id) => [3, 6, 14, 19].includes(id);
+const isEsterna = (id) => id === 9;
+function formatDate(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
+function formatDateTime(d) { if (!d) return '—'; return new Date(d).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (type ? ' ' + type : '');
+  setTimeout(() => { el.className = 'toast'; }, 3200);
+}
+
+// ═══════════════════════════════════════════════
+// START
+// ═══════════════════════════════════════════════
+async function start() {
+  await initDB();
+  // Riprendi sessione dalla cache (online o offline)
+  const cached = await cacheGet('current-user');
+  if (cached) {
+    currentUser = cached;
+    showApp();
+  } else {
+    loadLoginUsers();
+  }
+}
+
+start();
+</script>
+</body>
+</html>
