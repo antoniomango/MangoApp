@@ -3,10 +3,10 @@
 # Salva un dump SQL giornaliero e mantiene gli ultimi 30 giorni
 # ================================================================
 
-$DB_HOST     = "db.mtpzfxnyfkzikzlkomwz.supabase.co"
+$DB_HOST     = "aws-0-eu-west-1.pooler.supabase.com"
 $DB_PORT     = "5432"
 $DB_NAME     = "postgres"
-$DB_USER     = "postgres"
+$DB_USER     = "postgres.mtpzfxnyfkzikzlkomwz"
 $DB_PASSWORD = "0ZHJciZaIa898bOn"
 
 $BACKUP_DIR  = "C:\Users\RoverA\Desktop\MangoApp\backups"
@@ -26,6 +26,7 @@ $pgDump = Get-Command pg_dump -ErrorAction SilentlyContinue
 if (!$pgDump) {
     # Prova percorsi comuni
     $candidates = @(
+        "C:\Users\RoverA\Desktop\MangoApp\pgsql\bin\pg_dump.exe",
         "C:\Program Files\PostgreSQL\17\bin\pg_dump.exe",
         "C:\Program Files\PostgreSQL\16\bin\pg_dump.exe",
         "C:\Program Files\PostgreSQL\15\bin\pg_dump.exe"

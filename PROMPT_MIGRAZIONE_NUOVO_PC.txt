@@ -1,0 +1,154 @@
+================================================================
+MANGO SRL — Prompt per Cowork: Setup completo su nuovo PC
+================================================================
+
+Devo configurare da zero il server MangoApp su questo PC.
+Fai tutto nell'ordine esatto, senza saltare nessuno step.
+
+----------------------------------------------------------------
+STEP 1 — Installa Node.js
+----------------------------------------------------------------
+Esegui in PowerShell come amministratore:
+
+    winget install OpenJS.NodeJS.LTS
+
+Aspetta che finisca completamente, poi verifica che sia installato:
+
+    node --version
+    npm --version
+
+Entrambi devono restituire un numero di versione.
+
+----------------------------------------------------------------
+STEP 2 — Installa PostgreSQL client tools (per i backup)
+----------------------------------------------------------------
+Esegui in PowerShell come amministratore:
+
+    winget install PostgreSQL.PostgreSQL --version 16
+
+Aspetta che finisca. Poi verifica che esista il file:
+    C:\Program Files\PostgreSQL\16\bin\pg_dump.exe
+
+----------------------------------------------------------------
+STEP 3 — Scarica l'app da GitHub
+----------------------------------------------------------------
+Esegui in PowerShell:
+
+    cd C:\Users\RoverA\Desktop
+    git clone https://github.com/antoniomango/MangoApp.git
+
+Verifica che esista la cartella:
+    C:\Users\RoverA\Desktop\MangoApp
+
+E che contenga i file: operatore.html, responsabile.html, index.html
+
+----------------------------------------------------------------
+STEP 4 — Crea la cartella backups
+----------------------------------------------------------------
+
+    mkdir "C:\Users\RoverA\Desktop\MangoApp\backups"
+
+----------------------------------------------------------------
+STEP 5 — Testa il server manualmente
+----------------------------------------------------------------
+Esegui:
+
+    cd "C:\Users\RoverA\Desktop\MangoApp"
+    npx serve . --listen 3000
+
+Apri il browser su http://localhost:3000 e verifica che carichi
+la pagina dell'app. Poi ferma il server con CTRL+C.
+
+----------------------------------------------------------------
+STEP 6 — Schedula il Watchdog (controlla server ogni 5 minuti)
+----------------------------------------------------------------
+Esegui questo blocco PowerShell come amministratore:
+
+    $action = New-ScheduledTaskAction `
+        -Execute "powershell.exe" `
+        -Argument "-ExecutionPolicy Bypass -NonInteractive -WindowStyle Hidden -File `"C:\Users\RoverA\Desktop\MangoApp\WATCHDOG_SERVER.ps1`""
+
+    $trigger = New-ScheduledTaskTrigger `
+        -RepetitionInterval (New-TimeSpan -Minutes 5) `
+        -Once -At (Get-Date)
+
+    $settings = New-ScheduledTaskSettingsSet `
+        -StartWhenAvailable `
+        -ExecutionTimeLimit (New-TimeSpan -Minutes 2)
+
+    $principal = New-ScheduledTaskPrincipal `
+        -UserId "$env:USERDOMAIN\$env:USERNAME" `
+        -LogonType Interactive `
+        -RunLevel Highest
+
+    Register-ScheduledTask `
+        -TaskName "MangoApp Watchdog Server" `
+        -Action $action `
+        -Trigger $trigger `
+        -Settings $settings `
+        -Principal $principal `
+        -Force
+
+----------------------------------------------------------------
+STEP 7 — Schedula il Backup giornaliero (ogni notte alle 02:00)
+----------------------------------------------------------------
+Esegui questo blocco PowerShell come amministratore:
+
+    $action = New-ScheduledTaskAction `
+        -Execute "powershell.exe" `
+        -Argument "-ExecutionPolicy Bypass -NonInteractive -File `"C:\Users\RoverA\Desktop\MangoApp\BACKUP_DATABASE.ps1`""
+
+    $trigger = New-ScheduledTaskTrigger -Daily -At 02:00
+
+    $settings = New-ScheduledTaskSettingsSet `
+        -RunOnlyIfNetworkAvailable `
+        -StartWhenAvailable `
+        -WakeToRun
+
+    $principal = New-ScheduledTaskPrincipal `
+        -UserId "SYSTEM" `
+        -LogonType ServiceAccount `
+        -RunLevel Highest
+
+    Register-ScheduledTask `
+        -TaskName "MangoApp Backup Giornaliero" `
+        -Action $action `
+        -Trigger $trigger `
+        -Settings $settings `
+        -Principal $principal `
+        -Force
+
+----------------------------------------------------------------
+STEP 8 — Esegui un backup di test
+----------------------------------------------------------------
+
+    powershell -ExecutionPolicy Bypass -File "C:\Users\RoverA\Desktop\MangoApp\BACKUP_DATABASE.ps1"
+
+Verifica che compaia un file .sql in:
+    C:\Users\RoverA\Desktop\MangoApp\backups\
+
+----------------------------------------------------------------
+STEP 9 — Verifica finale: mostrami l'output di questi comandi
+----------------------------------------------------------------
+
+    node --version
+
+    Get-ScheduledTask -TaskName "MangoApp Watchdog Server" | Select-Object TaskName, State
+
+    Get-ScheduledTask -TaskName "MangoApp Backup Giornaliero" | Select-Object TaskName, State
+
+    Get-ChildItem "C:\Users\RoverA\Desktop\MangoApp\backups\"
+
+    Get-Content "C:\Users\RoverA\Desktop\MangoApp\watchdog.log" -Tail 10
+
+================================================================
+NOTA IMPORTANTE — Da fare a mano prima di spegnere il vecchio PC
+================================================================
+
+Copia la cartella:
+    C:\Users\RoverA\Desktop\MangoApp\backups\
+
+dal vecchio PC al nuovo tramite chiavetta USB o rete locale,
+in modo da non perdere i backup storici del database.
+
+================================================================
