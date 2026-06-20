@@ -16,7 +16,6 @@
     line-height: 1.6;
   }
 
-  /* ── COPERTINA — solo bordo, niente sfondo scuro ── */
   .cover {
     height: 100vh;
     display: flex;
@@ -43,204 +42,101 @@
     letter-spacing: 0.15em;
     text-transform: uppercase;
     margin-bottom: 8px;
-    color: #000;
   }
-  .cover .subtitle {
-    font-size: 14pt;
-    font-weight: 300;
-    margin-bottom: 48px;
-    color: #333;
-  }
+  .cover .subtitle { font-size: 14pt; font-weight: 300; margin-bottom: 48px; color: #333; }
   .cover .doc-info {
-    font-size: 10pt;
-    color: #555;
+    font-size: 10pt; color: #555;
     border-top: 1px solid #aaa;
-    padding-top: 24px;
-    width: 100%;
-    max-width: 400px;
+    padding-top: 24px; width: 100%; max-width: 400px;
   }
   .cover .doc-info strong { color: #000; }
 
-  /* ── LAYOUT PAGINE ── */
-  .page {
-    padding: 28mm 22mm 22mm 22mm;
-    page-break-after: always;
-  }
+  .page { padding: 28mm 22mm 22mm 22mm; page-break-after: always; }
   .page:last-child { page-break-after: avoid; }
 
-  /* ── INTESTAZIONE SEZIONE ── */
   .section-header {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 24px;
-    padding-bottom: 12px;
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 24px; padding-bottom: 12px;
     border-bottom: 2px solid #000;
   }
   .section-num {
     width: 36px; height: 36px;
-    background: #fff;
-    color: #000;
-    border: 2px solid #000;
-    border-radius: 50%;
+    background: #fff; color: #000;
+    border: 2px solid #000; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-weight: 700;
-    font-size: 14pt;
-    flex-shrink: 0;
+    font-weight: 700; font-size: 14pt; flex-shrink: 0;
   }
-  .section-header h2 {
-    font-size: 16pt;
-    font-weight: 700;
-    color: #000;
-  }
+  .section-header h2 { font-size: 16pt; font-weight: 700; }
 
-  /* ── TITOLI ── */
   h3 {
-    font-size: 12pt;
-    font-weight: 700;
-    color: #000;
+    font-size: 12pt; font-weight: 700; color: #000;
     margin: 20px 0 8px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    border-bottom: 1px solid #ccc;
-    padding-bottom: 4px;
+    display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid #ccc; padding-bottom: 4px;
   }
   h3::before { content: '▸'; }
-
   p { margin-bottom: 10px; }
 
-  /* ── STEP BOX ── */
   .steps { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
   .step {
-    display: flex;
-    align-items: flex-start;
-    gap: 14px;
-    background: #fff;
-    border: 1px solid #bbb;
-    border-radius: 4px;
-    padding: 10px 12px;
+    display: flex; align-items: flex-start; gap: 14px;
+    border: 1px solid #bbb; border-radius: 4px; padding: 10px 12px;
   }
   .step-num {
     width: 24px; height: 24px;
-    background: #fff;
-    color: #000;
-    border: 2px solid #000;
-    border-radius: 50%;
+    border: 2px solid #000; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 9.5pt;
-    font-weight: 700;
-    flex-shrink: 0;
-    margin-top: 1px;
+    font-size: 9.5pt; font-weight: 700; flex-shrink: 0; margin-top: 1px;
   }
   .step-body { flex: 1; }
   .step-body strong { display: block; font-size: 10.5pt; margin-bottom: 2px; }
   .step-body span { font-size: 9.5pt; color: #444; }
 
-  /* ── INFO BOX ── */
   .info-box {
-    background: #fff;
     border-left: 4px solid #000;
-    border-top: 1px solid #bbb;
-    border-bottom: 1px solid #bbb;
-    border-right: 1px solid #bbb;
-    padding: 10px 14px;
-    margin: 12px 0;
-    font-size: 9.5pt;
+    border-top: 1px solid #bbb; border-bottom: 1px solid #bbb; border-right: 1px solid #bbb;
+    padding: 10px 14px; margin: 12px 0; font-size: 9.5pt;
   }
-  .info-box.warn { border-left-color: #000; }
-  .info-box.ok   { border-left-color: #000; }
   .info-box strong { display: block; margin-bottom: 4px; font-size: 10pt; }
 
-  /* ── BADGE — solo bordo, niente sfondo colorato ── */
   .badge {
-    display: inline-block;
-    padding: 1px 7px;
-    border-radius: 3px;
-    font-size: 8.5pt;
-    font-weight: 700;
-    font-family: 'DM Mono', monospace;
-    vertical-align: middle;
-    border: 1.5px solid #000;
-    background: #fff;
-    color: #000;
+    display: inline-block; padding: 1px 7px; border-radius: 3px;
+    font-size: 8.5pt; font-weight: 700; font-family: 'DM Mono', monospace;
+    vertical-align: middle; border: 1.5px solid #000; background: #fff; color: #000;
   }
 
-  /* ── TABELLA FASI ── */
   .fase-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 9.5pt; }
   .fase-table th {
-    background: #fff;
-    color: #000;
-    border: 1px solid #000;
-    padding: 6px 10px;
-    text-align: left;
-    font-weight: 700;
-    font-size: 9pt;
+    border: 1px solid #000; padding: 6px 10px;
+    text-align: left; font-weight: 700; font-size: 9pt;
   }
   .fase-table td { padding: 5px 10px; border: 1px solid #ccc; }
   .fase-table tr:nth-child(even) td { background: #f5f5f5; }
   .fase-table .num { font-family: 'DM Mono', monospace; color: #555; text-align: center; width: 32px; }
 
-  /* ── FLUSSO STATI ── */
-  .stato-flow {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 14px 0;
-    flex-wrap: wrap;
-  }
+  .stato-flow { display: flex; align-items: center; gap: 8px; margin: 14px 0; flex-wrap: wrap; }
   .stato-node {
-    padding: 5px 14px;
-    border-radius: 3px;
-    font-size: 9.5pt;
-    font-weight: 700;
-    border: 2px solid #000;
-    background: #fff;
-    color: #000;
+    padding: 5px 14px; border-radius: 3px;
+    font-size: 9.5pt; font-weight: 700;
+    border: 2px solid #000; background: #fff; color: #000;
   }
   .arrow { color: #000; font-size: 14pt; line-height: 1; }
 
-  /* ── AZIONI GRID ── */
-  .azioni-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin: 12px 0;
-  }
-  .azione-card {
-    background: #fff;
-    border: 1px solid #bbb;
-    border-radius: 4px;
-    padding: 10px 12px;
-  }
-  .azione-card .azione-titolo {
-    font-weight: 700;
-    font-size: 10pt;
-    margin-bottom: 4px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
+  .azioni-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+  .azione-card { border: 1px solid #bbb; border-radius: 4px; padding: 10px 12px; }
+  .azione-card .azione-titolo { font-weight: 700; font-size: 10pt; margin-bottom: 4px; }
   .azione-card p { font-size: 9pt; color: #444; margin: 0; }
 
-  /* ── INDICE ── */
   .indice { margin: 20px 0; }
   .indice-item {
-    display: flex;
-    align-items: center;
-    padding: 9px 0;
-    border-bottom: 1px dotted #aaa;
-    gap: 12px;
+    display: flex; align-items: center; padding: 9px 0;
+    border-bottom: 1px dotted #aaa; gap: 12px;
   }
   .indice-num {
     width: 26px; height: 26px;
-    background: #fff;
-    color: #000;
-    border: 2px solid #000;
-    border-radius: 50%;
+    border: 2px solid #000; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 10pt; font-weight: 700;
-    flex-shrink: 0;
+    font-size: 10pt; font-weight: 700; flex-shrink: 0;
   }
   .indice-item span { font-size: 11pt; flex: 1; }
   .indice-item .dots { flex: 1; border-bottom: 1px dotted #aaa; margin: 0 8px; }
@@ -261,7 +157,7 @@
   <div class="subtitle">Guida all'utilizzo — Operatori</div>
   <div class="doc-info">
     <strong>Mango SRL — Gestione Produzione</strong><br>
-    Versione 1.0 &nbsp;·&nbsp; Giugno 2025<br><br>
+    Versione 2.0 &nbsp;·&nbsp; Giugno 2025<br><br>
     Questo documento è riservato al personale interno.<br>
     Conservarlo in postazione come riferimento rapido.
   </div>
@@ -270,261 +166,159 @@
 <!-- INDICE -->
 <div class="page">
   <div class="section-header">
-    <div class="section-num" style="background:#1C1714">☰</div>
+    <div class="section-num">☰</div>
     <h2>Indice</h2>
   </div>
   <div class="indice">
-    <div class="indice-item">
-      <div class="indice-num">1</div>
-      <span>Accesso all'applicazione</span>
-      <div class="dots"></div>
-    </div>
-    <div class="indice-item">
-      <div class="indice-num">2</div>
-      <span>Schermata principale (Home)</span>
-      <div class="dots"></div>
-    </div>
-    <div class="indice-item">
-      <div class="indice-num">3</div>
-      <span>Prendere in carico una fase</span>
-      <div class="dots"></div>
-    </div>
-    <div class="indice-item">
-      <div class="indice-num">4</div>
-      <span>Completare una fase</span>
-      <div class="dots"></div>
-    </div>
-    <div class="indice-item">
-      <div class="indice-num">5</div>
-      <span>Mettere una fase in attesa</span>
-      <div class="dots"></div>
-    </div>
-    <div class="indice-item">
-      <div class="indice-num">6</div>
-      <span>Subentrare in una fase di un collega</span>
-      <div class="dots"></div>
-    </div>
-    <div class="indice-item">
-      <div class="indice-num">7</div>
-      <span>Segnalare una non conformità (NC)</span>
-      <div class="dots"></div>
-    </div>
-    <div class="indice-item">
-      <div class="indice-num">8</div>
-      <span>Scheda Attività personale</span>
-      <div class="dots"></div>
-    </div>
-    <div class="indice-item">
-      <div class="indice-num">9</div>
-      <span>Notifiche</span>
-      <div class="dots"></div>
-    </div>
-    <div class="indice-item">
-      <div class="indice-num">10</div>
-      <span>Le 20 fasi di produzione</span>
-      <div class="dots"></div>
-    </div>
+    <div class="indice-item"><div class="indice-num">1</div><span>Accesso all'applicazione</span><div class="dots"></div></div>
+    <div class="indice-item"><div class="indice-num">2</div><span>Schermata principale (Home)</span><div class="dots"></div></div>
+    <div class="indice-item"><div class="indice-num">3</div><span>Dashboard Avanzamento Ordini</span><div class="dots"></div></div>
+    <div class="indice-item"><div class="indice-num">4</div><span>Prendere in carico una fase</span><div class="dots"></div></div>
+    <div class="indice-item"><div class="indice-num">5</div><span>Lavorare in due su una fase</span><div class="dots"></div></div>
+    <div class="indice-item"><div class="indice-num">6</div><span>Completare una fase</span><div class="dots"></div></div>
+    <div class="indice-item"><div class="indice-num">7</div><span>Mettere una fase in attesa</span><div class="dots"></div></div>
+    <div class="indice-item"><div class="indice-num">8</div><span>Subentrare in una fase di un collega</span><div class="dots"></div></div>
+    <div class="indice-item"><div class="indice-num">9</div><span>Annullare la presa in carico</span><div class="dots"></div></div>
+    <div class="indice-item"><div class="indice-num">10</div><span>Segnalare una non conformità (NC)</span><div class="dots"></div></div>
+    <div class="indice-item"><div class="indice-num">11</div><span>Scheda Attività personale</span><div class="dots"></div></div>
+    <div class="indice-item"><div class="indice-num">12</div><span>Indicatori scadenza ordini</span><div class="dots"></div></div>
+    <div class="indice-item"><div class="indice-num">13</div><span>Le 20 fasi di produzione</span><div class="dots"></div></div>
   </div>
-
   <div class="info-box" style="margin-top:32px">
     <strong>Come aprire l'applicazione</strong>
-    Apri il browser sul tuo telefono o PC e digita l'indirizzo di rete fornito dal responsabile (es. <strong>192.168.1.85:3000/operatore.html</strong>). Assicurati di essere connesso alla rete WiFi aziendale.
+    Apri il browser sul tuo telefono e digita l'indirizzo fornito dal responsabile (es. <strong>192.168.1.85:3000/operatore.html</strong>). Assicurati di essere connesso alla WiFi aziendale.
   </div>
 </div>
 
 <!-- SEZIONE 1: ACCESSO -->
 <div class="page">
-  <div class="section-header">
-    <div class="section-num">1</div>
-    <h2>Accesso all'applicazione</h2>
-  </div>
-
+  <div class="section-header"><div class="section-num">1</div><h2>Accesso all'applicazione</h2></div>
   <p>L'accesso avviene tramite <strong>nome</strong> e <strong>PIN personale</strong> a 4 cifre assegnato dal responsabile. Non è richiesta una password email.</p>
-
   <div class="steps">
-    <div class="step">
-      <div class="step-num">1</div>
-      <div class="step-body">
-        <strong>Seleziona il tuo nome</strong>
-        <span>Tocca il menu a tendina e scegli il tuo nome dall'elenco operatori.</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">2</div>
-      <div class="step-body">
-        <strong>Inserisci il PIN</strong>
-        <span>Digita le 4 cifre del tuo PIN personale nelle caselle. I caratteri sono nascosti per privacy.</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">3</div>
-      <div class="step-body">
-        <strong>Premi "Accedi"</strong>
-        <span>Se il PIN è corretto entri direttamente nella schermata principale.</span>
-      </div>
-    </div>
+    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Seleziona il tuo nome</strong><span>Tocca il menu a tendina e scegli il tuo nome dall'elenco operatori.</span></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Inserisci il PIN</strong><span>Digita le 4 cifre del tuo PIN personale. I caratteri sono nascosti per privacy.</span></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Premi "Accedi"</strong><span>Se il PIN è corretto entri direttamente nella schermata principale.</span></div></div>
   </div>
-
-  <div class="info-box warn">
-    <strong>⚠ PIN errato</strong>
-    Se il PIN non viene riconosciuto compare un messaggio di errore in rosso. Controlla di aver selezionato il nome giusto e riprova. In caso di problemi rivolgiti al responsabile.
-  </div>
-
-  <div class="info-box ok">
-    <strong>✓ Sessione salvata</strong>
-    L'app ricorda la tua sessione: se chiudi e riapri il browser non dovrai effettuare di nuovo il login, a meno che tu non abbia effettuato il logout manuale.
-  </div>
-
+  <div class="info-box warn"><strong>⚠ PIN errato</strong>Se il PIN non viene riconosciuto compare un messaggio rosso. Controlla di aver selezionato il nome giusto. In caso di problemi rivolgiti al responsabile.</div>
+  <div class="info-box ok"><strong>✓ Sessione salvata</strong>L'app ricorda la tua sessione: se chiudi e riapri il browser non devi rifare il login, a meno che tu non abbia fatto il logout manuale.</div>
   <h3>Logout</h3>
-  <p>Per uscire dall'account tocca il tuo nome nell'angolo in alto a destra della schermata e seleziona <strong>Esci</strong>. Fallo sempre se condividi il dispositivo con altri operatori.</p>
+  <p>Tocca il tuo nome in alto a destra e seleziona <strong>Esci</strong>. Fallo sempre se condividi il dispositivo con altri operatori.</p>
 </div>
 
 <!-- SEZIONE 2: HOME -->
 <div class="page">
-  <div class="section-header">
-    <div class="section-num">2</div>
-    <h2>Schermata principale (Home)</h2>
-  </div>
-
-  <p>Dopo l'accesso arrivi sulla schermata <strong>Home</strong>. È divisa in due aree principali:</p>
-
+  <div class="section-header"><div class="section-num">2</div><h2>Schermata principale (Home)</h2></div>
+  <p>Dopo l'accesso arrivi sulla schermata <strong>Home</strong>, divisa in due aree:</p>
   <h3>Le mie fasi attive</h3>
-  <p>In cima trovi tutte le fasi che hai preso in carico (stato <span class="badge badge-in_corso">In corso</span>) o che hai messo in pausa (<span class="badge badge-in_attesa">In attesa</span>). Da qui puoi gestirle direttamente con un tocco.</p>
-
-  <h3>Tutti gli ordini</h3>
-  <p>Sotto trovi la lista completa degli ordini aperti. Per ogni ordine vedi:</p>
+  <p>In cima trovi le fasi che hai in corso (<span class="badge">In corso</span>) o in pausa (<span class="badge">In attesa</span>). Da qui puoi gestirle con un tocco.</p>
+  <h3>Ricerca e lista ordini</h3>
+  <p>Sotto trovi un <strong>campo di ricerca</strong> per trovare rapidamente un ordine per cliente o numero, e la lista completa degli ordini aperti. Ogni card mostra:</p>
   <div class="steps">
-    <div class="step">
-      <div class="step-num" style="background:#8B5E3C">●</div>
-      <div class="step-body">
-        <strong>Nome cliente e numero ordine</strong>
-        <span>Es. "Rossi Mario — L 116 B"</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num" style="background:#8B5E3C">●</div>
-      <div class="step-body">
-        <strong>Quantità</strong>
-        <span>Numero di pezzi da produrre per quell'ordine.</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num" style="background:#8B5E3C">●</div>
-      <div class="step-body">
-        <strong>Avanzamento fasi</strong>
-        <span>Barra di progresso con le fasi completate rispetto al totale.</span>
-      </div>
-    </div>
+    <div class="step"><div class="step-num">●</div><div class="step-body"><strong>Nome cliente e numero ordine</strong><span>Es. "Rossi Mario — L 116 B"</span></div></div>
+    <div class="step"><div class="step-num">●</div><div class="step-body"><strong>Struttura e tipo prodotto</strong><span>Es. "4 Lati · Portoncino"</span></div></div>
+    <div class="step"><div class="step-num">●</div><div class="step-body"><strong>Priorità e data di scadenza</strong><span>Con indicatore visivo se l'ordine è in ritardo o in scadenza.</span></div></div>
+    <div class="step"><div class="step-num">●</div><div class="step-body"><strong>Fasi libere</strong><span>La scritta "fasi libere ✓" indica che ci sono fasi disponibili da prendere in carico.</span></div></div>
+  </div>
+  <h3>Navigazione — barra in fondo</h3>
+  <div class="azioni-grid">
+    <div class="azione-card"><div class="azione-titolo">🏠 Home</div><p>Le tue fasi attive e la lista ordini con ricerca.</p></div>
+    <div class="azione-card"><div class="azione-titolo">📈 Avanzamento</div><p>Dashboard con il progresso di tutti gli ordini.</p></div>
+    <div class="azione-card"><div class="azione-titolo">⚠️ NC</div><p>Segnala o consulta le non conformità.</p></div>
+    <div class="azione-card"><div class="azione-titolo">📊 Attività</div><p>Il riepilogo delle tue fasi completate.</p></div>
+  </div>
+  <div class="info-box"><strong>Indicatore di connessione</strong>Pallino verde = online. Pallino arancione = offline. In offline puoi consultare gli ordini già caricati ma non aggiornare le fasi.</div>
+</div>
+
+<!-- SEZIONE 3: AVANZAMENTO -->
+<div class="page">
+  <div class="section-header"><div class="section-num">3</div><h2>Dashboard Avanzamento Ordini</h2></div>
+  <p>La scheda <strong>📈 Avanzamento</strong> mostra una panoramica di tutti gli ordini aperti con il loro stato di avanzamento. È pensata per aiutarti a capire quali ordini sono più indietro e vanno spinti.</p>
+
+  <h3>Cosa vedi per ogni ordine</h3>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Nome cliente, numero ordine e priorità</strong><span>Il badge priorità (Normale / Urgente / Extra Urgente) è sempre visibile in alto a destra.</span></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Barra di progresso</strong><span>Mostra visivamente quante fasi sono state completate rispetto al totale. Diventa verde quando l'ordine è al 100%.</span></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Contatore fasi</strong><span>Es. "12/18 fasi · 67%" — sai esattamente a che punto è l'ordine.</span></div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-body"><strong>Pallini colorati per ogni fase</strong><span>Verde = completata · Blu = in corso · Arancione = in attesa · Grigio = disponibile.</span></div></div>
+    <div class="step"><div class="step-num">5</div><div class="step-body"><strong>Data di scadenza</strong><span>Mostrata in giallo se entro 3 giorni, in rosso se già scaduta.</span></div></div>
   </div>
 
-  <h3>Navigazione</h3>
-  <p>In fondo allo schermo trovi tre schede:</p>
-  <div class="azioni-grid">
-    <div class="azione-card">
-      <div class="azione-titolo">🏠 Home</div>
-      <p>Le tue fasi attive e la lista ordini.</p>
-    </div>
-    <div class="azione-card">
-      <div class="azione-titolo">⚠️ NC</div>
-      <p>Segnala o consulta le non conformità.</p>
-    </div>
-    <div class="azione-card">
-      <div class="azione-titolo">📊 Attività</div>
-      <p>Il riepilogo delle tue fasi completate.</p>
-    </div>
+  <div class="info-box ok">
+    <strong>✓ Solo lettura</strong>
+    Dalla dashboard avanzamento non si può fare nulla — è solo consultazione. Per prendere in carico una fase torna nella Home, cerca l'ordine e toccalo.
   </div>
 
   <div class="info-box">
-    <strong>Indicatore di connessione</strong>
-    In alto a destra vedi un pallino verde (online) o arancione (offline). In modalità offline puoi comunque consultare gli ordini già caricati, ma non puoi aggiornare le fasi.
+    <strong>Ordini sospesi</strong>
+    Gli ordini sospesi dal responsabile appaiono in grigio con la scritta "SOSPESO". Non lavorarci finché il responsabile non li riattiva.
   </div>
 </div>
 
-<!-- SEZIONE 3: PRENDERE IN CARICO -->
+<!-- SEZIONE 4: PRENDERE IN CARICO -->
 <div class="page">
-  <div class="section-header">
-    <div class="section-num">3</div>
-    <h2>Prendere in carico una fase</h2>
-  </div>
-
-  <p>Prendere in carico una fase significa dichiarare che sei tu ad eseguirla. Una fase può essere presa in carico solo se è in stato <span class="badge badge-disponibile">Disponibile</span>.</p>
-
+  <div class="section-header"><div class="section-num">4</div><h2>Prendere in carico una fase</h2></div>
+  <p>Prendere in carico una fase significa dichiarare che sei tu ad eseguirla. Una fase può essere presa in carico solo se è in stato <span class="badge">Disponibile</span>.</p>
   <div class="steps">
-    <div class="step">
-      <div class="step-num">1</div>
-      <div class="step-body">
-        <strong>Tocca l'ordine nella lista</strong>
-        <span>Si apre il dettaglio con tutte le fasi dell'ordine.</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">2</div>
-      <div class="step-body">
-        <strong>Tocca la fase che vuoi eseguire</strong>
-        <span>Scegli la fase con il cerchietto vuoto (○) — significa che è disponibile. Fasi con spunta (✓) sono già completate.</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">3</div>
-      <div class="step-body">
-        <strong>Premi "▶ Prendi in carico"</strong>
-        <span>La fase passa immediatamente in stato <span class="badge badge-in_corso">In corso</span> e viene assegnata a te.</span>
-      </div>
-    </div>
+    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Tocca l'ordine nella lista</strong><span>Si apre il dettaglio con tutte le fasi dell'ordine.</span></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Tocca la fase che vuoi eseguire</strong><span>Scegli la fase con il cerchietto vuoto (○) — disponibile. Le fasi con ✓ sono già completate.</span></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Premi "▶ Prendi in carico"</strong><span>La fase passa in stato <span class="badge">In corso</span> e viene assegnata a te. Il timer parte in automatico.</span></div></div>
   </div>
-
   <div class="info-box warn">
     <strong>⚠ Attenzione</strong>
-    Prendendo in carico una fase gli altri operatori non potranno avviarla. Assicurati di poterla portare avanti o, se hai bisogno di fermarti, usa il pulsante <strong>"⏸ Metti in attesa"</strong> (vedi sezione 5).
+    Se hai preso in carico una fase per errore, usa il pulsante <strong>"✕ Annulla presa in carico"</strong> (vedi sezione 9) per liberarla senza conseguenze.
   </div>
-
-  <h3>Fasi non applicabili</h3>
-  <p>Alcune fasi mostrano il badge <span class="badge badge-na">N/A</span> — significa che non si applicano a questo tipo di prodotto (es. la verniciatura su un grezzo). Non è necessario fare nulla su queste fasi.</p>
-
-  <div class="info-box ok">
-    <strong>✓ Puoi avere più fasi in corso</strong>
-    Non c'è un limite: puoi prendere in carico fasi su ordini diversi contemporaneamente. Tutte le fasi attive le trovi sempre nella sezione "Le mie fasi" in cima alla Home.
-  </div>
+  <h3>Fasi non applicabili (N/A)</h3>
+  <p>Alcune fasi mostrano il badge <span class="badge">N/A</span> — non si applicano a quel tipo di prodotto o materiale. Non è necessario fare nulla su queste fasi.</p>
+  <h3>Fase 9 — Attesa Struttura</h3>
+  <p>Questa fase parte automaticamente in stato <span class="badge">In attesa</span> appena viene creato un nuovo ordine. Il timer di attesa scorre fin dal primo giorno. Quando la struttura arriva in azienda, il responsabile o l'operatore la segna come completata. Questo permette di tracciare esattamente quanti giorni si è aspettato il fornitore.</p>
 </div>
 
-<!-- SEZIONE 4: COMPLETARE -->
+<!-- SEZIONE 5: LAVORARE IN DUE -->
 <div class="page">
-  <div class="section-header">
-    <div class="section-num">4</div>
-    <h2>Completare una fase</h2>
-  </div>
+  <div class="section-header"><div class="section-num">5</div><h2>Lavorare in due su una fase</h2></div>
+  <p>Alcune lavorazioni richiedono necessariamente due operatori. Il sistema supporta più operatori sulla stessa fase contemporaneamente.</p>
 
-  <p>Quando hai finito di lavorare su una fase devi segnalarla come completata. Solo l'operatore che ha in carico la fase può completarla.</p>
-
+  <h3>Come unirsi a una fase già in corso</h3>
+  <p>Se una fase è già <span class="badge">In corso</span> presa da un collega e devi lavorarci anche tu:</p>
   <div class="steps">
-    <div class="step">
-      <div class="step-num">1</div>
-      <div class="step-body">
-        <strong>Tocca la fase in corso</strong>
-        <span>Puoi farlo dalla Home → "Le mie fasi attive" o dal dettaglio ordine.</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">2</div>
-      <div class="step-body">
-        <strong>Aggiungi eventuali note (facoltativo)</strong>
-        <span>Puoi lasciare un commento sulla lavorazione, annotare anomalie minori o informazioni utili per le fasi successive.</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">3</div>
-      <div class="step-body">
-        <strong>Premi "✓ Segna come completata"</strong>
-        <span>La fase passa in stato <span class="badge badge-completata">Completata</span> e viene registrato orario e data.</span>
-      </div>
-    </div>
+    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Tocca la fase in corso</strong><span>Vedrai il nome del collega che la sta eseguendo e la scritta "In corso".</span></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Premi "+ Unisciti"</strong><span>Vieni aggiunto alla fase senza toglierla al collega. Entrambi risultate assegnati.</span></div></div>
   </div>
 
   <div class="info-box ok">
-    <strong>✓ Completamento automatico ordine</strong>
-    Quando tutte le fasi di un ordine sono completate o N/A, compare il pulsante <strong>"✓ Segna come spedito"</strong>. Premilo solo quando il prodotto è fisicamente uscito dall'azienda.
+    <strong>✓ Differenza tra "Unisciti" e "Subentra"</strong>
+    <ul style="margin-top:6px;padding-left:16px;font-size:9.5pt;line-height:1.9">
+      <li><strong>Unisciti</strong> → lavori insieme al collega, entrambi siete registrati sulla fase.</li>
+      <li><strong>Subentra</strong> → prendi il posto del collega, lui viene rimosso dalla fase.</li>
+    </ul>
   </div>
 
+  <h3>Chi può completare la fase</h3>
+  <p>Quando lavorate in due, <strong>chiunque dei due</strong> può premere "✓ Segna come completata". Il sistema registra tutti gli operatori che hanno partecipato.</p>
+
+  <div class="info-box">
+    <strong>Registro operatori</strong>
+    Nel dettaglio della fase, sotto "Operatori su questa fase", vedrai i nomi di tutti coloro che hanno lavorato su quella fase. Questi dati vengono usati per i report del responsabile.
+  </div>
+
+  <h3>Se vuoi uscire dalla fase prima che sia completata</h3>
+  <p>Usa il pulsante <strong>"✕ Annulla presa in carico"</strong>. Se il tuo collega è ancora sulla fase, la fase rimane in corso a lui. Se eri l'unico, la fase torna disponibile (vedi sezione 9).</p>
+</div>
+
+<!-- SEZIONE 6: COMPLETARE -->
+<div class="page">
+  <div class="section-header"><div class="section-num">6</div><h2>Completare una fase</h2></div>
+  <p>Quando hai finito di lavorare su una fase devi segnalarla come completata.</p>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Tocca la fase in corso</strong><span>Dalla Home → "Le mie fasi attive" o dal dettaglio ordine.</span></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Aggiungi eventuali note (facoltativo)</strong><span>Annota anomalie, informazioni utili per le fasi successive o comunicazioni al responsabile.</span></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Allega una foto (facoltativo)</strong><span>Tocca "📷 Scatta/allega foto" per documentare il lavoro svolto. Le foto vengono salvate nell'archivio dell'ordine.</span></div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-body"><strong>Premi "✓ Segna come completata"</strong><span>La fase passa in stato <span class="badge">Completata</span> con data e ora registrate automaticamente.</span></div></div>
+  </div>
+  <div class="info-box ok">
+    <strong>✓ Spedizione ordine</strong>
+    Quando tutte le fasi sono completate o N/A compare il pulsante <strong>"✓ Segna come spedito"</strong>. Premilo solo quando il prodotto è fisicamente uscito dall'azienda.
+  </div>
   <h3>Flusso degli stati di una fase</h3>
   <div class="stato-flow">
     <span class="stato-node">○ Disponibile</span>
@@ -538,237 +332,138 @@
     <span class="arrow">↕</span>
     <span class="stato-node" style="border-style:dashed;margin-left:8px">⏸ In attesa</span>
   </div>
-  <p style="font-size:9pt;color:#555;margin-top:8px">Da <em>In attesa</em> si può tornare <em>In corso</em> (riprendendo la fase) oppure completarla direttamente.</p>
+  <p style="font-size:9pt;color:#555;margin-top:8px">Da <em>In attesa</em> si può tornare <em>In corso</em> oppure completare direttamente.</p>
 </div>
 
-<!-- SEZIONE 5: IN ATTESA -->
+<!-- SEZIONE 7: IN ATTESA -->
 <div class="page">
-  <div class="section-header">
-    <div class="section-num">5</div>
-    <h2>Mettere una fase in attesa</h2>
-  </div>
-
-  <p>Usa questa funzione quando devi interrompere temporaneamente una fase — ad esempio perché stai aspettando materiale, attrezzatura o istruzioni dal responsabile.</p>
-
+  <div class="section-header"><div class="section-num">7</div><h2>Mettere una fase in attesa</h2></div>
+  <p>Usa questa funzione quando devi interrompere temporaneamente una fase — stai aspettando materiale, attrezzatura o istruzioni dal responsabile.</p>
   <div class="steps">
-    <div class="step">
-      <div class="step-num">1</div>
-      <div class="step-body">
-        <strong>Apri la fase che hai in corso</strong>
-        <span>Tocca la fase dalla sezione "Le mie fasi attive" o dal dettaglio ordine.</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">2</div>
-      <div class="step-body">
-        <strong>Premi "⏸ Metti in attesa"</strong>
-        <span>La fase passa in stato <span class="badge badge-in_attesa">In attesa</span>. Rimane assegnata a te ma risulta sospesa.</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">3</div>
-      <div class="step-body">
-        <strong>Quando sei pronto, riprendi</strong>
-        <span>Qualsiasi operatore può premere <strong>"▶ Riprendi fase"</strong> per riattivarla (vedi sezione 6).</span>
-      </div>
-    </div>
+    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Apri la fase che hai in corso</strong><span>Dalla sezione "Le mie fasi attive" o dal dettaglio ordine.</span></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Premi "⏸ Metti in attesa"</strong><span>La fase passa in stato <span class="badge">In attesa</span>. Rimane assegnata a te ma è sospesa.</span></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Quando sei pronto, riprendi</strong><span>Tu o un collega potete premere <strong>"▶ Riprendi fase"</strong> per riattivarla.</span></div></div>
   </div>
-
   <div class="info-box">
     <strong>Quando usare "In attesa"</strong>
     <ul style="margin-top:6px;padding-left:16px;font-size:9.5pt;line-height:1.8">
       <li>Attesa materiali (legno, vetro, ferramenta…)</li>
-      <li>Attesa struttura o componenti da fornitore esterno</li>
       <li>Fine turno — riprenderà un collega il giorno dopo</li>
       <li>Problema tecnico che richiede valutazione del responsabile</li>
     </ul>
   </div>
-
-  <div class="info-box warn">
-    <strong>⚠ Solo tu puoi mettere in attesa la tua fase</strong>
-    Solo l'operatore che ha preso in carico la fase può metterla in attesa. Un collega non può mettere in pausa una tua fase attiva senza prima prenderla in carico.
-  </div>
 </div>
 
-<!-- SEZIONE 6: SUBENTRO -->
+<!-- SEZIONE 8: SUBENTRO -->
 <div class="page">
-  <div class="section-header">
-    <div class="section-num">6</div>
-    <h2>Subentrare in una fase di un collega</h2>
-  </div>
-
-  <p>Se una fase è stata messa in attesa o il collega non è disponibile, puoi prenderla in carico tu. Il sistema distingue due casi:</p>
+  <div class="section-header"><div class="section-num">8</div><h2>Subentrare in una fase di un collega</h2></div>
+  <p>Se una fase è stata messa in attesa o il collega non è disponibile, puoi prenderla in carico tu.</p>
 
   <h3>Caso A — Fase in attesa ⏸</h3>
-  <p>Chiunque può riprendere liberamente una fase in stato <span class="badge badge-in_attesa">In attesa</span>.</p>
+  <p>Chiunque può riprendere liberamente una fase in stato <span class="badge">In attesa</span>.</p>
   <div class="steps">
-    <div class="step">
-      <div class="step-num">1</div>
-      <div class="step-body">
-        <strong>Apri l'ordine e tocca la fase in attesa</strong>
-        <span>La fase mostra l'icona ⏸ e il nome dell'operatore che l'aveva presa.</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">2</div>
-      <div class="step-body">
-        <strong>Premi "▶ Riprendi fase"</strong>
-        <span>La fase passa in corso a tuo nome. Il collega precedente riceve una notifica automatica nell'app.</span>
-      </div>
-    </div>
+    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Tocca la fase in attesa</strong><span>Mostra il nome dell'operatore che l'aveva presa.</span></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Premi "▶ Riprendi fase"</strong><span>La fase passa in corso a tuo nome.</span></div></div>
   </div>
 
   <h3>Caso B — Fase in corso di un collega ▶</h3>
-  <p>Se una fase è già <span class="badge badge-in_corso">In corso</span> presa da un collega, puoi comunque subentrarle ma è richiesta una conferma esplicita.</p>
+  <p>Se la fase è già <span class="badge">In corso</span> e vuoi <strong>sostituire</strong> il collega (non affiancarti — per affiancarti usa "+ Unisciti" della sezione 5):</p>
   <div class="steps">
-    <div class="step">
-      <div class="step-num">1</div>
-      <div class="step-body">
-        <strong>Apri la fase del collega</strong>
-        <span>Vedrai il nome del collega che la sta eseguendo e il pulsante "↩ Prendi in carico".</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">2</div>
-      <div class="step-body">
-        <strong>Premi "↩ Prendi in carico" e conferma</strong>
-        <span>Compare un messaggio di conferma. Premendo OK subentri nella fase. Il collega riceve una notifica con il tuo nome.</span>
-      </div>
-    </div>
+    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Apri la fase del collega</strong><span>Vedrai il pulsante "↩ Prendi in carico" (subentro).</span></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Premi "↩ Prendi in carico" e conferma</strong><span>Compare un messaggio di conferma. Premendo OK subentri. Il collega viene notificato.</span></div></div>
   </div>
 
   <div class="info-box warn">
     <strong>⚠ Il subentro viene sempre registrato</strong>
-    Ogni cambio di operatore viene salvato nel registro attività dell'ordine e il collega precedente riceve sempre una notifica. Usa il subentro con responsabilità.
+    Ogni cambio di operatore è salvato nel registro dell'ordine. Usa il subentro con responsabilità.
   </div>
 </div>
 
-<!-- SEZIONE 7: NON CONFORMITÀ -->
+<!-- SEZIONE 9: ANNULLA PRESA IN CARICO -->
 <div class="page">
-  <div class="section-header">
-    <div class="section-num">7</div>
-    <h2>Segnalare una non conformità (NC)</h2>
-  </div>
-
-  <p>Una <strong>non conformità</strong> è un problema rilevato durante la produzione: un difetto sul materiale, un errore di lavorazione, una discrepanza rispetto all'ordine. Va segnalata immediatamente.</p>
+  <div class="section-header"><div class="section-num">9</div><h2>Annullare la presa in carico</h2></div>
+  <p>Se hai preso in carico una fase per errore o non puoi più lavorarci, puoi annullare la presa in carico senza conseguenze. L'azione viene comunque registrata nel log.</p>
 
   <div class="steps">
-    <div class="step">
-      <div class="step-num">1</div>
-      <div class="step-body">
-        <strong>Tocca la scheda "⚠️ NC" in fondo allo schermo</strong>
-        <span>Si apre la sezione non conformità.</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">2</div>
-      <div class="step-body">
-        <strong>Premi "Nuova NC"</strong>
-        <span>Apparirà il modulo di segnalazione.</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">3</div>
-      <div class="step-body">
-        <strong>Seleziona l'ordine interessato</strong>
-        <span>Scegli dal menu a tendina il codice ordine relativo al problema.</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">4</div>
-      <div class="step-body">
-        <strong>Seleziona la fase in cui hai rilevato il problema</strong>
-        <span>Indica la fase specifica dove si è verificata la non conformità.</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">5</div>
-      <div class="step-body">
-        <strong>Descrivi il problema e premi "Invia"</strong>
-        <span>La NC viene registrata e inviata al responsabile che provvederà alla gestione.</span>
-      </div>
-    </div>
+    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Apri la fase che hai in corso</strong><span>Deve essere una fase che hai preso in carico tu.</span></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Scorri in fondo al riquadro azioni</strong><span>Trovi il pulsante <strong>"✕ Annulla presa in carico"</strong> in piccolo in fondo.</span></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Conferma l'operazione</strong><span>Appare un messaggio di conferma. Premendo OK la fase viene liberata.</span></div></div>
   </div>
 
   <div class="info-box ok">
-    <strong>✓ Continua a lavorare</strong>
-    Segnalare una NC non blocca automaticamente l'ordine. Continua le altre fasi a meno che il responsabile non ti comunichi diversamente.
+    <strong>✓ Cosa succede dopo</strong>
+    <ul style="margin-top:6px;padding-left:16px;font-size:9.5pt;line-height:1.8">
+      <li>Se eri l'unico operatore sulla fase → torna a <span class="badge">Disponibile</span> per tutti.</li>
+      <li>Se lavoravi insieme a un collega → lui continua, tu esci dalla fase.</li>
+    </ul>
   </div>
 
   <div class="info-box warn">
-    <strong>⚠ Segnala sempre e subito</strong>
-    Non aspettare la fine del turno. Prima si segnala un problema, prima può essere risolto evitando ulteriori danni al prodotto o perdite di tempo.
+    <strong>⚠ L'annullamento è registrato</strong>
+    Anche se la fase torna disponibile, nel log dell'ordine rimane traccia che l'hai presa in carico e poi annullata. Evita di usarlo frequentemente.
   </div>
 </div>
 
-<!-- SEZIONE 8: ATTIVITÀ + SEZIONE 9: NOTIFICHE -->
+<!-- SEZIONE 10: NC -->
 <div class="page">
-  <div class="section-header">
-    <div class="section-num">8</div>
-    <h2>Scheda Attività personale</h2>
+  <div class="section-header"><div class="section-num">10</div><h2>Segnalare una non conformità (NC)</h2></div>
+  <p>Una <strong>non conformità</strong> è un problema rilevato durante la produzione: difetto sul materiale, errore di lavorazione, discrepanza rispetto all'ordine. Va segnalata immediatamente.</p>
+  <div class="steps">
+    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Tocca la scheda "⚠️ NC" in fondo allo schermo</strong><span>Si apre la sezione non conformità.</span></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Seleziona l'ordine interessato</strong><span>Scegli dal menu il codice ordine relativo al problema.</span></div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Seleziona la fase in cui hai rilevato il problema</strong><span>Indica la fase specifica dove si è verificata la non conformità.</span></div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-body"><strong>Descrivi il problema e premi "Invia"</strong><span>La NC viene registrata e inviata al responsabile.</span></div></div>
   </div>
+  <div class="info-box ok"><strong>✓ Continua a lavorare</strong>Segnalare una NC non blocca l'ordine. Continua sulle altre fasi a meno che il responsabile non ti comunichi diversamente.</div>
+  <div class="info-box warn"><strong>⚠ Segnala sempre e subito</strong>Non aspettare la fine del turno. Prima si segnala, prima si risolve.</div>
+</div>
 
-  <p>La scheda <strong>📊 Attività</strong> mostra il riepilogo di tutte le fasi che hai completato: numero ordine, nome fase, data e ora di inizio e completamento.</p>
-
-  <p>Usa questa scheda per:</p>
+<!-- SEZIONE 11 + 12 -->
+<div class="page">
+  <div class="section-header"><div class="section-num">11</div><h2>Scheda Attività personale</h2></div>
+  <p>La scheda <strong>📊 Attività</strong> mostra tutte le fasi che hai completato: ordine, fase, data/ora inizio e completamento.</p>
   <div class="azioni-grid">
-    <div class="azione-card">
-      <div class="azione-titolo">📋 Storico personale</div>
-      <p>Verifica tutte le fasi che hai svolto nel tempo.</p>
-    </div>
-    <div class="azione-card">
-      <div class="azione-titolo">⏱ Tempi di lavoro</div>
-      <p>Consulta quanto tempo hai impiegato per ciascuna fase.</p>
-    </div>
+    <div class="azione-card"><div class="azione-titolo">📋 Storico</div><p>Tutte le fasi svolte nel tempo.</p></div>
+    <div class="azione-card"><div class="azione-titolo">⏱ Tempi</div><p>Quanto hai impiegato per ciascuna fase.</p></div>
   </div>
 
-  <div class="section-header" style="margin-top:32px">
-    <div class="section-num">9</div>
-    <h2>Notifiche</h2>
-  </div>
-
-  <p>L'app invia notifiche automatiche in questi casi:</p>
-
+  <div class="section-header" style="margin-top:32px"><div class="section-num">12</div><h2>Indicatori scadenza ordini</h2></div>
+  <p>Nella Home e nella dashboard Avanzamento, le card degli ordini cambiano aspetto in base alla scadenza:</p>
   <div class="steps">
     <div class="step">
-      <div class="step-num">!</div>
+      <div class="step-num" style="border-style:solid">○</div>
       <div class="step-body">
-        <strong>Un collega ha preso in carico una tua fase</strong>
-        <span>Ricevi il nome dell'operatore che ha subentrato e il nome della fase coinvolta.</span>
+        <strong>Nessun indicatore — ordine nella norma</strong>
+        <span>La scadenza è ancora lontana (più di 3 giorni). Nessuna urgenza particolare.</span>
       </div>
     </div>
-    <div class="step">
+    <div class="step" style="border-left:4px solid #888">
       <div class="step-num">!</div>
       <div class="step-body">
-        <strong>Un collega ha ripreso una tua fase in attesa</strong>
-        <span>Ricevi una notifica quando qualcuno riprende una fase che avevi messo in pausa.</span>
+        <strong>Bordo giallo lampeggiante — scadenza entro 3 giorni</strong>
+        <span>L'ordine scade a breve. Priorità alta: organizzati per completare le fasi rimanenti.</span>
+      </div>
+    </div>
+    <div class="step" style="border-left:4px solid #333">
+      <div class="step-num">!!</div>
+      <div class="step-body">
+        <strong>Bordo rosso lampeggiante — ordine in ritardo</strong>
+        <span>La data di consegna è già passata. Segnala al responsabile e spingi al massimo sulle fasi rimaste.</span>
       </div>
     </div>
   </div>
-
-  <div class="info-box">
-    <strong>Come vedere le notifiche</strong>
-    Il badge con il numero di notifiche non lette appare sull'icona della campanella in alto nell'app. Toccala per vedere tutte le notifiche ricevute.
+  <div class="info-box warn">
+    <strong>⚠ Gli ordini in ritardo hanno priorità assoluta</strong>
+    Quando vedi un bordo rosso, coordina con il responsabile per capire quali fasi portare avanti per prime.
   </div>
 </div>
 
-<!-- SEZIONE 10: FASI -->
+<!-- SEZIONE 13: FASI -->
 <div class="page">
-  <div class="section-header">
-    <div class="section-num">10</div>
-    <h2>Le 20 fasi di produzione</h2>
-  </div>
-
-  <p>Ogni ordine standard passa attraverso fino a 20 fasi. Alcune potrebbero non essere applicabili (<span class="badge badge-na">N/A</span>) in base al tipo di prodotto e materiale.</p>
-
+  <div class="section-header"><div class="section-num">13</div><h2>Le 20 fasi di produzione</h2></div>
+  <p>Ogni ordine standard passa attraverso fino a 20 fasi. Alcune potrebbero essere <span class="badge">N/A</span> in base al tipo di prodotto e materiale.</p>
   <table class="fase-table">
-    <thead>
-      <tr>
-        <th class="num">#</th>
-        <th>Nome fase</th>
-        <th>Note</th>
-      </tr>
-    </thead>
+    <thead><tr><th class="num">#</th><th>Nome fase</th><th>Note</th></tr></thead>
     <tbody>
       <tr><td class="num">1</td><td>Ricevimento materiale</td><td></td></tr>
       <tr><td class="num">2</td><td>Controllo qualità in entrata</td><td></td></tr>
@@ -777,87 +472,46 @@
       <tr><td class="num">5</td><td>Foratura</td><td></td></tr>
       <tr><td class="num">6</td><td>Fresatura CNC</td><td>Solo prodotti CNC</td></tr>
       <tr><td class="num">7</td><td>Bordatura</td><td></td></tr>
-      <tr><td class="num">8</td><td>Assemblaggio</td><td></td></tr>
-      <tr><td class="num">9</td><td>Lavorazione esterna</td><td>Lavorazione presso terzi</td></tr>
+      <tr><td class="num">8</td><td>Assemblaggio</td><td>N/A se materiale HDF</td></tr>
+      <tr><td class="num">9</td><td>Attesa Struttura</td><td style="font-weight:600">Parte in attesa al momento della creazione ordine — si completa all'arrivo della struttura</td></tr>
       <tr><td class="num">10</td><td>Placcatura</td><td>Solo placcato</td></tr>
-      <tr><td class="num">11</td><td>Carteggiatura</td><td></td></tr>
-      <tr><td class="num">12</td><td>Verniciatura</td><td>N/A su grezzo</td></tr>
+      <tr><td class="num">11</td><td>Carteggiatura</td><td>N/A se Barra ad L o Complanare</td></tr>
+      <tr><td class="num">12</td><td>Verniciatura</td><td></td></tr>
       <tr><td class="num">13</td><td>Essiccazione / Finitura</td><td></td></tr>
       <tr><td class="num">14</td><td>Incisione CNC</td><td>Solo prodotti CNC</td></tr>
       <tr><td class="num">15</td><td>Montaggio ferramenta</td><td></td></tr>
       <tr><td class="num">16</td><td>Controllo qualità finale</td><td></td></tr>
-      <tr><td class="num">17</td><td>Imballaggio</td><td></td></tr>
-      <tr><td class="num">18</td><td>Etichettatura</td><td></td></tr>
-      <tr><td class="num">19</td><td>Stoccaggio</td><td></td></tr>
-      <tr><td class="num">20</td><td>Pronto per spedizione</td><td>Ultima fase prima della consegna</td></tr>
+      <tr><td class="num">17</td><td>Imballaggio</td><td>N/A se Battente</td></tr>
+      <tr><td class="num">18</td><td>Etichettatura</td><td>N/A se Battente</td></tr>
+      <tr><td class="num">19</td><td>Stoccaggio</td><td>N/A se Battente</td></tr>
+      <tr><td class="num">20</td><td>Pronto per spedizione</td><td>N/A se Battente — ultima fase prima della consegna</td></tr>
     </tbody>
   </table>
-
   <div class="info-box" style="margin-top:16px">
     <strong>Ordini Extra</strong>
-    Alcuni ordini speciali (tipo "extra") hanno fasi personalizzate definite dal responsabile. Il funzionamento è identico: prendi in carico, lavora, completa.
+    Gli ordini speciali (tipo "extra") hanno fasi personalizzate definite dal responsabile. Il funzionamento è identico: prendi in carico, lavora, completa.
   </div>
 </div>
 
-<!-- ULTIMA PAGINA: PROMEMORIA RAPIDO -->
+<!-- PROMEMORIA -->
 <div class="page" style="page-break-after:avoid">
-  <div class="section-header">
-    <div class="section-num">✓</div>
-    <h2>Promemoria rapido — Regole d'uso</h2>
-  </div>
-
+  <div class="section-header"><div class="section-num">✓</div><h2>Promemoria rapido — Regole d'uso</h2></div>
   <div class="steps">
-    <div class="step">
-      <div class="step-num">✓</div>
-      <div class="step-body">
-        <strong>Prendi in carico solo le fasi che puoi eseguire</strong>
-        <span>Non tenere fasi bloccate senza lavorarci. Se ti fermi, mettile in attesa.</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">✓</div>
-      <div class="step-body">
-        <strong>Segna sempre completata la fase prima di passare alla successiva</strong>
-        <span>Il responsabile monitora l'avanzamento in tempo reale dalla sua dashboard.</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">✓</div>
-      <div class="step-body">
-        <strong>Segnala subito qualsiasi problema tramite NC</strong>
-        <span>Non aspettare — la non conformità va registrata nel momento in cui la rilevi.</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">✓</div>
-      <div class="step-body">
-        <strong>Se subentri in una fase avvisa il collega</strong>
-        <span>L'app lo notifica automaticamente, ma una comunicazione diretta è sempre preferibile.</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">✓</div>
-      <div class="step-body">
-        <strong>Non condividere il tuo PIN</strong>
-        <span>Il PIN è personale. Le azioni registrate nell'app sono a tuo nome.</span>
-      </div>
-    </div>
-    <div class="step">
-      <div class="step-num">✓</div>
-      <div class="step-body">
-        <strong>In caso di dubbi chiedi al responsabile</strong>
-        <span>Non tentare operazioni di cui non sei sicuro. Meglio chiedere prima.</span>
-      </div>
-    </div>
+    <div class="step"><div class="step-num">✓</div><div class="step-body"><strong>Prendi in carico solo le fasi che puoi eseguire</strong><span>Non tenere fasi bloccate senza lavorarci. Se ti fermi, mettile in attesa.</span></div></div>
+    <div class="step"><div class="step-num">✓</div><div class="step-body"><strong>Se lavorate in due, entrambi dovete premere "+ Unisciti"</strong><span>Solo così entrambi risultate registrati sul lavoro svolto.</span></div></div>
+    <div class="step"><div class="step-num">✓</div><div class="step-body"><strong>Segna sempre completata la fase prima di passare alla successiva</strong><span>Il responsabile monitora l'avanzamento in tempo reale dalla sua dashboard.</span></div></div>
+    <div class="step"><div class="step-num">✓</div><div class="step-body"><strong>Quando arriva la struttura, segna subito la fase 9 come completata</strong><span>Il tempo di attesa viene tracciato automaticamente dall'app.</span></div></div>
+    <div class="step"><div class="step-num">✓</div><div class="step-body"><strong>Segnala subito qualsiasi problema tramite NC</strong><span>Non aspettare — la non conformità va registrata nel momento in cui la rilevi.</span></div></div>
+    <div class="step"><div class="step-num">✓</div><div class="step-body"><strong>Ordini con bordo rosso = massima priorità</strong><span>Coordina con il responsabile e spingiti a completare le fasi rimanenti.</span></div></div>
+    <div class="step"><div class="step-num">✓</div><div class="step-body"><strong>Non condividere il tuo PIN</strong><span>Il PIN è personale. Le azioni registrate nell'app sono a tuo nome.</span></div></div>
+    <div class="step"><div class="step-num">✓</div><div class="step-body"><strong>In caso di dubbi chiedi al responsabile</strong><span>Non tentare operazioni di cui non sei sicuro.</span></div></div>
   </div>
-
   <div style="margin-top:32px;text-align:center;padding:20px;border:2px solid #000;border-radius:4px">
     <div style="font-family:'DM Mono',monospace;font-size:11pt;letter-spacing:0.1em;margin-bottom:4px;font-weight:700">MANGO SRL</div>
-    <div style="font-size:9pt;color:#555">Gestione Produzione — Versione 1.0 · 2025</div>
+    <div style="font-size:9pt;color:#555">Gestione Produzione — Versione 2.0 · Giugno 2025</div>
   </div>
 </div>
 
-<!-- PULSANTE STAMPA (non appare in stampa) -->
 <div class="no-print" style="position:fixed;bottom:24px;right:24px">
   <button onclick="window.print()" style="background:#8B5E3C;color:white;border:none;padding:14px 24px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.3)">
     🖨️ Stampa / Salva PDF
