@@ -192,6 +192,10 @@ textarea:focus { border-color: var(--wood); }
 .av-fase-dot.in_attesa { background: #F59E0B; }
 .av-fase-dot.disponibile { background: var(--border); }
 .av-fase-dot.non_applicabile { background: transparent; border: 1px solid var(--border); opacity: 0.3; }
+@keyframes blink-warn { 0%,100% { border-left-color: #F59E0B; } 50% { border-left-color: transparent; } }
+@keyframes blink-danger { 0%,100% { border-left-color: #EF4444; } 50% { border-left-color: transparent; } }
+.scad-warning { border-left: 4px solid #F59E0B !important; animation: blink-warn 1.5s ease-in-out infinite; }
+.scad-danger  { border-left: 4px solid #EF4444 !important; animation: blink-danger 1.2s ease-in-out infinite; }
 .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
 .empty-state .icon { font-size: 36px; margin-bottom: 10px; }
 .queue-badge { background: var(--warn); color: white; border-radius: 12px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
@@ -731,14 +735,14 @@ async function renderAvanzamento() {
       `<div class="av-fase-dot ${f.stato}" title="Fase ${f.fase_id}: ${f.stato}"></div>`
     ).join('');
 
-    return `<div class="av-card" style="${o.stato === 'sospeso' ? 'opacity:0.6' : ''}">
+    return `<div class="av-card ${scadenzaClass(o.scadenza)}" style="${o.stato === 'sospeso' ? 'opacity:0.6' : ''}">
       <div class="av-header">
         <div class="av-title">${escapeHtml(o.cliente)}</div>
         <span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span>
       </div>
       <div class="av-meta">
         ${escapeHtml(o.codice || '—')} · ${strutturaLabel(o.struttura)} · ${tipoProdLabel(o.tipo_prodotto)}
-        ${o.scadenza ? ` · <span style="color:${isLate ? 'var(--alert)' : 'var(--muted)'}">Scad. ${formatDate(o.scadenza)}${isLate ? ' ⚠️' : ''}</span>` : ''}
+        ${o.scadenza ? `<br>${scadenzaLabel(o.scadenza)}` : ''}
         ${o.stato === 'sospeso' ? ' · <span style="color:var(--alert)">SOSPESO</span>' : ''}
       </div>
       <div class="progress-bar-wrap">
@@ -766,10 +770,11 @@ function filtraOrdini() {
     return;
   }
   dispEl.innerHTML = filtrati.map(o => `
-    <div class="card card-row" onclick="openOrdineDetail('${o.id}')">
+    <div class="card card-row ${scadenzaClass(o.scadenza)}" onclick="openOrdineDetail('${o.id}')">
       <div class="row-main">
         <div class="row-title">${escapeHtml(o.cliente)} — ${escapeHtml(o.codice || '')}</div>
         <div class="row-sub">${strutturaLabel(o.struttura)} · ${tipoProdLabel(o.tipo_prodotto)}</div>
+        ${o.scadenza ? `<div style="margin-top:3px">${scadenzaLabel(o.scadenza)}</div>` : ''}
       </div>
       <div class="row-right">
         <span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span>
@@ -1395,6 +1400,26 @@ function getFaseNome(faseId) {
 }
 const isCNC = (id) => [3, 6, 14, 19].includes(id);
 const isEsterna = (id) => id === 9;
+function scadenzaClass(scadenza) {
+  if (!scadenza) return '';
+  const oggi = new Date(); oggi.setHours(0,0,0,0);
+  const scad = new Date(scadenza);
+  const diff = Math.floor((scad - oggi) / 86400000);
+  if (diff < 0) return 'scad-danger';
+  if (diff < 3) return 'scad-warning';
+  return '';
+}
+function scadenzaLabel(scadenza) {
+  if (!scadenza) return '';
+  const cls = scadenzaClass(scadenza);
+  const oggi = new Date(); oggi.setHours(0,0,0,0);
+  const diff = Math.floor((new Date(scadenza) - oggi) / 86400000);
+  const testo = formatDate(scadenza);
+  const extra = diff < 0 ? ' ⚠️ IN RITARDO' : diff === 0 ? ' ⚠️ OGGI' : diff === 1 ? ' · domani' : '';
+  if (!cls) return `<span style="font-size:11px;color:var(--muted)">Scad. ${testo}</span>`;
+  const colore = cls === 'scad-danger' ? '#EF4444' : '#F59E0B';
+  return `<span style="font-size:11px;font-weight:600;color:${colore}">Scad. ${testo}${extra}</span>`;
+}
 function formatDate(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
 function formatDateTime(d) { if (!d) return '—'; return new Date(d).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
 

@@ -283,6 +283,10 @@ tr:hover td { background: var(--phase-bg); }
 /* ── SPINNER ── */
 .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+@keyframes blink-warn { 0%,100% { border-left-color: #F59E0B; } 50% { border-left-color: transparent; } }
+@keyframes blink-danger { 0%,100% { border-left-color: #EF4444; } 50% { border-left-color: transparent; } }
+.scad-warning { border-left: 4px solid #F59E0B !important; animation: blink-warn 1.5s ease-in-out infinite; }
+.scad-danger  { border-left: 4px solid #EF4444 !important; animation: blink-danger 1.2s ease-in-out infinite; }
 
 .empty-state { text-align: center; padding: 48px 20px; color: var(--muted); }
 .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
@@ -1162,12 +1166,12 @@ function renderDashboard() {
 function ordineRow(o, mini = false) {
   const scad = o.scadenza ? formatDate(o.scadenza) : '—';
   const isLate = o.scadenza && o.scadenza < new Date().toISOString().split('T')[0] && o.stato === 'aperto';
-  return `<tr class="clickable" onclick="openDettaglioOrdine('${o.id}')">
+  return `<tr class="clickable ${scadenzaClass(o.scadenza)}" onclick="openDettaglioOrdine('${o.id}')">
     <td><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div></td>
     <td>${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}</td>
     <td><span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span></td>
     <td style="text-align:center;font-weight:600">${o.quantita || 1}</td>
-    <td style="color:${isLate ? 'var(--alert)' : 'inherit'}">${scad}${isLate ? ' ⚠️' : ''}</td>
+    <td style="color:${isLate ? '#EF4444' : 'inherit'};font-weight:${isLate ? '700' : 'normal'}">${scad}${isLate ? ' ⚠️' : ''}</td>
     <td><span class="badge badge-${o.stato}">${statoLabel(o.stato)}</span></td>
     <td id="prog-${o.id}" style="min-width:120px">—</td>
     <td>
@@ -2140,6 +2144,14 @@ function escapeHtml(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+function scadenzaClass(scadenza) {
+  if (!scadenza) return '';
+  const oggi = new Date(); oggi.setHours(0,0,0,0);
+  const diff = Math.floor((new Date(scadenza) - oggi) / 86400000);
+  if (diff < 0) return 'scad-danger';
+  if (diff < 3) return 'scad-warning';
+  return '';
+}
 function formatDate(d) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
