@@ -1050,11 +1050,16 @@ async function renderFaseDetail(ordFaseId, ordineId) {
 
   // Lista operatori
   if (opMulti.length > 0) {
-    const nomi = opMulti.map(o => {
+    const righe = opMulti.map(o => {
       const n = `${o.users?.nome || ''} ${o.users?.cognome || ''}`.trim();
-      return o.operatore_id === currentUser.id ? `<strong>${escapeHtml(n)} (tu)</strong>` : escapeHtml(n);
-    }).join(', ');
-    bodyHtml += `<div class="note-box" style="border-color:var(--wood)"><strong>Operatori su questa fase</strong>${nomi}</div>`;
+      const sei_tu = o.operatore_id === currentUser.id;
+      const puoiRimuovere = isMia && !sei_tu && f.stato === 'in_corso';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0">
+        <span>${sei_tu ? `<strong>${escapeHtml(n)} (tu)</strong>` : escapeHtml(n)}</span>
+        ${puoiRimuovere ? `<button class="btn btn-alert" style="padding:3px 10px;font-size:12px" onclick="rimuoviCollega('${ordFaseId}','${ordineId}','${o.operatore_id}','${escapeHtml(n)}')">Rimuovi</button>` : ''}
+      </div>`;
+    }).join('');
+    bodyHtml += `<div class="note-box" style="border-color:var(--wood)"><strong>Operatori su questa fase</strong>${righe}</div>`;
   } else if (f['users']) {
     const n = `${f['users'].nome} ${f['users'].cognome}`;
     bodyHtml += `<div class="note-box"><strong>In carico a</strong>${escapeHtml(n)}</div>`;
@@ -1099,15 +1104,12 @@ async function renderFaseDetail(ordFaseId, ordineId) {
       const { data: tuttiOp } = await sb.from('users').select('id, nome, cognome').eq('attivo', true).in('ruolo', ['operatore']).order('cognome');
       const disponibili = (tuttiOp || []).filter(u => !giaSulla.has(u.id));
       if (disponibili.length) {
-        opzioniColleghi = `<div class="form-group" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
-          <label>Aggiungi un collega a questa fase</label>
-          <div style="display:flex;gap:8px;margin-top:6px">
-            <select id="sel-collega" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--ink);font-size:14px">
-              <option value="">— seleziona —</option>
-              ${disponibili.map(u => `<option value="${u.id}">${escapeHtml(u.nome)} ${escapeHtml(u.cognome)}</option>`).join('')}
-            </select>
-            <button class="btn btn-secondary" onclick="aggiungiCollega('${ordFaseId}','${ordineId}')">+ Aggiungi</button>
-          </div>
+        const chips = disponibili.map(u =>
+          `<button class="btn btn-secondary" style="padding:8px 14px;font-size:13px" onclick="aggiungiCollega('${ordFaseId}','${ordineId}','${u.id}','${escapeHtml(u.nome)} ${escapeHtml(u.cognome)}')">${escapeHtml(u.nome)} ${escapeHtml(u.cognome)}</button>`
+        ).join('');
+        opzioniColleghi = `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);display:block;margin-bottom:8px">Aggiungi collega</label>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">${chips}</div>
         </div>`;
       }
     }
@@ -1193,10 +1195,8 @@ async function prendiInCarico(ordFaseId, ordineId) {
   await renderOrdineDetail(ordineId);
 }
 
-async function aggiungiCollega(ordFaseId, ordineId) {
-  const sel = document.getElementById('sel-collega');
-  const collegaId = sel?.value;
-  if (!collegaId) { toast('Seleziona un collega', 'err'); return; }
+async function aggiungiCollega(ordFaseId, ordineId, collegaId, collegaNome) {
+  if (!confirm(`Aggiungere ${collegaNome} a questa fase?`)) return;
   const { error } = await sb.from('ordine_fasi_operatori').upsert(
     { ordine_fase_id: ordFaseId, operatore_id: collegaId },
     { onConflict: 'ordine_fase_id,operatore_id' }
@@ -1206,7 +1206,20 @@ async function aggiungiCollega(ordFaseId, ordineId) {
     ordine_id: ordineId, utente_id: currentUser.id,
     azione: 'fase_iniziata', dettaglio: { aggiunto_da: currentUser.id, operatore_id: collegaId, ordine_fase_id: ordFaseId }
   });
-  toast('Collega aggiunto alla fase', 'ok');
+  toast(`${collegaNome} aggiunto alla fase`, 'ok');
+  await renderFaseDetail(ordFaseId, ordineId);
+}
+
+async function rimuoviCollega(ordFaseId, ordineId, collegaId, collegaNome) {
+  if (!confirm(`Rimuovere ${collegaNome} da questa fase?`)) return;
+  const { error } = await sb.from('ordine_fasi_operatori').delete()
+    .eq('ordine_fase_id', ordFaseId).eq('operatore_id', collegaId);
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  await sb.from('archivio_log').insert({
+    ordine_id: ordineId, utente_id: currentUser.id,
+    azione: 'fase_annullata', dettaglio: { rimosso_da: currentUser.id, operatore_id: collegaId, ordine_fase_id: ordFaseId }
+  });
+  toast(`${collegaNome} rimosso dalla fase`, 'ok');
   await renderFaseDetail(ordFaseId, ordineId);
 }
 
