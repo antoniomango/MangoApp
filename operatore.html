@@ -1142,7 +1142,7 @@ async function renderFaseDetail(ordFaseId, ordineId) {
           <div class="foto-preview" id="fase-foto-preview"></div>
         </div>
         ${opzioniColleghi}
-        <button class="btn btn-ok" style="margin-top:14px" onclick="completaFase('${ordFaseId}', '${ordineId}')">✓ Segna come completata</button>
+        <button class="btn btn-ok" id="btn-completa-fase" style="margin-top:14px" onclick="completaFase('${ordFaseId}', '${ordineId}')">✓ Segna come completata</button>
         <button class="btn btn-secondary" style="margin-top:10px" onclick="mettiInAttesa('${ordFaseId}', '${ordineId}')">⏸ Metti in attesa</button>
         <button class="btn btn-alert" style="margin-top:10px;font-size:12px;opacity:0.8" onclick="annullaPresaInCarico('${ordFaseId}', '${ordineId}')">✕ Annulla presa in carico</button>
       </div>`;
@@ -1257,18 +1257,32 @@ async function uniscitiAFase(ordFaseId, ordineId) {
 
 async function completaFase(ordFaseId, ordineId) {
   const note = document.getElementById('note-op')?.value.trim() || null;
-  // Upload foto se presente
+
+  // Blocca il bottone subito per evitare doppi click
+  const btnCompleta = document.getElementById('btn-completa-fase');
+  if (btnCompleta) { btnCompleta.disabled = true; btnCompleta.textContent = 'Attendere...'; }
+
+  // Upload foto con progress
   const fotoInput = document.getElementById('fase-foto-input');
   if (fotoInput?.files?.length && isOnline) {
-    for (const file of fotoInput.files) {
-      const ext = file.name.split('.').pop();
-      const path = `${ordineId}/${ordFaseId}/${Date.now()}.${ext}`;
+    const files = Array.from(fotoInput.files);
+    let caricate = 0;
+    for (const file of files) {
+      if (btnCompleta) btnCompleta.textContent = `Caricamento foto ${caricate + 1}/${files.length}...`;
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `${ordineId}/${ordFaseId}/${Date.now()}_${caricate}.${ext}`;
       const { error: upErr } = await sb.storage.from('allegati-fasi').upload(path, file, { upsert: true });
-      if (upErr) { console.error('Upload foto:', upErr); toast('Errore upload foto: ' + upErr.message, 'err'); continue; }
-      const { error: insErr } = await sb.from('allegati').insert({ ordine_fase_id: ordFaseId, url_file: path, caricato_da: currentUser.id });
-      if (insErr) console.error('Insert allegato:', insErr);
+      if (upErr) { console.error('Upload foto:', upErr); toast(`Foto ${caricate + 1}: errore upload`, 'err'); }
+      else {
+        const { error: insErr } = await sb.from('allegati').insert({ ordine_fase_id: ordFaseId, url_file: path, caricato_da: currentUser.id });
+        if (insErr) console.error('Insert allegato:', insErr);
+        else caricate++;
+      }
     }
+    if (caricate < files.length) toast(`Attenzione: caricate ${caricate}/${files.length} foto`, 'err');
   }
+
+  if (btnCompleta) btnCompleta.textContent = 'Completamento...';
 
   if (isOnline) {
     // Prova prima col RPC (operatore primario); se fallisce per permessi usa UPDATE diretto (operatore aggiunto via junction)
@@ -1280,7 +1294,11 @@ async function completaFase(ordFaseId, ordineId) {
         completata_il: new Date().toISOString(),
         note_operatore: note || null
       }).eq('id', ordFaseId).in('stato', ['in_corso', 'in_attesa']);
-      if (error) { toast(error.message || 'Errore', 'err'); return; }
+      if (error) {
+        if (btnCompleta) { btnCompleta.disabled = false; btnCompleta.textContent = '✓ Segna come completata'; }
+        toast(error.message || 'Errore', 'err');
+        return;
+      }
       await sb.from('archivio_log').insert({ ordine_id: ordineId, utente_id: currentUser.id, azione: 'fase_completata', dettaglio: { ordine_fase_id: ordFaseId } });
     }
   } else {
