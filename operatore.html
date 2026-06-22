@@ -1091,6 +1091,26 @@ async function renderFaseDetail(ordFaseId, ordineId) {
         <button class="btn btn-primary" onclick="prendiInCarico('${ordFaseId}', '${ordineId}')">▶ Prendi in carico</button>
       </div>`;
   } else if (f.stato === 'in_corso' && isMia) {
+    // Carica operatori disponibili (escludi chi è già sulla fase)
+    const giaSulla = new Set(opMulti.map(o => o.operatore_id));
+    giaSulla.add(currentUser.id);
+    let opzioniColleghi = '';
+    if (isOnline) {
+      const { data: tuttiOp } = await sb.from('users').select('id, nome, cognome').eq('attivo', true).in('ruolo', ['operatore']).order('cognome');
+      const disponibili = (tuttiOp || []).filter(u => !giaSulla.has(u.id));
+      if (disponibili.length) {
+        opzioniColleghi = `<div class="form-group" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+          <label>Aggiungi un collega a questa fase</label>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <select id="sel-collega" style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--ink);font-size:14px">
+              <option value="">— seleziona —</option>
+              ${disponibili.map(u => `<option value="${u.id}">${escapeHtml(u.nome)} ${escapeHtml(u.cognome)}</option>`).join('')}
+            </select>
+            <button class="btn btn-secondary" onclick="aggiungiCollega('${ordFaseId}','${ordineId}')">+ Aggiungi</button>
+          </div>
+        </div>`;
+      }
+    }
     bodyHtml += `
       <div class="azione-box">
         <h4>Completa fase</h4>
@@ -1104,7 +1124,8 @@ async function renderFaseDetail(ordFaseId, ordineId) {
           <input type="file" id="fase-foto-input" accept="image/*" multiple style="display:none" onchange="previewFaseFoto(this)">
           <div class="foto-preview" id="fase-foto-preview"></div>
         </div>
-        <button class="btn btn-ok" onclick="completaFase('${ordFaseId}', '${ordineId}')">✓ Segna come completata</button>
+        ${opzioniColleghi}
+        <button class="btn btn-ok" style="margin-top:14px" onclick="completaFase('${ordFaseId}', '${ordineId}')">✓ Segna come completata</button>
         <button class="btn btn-secondary" style="margin-top:10px" onclick="mettiInAttesa('${ordFaseId}', '${ordineId}')">⏸ Metti in attesa</button>
         <button class="btn btn-alert" style="margin-top:10px;font-size:12px;opacity:0.8" onclick="annullaPresaInCarico('${ordFaseId}', '${ordineId}')">✕ Annulla presa in carico</button>
       </div>`;
@@ -1170,6 +1191,23 @@ async function prendiInCarico(ordFaseId, ordineId) {
   toast('Fase presa in carico!', 'ok');
   await renderFaseDetail(ordFaseId, ordineId);
   await renderOrdineDetail(ordineId);
+}
+
+async function aggiungiCollega(ordFaseId, ordineId) {
+  const sel = document.getElementById('sel-collega');
+  const collegaId = sel?.value;
+  if (!collegaId) { toast('Seleziona un collega', 'err'); return; }
+  const { error } = await sb.from('ordine_fasi_operatori').upsert(
+    { ordine_fase_id: ordFaseId, operatore_id: collegaId },
+    { onConflict: 'ordine_fase_id,operatore_id' }
+  );
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  await sb.from('archivio_log').insert({
+    ordine_id: ordineId, utente_id: currentUser.id,
+    azione: 'fase_iniziata', dettaglio: { aggiunto_da: currentUser.id, operatore_id: collegaId, ordine_fase_id: ordFaseId }
+  });
+  toast('Collega aggiunto alla fase', 'ok');
+  await renderFaseDetail(ordFaseId, ordineId);
 }
 
 async function uniscitiAFase(ordFaseId, ordineId) {
