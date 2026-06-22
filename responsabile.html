@@ -1066,7 +1066,7 @@ async function loadFasi() {
 async function loadOrdini() {
   const { data } = await sb.from('ordini')
     .select('*, creato_da_user:users!creato_da(nome, cognome)')
-    .in('stato', ['aperto', 'sospeso'])
+    .in('stato', ['aperto', 'sospeso', 'attesa_spedizione'])
     .eq('eliminato', false);
   const prioOrd = { 'extra_urgente': 0, 'urgente': 1, 'normale': 2 };
   ordiniCache = (data || []).sort((a, b) => {
