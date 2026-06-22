@@ -344,6 +344,7 @@ tr:hover td { background: var(--phase-bg); }
         <div class="notif-badge" id="notif-badge" style="display:none">0</div>
       </button>
       <span id="user-label" style="color:#F2EDE6"></span>
+      <span id="header-date" style="color:#9E9189;font-family:'DM Mono',monospace;font-size:11px"></span>
       <a href="#" onclick="doLogout()" style="color:var(--muted);font-size:11px;text-decoration:none">esci</a>
     </div>
   </header>
@@ -1017,6 +1018,7 @@ async function postLogin() {
   const { data } = await sb.from('users').select('*').eq('email', currentUser.email).single();
   currentUserRow = data;
   document.getElementById('user-label').textContent = data ? `${data.nome} ${data.cognome}` : currentUser.email;
+  document.getElementById('header-date').textContent = new Date().toLocaleDateString('it-IT', { weekday:'short', day:'numeric', month:'short' });
   // Load fasi
   await loadFasi();
   // Load data

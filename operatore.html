@@ -253,6 +253,8 @@ textarea:focus { border-color: var(--wood); }
       <div class="user-chip">
         <div class="online-dot" id="conn-dot"></div>
         <span id="user-chip-name"></span>
+        <span style="opacity:.5;margin:0 2px">·</span>
+        <span id="header-date" style="font-family:'DM Mono',monospace;font-size:11px;opacity:.8"></span>
       </div>
       <button onclick="doLogout()" style="background:none;border:none;color:#9E9189;font-size:12px;cursor:pointer">esci</button>
     </div>
@@ -596,6 +598,7 @@ async function showApp() {
   app.style.display = 'flex';
   document.getElementById('user-chip-name').textContent = `${currentUser.nome} ${currentUser.cognome}`;
   document.getElementById('home-name').textContent = currentUser.nome;
+  document.getElementById('header-date').textContent = new Date().toLocaleDateString('it-IT', { weekday:'short', day:'numeric', month:'short' });
 
   await loadFasi();
   await loadOrdini();
