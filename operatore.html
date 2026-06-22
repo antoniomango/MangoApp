@@ -635,7 +635,7 @@ async function loadFasi() {
 
 async function loadOrdini() {
   if (isOnline) {
-    const { data } = await sb.from('ordini').select('*').in('stato', ['aperto', 'sospeso']).eq('eliminato', false);
+    const { data } = await sb.from('ordini').select('*').in('stato', ['aperto', 'sospeso', 'attesa_spedizione']).eq('eliminato', false);
     const prioOrd = { 'extra_urgente': 0, 'urgente': 1, 'normale': 2 };
     ordiniCache = (data || []).sort((a, b) => {
       const pd = prioOrd[a.priorita] - prioOrd[b.priorita];
@@ -803,20 +803,22 @@ function filtraOrdini() {
     dispEl.innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>${q ? 'Nessun risultato' : 'Nessun ordine aperto'}</p></div>`;
     return;
   }
-  dispEl.innerHTML = filtrati.map(o => `
-    <div class="card card-row ${scadenzaClass(o.scadenza)}" onclick="openOrdineDetail('${o.id}')">
+  dispEl.innerHTML = filtrati.map(o => {
+    const isAttesa = o.stato === 'attesa_spedizione';
+    const extraStyle = isAttesa ? 'border-left:4px solid var(--ok);background:#F0FDF4' : '';
+    return `
+    <div class="card card-row ${isAttesa ? '' : scadenzaClass(o.scadenza)}" style="${extraStyle}" onclick="openOrdineDetail('${o.id}')">
       <div class="row-main">
         <div class="row-title">${escapeHtml(o.cliente)} — ${escapeHtml(o.codice || '')}</div>
         <div class="row-sub">${strutturaLabel(o.struttura)} · ${tipoProdLabel(o.tipo_prodotto)}</div>
-        ${o.scadenza ? `<div style="margin-top:3px">${scadenzaLabel(o.scadenza)}</div>` : ''}
+        ${isAttesa ? '<div style="margin-top:3px;font-size:12px;font-weight:600;color:var(--ok)">✓ In attesa corriere</div>' : (o.scadenza ? `<div style="margin-top:3px">${scadenzaLabel(o.scadenza)}</div>` : '')}
       </div>
       <div class="row-right">
         <span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span>
-        ${conDisp.has(o.id) ? '<span style="font-size:11px;color:var(--ok)">fasi libere ✓</span>' : ''}
+        ${!isAttesa && conDisp.has(o.id) ? '<span style="font-size:11px;color:var(--ok)">fasi libere ✓</span>' : ''}
       </div>
       <span class="arrow">›</span>
-    </div>
-  `).join('');
+    </div>`}).join('');
 }
 
 // ═══════════════════════════════════════════════
@@ -1266,8 +1268,18 @@ async function completaFase(ordFaseId, ordineId) {
   }
 
   if (isOnline) {
+    // Prova prima col RPC (operatore primario); se fallisce per permessi usa UPDATE diretto (operatore aggiunto via junction)
     const { data } = await sb.rpc('completa_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_note_operatore: note });
-    if (!data?.ok) { toast(data?.errore || 'Errore', 'err'); return; }
+    if (!data?.ok) {
+      // Fallback: aggiorna direttamente (utente nella junction table)
+      const { error } = await sb.from('ordine_fasi').update({
+        stato: 'completata',
+        completata_il: new Date().toISOString(),
+        note_operatore: note || null
+      }).eq('id', ordFaseId).in('stato', ['in_corso', 'in_attesa']);
+      if (error) { toast(error.message || 'Errore', 'err'); return; }
+      await sb.from('archivio_log').insert({ ordine_id: ordineId, utente_id: currentUser.id, azione: 'fase_completata', dettaglio: { ordine_fase_id: ordFaseId } });
+    }
   } else {
     await queueAction({ type: 'completa_fase', ordFaseId, note });
     await updateQueueBadge();

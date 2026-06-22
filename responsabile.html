@@ -146,6 +146,7 @@ tr:hover td { background: var(--phase-bg); }
 .badge-aperto { background: #D1FAE5; color: #065F46; }
 .badge-sospeso { background: #FEF3C7; color: #92400E; }
 .badge-spedito { background: #E0E7FF; color: #3730A3; }
+.badge-attesa_spedizione { background: #D1FAE5; color: #065F46; font-weight: 700; }
 .badge-normale { background: #F3F4F6; color: #374151; }
 .badge-urgente { background: #FEF9C3; color: #713F12; }
 .badge-extra_urgente { background: #FEE2E2; color: #991B1B; }
@@ -393,10 +394,11 @@ tr:hover td { background: var(--phase-bg); }
           </div>
           <button class="btn btn-primary" onclick="openModalNuovoOrdine()">+ Nuovo Ordine</button>
         </div>
-        <div class="kpi-grid">
+        <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr)">
           <div class="kpi-card"><div class="label">Ordini Aperti</div><div class="value" id="kpi-aperti">—</div></div>
           <div class="kpi-card warn"><div class="label">In Ritardo</div><div class="value" id="kpi-ritardo">—</div></div>
           <div class="kpi-card alert"><div class="label">NC Aperte</div><div class="value" id="kpi-nc">—</div></div>
+          <div class="kpi-card ok"><div class="label">Attesa Corriere</div><div class="value" id="kpi-attesa">—</div></div>
           <div class="kpi-card ok"><div class="label">Spediti (30gg)</div><div class="value" id="kpi-spediti">—</div></div>
         </div>
         <div class="card">
@@ -1063,7 +1065,7 @@ async function loadFasi() {
 async function loadOrdini() {
   const { data } = await sb.from('ordini')
     .select('*, creato_da_user:users!creato_da(nome, cognome)')
-    .in('stato', ['aperto', 'sospeso'])
+    .in('stato', ['aperto', 'sospeso', 'attesa_spedizione'])
     .eq('eliminato', false);
   const prioOrd = { 'extra_urgente': 0, 'urgente': 1, 'normale': 2 };
   ordiniCache = (data || []).sort((a, b) => {
@@ -1171,12 +1173,14 @@ function renderDashboard() {
   const aperti = ordiniCache.filter(o => o.stato === 'aperto').length;
   const ritardo = ordiniCache.filter(o => o.stato === 'aperto' && o.scadenza && o.scadenza < oggi).length;
   const ncAperte = ncCache.filter(n => n.stato === 'aperta').length;
+  const attesa = ordiniCache.filter(o => o.stato === 'attesa_spedizione').length;
   const trenta = new Date(); trenta.setDate(trenta.getDate() - 30);
   const spediti30 = ordiniSpeditiCache.filter(o => new Date(o.spedito_il) >= trenta).length;
 
   document.getElementById('kpi-aperti').textContent = aperti;
   document.getElementById('kpi-ritardo').textContent = ritardo;
   document.getElementById('kpi-nc').textContent = ncAperte;
+  document.getElementById('kpi-attesa').textContent = attesa;
   document.getElementById('kpi-spediti').textContent = spediti30;
   document.getElementById('dash-subtitle').textContent =
     `${new Date().toLocaleDateString('it-IT', {weekday:'long', day:'numeric', month:'long', year:'numeric'})}`;
@@ -1194,7 +1198,9 @@ function renderDashboard() {
 function ordineRow(o, mini = false) {
   const scad = o.scadenza ? formatDate(o.scadenza) : '—';
   const isLate = o.scadenza && o.scadenza < new Date().toISOString().split('T')[0] && o.stato === 'aperto';
-  return `<tr class="clickable ${scadenzaClass(o.scadenza)}" onclick="openDettaglioOrdine('${o.id}')">
+  const isAttesa = o.stato === 'attesa_spedizione';
+  const rowClass = isAttesa ? 'style="background:#F0FDF4"' : '';
+  return `<tr class="clickable ${scadenzaClass(o.scadenza)}" ${rowClass} onclick="openDettaglioOrdine('${o.id}')">
     <td><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div></td>
     <td>${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}</td>
     <td><span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span></td>
@@ -1205,7 +1211,9 @@ function ordineRow(o, mini = false) {
     <td>
       ${o.stato === 'aperto'
         ? `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();sospendi('${o.id}')">Sospendi</button>`
-        : `<button class="btn btn-ok" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();riattiva('${o.id}')">Riattiva</button>`}
+        : o.stato === 'attesa_spedizione'
+          ? `<button class="btn btn-ok" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();segnaSpedito('${o.id}')">📦 Spedisci</button>`
+          : `<button class="btn btn-ok" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();riattiva('${o.id}')">Riattiva</button>`}
     </td>
   </tr>`;
 }
@@ -2349,7 +2357,7 @@ function prioLabel(p) {
 }
 
 function statoLabel(s) {
-  return { 'aperto': 'Aperto', 'sospeso': 'Sospeso', 'spedito': 'Spedito' }[s] || s;
+  return { 'aperto': 'Aperto', 'sospeso': 'Sospeso', 'spedito': 'Spedito', 'attesa_spedizione': 'In attesa corriere' }[s] || s;
 }
 
 function statoFaseLabel(s) {
