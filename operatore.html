@@ -723,14 +723,17 @@ async function renderHome() {
       </div>`}).join('');
   }
 
-  // Ordini disponibili
-  const aperti = ordiniCache.filter(o => o.stato === 'aperto');
+  // Ordini disponibili (aperto + attesa_spedizione visibili in lista)
+  const aperti = ordiniCache.filter(o => o.stato === 'aperto' || o.stato === 'attesa_spedizione' || o.stato === 'sospeso');
   let conDisp = new Set();
   if (isOnline && aperti.length) {
-    const { data: fasiDisp } = await sb.from('ordine_fasi')
-      .select('ordine_id').eq('stato', 'disponibile')
-      .in('ordine_id', aperti.map(o => o.id));
-    conDisp = new Set((fasiDisp || []).map(f => f.ordine_id));
+    const soloAperti = aperti.filter(o => o.stato === 'aperto').map(o => o.id);
+    if (soloAperti.length) {
+      const { data: fasiDisp } = await sb.from('ordine_fasi')
+        .select('ordine_id').eq('stato', 'disponibile')
+        .in('ordine_id', soloAperti);
+      conDisp = new Set((fasiDisp || []).map(f => f.ordine_id));
+    }
   }
   window._ordiniAperti = aperti;
   window._conDisp = conDisp;
@@ -741,7 +744,7 @@ async function renderAvanzamento() {
   const el = document.getElementById('avanzamento-list');
   if (!isOnline) { el.innerHTML = '<div class="empty-state"><div class="icon">📵</div><p>Disponibile solo online</p></div>'; return; }
 
-  const aperti = ordiniCache.filter(o => o.stato === 'aperto' || o.stato === 'sospeso');
+  const aperti = ordiniCache.filter(o => o.stato === 'aperto' || o.stato === 'sospeso' || o.stato === 'attesa_spedizione');
   if (!aperti.length) { el.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>Nessun ordine aperto</p></div>'; return; }
 
   const { data: tutteLeFasi } = await sb.from('ordine_fasi')
