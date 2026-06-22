@@ -635,7 +635,7 @@ async function loadFasi() {
 
 async function loadOrdini() {
   if (isOnline) {
-    const { data } = await sb.from('ordini').select('*').in('stato', ['aperto', 'sospeso', 'attesa_spedizione']).eq('eliminato', false);
+    const { data } = await sb.from('ordini').select('*').in('stato', ['aperto', 'sospeso']).eq('eliminato', false);
     const prioOrd = { 'extra_urgente': 0, 'urgente': 1, 'normale': 2 };
     ordiniCache = (data || []).sort((a, b) => {
       const pd = prioOrd[a.priorita] - prioOrd[b.priorita];
