@@ -2153,14 +2153,18 @@ async function aggiungiNuovaFase() {
     toast('Posizione non valida', 'err'); return;
   }
 
-  // Calcola posizione: tra la fase selezionata e la successiva
+  // Normalizza PRIMA le posizioni esistenti a multipli di 10 (evita decimali)
+  await normalizzaPosizioni();
+  await loadFasi();
+
+  // Ora posizioni = 10, 20, 30... il punto medio è sempre intero (X5)
   let nuovaPosizione;
   if (sceltaIdx === 0) {
     nuovaPosizione = (fasi[0]?.posizione ?? 10) - 5;
   } else {
     const dopo = fasi[sceltaIdx - 1].posizione ?? (sceltaIdx * 10);
-    const prima = fasi[sceltaIdx]?.posizione ?? (dopo + 10);
-    nuovaPosizione = (dopo + prima) / 2;
+    const successiva = fasi[sceltaIdx]?.posizione ?? (dopo + 10);
+    nuovaPosizione = Math.round((dopo + successiva) / 2);
   }
 
   const nextId = Math.max(...fasi.map(f => f.id)) + 1;
@@ -2169,7 +2173,7 @@ async function aggiungiNuovaFase() {
   });
   if (error) { toast('Errore: ' + error.message, 'err'); return; }
 
-  // Rinormalizza posizioni a multipli di 10
+  // Rinormalizza di nuovo per includere la nuova fase
   await loadFasi();
   await normalizzaPosizioni();
 
