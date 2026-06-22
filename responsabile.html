@@ -759,6 +759,13 @@ tr:hover td { background: var(--phase-bg); }
           Aggiungi fasi extra a questo ordine
         </label>
       </div>
+      <div id="std-spazzolatura-row" style="margin-top:10px;display:none">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;font-weight:600">
+          <input type="checkbox" id="ord-spazzolatura">
+          🪥 Spazzolatura richiesta
+        </label>
+        <div style="font-size:11px;color:var(--muted);margin-left:24px;margin-top:2px">Se attivata, verrà aggiunta la fase "Spazzolatura" a questo ordine</div>
+      </div>
       <!-- Fasi extra (visibile solo se tipo=extra) -->
       <div id="extra-fasi-section" style="display:none;margin-top:8px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -1574,8 +1581,10 @@ function setTipoOrdine(tipo) {
   document.getElementById('standard-fields-section').style.display = tipo === 'standard' ? '' : 'none';
   // Toggle fasi extra standard (checkbox)
   document.getElementById('std-extra-toggle-row').style.display = tipo === 'standard' ? '' : 'none';
+  document.getElementById('std-spazzolatura-row').style.display = tipo === 'standard' ? '' : 'none';
   if (tipo !== 'standard') {
     document.getElementById('ord-extra-toggle').checked = false;
+    document.getElementById('ord-spazzolatura').checked = false;
     document.getElementById('std-extra-fasi-section').style.display = 'none';
     document.getElementById('std-extra-fasi-list').innerHTML = '';
   }
@@ -1718,6 +1727,13 @@ async function creaOrdine() {
       );
       if (sErr) { toast('Errore fasi aggiuntive: ' + sErr.message, 'err'); return; }
     }
+  }
+
+  // Inserisci fase Spazzolatura se richiesta
+  if (tipo === 'standard' && document.getElementById('ord-spazzolatura')?.checked) {
+    await sb.from('ordine_fasi').insert({
+      ordine_id: newOrdine.id, fase_id: null, nome_custom: 'Spazzolatura', stato: 'disponibile'
+    });
   }
 
   await sb.from('archivio_log').insert({ ordine_id: newOrdine.id, utente_id: currentUserRow.id, azione: 'ordine_creato' });
