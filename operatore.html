@@ -158,7 +158,17 @@ textarea:focus { border-color: var(--wood); }
 .upload-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; border: 2px dashed var(--border); border-radius: 8px; background: var(--phase-bg); color: var(--muted); font-size: 14px; cursor: pointer; margin-bottom: 12px; }
 .upload-btn:active { background: var(--border); }
 .foto-preview { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.foto-thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+.foto-thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; }
+
+/* ── LIGHTBOX ── */
+#lightbox { display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.92); flex-direction:column; align-items:center; justify-content:center; }
+#lightbox.open { display:flex; }
+#lightbox img { max-width:94vw; max-height:80vh; border-radius:10px; object-fit:contain; }
+#lb-counter { color:#fff; font-size:13px; margin-top:12px; opacity:.7; }
+#lb-close { position:absolute; top:16px; right:20px; font-size:28px; color:#fff; cursor:pointer; line-height:1; }
+#lb-prev, #lb-next { position:absolute; top:50%; transform:translateY(-50%); font-size:36px; color:#fff; cursor:pointer; padding:10px 18px; user-select:none; }
+#lb-prev { left:4px; }
+#lb-next { right:4px; }
 
 /* ── NC FORM ── */
 .nc-form select { margin-bottom: 12px; }
@@ -372,6 +382,15 @@ textarea:focus { border-color: var(--wood); }
       <span class="tab-label">Attività</span>
     </div>
   </div>
+</div>
+
+<!-- LIGHTBOX -->
+<div id="lightbox" onclick="lbClose()">
+  <span id="lb-close">✕</span>
+  <span id="lb-prev" onclick="event.stopPropagation();lbMove(-1)">‹</span>
+  <img id="lb-img" src="" onclick="event.stopPropagation()">
+  <span id="lb-next" onclick="event.stopPropagation();lbMove(1)">›</span>
+  <div id="lb-counter"></div>
 </div>
 
 <!-- TOAST -->
@@ -852,13 +871,14 @@ async function renderOrdineDetail(ordineId) {
     }
     const struttura = ordine?.struttura || '';
     el.innerHTML = ordFasi.map(f => {
-      const nomeFase = getFaseNome(f.fase_id);
+      const isCustom = !f.fase_id;
+      const nomeFase = isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id);
       const opNome = f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '';
       const isMia = f.operatore_id === currentUser.id;
       const isNA = f.stato === 'non_applicabile';
-      const est = isEsterna(f.fase_id);
-      const cnc = isCNC(f.fase_id);
-      const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '▶' : f.stato === 'in_attesa' ? '⏸' : isNA ? '—' : f.fase_id;
+      const est = !isCustom && isEsterna(f.fase_id);
+      const cnc = !isCustom && isCNC(f.fase_id);
+      const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '▶' : f.stato === 'in_attesa' ? '⏸' : isNA ? '—' : isCustom ? '★' : f.fase_id;
       const clickAttr = isNA ? '' : `onclick="openFaseDetail('${f.id}', '${ordineId}')"`;
       const extraBadges = [
         cnc ? '<span style="font-size:9px;font-weight:700;background:#7C3AED;color:#fff;padding:1px 4px;border-radius:3px;margin-left:4px">CNC</span>' : '',
@@ -998,12 +1018,14 @@ async function renderFaseDetail(ordFaseId, ordineId) {
 
   if (f.stato === 'non_applicabile') return;
   const ordine = ordiniCache.find(o => o.id === ordineId);
-  const nomeFase = getFaseNome(f.fase_id);
+  const isCustom = !f.fase_id;
+  const nomeFase = isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id);
+  const numLabel = isCustom ? '★' : f.fase_id;
 
   // isMia = sono nella junction table O sono il primary operatore_id
   const isMia = opMulti.some(o => o.operatore_id === currentUser.id) || f.operatore_id === currentUser.id;
 
-  document.getElementById('fase-det-title').textContent = `${f.fase_id}. ${nomeFase}`;
+  document.getElementById('fase-det-title').textContent = `${numLabel}. ${nomeFase}`;
   const badgeEl = document.getElementById('fase-det-badge');
   badgeEl.className = `badge badge-${f.stato}`;
   badgeEl.textContent = statoFaseLabel(f.stato);
@@ -1036,11 +1058,12 @@ async function renderFaseDetail(ordFaseId, ordineId) {
   if (isOnline) {
     const { data: allegati } = await sb.from('allegati').select('url_file').eq('ordine_fase_id', ordFaseId);
     if (allegati?.length) {
+      const urls = allegati.map(a => sb.storage.from('allegati-fasi').getPublicUrl(a.url_file).data.publicUrl);
+      const urlsJson = escHtml(JSON.stringify(urls));
       bodyHtml += `<div class="note-box" style="margin-bottom:12px"><strong>Foto allegate (${allegati.length})</strong><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">`;
-      for (const a of allegati) {
-        const { data: { publicUrl } } = sb.storage.from('allegati-fasi').getPublicUrl(a.url_file);
-        bodyHtml += `<a href="${publicUrl}" target="_blank"><img src="${publicUrl}" style="width:72px;height:72px;object-fit:cover;border-radius:8px;border:1px solid var(--border)"></a>`;
-      }
+      urls.forEach((url, i) => {
+        bodyHtml += `<img src="${url}" class="foto-thumb" onclick='lbOpen(${urlsJson},${i})'>`;
+      });
       bodyHtml += `</div></div>`;
     }
   }
@@ -1068,8 +1091,8 @@ async function renderFaseDetail(ordFaseId, ordineId) {
         </div>
         <div class="form-group">
           <label>Foto (opzionale)</label>
-          <label class="upload-btn" for="fase-foto-input">📷 Scatta/allega foto</label>
-          <input type="file" id="fase-foto-input" accept="image/*" capture="environment" style="display:none" onchange="previewFaseFoto(this)">
+          <label class="upload-btn" for="fase-foto-input">📷 Scatta/allega foto (anche più di una)</label>
+          <input type="file" id="fase-foto-input" accept="image/*" multiple style="display:none" onchange="previewFaseFoto(this)">
           <div class="foto-preview" id="fase-foto-preview"></div>
         </div>
         <button class="btn btn-ok" onclick="completaFase('${ordFaseId}', '${ordineId}')">✓ Segna come completata</button>
@@ -1299,6 +1322,28 @@ function previewFaseFoto(input) {
     el.appendChild(img);
   }
 }
+
+// ── LIGHTBOX ──
+let _lbUrls = [], _lbIdx = 0;
+function lbOpen(urls, idx) {
+  _lbUrls = urls; _lbIdx = idx;
+  lbShow();
+  document.getElementById('lightbox').classList.add('open');
+}
+function lbClose() { document.getElementById('lightbox').classList.remove('open'); }
+function lbMove(dir) { _lbIdx = (_lbIdx + dir + _lbUrls.length) % _lbUrls.length; lbShow(); }
+function lbShow() {
+  document.getElementById('lb-img').src = _lbUrls[_lbIdx];
+  document.getElementById('lb-counter').textContent = _lbUrls.length > 1 ? `${_lbIdx+1} / ${_lbUrls.length}` : '';
+  document.getElementById('lb-prev').style.display = _lbUrls.length > 1 ? '' : 'none';
+  document.getElementById('lb-next').style.display = _lbUrls.length > 1 ? '' : 'none';
+}
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('lightbox').classList.contains('open')) return;
+  if (e.key === 'Escape') lbClose();
+  if (e.key === 'ArrowLeft') lbMove(-1);
+  if (e.key === 'ArrowRight') lbMove(1);
+});
 
 async function inviaNC() {
   const ordineId = document.getElementById('nc-ordine-sel').value;
