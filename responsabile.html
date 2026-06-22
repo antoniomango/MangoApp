@@ -258,6 +258,10 @@ tr:hover td { background: var(--phase-bg); }
 .fase-config-inputs input:focus { border-color: var(--wood); }
 .fase-del-btn { flex-shrink:0; background:none; border:none; color:var(--muted); font-size:16px; cursor:pointer; padding:4px 6px; border-radius:6px; line-height:1; }
 .fase-del-btn:hover { background:var(--danger-bg,#fef2f2); color:#dc2626; }
+.fase-move-btns { display:flex; flex-direction:column; gap:2px; flex-shrink:0; }
+.fase-move-btn { background:none; border:1px solid var(--border); color:var(--muted); font-size:11px; cursor:pointer; padding:2px 6px; border-radius:4px; line-height:1.2; }
+.fase-move-btn:hover:not(:disabled) { background:var(--surface); color:var(--ink); }
+.fase-move-btn:disabled { opacity:0.2; cursor:default; }
 /* fasi extra su ordine standard */
 .extra-std-row { display:flex; gap:8px; align-items:center; }
 .extra-std-row input { flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; background:var(--bg); color:var(--ink); outline:none; }
@@ -2129,8 +2133,13 @@ async function salvaNotaFaseExtra(faseExtraId, ordineId) {
 // ═══════════════════════════════════════════════
 function renderFasiConfig() {
   const el = document.getElementById('fasi-config-list');
+  const n = fasi.length;
   el.innerHTML = fasi.map((f, i) => `
     <div class="fase-config-item" id="fase-cfg-row-${f.id}">
+      <div class="fase-move-btns">
+        <button class="fase-move-btn" onclick="spostaFase(${f.id},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
+        <button class="fase-move-btn" onclick="spostaFase(${f.id},1)" ${i === n-1 ? 'disabled' : ''}>▼</button>
+      </div>
       <span class="fase-config-num" title="ID interno: ${f.id}">${i + 1}</span>
       <div class="fase-config-inputs">
         <input type="text" id="fase-nome-${f.id}" value="${escapeHtml(f.nome)}" placeholder="Nome fase">
@@ -2139,6 +2148,23 @@ function renderFasiConfig() {
       <button class="fase-del-btn" title="Elimina fase" onclick="eliminaFase(${f.id})">✕</button>
     </div>
   `).join('');
+}
+
+async function spostaFase(id, dir) {
+  const idx = fasi.findIndex(f => f.id === id);
+  const swapIdx = idx + dir;
+  if (swapIdx < 0 || swapIdx >= fasi.length) return;
+  // Salva prima nome/descrizione correnti per non perderli
+  await saveFasiConfig(true);
+  // Scambia le posizioni tra le due fasi
+  const posA = fasi[idx].posizione;
+  const posB = fasi[swapIdx].posizione;
+  await Promise.all([
+    sb.from('fasi').update({ posizione: posB }).eq('id', fasi[idx].id),
+    sb.from('fasi').update({ posizione: posA }).eq('id', fasi[swapIdx].id),
+  ]);
+  await loadFasi();
+  renderFasiConfig();
 }
 
 async function aggiungiNuovaFase() {
@@ -2226,7 +2252,7 @@ async function eliminaFase(id) {
   toast(`Fase ${id} eliminata e rimossa dagli ordini attivi`, 'ok');
 }
 
-async function saveFasiConfig() {
+async function saveFasiConfig(silent = false) {
   const updates = fasi.map(f => ({
     id: f.id,
     nome: document.getElementById(`fase-nome-${f.id}`)?.value.trim() || f.nome,
@@ -2236,7 +2262,7 @@ async function saveFasiConfig() {
     await sb.from('fasi').update({ nome: u.nome, descrizione: u.descrizione }).eq('id', u.id);
   }
   await loadFasi();
-  toast('Configurazione fasi salvata', 'ok');
+  if (!silent) toast('Configurazione fasi salvata', 'ok');
 }
 
 async function importaFasiDaExcel(input) {
