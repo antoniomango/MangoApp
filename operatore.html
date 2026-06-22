@@ -253,8 +253,6 @@ textarea:focus { border-color: var(--wood); }
       <div class="user-chip">
         <div class="online-dot" id="conn-dot"></div>
         <span id="user-chip-name"></span>
-        <span style="opacity:.5;margin:0 2px">·</span>
-        <span id="header-date" style="font-family:'DM Mono',monospace;font-size:11px;opacity:.8"></span>
       </div>
       <button onclick="doLogout()" style="background:none;border:none;color:#9E9189;font-size:12px;cursor:pointer">esci</button>
     </div>
@@ -264,7 +262,10 @@ textarea:focus { border-color: var(--wood); }
     <!-- HOME -->
     <div class="screen active" id="screen-home">
       <div style="padding:16px">
-        <div class="page-title">Ciao, <span id="home-name"></span> 👋</div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+          <div class="page-title">Ciao, <span id="home-name"></span> 👋</div>
+          <div id="home-date" style="font-size:14px;font-weight:600;color:var(--muted);white-space:nowrap"></div>
+        </div>
 
         <!-- In corso -->
         <div class="section-title">Le mie fasi in corso</div>
@@ -598,7 +599,8 @@ async function showApp() {
   app.style.display = 'flex';
   document.getElementById('user-chip-name').textContent = `${currentUser.nome} ${currentUser.cognome}`;
   document.getElementById('home-name').textContent = currentUser.nome;
-  document.getElementById('header-date').textContent = new Date().toLocaleDateString('it-IT', { weekday:'short', day:'numeric', month:'short' });
+  const oggi = new Date();
+  document.getElementById('home-date').textContent = oggi.toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long' });
 
   await loadFasi();
   await loadOrdini();
