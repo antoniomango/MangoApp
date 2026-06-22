@@ -1050,7 +1050,7 @@ async function doLogout() {
 // DATA LOADING
 // ═══════════════════════════════════════════════
 async function loadFasi() {
-  const { data } = await sb.from('fasi').select('*').order('id');
+  const { data } = await sb.from('fasi').select('*').order('posizione').order('id');
   fasi = data || [];
 }
 
@@ -2125,9 +2125,9 @@ async function salvaNotaFaseExtra(faseExtraId, ordineId) {
 // ═══════════════════════════════════════════════
 function renderFasiConfig() {
   const el = document.getElementById('fasi-config-list');
-  el.innerHTML = fasi.map(f => `
+  el.innerHTML = fasi.map((f, i) => `
     <div class="fase-config-item" id="fase-cfg-row-${f.id}">
-      <span class="fase-config-num">${f.id}</span>
+      <span class="fase-config-num" title="ID interno: ${f.id}">${i + 1}</span>
       <div class="fase-config-inputs">
         <input type="text" id="fase-nome-${f.id}" value="${escapeHtml(f.nome)}" placeholder="Nome fase">
         <input type="text" id="fase-desc-${f.id}" value="${escapeHtml(f.descrizione || '')}" placeholder="Descrizione (opzionale)">
@@ -2141,24 +2141,59 @@ async function aggiungiNuovaFase() {
   const nome = prompt('Nome della nuova fase:');
   if (!nome?.trim()) return;
   const desc = prompt('Descrizione (opzionale, premi Invio per saltare):') || null;
+
+  // Chiedi posizione
+  const listaFasi = fasi.map((f, i) => `${i + 1}. ${f.nome}`).join('\n');
+  const sceltaRaw = prompt(
+    `Inserire la fase dopo quale posizione?\n(0 = in cima alla lista)\n\n${listaFasi}`
+  );
+  if (sceltaRaw === null) return; // annullato
+  const sceltaIdx = parseInt(sceltaRaw);
+  if (isNaN(sceltaIdx) || sceltaIdx < 0 || sceltaIdx > fasi.length) {
+    toast('Posizione non valida', 'err'); return;
+  }
+
+  // Calcola posizione: tra la fase selezionata e la successiva
+  let nuovaPosizione;
+  if (sceltaIdx === 0) {
+    nuovaPosizione = (fasi[0]?.posizione ?? 10) - 5;
+  } else {
+    const dopo = fasi[sceltaIdx - 1].posizione ?? (sceltaIdx * 10);
+    const prima = fasi[sceltaIdx]?.posizione ?? (dopo + 10);
+    nuovaPosizione = (dopo + prima) / 2;
+  }
+
   const nextId = Math.max(...fasi.map(f => f.id)) + 1;
-  const { error } = await sb.from('fasi').insert({ id: nextId, nome: nome.trim(), descrizione: desc?.trim() || null });
+  const { error } = await sb.from('fasi').insert({
+    id: nextId, nome: nome.trim(), descrizione: desc?.trim() || null, posizione: nuovaPosizione
+  });
   if (error) { toast('Errore: ' + error.message, 'err'); return; }
 
-  // Aggiungi la fase a tutti gli ordini attivi (non spediti, non eliminati)
+  // Rinormalizza posizioni a multipli di 10
+  await loadFasi();
+  await normalizzaPosizioni();
+
+  // Aggiungi la fase a tutti gli ordini attivi
   const ordiniAttivi = ordiniCache.filter(o => o.stato !== 'spedito' && !o.eliminato);
   if (ordiniAttivi.length) {
     const { error: insErr } = await sb.from('ordine_fasi').insert(
       ordiniAttivi.map(o => ({ ordine_id: o.id, fase_id: nextId, stato: 'disponibile' }))
     );
     if (insErr) toast(`Fase creata ma errore aggiornamento ordini: ${insErr.message}`, 'err');
-    else toast(`Fase ${nextId} aggiunta e applicata a ${ordiniAttivi.length} ordini attivi`, 'ok');
+    else toast(`Fase aggiunta in posizione ${sceltaIdx + 1} e applicata a ${ordiniAttivi.length} ordini attivi`, 'ok');
   } else {
-    toast(`Fase ${nextId} aggiunta`, 'ok');
+    toast('Fase aggiunta', 'ok');
   }
 
   await loadFasi();
   renderFasiConfig();
+}
+
+async function normalizzaPosizioni() {
+  // Riassegna posizioni 10, 20, 30... mantenendo l'ordine corrente
+  for (let i = 0; i < fasi.length; i++) {
+    await sb.from('fasi').update({ posizione: (i + 1) * 10 }).eq('id', fasi[i].id);
+  }
 }
 
 async function eliminaFase(id) {
