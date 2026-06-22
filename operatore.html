@@ -687,30 +687,40 @@ function showScreen(name) {
 // HOME
 // ═══════════════════════════════════════════════
 async function renderHome() {
-  // Mie fasi in corso
+  // Mie fasi in corso (come operatore principale O aggiunto tramite junction)
   let mieFasi = [];
   if (isOnline) {
-    const { data } = await sb.from('ordine_fasi')
-      .select('*, ordini(codice, cliente, stato), fasi(nome)')
-      .eq('operatore_id', currentUser.id)
-      .in('stato', ['in_corso', 'in_attesa']);
-    mieFasi = data || [];
+    const [{ data: primarie }, { data: junction }] = await Promise.all([
+      sb.from('ordine_fasi')
+        .select('*, ordini(codice, cliente, stato), fasi(nome)')
+        .eq('operatore_id', currentUser.id)
+        .in('stato', ['in_corso', 'in_attesa']),
+      sb.from('ordine_fasi_operatori')
+        .select('ordine_fase_id, ordine_fasi(*, ordini(codice, cliente, stato), fasi(nome))')
+        .eq('operatore_id', currentUser.id)
+    ]);
+    const ids = new Set((primarie || []).map(f => f.id));
+    const daJunction = (junction || [])
+      .map(j => j.ordine_fasi)
+      .filter(f => f && !ids.has(f.id) && ['in_corso', 'in_attesa'].includes(f.stato));
+    mieFasi = [...(primarie || []), ...daJunction];
   }
 
   const mieEl = document.getElementById('mie-fasi-card');
   if (!mieFasi.length) {
     mieEl.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>Nessuna fase in corso</p></div>';
   } else {
-    mieEl.innerHTML = mieFasi.map(f => `
+    mieEl.innerHTML = mieFasi.map(f => {
+      const nomeFase = f.nome_custom || f.fasi?.nome || 'Fase';
+      return `
       <div class="card-row" onclick="openFaseDetail('${f.id}', '${f.ordine_id}')">
         <div class="row-main">
-          <div class="row-title">${f.fasi?.nome || 'Fase'}</div>
-          <div class="row-sub">${f.ordini?.cliente} · ${f.ordini?.codice || ''}</div>
+          <div class="row-title">${escapeHtml(nomeFase)}</div>
+          <div class="row-sub">${escapeHtml(f.ordini?.cliente || '')} · ${escapeHtml(f.ordini?.codice || '')}</div>
         </div>
-        <span class="badge badge-in_corso">In corso</span>
+        <span class="badge badge-${f.stato}">${f.stato === 'in_attesa' ? 'In attesa' : 'In corso'}</span>
         <span class="arrow">›</span>
-      </div>
-    `).join('');
+      </div>`}).join('');
   }
 
   // Ordini disponibili
