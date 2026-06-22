@@ -1333,10 +1333,14 @@ async function renderDettaglioOrdine(id) {
       </div>`;
     }).join('');
   } else {
-    const { data: ordFasi } = await sb.from('ordine_fasi')
+    const { data: ordFasiRaw } = await sb.from('ordine_fasi')
       .select('*, users!operatore_id(nome, cognome)')
-      .eq('ordine_id', id)
-      .order('fase_id', { nullsLast: true });
+      .eq('ordine_id', id);
+    const ordFasi = (ordFasiRaw || []).sort((a, b) => {
+      const posA = a.fase_id ? (fasi.find(f => f.id === a.fase_id)?.posizione ?? 9999) : 99999;
+      const posB = b.fase_id ? (fasi.find(f => f.id === b.fase_id)?.posizione ?? 9999) : 99999;
+      return posA - posB;
+    });
     fasiEl.innerHTML = (ordFasi || []).map(f => {
       const isCustom = !f.fase_id;
       const nomeFase = isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id);
