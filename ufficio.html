@@ -36,6 +36,9 @@
   .btn-sm { padding:6px 12px; border:1px solid var(--border); border-radius:8px; font-size:12px; font-weight:600; background:var(--surface); color:var(--ink); cursor:pointer; }
 
   main { padding:16px; max-width:700px; margin:0 auto; }
+  .data-oggi { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:10px 16px; margin-bottom:16px; display:flex; align-items:center; gap:10px; font-size:14px; }
+  .data-oggi strong { font-size:16px; color:var(--ink); }
+  .data-oggi span { color:var(--muted); font-size:12px; }
 
   /* ORDINE CARD */
   .ord-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px 20px; margin-bottom:14px; }
@@ -212,7 +215,11 @@ function renderUfficio(ordini, ordFasi) {
     fasiMap[f.ordine_id].push(f);
   });
 
-  el.innerHTML = ordini.map(o => {
+  // Intestazione con data odierna
+  const oggiLabel = new Date().toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  const intestazione = `<div class="data-oggi">📅 <strong>${oggiLabel.charAt(0).toUpperCase()+oggiLabel.slice(1)}</strong><span>— ${ordini.length} ordini attivi</span></div>`;
+
+  el.innerHTML = intestazione + ordini.map(o => {
     const fasi = fasiMap[o.id] || [];
     const appl = fasi.filter(f => f.stato !== 'non_applicabile');
     const comp = appl.filter(f => f.stato === 'completata').length;
@@ -230,8 +237,8 @@ function renderUfficio(ordini, ordFasi) {
       : `<span class="badge badge-aperto">In produzione</span>`;
 
     const scadHtml = o.scadenza
-      ? `<span class="scad ${inRitardo ? 'late' : ''}">📅 ${formatData(o.scadenza)}</span>`
-      : '';
+      ? `<span class="scad ${inRitardo ? 'late' : ''}">Consegna richiesta: <strong>${formatData(o.scadenza)}</strong>${inRitardo ? ' ⚠ In ritardo' : ''}</span>`
+      : `<span class="scad">Nessuna data di consegna</span>`;
 
     // Barre macro
     const bars = macroFasi.length ? macroFasi.map(m => {
@@ -258,7 +265,8 @@ function renderUfficio(ordini, ordFasi) {
           </div>
           <div class="ord-pct ${pct===100 ? 'done' : ''}">${pct}%</div>
         </div>
-        <div class="ord-info">${badge}${scadHtml}</div>
+        <div class="ord-info">${badge}</div>
+        <div style="margin-bottom:12px">${scadHtml}</div>
         ${bars}
         <div class="tot-track"><div class="tot-fill" style="width:${pct}%"></div></div>
       </div>`;
