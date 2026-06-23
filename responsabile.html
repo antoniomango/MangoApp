@@ -586,58 +586,53 @@ tr:hover td { background: var(--phase-bg); }
         <!-- CARD RIEPILOGO -->
         <div id="kpi-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px"></div>
 
-        <!-- RIGA 1: Fasi per operatore + Fasi più lente -->
+        <!-- RIGA 1: Tempo medio per fase + Trend mensile -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
           <div class="card" style="padding:20px">
-            <h3 style="font-size:13px;font-weight:600;margin-bottom:16px;color:var(--wood)">⚡ Produttività operatori</h3>
-            <div id="kpi-operatori"></div>
+            <h3 style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--wood)">⏱ Tempo medio per fase</h3>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Ore lavorative effettive — esclusi weekend e pausa</div>
+            <div id="kpi-fasi-tempo"></div>
           </div>
           <div class="card" style="padding:20px">
-            <h3 style="font-size:13px;font-weight:600;margin-bottom:16px;color:var(--wood)">⏱ Tempo medio per fase</h3>
-            <div id="kpi-fasi-tempo"></div>
+            <h3 style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--wood)">📅 Ordini completati per mese</h3>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Ordini arrivati in attesa corriere o spediti</div>
+            <div id="kpi-trend"></div>
           </div>
         </div>
 
-        <!-- RIGA 2: Trend mensile + NC per fase -->
+        <!-- RIGA 2: Tempo ciclo per tipologia + NC per fase -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
           <div class="card" style="padding:20px">
-            <h3 style="font-size:13px;font-weight:600;margin-bottom:16px;color:var(--wood)">📅 Ordini completati per mese</h3>
-            <div id="kpi-trend"></div>
+            <h3 style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--wood)">🏗 Tempo ciclo per tipologia</h3>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Dalla prima fase completata all'ordine pronto — ore lavorative</div>
+            <div id="kpi-struttura"></div>
           </div>
           <div class="card" style="padding:20px">
-            <h3 style="font-size:13px;font-weight:600;margin-bottom:16px;color:var(--wood)">⚠️ Non conformità per fase</h3>
+            <h3 style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--wood)">⚠️ Non conformità per fase</h3>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Fasi con più problemi segnalati</div>
             <div id="kpi-nc-fase"></div>
           </div>
         </div>
 
-        <!-- RIGA 3: Tempo medio ordine per struttura + Ordini in ritardo -->
+        <!-- RIGA 3: Ordini in ritardo + Fasi in attesa -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
           <div class="card" style="padding:20px">
-            <h3 style="font-size:13px;font-weight:600;margin-bottom:16px;color:var(--wood)">🏗 Tempo medio ordine per tipologia</h3>
-            <div id="kpi-struttura"></div>
-          </div>
-          <div class="card" style="padding:20px">
-            <h3 style="font-size:13px;font-weight:600;margin-bottom:16px;color:var(--wood)">🔴 Ordini aperti in ritardo</h3>
+            <h3 style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--wood)">🔴 Ordini in ritardo</h3>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Ordini aperti oltre la scadenza</div>
             <div id="kpi-ritardo"></div>
           </div>
-        </div>
-
-        <!-- RIGA 4: Fasi in attesa attualmente + Tasso NC -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
           <div class="card" style="padding:20px">
-            <h3 style="font-size:13px;font-weight:600;margin-bottom:16px;color:var(--wood)">⏸ Fasi attualmente in attesa</h3>
+            <h3 style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--wood)">⏸ Fasi attualmente in attesa</h3>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Fasi bloccate in questo momento</div>
             <div id="kpi-in-attesa"></div>
           </div>
-          <div class="card" style="padding:20px">
-            <h3 style="font-size:13px;font-weight:600;margin-bottom:16px;color:var(--wood)">📊 Distribuzione priorità ordini</h3>
-            <div id="kpi-priorita"></div>
-          </div>
         </div>
 
-        <!-- RIGA 5: Top operatori mese + Fasi bloccate più a lungo -->
+        <!-- RIGA 4: Distribuzione priorità -->
         <div class="card" style="padding:20px;margin-bottom:16px">
-          <h3 style="font-size:13px;font-weight:600;margin-bottom:16px;color:var(--wood)">🏆 Classifica operatori — fasi completate nel periodo</h3>
-          <div id="kpi-classifica"></div>
+          <h3 style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--wood)">📊 Distribuzione priorità ordini attivi</h3>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Composizione del portafoglio ordini in produzione</div>
+          <div id="kpi-priorita"></div>
         </div>
 
       </section>
@@ -2710,223 +2705,250 @@ async function eliminaOrdine(id) {
 // ═══════════════════════════════════════════════
 // KPI
 // ═══════════════════════════════════════════════
+// Calcola ore lavorative effettive tra due timestamp, rispettando config_orario
+function calcolaOreEffettive(startIso, endIso) {
+  if (!startIso || !endIso) return 0;
+  const cfg = orarioConfig;
+  if (!cfg) return (new Date(endIso) - new Date(startIso)) / 3600000;
+
+  const [ih, im] = (cfg.ora_inizio || '08:00').split(':').map(Number);
+  const [fh, fm] = (cfg.ora_fine || '17:00').split(':').map(Number);
+  const inizioMin = ih * 60 + im;
+  const fineMin   = fh * 60 + fm;
+  const pausaMin  = cfg.pausa_attiva ? (cfg.pausa_minuti || 0) : 0;
+  const oreNetteGiorno = (fineMin - inizioMin - pausaMin) / 60;
+
+  const start = new Date(startIso);
+  const end   = new Date(endIso);
+  if (end <= start) return 0;
+
+  let totaleMin = 0;
+  const cur = new Date(start);
+  cur.setHours(0, 0, 0, 0);
+
+  while (cur < end) {
+    const dow = cur.getDay(); // 0=Dom, 6=Sab
+    const isLav = (dow >= 1 && dow <= 5) ||
+                  (dow === 6 && cfg.sabato_lavorativo) ||
+                  (dow === 0 && cfg.domenica_lavorativa);
+
+    if (isLav) {
+      const oreGiorno = (dow === 6) ? (cfg.ore_sabato || oreNetteGiorno)
+                      : (dow === 0) ? (cfg.ore_domenica || oreNetteGiorno)
+                      : oreNetteGiorno;
+
+      const dayStart = new Date(cur); dayStart.setHours(ih, im, 0, 0);
+      const dayEnd   = new Date(cur); dayEnd.setHours(fh, fm, 0, 0);
+
+      const effStart = new Date(Math.max(start, dayStart));
+      const effEnd   = new Date(Math.min(end, dayEnd));
+
+      if (effEnd > effStart) {
+        // minuti grezzi in questo giorno
+        let mins = (effEnd - effStart) / 60000;
+        // sottrai pausa proporzionalmente se il giorno è pieno
+        const frazioneGiorno = mins / ((fineMin - inizioMin) || 1);
+        mins -= pausaMin * frazioneGiorno;
+        // cap alle ore lavorative configurate per quel giorno
+        totaleMin += Math.min(Math.max(0, mins), oreGiorno * 60);
+      }
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return totaleMin / 60;
+}
+
 async function loadKpi() {
   const giorni = parseInt(document.getElementById('kpi-periodo').value);
   const dal = giorni > 0 ? new Date(Date.now() - giorni * 86400000).toISOString() : null;
 
-  // Fetch parallelo di tutti i dati necessari
   const [
     { data: ordFasi },
     { data: ordini },
     { data: nc },
-    { data: users },
     { data: fasiCfg }
   ] = await Promise.all([
     sb.from('ordine_fasi')
-      .select('*, users!operatore_id(nome, cognome), ordini(codice, cliente, struttura, tipo_prodotto, priorita, scadenza, creato_il, spedito_il, eliminato)')
+      .select('*, ordini(codice, cliente, struttura, tipo_prodotto, priorita, scadenza, creato_il, spedito_il, completato_il, eliminato)')
       .not('completata_il', 'is', null)
       .gte('completata_il', dal || '2000-01-01'),
     sb.from('ordini')
-      .select('id, codice, cliente, stato, priorita, struttura, tipo_prodotto, scadenza, creato_il, spedito_il, eliminato')
+      .select('id, codice, cliente, stato, priorita, struttura, tipo_prodotto, scadenza, creato_il, spedito_il, completato_il, eliminato')
       .eq('eliminato', false),
     sb.from('non_conformita')
       .select('id, stato, fase_id, segnalata_il, ordine_id')
       .gte('segnalata_il', dal || '2000-01-01'),
-    sb.from('users').select('id, nome, cognome').in('ruolo', ['operatore']),
-    sb.from('fasi').select('id, nome').order('id')
+    sb.from('fasi').select('id, nome').order('posizione').order('id')
   ]);
 
   const fasi = ordFasi || [];
   const tuttiOrdini = ordini || [];
   const tutteNc = nc || [];
-  const operatori = users || [];
   const fasiNomi = Object.fromEntries((fasiCfg || []).map(f => [f.id, f.nome]));
-
   const oggi = new Date().toISOString().split('T')[0];
 
-  // ── CARDS RIEPILOGO ──
-  const aperti = tuttiOrdini.filter(o => o.stato === 'aperto').length;
-  const speditiPeriodo = tuttiOrdini.filter(o => o.stato === 'spedito' && (!dal || (o.spedito_il && o.spedito_il >= dal))).length;
-  const inRitardo = tuttiOrdini.filter(o => o.stato === 'aperto' && o.scadenza && o.scadenza < oggi).length;
-  const ncAperte = (nc || []).filter(n => n.stato === 'aperta').length;
-  const fasiCompletate = fasi.length;
-
-  // Tempo medio ordine (dalla prima fase completata all'ultima)
-  const tempiOrdine = [];
+  // ── Raggruppa fasi per ordine ──
   const perOrdine = {};
   fasi.forEach(f => {
     if (!f.ordini || f.ordini.eliminato) return;
     const oid = f.ordine_id;
-    if (!perOrdine[oid]) perOrdine[oid] = { min: f.iniziata_il, max: f.completata_il, ord: f.ordini };
+    if (!perOrdine[oid]) perOrdine[oid] = { minInizio: f.iniziata_il, maxFine: f.completata_il, ord: f.ordini };
     else {
-      if (f.iniziata_il && f.iniziata_il < perOrdine[oid].min) perOrdine[oid].min = f.iniziata_il;
-      if (f.completata_il && f.completata_il > perOrdine[oid].max) perOrdine[oid].max = f.completata_il;
+      if (f.iniziata_il && (!perOrdine[oid].minInizio || f.iniziata_il < perOrdine[oid].minInizio)) perOrdine[oid].minInizio = f.iniziata_il;
+      if (f.completata_il && f.completata_il > perOrdine[oid].maxFine) perOrdine[oid].maxFine = f.completata_il;
     }
   });
-  Object.values(perOrdine).forEach(o => {
-    if (o.min && o.max) {
-      const h = (new Date(o.max) - new Date(o.min)) / 3600000;
-      if (h > 0) tempiOrdine.push(h);
-    }
-  });
-  const tmOrdine = tempiOrdine.length ? tempiOrdine.reduce((a, b) => a + b, 0) / tempiOrdine.length : null;
+
+  // ── Tempo medio ciclo ordine (ore lavorative) ──
+  const tempiCiclo = Object.values(perOrdine)
+    .map(o => calcolaOreEffettive(o.minInizio, o.maxFine))
+    .filter(h => h > 0);
+  const tmCiclo = tempiCiclo.length ? tempiCiclo.reduce((a,b)=>a+b,0)/tempiCiclo.length : null;
+
+  // ── CARDS ──
+  const aperti = tuttiOrdini.filter(o => o.stato === 'aperto').length;
+  const attesaCorr = tuttiOrdini.filter(o => o.stato === 'attesa_spedizione').length;
+  const speditiPeriodo = tuttiOrdini.filter(o => o.stato === 'spedito' && (!dal || (o.spedito_il && o.spedito_il >= dal))).length;
+  const inRitardo = tuttiOrdini.filter(o => o.stato === 'aperto' && o.scadenza && o.scadenza < oggi).length;
+  const ncAperte = tutteNc.filter(n => n.stato === 'aperta').length;
 
   document.getElementById('kpi-cards').innerHTML = `
-    <div class="kpi-card"><div class="kpi-label">Ordini aperti</div><div class="kpi-value">${aperti}</div><div class="kpi-sub">attualmente in produzione</div></div>
-    <div class="kpi-card kpi-ok"><div class="kpi-label">Spediti nel periodo</div><div class="kpi-value">${speditiPeriodo}</div><div class="kpi-sub">ordini completati</div></div>
+    <div class="kpi-card"><div class="kpi-label">In produzione</div><div class="kpi-value">${aperti}</div><div class="kpi-sub">ordini aperti</div></div>
+    <div class="kpi-card kpi-ok"><div class="kpi-label">Attesa corriere</div><div class="kpi-value">${attesaCorr}</div><div class="kpi-sub">pronti per spedizione</div></div>
+    <div class="kpi-card kpi-ok"><div class="kpi-label">Spediti</div><div class="kpi-value">${speditiPeriodo}</div><div class="kpi-sub">nel periodo selezionato</div></div>
     <div class="kpi-card ${inRitardo > 0 ? 'kpi-alert' : ''}"><div class="kpi-label">In ritardo</div><div class="kpi-value">${inRitardo}</div><div class="kpi-sub">oltre la scadenza</div></div>
     <div class="kpi-card ${ncAperte > 0 ? 'kpi-warn' : ''}"><div class="kpi-label">NC aperte</div><div class="kpi-value">${ncAperte}</div><div class="kpi-sub">non conformità attive</div></div>
-    <div class="kpi-card"><div class="kpi-label">Fasi completate</div><div class="kpi-value">${fasiCompletate}</div><div class="kpi-sub">nel periodo selezionato</div></div>
-    <div class="kpi-card"><div class="kpi-label">Tempo medio ordine</div><div class="kpi-value">${tmOrdine ? formatOre(tmOrdine) : '—'}</div><div class="kpi-sub">dalla prima all'ultima fase</div></div>
+    <div class="kpi-card"><div class="kpi-label">Tempo ciclo medio</div><div class="kpi-value">${tmCiclo ? formatOre(tmCiclo) : '—'}</div><div class="kpi-sub">ore lavorative/ordine</div></div>
   `;
 
-  // ── PRODUTTIVITÀ OPERATORI ──
-  const opStats = {};
-  operatori.forEach(u => { opStats[u.id] = { nome: u.nome + ' ' + u.cognome, count: 0, ore: [] }; });
-  fasi.forEach(f => {
-    const uid = f.operatore_id;
-    if (!uid || !opStats[uid]) return;
-    opStats[uid].count++;
-    if (f.iniziata_il && f.completata_il) {
-      const h = (new Date(f.completata_il) - new Date(f.iniziata_il)) / 3600000;
-      if (h > 0 && h < 200) opStats[uid].ore.push(h);
-    }
-  });
-  const opArr = Object.values(opStats).filter(o => o.count > 0).sort((a, b) => b.count - a.count);
-  const maxCount = opArr[0]?.count || 1;
-  document.getElementById('kpi-operatori').innerHTML = opArr.length ? opArr.map(o => {
-    const tm = o.ore.length ? o.ore.reduce((a, b) => a + b, 0) / o.ore.length : null;
-    return `<div class="kpi-bar-row">
-      <div class="kpi-bar-label" title="${o.nome}">${o.nome}</div>
-      <div class="kpi-bar-track"><div class="kpi-bar-fill" style="width:${Math.round(o.count/maxCount*100)}%"></div></div>
-      <div class="kpi-bar-val">${o.count} fasi</div>
-    </div>
-    <div style="font-size:10px;color:var(--muted);margin:-6px 0 10px 150px">Tempo medio fase: ${tm ? formatOre(tm) : '—'}</div>`;
-  }).join('') : '<div class="kpi-empty">Nessun dato nel periodo</div>';
-
-  // ── TEMPO MEDIO PER FASE ──
+  // ── TEMPO MEDIO PER FASE (ore lavorative) ──
   const faseTempo = {};
   fasi.forEach(f => {
     if (!f.fase_id || !f.iniziata_il || !f.completata_il) return;
-    const h = (new Date(f.completata_il) - new Date(f.iniziata_il)) / 3600000;
-    if (h <= 0 || h > 200) return;
+    const h = calcolaOreEffettive(f.iniziata_il, f.completata_il);
+    if (h <= 0 || h > 500) return;
     if (!faseTempo[f.fase_id]) faseTempo[f.fase_id] = [];
     faseTempo[f.fase_id].push(h);
   });
   const faseTempoArr = Object.entries(faseTempo)
     .map(([id, ore]) => ({ id: parseInt(id), nome: fasiNomi[parseInt(id)] || `Fase ${id}`, media: ore.reduce((a,b)=>a+b,0)/ore.length, count: ore.length }))
-    .sort((a, b) => b.media - a.media);
+    .sort((a,b) => b.media - a.media);
   const maxOre = faseTempoArr[0]?.media || 1;
-  document.getElementById('kpi-fasi-tempo').innerHTML = faseTempoArr.length ? faseTempoArr.slice(0, 12).map(f =>
-    `<div class="kpi-bar-row">
-      <div class="kpi-bar-label" title="${f.nome}">${f.id}. ${f.nome}</div>
-      <div class="kpi-bar-track"><div class="kpi-bar-fill" style="width:${Math.round(f.media/maxOre*100)}%;background:${f.media > 8 ? 'var(--alert)' : f.media > 4 ? 'var(--warn)' : 'var(--ok)'}"></div></div>
+  const oreGiornoRef = calcolaOreEffettive(
+    new Date(2024,0,1,parseInt((orarioConfig?.ora_inizio||'08:00').split(':')[0]), parseInt((orarioConfig?.ora_inizio||'08:00').split(':')[1])).toISOString(),
+    new Date(2024,0,1,parseInt((orarioConfig?.ora_fine||'17:00').split(':')[0]),   parseInt((orarioConfig?.ora_fine||'17:00').split(':')[1])).toISOString()
+  ) || 8;
+
+  document.getElementById('kpi-fasi-tempo').innerHTML = faseTempoArr.length ? faseTempoArr.slice(0, 15).map(f => {
+    const color = f.media > oreGiornoRef ? 'var(--alert)' : f.media > oreGiornoRef/2 ? 'var(--warn)' : 'var(--ok)';
+    return `<div class="kpi-bar-row">
+      <div class="kpi-bar-label" title="${escapeHtml(f.nome)}">${escapeHtml(f.nome)}</div>
+      <div class="kpi-bar-track"><div class="kpi-bar-fill" style="width:${Math.round(f.media/maxOre*100)}%;background:${color}"></div></div>
       <div class="kpi-bar-val">${formatOre(f.media)}</div>
-    </div>`
-  ).join('') : '<div class="kpi-empty">Nessun dato nel periodo</div>';
+    </div><div style="font-size:10px;color:var(--muted);margin:-6px 0 8px 150px">${f.count} campioni</div>`;
+  }).join('') : '<div class="kpi-empty">Nessun dato nel periodo</div>';
 
   // ── TREND MENSILE ──
   const mesiMap = {};
-  tuttiOrdini.filter(o => o.stato === 'spedito' && o.spedito_il && (!dal || o.spedito_il >= dal)).forEach(o => {
-    const m = o.spedito_il.substring(0, 7);
+  tuttiOrdini.filter(o => ['spedito','attesa_spedizione'].includes(o.stato) && (!dal || ((o.completato_il||o.spedito_il) >= dal))).forEach(o => {
+    const dt = o.completato_il || o.spedito_il;
+    if (!dt) return;
+    const m = dt.substring(0, 7);
     mesiMap[m] = (mesiMap[m] || 0) + 1;
   });
-  const mesiArr = Object.entries(mesiMap).sort((a, b) => a[0].localeCompare(b[0]));
+  const mesiArr = Object.entries(mesiMap).sort((a,b) => a[0].localeCompare(b[0]));
   const maxM = Math.max(...mesiArr.map(m => m[1]), 1);
   document.getElementById('kpi-trend').innerHTML = mesiArr.length ? mesiArr.map(([m, v]) => {
     const [y, mo] = m.split('-');
-    const label = new Date(y, mo - 1).toLocaleString('it-IT', { month: 'short', year: '2-digit' });
+    const label = new Date(y, mo-1).toLocaleString('it-IT', { month: 'short', year: '2-digit' });
     return `<div class="kpi-bar-row">
       <div class="kpi-bar-label">${label}</div>
       <div class="kpi-bar-track"><div class="kpi-bar-fill" style="width:${Math.round(v/maxM*100)}%"></div></div>
       <div class="kpi-bar-val">${v} ord.</div>
     </div>`;
-  }).join('') : '<div class="kpi-empty">Nessun ordine spedito nel periodo</div>';
+  }).join('') : '<div class="kpi-empty">Nessun ordine completato nel periodo</div>';
+
+  // ── TEMPO CICLO PER TIPOLOGIA (ore lavorative) ──
+  const strMap = {};
+  Object.values(perOrdine).forEach(o => {
+    if (!o.ord || !o.minInizio || !o.maxFine) return;
+    const s = o.ord.struttura || o.ord.tipo_prodotto || 'extra';
+    const h = calcolaOreEffettive(o.minInizio, o.maxFine);
+    if (h <= 0) return;
+    if (!strMap[s]) strMap[s] = [];
+    strMap[s].push(h);
+  });
+  const strArr = Object.entries(strMap)
+    .map(([s, ore]) => ({ s, media: ore.reduce((a,b)=>a+b,0)/ore.length, count: ore.length }))
+    .sort((a,b) => b.media - a.media);
+  document.getElementById('kpi-struttura').innerHTML = strArr.length ?
+    `<table class="kpi-table"><thead><tr><th>Tipologia</th><th>Ordini</th><th>Tempo medio</th><th>Vs. standard</th></tr></thead><tbody>` +
+    strArr.map((r, i) => {
+      const ref = strArr[strArr.length-1]?.media || r.media;
+      const pct = Math.round((r.media / ref - 1) * 100);
+      const badge = i === 0 ? '' : pct > 0 ? `<span style="color:var(--alert);font-size:10px">+${pct}%</span>` : `<span style="color:var(--ok);font-size:10px">${pct}%</span>`;
+      return `<tr><td>${strutturaLabel(r.s)}</td><td style="text-align:center">${r.count}</td><td style="font-family:'DM Mono',monospace">${formatOre(r.media)}</td><td>${badge}</td></tr>`;
+    }).join('') + `</tbody></table>` : '<div class="kpi-empty">Nessun dato</div>';
 
   // ── NC PER FASE ──
   const ncFase = {};
-  tutteNc.forEach(n => {
-    if (!n.fase_id) return;
-    ncFase[n.fase_id] = (ncFase[n.fase_id] || 0) + 1;
-  });
-  const ncFaseArr = Object.entries(ncFase).map(([id, c]) => ({ id: parseInt(id), nome: fasiNomi[parseInt(id)] || `Fase ${id}`, count: c })).sort((a,b) => b.count - a.count);
+  tutteNc.forEach(n => { if (n.fase_id) ncFase[n.fase_id] = (ncFase[n.fase_id]||0) + 1; });
+  const ncFaseArr = Object.entries(ncFase)
+    .map(([id, c]) => ({ nome: fasiNomi[parseInt(id)] || `Fase ${id}`, count: c }))
+    .sort((a,b) => b.count - a.count);
   const maxNc = ncFaseArr[0]?.count || 1;
   document.getElementById('kpi-nc-fase').innerHTML = ncFaseArr.length ? ncFaseArr.map(f =>
     `<div class="kpi-bar-row">
-      <div class="kpi-bar-label" title="${f.nome}">${f.id}. ${f.nome}</div>
+      <div class="kpi-bar-label" title="${escapeHtml(f.nome)}">${escapeHtml(f.nome)}</div>
       <div class="kpi-bar-track"><div class="kpi-bar-fill" style="width:${Math.round(f.count/maxNc*100)}%;background:var(--alert)"></div></div>
       <div class="kpi-bar-val">${f.count} NC</div>
     </div>`
   ).join('') : '<div class="kpi-empty">Nessuna NC nel periodo</div>';
 
-  // ── TEMPO MEDIO PER STRUTTURA ──
-  const strMap = {};
-  Object.values(perOrdine).forEach(o => {
-    if (!o.ord || !o.min || !o.max) return;
-    const s = o.ord.struttura || 'extra';
-    const h = (new Date(o.max) - new Date(o.min)) / 3600000;
-    if (h <= 0) return;
-    if (!strMap[s]) strMap[s] = [];
-    strMap[s].push(h);
-  });
-  const strArr = Object.entries(strMap).map(([s, ore]) => ({ s, media: ore.reduce((a,b)=>a+b,0)/ore.length, count: ore.length })).sort((a,b)=>b.media-a.media);
-  document.getElementById('kpi-struttura').innerHTML = strArr.length ?
-    `<table class="kpi-table"><thead><tr><th>Tipologia</th><th>Ordini</th><th>Tempo medio</th></tr></thead><tbody>` +
-    strArr.map(r => `<tr><td>${strutturaLabel(r.s)}</td><td>${r.count}</td><td style="font-family:'DM Mono',monospace">${formatOre(r.media)}</td></tr>`).join('') +
-    `</tbody></table>` : '<div class="kpi-empty">Nessun dato</div>';
-
   // ── ORDINI IN RITARDO ──
-  const ritardoList = tuttiOrdini.filter(o => o.stato === 'aperto' && o.scadenza && o.scadenza < oggi).sort((a,b) => a.scadenza.localeCompare(b.scadenza));
+  const ritardoList = tuttiOrdini
+    .filter(o => o.stato === 'aperto' && o.scadenza && o.scadenza < oggi)
+    .sort((a,b) => a.scadenza.localeCompare(b.scadenza));
   document.getElementById('kpi-ritardo').innerHTML = ritardoList.length ?
-    `<table class="kpi-table"><thead><tr><th>Cliente</th><th>Codice</th><th>Scadenza</th><th>Giorni</th></tr></thead><tbody>` +
+    `<table class="kpi-table"><thead><tr><th>Cliente</th><th>Codice</th><th>Scadenza</th><th>Ritardo</th></tr></thead><tbody>` +
     ritardoList.map(o => {
       const gg = Math.floor((new Date(oggi) - new Date(o.scadenza)) / 86400000);
-      return `<tr><td>${escapeHtml(o.cliente)}</td><td style="font-family:'DM Mono',monospace;font-size:11px">${escapeHtml(o.codice||'')}</td><td>${formatDate(o.scadenza)}</td><td style="color:var(--alert);font-weight:600">+${gg}gg</td></tr>`;
-    }).join('') + `</tbody></table>` : '<div class="kpi-empty" style="color:var(--ok)">✓ Nessun ordine in ritardo</div>';
+      return `<tr>
+        <td>${escapeHtml(o.cliente)}</td>
+        <td style="font-family:'DM Mono',monospace;font-size:11px">${escapeHtml(o.codice||'')}</td>
+        <td>${formatDate(o.scadenza)}</td>
+        <td style="color:var(--alert);font-weight:700">+${gg}gg</td>
+      </tr>`;
+    }).join('') + `</tbody></table>`
+    : '<div class="kpi-empty" style="color:var(--ok)">✓ Nessun ordine in ritardo</div>';
 
   // ── FASI IN ATTESA ──
   const { data: inAttesa } = await sb.from('ordine_fasi')
-    .select('*, users!operatore_id(nome, cognome), ordini(codice, cliente)')
+    .select('*, users!operatore_id(nome, cognome), ordini(codice, cliente), fasi(nome)')
     .eq('stato', 'in_attesa');
-  document.getElementById('kpi-in-attesa').innerHTML = (inAttesa || []).length ?
-    `<table class="kpi-table"><thead><tr><th>Ordine</th><th>Fase</th><th>Operatore</th></tr></thead><tbody>` +
+  document.getElementById('kpi-in-attesa').innerHTML = (inAttesa||[]).length ?
+    `<table class="kpi-table"><thead><tr><th>Cliente</th><th>Fase</th><th>Operatore</th></tr></thead><tbody>` +
     inAttesa.map(f => `<tr>
       <td>${escapeHtml(f.ordini?.cliente||'')} <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">${escapeHtml(f.ordini?.codice||'')}</span></td>
-      <td>${fasiNomi[f.fase_id] || `Fase ${f.fase_id}`}</td>
-      <td>${f.users ? f.users.nome + ' ' + f.users.cognome : '—'}</td>
-    </tr>`).join('') + `</tbody></table>` : '<div class="kpi-empty" style="color:var(--ok)">✓ Nessuna fase in attesa</div>';
+      <td>${escapeHtml(f.fasi?.nome || f.nome_custom || '—')}</td>
+      <td>${f.users ? escapeHtml(f.users.nome+' '+f.users.cognome) : '—'}</td>
+    </tr>`).join('') + `</tbody></table>`
+    : '<div class="kpi-empty" style="color:var(--ok)">✓ Nessuna fase in attesa</div>';
 
   // ── DISTRIBUZIONE PRIORITÀ ──
   const prioCount = { normale: 0, urgente: 0, extra_urgente: 0 };
-  tuttiOrdini.filter(o => o.stato === 'aperto').forEach(o => { if (prioCount[o.priorita] !== undefined) prioCount[o.priorita]++; });
+  tuttiOrdini.filter(o => ['aperto','attesa_spedizione'].includes(o.stato)).forEach(o => { if (prioCount[o.priorita] !== undefined) prioCount[o.priorita]++; });
   const totPrio = Object.values(prioCount).reduce((a,b)=>a+b,0) || 1;
   const prioColors = { normale: 'var(--ok)', urgente: 'var(--warn)', extra_urgente: 'var(--alert)' };
   const prioLabels = { normale: 'Normale', urgente: 'Urgente', extra_urgente: 'Extra Urgente' };
-  document.getElementById('kpi-priorita').innerHTML = `
-    ${Object.entries(prioCount).map(([k, v]) => `
+  document.getElementById('kpi-priorita').innerHTML =
+    Object.entries(prioCount).map(([k, v]) => `
       <div class="kpi-bar-row">
         <div class="kpi-bar-label">${prioLabels[k]}</div>
         <div class="kpi-bar-track"><div class="kpi-bar-fill" style="width:${Math.round(v/totPrio*100)}%;background:${prioColors[k]}"></div></div>
         <div class="kpi-bar-val">${v} (${Math.round(v/totPrio*100)}%)</div>
-      </div>`).join('')}
-    <div style="font-size:11px;color:var(--muted);margin-top:8px">Totale ordini aperti: ${totPrio}</div>`;
-
-  // ── CLASSIFICA ──
-  const classifica = Object.values(opStats).filter(o => o.count > 0).sort((a,b) => b.count - a.count);
-  document.getElementById('kpi-classifica').innerHTML = classifica.length ?
-    `<table class="kpi-table"><thead><tr><th>#</th><th>Operatore</th><th>Fasi completate</th><th>Tempo medio/fase</th><th>Totale ore lavorate</th></tr></thead><tbody>` +
-    classifica.map((o, i) => {
-      const tm = o.ore.length ? o.ore.reduce((a,b)=>a+b,0)/o.ore.length : null;
-      const tot = o.ore.reduce((a,b)=>a+b,0);
-      const medals = ['🥇','🥈','🥉'];
-      return `<tr>
-        <td style="font-weight:700;font-size:14px">${medals[i] || (i+1)}</td>
-        <td style="font-weight:500">${o.nome}</td>
-        <td style="font-family:'DM Mono',monospace;text-align:center">${o.count}</td>
-        <td style="font-family:'DM Mono',monospace">${tm ? formatOre(tm) : '—'}</td>
-        <td style="font-family:'DM Mono',monospace">${tot > 0 ? formatOre(tot) : '—'}</td>
-      </tr>`;
-    }).join('') + `</tbody></table>` : '<div class="kpi-empty">Nessun dato nel periodo</div>';
+      </div>`).join('') +
+    `<div style="font-size:11px;color:var(--muted);margin-top:8px">Totale ordini attivi: ${totPrio}</div>`;
 }
 
 function formatOre(h) {
