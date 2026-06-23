@@ -382,6 +382,9 @@ tr:hover td { background: var(--phase-bg); }
       <div class="nav-item" onclick="showSection('fasi-config')" id="nav-fasi-config">
         <span class="icon">⚙️</span> Config. Fasi
       </div>
+      <div class="nav-item" onclick="showSection('orario-config')" id="nav-orario-config">
+        <span class="icon">🕐</span> Orario Lavoro
+      </div>
     </nav>
 
     <main>
@@ -637,6 +640,69 @@ tr:hover td { background: var(--phase-bg); }
           <div id="kpi-classifica"></div>
         </div>
 
+      </section>
+
+      <!-- ORARIO LAVORO -->
+      <section class="section" id="sec-orario-config">
+        <div class="page-hdr">
+          <div>
+            <h1>Orario di Lavoro</h1>
+            <div class="sub">Usato per calcolare i tempi KPI escludendo ore non lavorative</div>
+          </div>
+          <button class="btn btn-primary" onclick="salvaOrario()">💾 Salva</button>
+        </div>
+        <div class="card" style="max-width:520px">
+
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:14px">Orario giornaliero</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Inizio turno</label>
+              <input type="time" id="or-inizio" value="08:00">
+            </div>
+            <div class="form-group">
+              <label>Fine turno</label>
+              <input type="time" id="or-fine" value="17:00">
+            </div>
+          </div>
+
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:20px 0 14px">Sabato</div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:10px">
+            <input type="checkbox" id="or-sabato" onchange="toggleOrarioSabato(this)">
+            Sabato lavorativo
+          </label>
+          <div id="or-sabato-ore-row" style="display:none">
+            <div class="form-group" style="max-width:200px">
+              <label>Ore lavorate il sabato</label>
+              <input type="number" id="or-ore-sabato" min="1" max="8" step="0.5" value="4">
+            </div>
+          </div>
+
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:20px 0 14px">Domenica</div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:10px">
+            <input type="checkbox" id="or-domenica" onchange="toggleOrarioDomenica(this)">
+            Domenica lavorativa (casi eccezionali)
+          </label>
+          <div id="or-domenica-ore-row" style="display:none">
+            <div class="form-group" style="max-width:200px">
+              <label>Ore lavorate la domenica</label>
+              <input type="number" id="or-ore-domenica" min="1" max="8" step="0.5" value="4">
+            </div>
+          </div>
+
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:20px 0 14px">Straordinario</div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:10px">
+            <input type="checkbox" id="or-straordinario" onchange="toggleOrarioStraordinario(this)">
+            Ammesso straordinario
+          </label>
+          <div id="or-straordinario-ore-row" style="display:none">
+            <div class="form-group" style="max-width:200px">
+              <label>Ore straordinario massime al giorno</label>
+              <input type="number" id="or-ore-straordinario" min="0.5" max="4" step="0.5" value="2">
+            </div>
+          </div>
+
+          <div style="margin-top:20px;padding:12px 14px;background:var(--surface);border-radius:8px;font-size:12px;color:var(--muted)" id="or-riepilogo"></div>
+        </div>
       </section>
 
       <!-- CONFIG FASI -->
@@ -1034,7 +1100,7 @@ async function postLogin() {
   // Load fasi
   await loadFasi();
   // Load data
-  await Promise.all([loadOrdini(), loadNc(), loadOperatori(), loadNotifiche()]);
+  await Promise.all([loadOrdini(), loadNc(), loadOperatori(), loadNotifiche(), loadOrarioConfig()]);
   // Realtime
   setupRealtime();
   // Render
@@ -1172,6 +1238,7 @@ function showSection(name) {
   else if (name === 'archivio') renderArchivioTable();
   else if (name === 'notifiche') renderNotifiche();
   else if (name === 'fasi-config') renderFasiConfig();
+  else if (name === 'orario-config') renderOrarioConfig();
   else if (name === 'kpi') loadKpi();
 }
 
@@ -2017,6 +2084,90 @@ async function eliminaOperatore(id, nome) {
   toast('Profilo eliminato', 'ok');
   await loadOperatori();
   renderOperatori();
+}
+
+// ═══════════════════════════════════════════════
+// ORARIO LAVORO
+// ═══════════════════════════════════════════════
+let orarioConfig = null;
+
+async function loadOrarioConfig() {
+  const { data } = await sb.from('config_orario').select('*').single();
+  orarioConfig = data;
+}
+
+function aggiornaRiepilogoOrario() {
+  const inizio = document.getElementById('or-inizio').value;
+  const fine = document.getElementById('or-fine').value;
+  const sabato = document.getElementById('or-sabato').checked;
+  const oreSabato = parseFloat(document.getElementById('or-ore-sabato').value) || 0;
+  const domenica = document.getElementById('or-domenica').checked;
+  const oreDomenica = parseFloat(document.getElementById('or-ore-domenica').value) || 0;
+  const straordinario = document.getElementById('or-straordinario').checked;
+  const oreStraord = parseFloat(document.getElementById('or-ore-straordinario').value) || 0;
+
+  const [h1, m1] = inizio.split(':').map(Number);
+  const [h2, m2] = fine.split(':').map(Number);
+  const oreGiorno = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+  const oreMax = oreGiorno + (straordinario ? oreStraord : 0);
+
+  let settimana = oreGiorno * 5;
+  if (sabato) settimana += oreSabato;
+  if (domenica) settimana += oreDomenica;
+
+  document.getElementById('or-riepilogo').innerHTML =
+    `📅 <b>${oreGiorno.toFixed(1)} ore/giorno</b> (lun–ven)` +
+    (straordinario ? ` + max ${oreStraord}h straordinario = <b>${oreMax.toFixed(1)}h max</b>` : '') +
+    (sabato ? ` · Sab: ${oreSabato}h` : '') +
+    (domenica ? ` · Dom: ${oreDomenica}h` : '') +
+    ` · <b>${settimana.toFixed(1)} ore/settimana</b>`;
+}
+
+function renderOrarioConfig() {
+  if (!orarioConfig) return;
+  document.getElementById('or-inizio').value = orarioConfig.ora_inizio?.slice(0,5) || '08:00';
+  document.getElementById('or-fine').value = orarioConfig.ora_fine?.slice(0,5) || '17:00';
+  document.getElementById('or-sabato').checked = orarioConfig.sabato_lavorativo;
+  document.getElementById('or-ore-sabato').value = orarioConfig.ore_sabato || 4;
+  document.getElementById('or-sabato-ore-row').style.display = orarioConfig.sabato_lavorativo ? '' : 'none';
+  document.getElementById('or-domenica').checked = orarioConfig.domenica_lavorativa;
+  document.getElementById('or-ore-domenica').value = orarioConfig.ore_domenica || 4;
+  document.getElementById('or-domenica-ore-row').style.display = orarioConfig.domenica_lavorativa ? '' : 'none';
+  document.getElementById('or-straordinario').checked = orarioConfig.straordinario_attivo;
+  document.getElementById('or-ore-straordinario').value = orarioConfig.ore_straordinario || 2;
+  document.getElementById('or-straordinario-ore-row').style.display = orarioConfig.straordinario_attivo ? '' : 'none';
+  aggiornaRiepilogoOrario();
+}
+
+function toggleOrarioSabato(cb) {
+  document.getElementById('or-sabato-ore-row').style.display = cb.checked ? '' : 'none';
+  aggiornaRiepilogoOrario();
+}
+function toggleOrarioDomenica(cb) {
+  document.getElementById('or-domenica-ore-row').style.display = cb.checked ? '' : 'none';
+  aggiornaRiepilogoOrario();
+}
+function toggleOrarioStraordinario(cb) {
+  document.getElementById('or-straordinario-ore-row').style.display = cb.checked ? '' : 'none';
+  aggiornaRiepilogoOrario();
+}
+
+async function salvaOrario() {
+  const payload = {
+    ora_inizio: document.getElementById('or-inizio').value,
+    ora_fine: document.getElementById('or-fine').value,
+    sabato_lavorativo: document.getElementById('or-sabato').checked,
+    ore_sabato: parseFloat(document.getElementById('or-ore-sabato').value) || 4,
+    domenica_lavorativa: document.getElementById('or-domenica').checked,
+    ore_domenica: parseFloat(document.getElementById('or-ore-domenica').value) || 0,
+    straordinario_attivo: document.getElementById('or-straordinario').checked,
+    ore_straordinario: parseFloat(document.getElementById('or-ore-straordinario').value) || 2,
+  };
+  const { error } = await sb.from('config_orario').update(payload).eq('id', true);
+  if (error) { toast('Errore salvataggio: ' + error.message, 'err'); return; }
+  orarioConfig = { ...orarioConfig, ...payload };
+  toast('Orario salvato', 'ok');
+  aggiornaRiepilogoOrario();
 }
 
 // ═══════════════════════════════════════════════
