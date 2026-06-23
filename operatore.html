@@ -1026,20 +1026,8 @@ async function openFaseDetail(ordFaseId, ordineId) {
   currentOrdineId = ordineId;
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-fase').classList.add('active');
-  document.getElementById('fase-back-btn').onclick = () => backDaFase(ordFaseId, ordineId);
+  document.getElementById('fase-back-btn').onclick = () => openOrdineDetail(ordineId);
   await renderFaseDetail(ordFaseId, ordineId);
-}
-
-async function backDaFase(ordFaseId, ordineId) {
-  // Se la fase è in_corso e appartiene a me, chiedo se vuole annullare
-  const { data: f } = await sb.from('ordine_fasi').select('stato, operatore_id').eq('id', ordFaseId).single();
-  if (f?.stato === 'in_corso' && f?.operatore_id === currentUser.id) {
-    if (confirm('Hai preso in carico questa fase.\nVuoi annullare la presa in carico e riportarla a "disponibile"?')) {
-      await annullaPresaInCarico(ordFaseId, ordineId);
-      return;
-    }
-  }
-  openOrdineDetail(ordineId);
 }
 
 async function renderFaseDetail(ordFaseId, ordineId) {
