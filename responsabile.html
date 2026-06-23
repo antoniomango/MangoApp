@@ -846,7 +846,8 @@ tr:hover td { background: var(--phase-bg); }
       <div class="form-row">
         <div class="form-group">
           <label>Cliente *</label>
-          <input type="text" id="ord-cliente" placeholder="Nome cliente">
+          <input type="text" id="ord-cliente" placeholder="Nome cliente" list="clienti-list" autocomplete="off">
+          <datalist id="clienti-list"></datalist>
         </div>
         <div class="form-group">
           <label>N° Ordine *</label>
@@ -1828,7 +1829,15 @@ function renumberExtraFasi() {
   });
 }
 
+async function caricaClienti() {
+  const { data } = await sb.from('ordini').select('cliente').eq('eliminato', false).order('cliente');
+  const nomi = [...new Set((data || []).map(o => o.cliente).filter(Boolean))];
+  const dl = document.getElementById('clienti-list');
+  if (dl) dl.innerHTML = nomi.map(n => `<option value="${n}">`).join('');
+}
+
 function openModalNuovoOrdine() {
+  caricaClienti();
   document.getElementById('ord-cliente').value = '';
   document.getElementById('ord-codice').value = '';
   document.getElementById('ord-note').value = '';
