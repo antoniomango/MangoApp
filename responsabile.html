@@ -3041,11 +3041,22 @@ async function loadKpi() {
   `;
 
   // ── TEMPO MEDIO PER FASE (ore lavorative) ──
+  // Se lo stesso operatore aveva N ordini in_corso per la stessa fase nello stesso periodo,
+  // il tempo reale per ordine è diviso per N (lavoro in parallelo ottimizzato)
   const faseTempo = {};
   fasi.forEach(f => {
     if (!f.fase_id || !f.iniziata_il || !f.completata_il) return;
-    const h = calcolaOreEffettive(f.iniziata_il, f.completata_il);
-    if (h <= 0 || h > 500) return;
+    const hTotale = calcolaOreEffettive(f.iniziata_il, f.completata_il);
+    if (hTotale <= 0 || hTotale > 500) return;
+    // Conta quante fasi dello stesso tipo aveva in_corso lo stesso operatore in contemporanea
+    const parallele = fasi.filter(g =>
+      g.fase_id === f.fase_id &&
+      g.operatore_id === f.operatore_id &&
+      g.iniziata_il && g.completata_il &&
+      g.iniziata_il < f.completata_il &&
+      g.completata_il > f.iniziata_il
+    ).length || 1;
+    const h = hTotale / parallele;
     if (!faseTempo[f.fase_id]) faseTempo[f.fase_id] = [];
     faseTempo[f.fase_id].push(h);
   });
