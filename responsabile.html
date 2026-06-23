@@ -891,10 +891,11 @@ tr:hover td { background: var(--phase-bg); }
 <div class="modal-overlay" id="modal-operatore">
   <div class="modal">
     <div class="modal-hdr">
-      <h3>Nuovo Operatore</h3>
+      <h3 id="op-modal-title">Nuovo Operatore</h3>
       <button class="modal-close" onclick="closeModal('modal-operatore')">✕</button>
     </div>
     <div class="modal-body">
+      <input type="hidden" id="op-edit-id">
       <div class="form-row">
         <div class="form-group">
           <label>Nome *</label>
@@ -907,8 +908,9 @@ tr:hover td { background: var(--phase-bg); }
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>PIN (4 cifre) *</label>
+          <label id="op-pin-label">PIN (4 cifre) *</label>
           <input type="password" id="op-pin" placeholder="••••" maxlength="4" pattern="[0-9]{4}">
+          <div id="op-pin-hint" style="display:none;font-size:11px;color:var(--muted);margin-top:4px">Lascia vuoto per non cambiare il PIN</div>
         </div>
         <div class="form-group">
           <label>Ruolo</label>
@@ -921,7 +923,7 @@ tr:hover td { background: var(--phase-bg); }
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-operatore')">Annulla</button>
-      <button class="btn btn-primary" onclick="creaOperatore()">Crea</button>
+      <button class="btn btn-primary" id="op-modal-btn" onclick="salvaOperatore()">Crea</button>
     </div>
   </div>
 </div>
@@ -1924,40 +1926,79 @@ function renderOperatori() {
   }
   grid.innerHTML = operatoriCache.map(op => `
     <div class="op-card ${op.attivo ? '' : 'inactive'}">
-      <div class="op-name">${op.nome} ${op.cognome}</div>
-      <div class="op-role">${op.ruolo === 'operatore' ? 'Operatore' : 'Sola Lettura'}</div>
-      <div class="op-actions">
+      <div class="op-name">${escapeHtml(op.nome)} ${escapeHtml(op.cognome)}</div>
+      <div class="op-role">${op.ruolo === 'operatore' ? 'Operatore' : 'Sola Lettura'} ${op.attivo ? '' : '· <span style="color:var(--alert)">Disattivo</span>'}</div>
+      <div class="op-actions" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+        <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="openModalModificaOperatore('${op.id}')">✏️ Modifica</button>
         ${op.attivo
           ? `<button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="toggleOperatore('${op.id}', false)">Disattiva</button>`
           : `<button class="btn btn-ok" style="padding:5px 10px;font-size:12px" onclick="toggleOperatore('${op.id}', true)">Attiva</button>`
         }
-        <button class="btn" style="padding:5px 10px;font-size:12px;background:var(--alert);color:#fff;margin-left:4px" onclick="eliminaOperatore('${op.id}', '${op.nome} ${op.cognome}')">🗑</button>
+        <button class="btn" style="padding:5px 10px;font-size:12px;background:var(--alert);color:#fff" onclick="eliminaOperatore('${op.id}', '${escapeHtml(op.nome)} ${escapeHtml(op.cognome)}')">🗑</button>
       </div>
     </div>
   `).join('');
 }
 
 function openModalNuovoOperatore() {
+  document.getElementById('op-edit-id').value = '';
   document.getElementById('op-nome').value = '';
   document.getElementById('op-cognome').value = '';
   document.getElementById('op-pin').value = '';
+  document.getElementById('op-ruolo').value = 'operatore';
+  document.getElementById('op-modal-title').textContent = 'Nuovo Operatore';
+  document.getElementById('op-modal-btn').textContent = 'Crea';
+  document.getElementById('op-pin-label').textContent = 'PIN (4 cifre) *';
+  document.getElementById('op-pin-hint').style.display = 'none';
   document.getElementById('modal-operatore').classList.add('open');
 }
 
-async function creaOperatore() {
+function openModalModificaOperatore(id) {
+  const op = operatoriCache.find(o => o.id === id);
+  if (!op) return;
+  document.getElementById('op-edit-id').value = op.id;
+  document.getElementById('op-nome').value = op.nome;
+  document.getElementById('op-cognome').value = op.cognome;
+  document.getElementById('op-pin').value = '';
+  document.getElementById('op-ruolo').value = op.ruolo;
+  document.getElementById('op-modal-title').textContent = `Modifica — ${op.nome} ${op.cognome}`;
+  document.getElementById('op-modal-btn').textContent = 'Salva';
+  document.getElementById('op-pin-label').textContent = 'Nuovo PIN (4 cifre)';
+  document.getElementById('op-pin-hint').style.display = '';
+  document.getElementById('modal-operatore').classList.add('open');
+}
+
+async function salvaOperatore() {
+  const editId = document.getElementById('op-edit-id').value;
   const nome = document.getElementById('op-nome').value.trim();
   const cognome = document.getElementById('op-cognome').value.trim();
   const pin = document.getElementById('op-pin').value.trim();
   const ruolo = document.getElementById('op-ruolo').value;
 
   if (!nome || !cognome) { toast('Nome e cognome obbligatori', 'err'); return; }
-  if (!/^\d{4}$/.test(pin)) { toast('Il PIN deve essere 4 cifre numeriche', 'err'); return; }
 
-  const { data, error } = await sb.rpc('crea_operatore', { p_nome: nome, p_cognome: cognome, p_pin: pin, p_ruolo: ruolo });
-  if (error || !data?.ok) { toast(error?.message || data?.errore || 'Errore', 'err'); return; }
+  if (editId) {
+    // MODIFICA
+    if (pin && !/^\d{4}$/.test(pin)) { toast('Il PIN deve essere 4 cifre numeriche', 'err'); return; }
+    const aggiornamento = { nome, cognome, ruolo };
+    if (pin) {
+      // Aggiorna PIN via RPC (il PIN è hashato nel DB)
+      const { data: pinData } = await sb.rpc('aggiorna_pin_operatore', { p_operatore_id: editId, p_nuovo_pin: pin });
+      if (!pinData?.ok) { toast(pinData?.errore || 'Errore aggiornamento PIN', 'err'); return; }
+    }
+    const { error } = await sb.from('users').update(aggiornamento).eq('id', editId);
+    if (error) { toast('Errore: ' + error.message, 'err'); return; }
+    closeModal('modal-operatore');
+    toast('Operatore aggiornato', 'ok');
+  } else {
+    // CREAZIONE
+    if (!/^\d{4}$/.test(pin)) { toast('Il PIN deve essere 4 cifre numeriche', 'err'); return; }
+    const { data, error } = await sb.rpc('crea_operatore', { p_nome: nome, p_cognome: cognome, p_pin: pin, p_ruolo: ruolo });
+    if (error || !data?.ok) { toast(error?.message || data?.errore || 'Errore', 'err'); return; }
+    closeModal('modal-operatore');
+    toast('Operatore creato', 'ok');
+  }
 
-  closeModal('modal-operatore');
-  toast('Operatore creato', 'ok');
   await loadOperatori();
   renderOperatori();
 }
