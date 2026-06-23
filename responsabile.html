@@ -250,6 +250,23 @@ tr:hover td { background: var(--phase-bg); }
 .op-card .op-actions { display: flex; gap: 6px; margin-top: 14px; }
 .inactive { opacity: 0.5; }
 
+/* ── UFFICIO / MACRO FASI ── */
+.ufficio-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px 22px; margin-bottom:14px; }
+.ufficio-card-hdr { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:16px; }
+.ufficio-card-title { font-size:15px; font-weight:700; color:var(--ink); }
+.ufficio-card-sub { font-size:12px; color:var(--muted); margin-top:2px; }
+.ufficio-macro-row { margin-bottom:10px; }
+.ufficio-macro-label { display:flex; justify-content:space-between; font-size:12px; font-weight:600; margin-bottom:4px; }
+.ufficio-macro-track { background:var(--phase-bg); border-radius:99px; height:10px; overflow:hidden; }
+.ufficio-macro-fill { height:100%; border-radius:99px; transition:width .4s; }
+.ufficio-totale-track { background:var(--phase-bg); border-radius:99px; height:14px; overflow:hidden; margin-top:14px; }
+.ufficio-totale-fill { height:100%; border-radius:99px; background:var(--wood); transition:width .4s; }
+.macro-cfg-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:18px 20px; }
+.macro-cfg-hdr { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+.macro-fasi-check { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:6px; }
+.macro-fasi-check label { display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer; padding:4px 6px; border-radius:6px; }
+.macro-fasi-check label:hover { background:var(--phase-bg); }
+
 /* ── CONFIGURAZIONE FASI ── */
 .fase-config-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
 .fase-config-item:last-child { border-bottom: none; }
@@ -381,6 +398,9 @@ tr:hover td { background: var(--phase-bg); }
       <div class="nav-section">Impostazioni</div>
       <div class="nav-item" onclick="showSection('fasi-config')" id="nav-fasi-config">
         <span class="icon">⚙️</span> Config. Fasi
+      </div>
+      <div class="nav-item" onclick="showSection('macro-config')" id="nav-macro-config">
+        <span class="icon">📊</span> Macro Fasi
       </div>
       <div class="nav-item" onclick="showSection('orario-config')" id="nav-orario-config">
         <span class="icon">🕐</span> Orario Lavoro
@@ -635,6 +655,27 @@ tr:hover td { background: var(--phase-bg); }
           <div id="kpi-priorita"></div>
         </div>
 
+      </section>
+
+      <!-- VISTA UFFICIO (sola_lettura) -->
+      <section class="section" id="sec-ufficio">
+        <div class="page-hdr">
+          <div><h1>Stato Produzione</h1><div class="sub">Avanzamento ordini attivi per macro-fase</div></div>
+          <button class="btn btn-secondary" onclick="loadUfficio()">↻ Aggiorna</button>
+        </div>
+        <div id="ufficio-ordini"></div>
+      </section>
+
+      <!-- MACRO FASI CONFIG -->
+      <section class="section" id="sec-macro-config">
+        <div class="page-hdr">
+          <div><h1>Macro Fasi</h1><div class="sub">Raggruppa le fasi di produzione per la vista ufficio</div></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary" onclick="aggiungiMacroFase()">+ Nuovo gruppo</button>
+            <button class="btn btn-primary" onclick="salvaMacroFasi()">💾 Salva</button>
+          </div>
+        </div>
+        <div id="macro-fasi-list" style="display:flex;flex-direction:column;gap:16px;max-width:700px"></div>
       </section>
 
       <!-- ORARIO LAVORO -->
@@ -1153,12 +1194,21 @@ async function postLogin() {
   // Load fasi
   await loadFasi();
   // Load data
-  await Promise.all([loadOrdini(), loadNc(), loadOperatori(), loadNotifiche(), loadOrarioConfig()]);
+  await Promise.all([loadOrdini(), loadNc(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadMacroFasi()]);
   // Realtime
   setupRealtime();
-  // Render
-  showSection('dashboard');
-  renderDashboard();
+  // Render in base al ruolo
+  if (currentUserRow?.ruolo === 'sola_lettura') {
+    // Nascondi nav e funzioni non pertinenti all'ufficio
+    document.querySelector('nav').style.display = 'none';
+    document.querySelector('.topbar').insertAdjacentHTML('afterbegin',
+      `<div style="font-weight:700;font-size:14px;color:var(--wood);margin-right:auto">📊 Vista Ufficio</div>`);
+    showSection('ufficio');
+    await loadUfficio();
+  } else {
+    showSection('dashboard');
+    renderDashboard();
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -1292,6 +1342,8 @@ function showSection(name) {
   else if (name === 'notifiche') renderNotifiche();
   else if (name === 'fasi-config') renderFasiConfig();
   else if (name === 'orario-config') renderOrarioConfig();
+  else if (name === 'macro-config') renderMacroConfig();
+  else if (name === 'ufficio') loadUfficio();
   else if (name === 'kpi') loadKpi();
 }
 
@@ -2243,6 +2295,195 @@ async function salvaOrario() {
   if (error) { toast('Errore salvataggio: ' + error.message, 'err'); return; }
   orarioConfig = { ...orarioConfig, ...payload };
   toast('Orario salvato', 'ok');
+}
+
+// ═══════════════════════════════════════════════
+// MACRO FASI
+// ═══════════════════════════════════════════════
+let macroFasiCache = []; // [{id, nome, posizione, colore, fasi:[id,...]}]
+
+async function loadMacroFasi() {
+  const [{ data: macro }, { data: fasiConMacro }] = await Promise.all([
+    sb.from('macro_fasi').select('*').order('posizione').order('id'),
+    sb.from('fasi').select('id, macro_fase_id').order('posizione').order('id')
+  ]);
+  macroFasiCache = (macro || []).map(m => ({
+    ...m,
+    fasi: (fasiConMacro || []).filter(f => f.macro_fase_id === m.id).map(f => f.id)
+  }));
+}
+
+function renderMacroConfig() {
+  const el = document.getElementById('macro-fasi-list');
+  if (!macroFasiCache.length) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">📊</div><p>Nessun gruppo macro — premi "+ Nuovo gruppo" per iniziare</p></div>`;
+    return;
+  }
+  el.innerHTML = macroFasiCache.map((m, idx) => {
+    const checklist = fasiCache.map(f => `
+      <label>
+        <input type="checkbox" data-macro="${m.id}" data-fase="${f.id}"
+          ${m.fasi.includes(f.id) ? 'checked' : ''}>
+        ${escapeHtml(f.nome)}
+      </label>`).join('');
+    return `
+    <div class="macro-cfg-card" id="macro-card-${m.id}">
+      <div class="macro-cfg-hdr">
+        <input type="color" value="${m.colore || '#6B7280'}" id="macro-col-${m.id}"
+          style="width:32px;height:32px;border:none;border-radius:8px;cursor:pointer;padding:0">
+        <input type="text" value="${escapeHtml(m.nome)}" id="macro-nome-${m.id}"
+          style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;background:var(--bg);color:var(--ink)">
+        <div style="display:flex;gap:6px">
+          ${idx > 0 ? `<button class="btn btn-secondary" style="padding:5px 10px" onclick="spostaM(${m.id},-1)">▲</button>` : ''}
+          ${idx < macroFasiCache.length-1 ? `<button class="btn btn-secondary" style="padding:5px 10px" onclick="spostaM(${m.id},1)">▼</button>` : ''}
+          <button class="btn" style="padding:5px 10px;background:var(--alert);color:#fff" onclick="eliminaMacro(${m.id},'${escapeHtml(m.nome)}')">🗑</button>
+        </div>
+      </div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Fasi incluse in questo gruppo</div>
+      <div class="macro-fasi-check">${checklist}</div>
+    </div>`;
+  }).join('');
+}
+
+async function aggiungiMacroFase() {
+  const nome = prompt('Nome del nuovo gruppo macro (es. "Lavorazione"):');
+  if (!nome?.trim()) return;
+  const pos = macroFasiCache.length > 0 ? Math.max(...macroFasiCache.map(m => m.posizione)) + 10 : 10;
+  const { data, error } = await sb.from('macro_fasi').insert({ nome: nome.trim(), posizione: pos, colore: '#6B7280' }).select().single();
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  macroFasiCache.push({ ...data, fasi: [] });
+  renderMacroConfig();
+}
+
+async function spostaM(id, dir) {
+  const idx = macroFasiCache.findIndex(m => m.id === id);
+  const target = macroFasiCache[idx + dir];
+  if (!target) return;
+  // Scambia posizioni
+  const posA = macroFasiCache[idx].posizione;
+  const posB = target.posizione;
+  await Promise.all([
+    sb.from('macro_fasi').update({ posizione: posB }).eq('id', id),
+    sb.from('macro_fasi').update({ posizione: posA }).eq('id', target.id)
+  ]);
+  macroFasiCache[idx].posizione = posB;
+  target.posizione = posA;
+  macroFasiCache.sort((a, b) => a.posizione - b.posizione);
+  renderMacroConfig();
+}
+
+async function eliminaMacro(id, nome) {
+  if (!confirm(`Eliminare il gruppo "${nome}"?\nLe fasi al suo interno non vengono eliminate.`)) return;
+  await sb.from('fasi').update({ macro_fase_id: null }).eq('macro_fase_id', id);
+  await sb.from('macro_fasi').delete().eq('id', id);
+  macroFasiCache = macroFasiCache.filter(m => m.id !== id);
+  renderMacroConfig();
+  toast('Gruppo eliminato', 'ok');
+}
+
+async function salvaMacroFasi() {
+  // Salva nomi e colori
+  for (const m of macroFasiCache) {
+    const nome = document.getElementById(`macro-nome-${m.id}`)?.value.trim();
+    const colore = document.getElementById(`macro-col-${m.id}`)?.value;
+    if (nome) await sb.from('macro_fasi').update({ nome, colore }).eq('id', m.id);
+  }
+  // Salva assegnazioni fasi: prima azzera tutto, poi riassegna
+  const toNull = fasiCache.map(f => f.id);
+  if (toNull.length) await sb.from('fasi').update({ macro_fase_id: null }).in('id', toNull);
+  for (const m of macroFasiCache) {
+    const checked = [...document.querySelectorAll(`input[data-macro="${m.id}"]:checked`)].map(cb => parseInt(cb.dataset.fase));
+    if (checked.length) await sb.from('fasi').update({ macro_fase_id: m.id }).in('id', checked);
+  }
+  await loadMacroFasi();
+  renderMacroConfig();
+  toast('Macro fasi salvate', 'ok');
+}
+
+// ── VISTA UFFICIO ──
+async function loadUfficio() {
+  if (!macroFasiCache.length) await loadMacroFasi();
+  const [{ data: ordini }, { data: ordFasi }] = await Promise.all([
+    sb.from('ordini').select('id, codice, cliente, scadenza, stato, priorita').in('stato', ['aperto', 'attesa_spedizione', 'sospeso']).eq('eliminato', false).order('scadenza', { ascending: true, nullsFirst: false }),
+    sb.from('ordine_fasi').select('ordine_id, fase_id, stato').in('stato', ['disponibile','in_corso','in_attesa','completata','non_applicabile'])
+  ]);
+  renderUfficio(ordini || [], ordFasi || []);
+}
+
+function renderUfficio(ordini, ordFasi) {
+  const el = document.getElementById('ufficio-ordini');
+  if (!ordini.length) { el.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>Nessun ordine attivo</p></div>'; return; }
+
+  // Raggruppa fasi per ordine
+  const fasiPerOrdine = {};
+  ordFasi.forEach(f => {
+    if (!fasiPerOrdine[f.ordine_id]) fasiPerOrdine[f.ordine_id] = [];
+    fasiPerOrdine[f.ordine_id].push(f);
+  });
+
+  // Mappa fase_id → macro_fase_id
+  const faseMacro = {};
+  macroFasiCache.forEach(m => m.fasi.forEach(fid => { faseMacro[fid] = m.id; }));
+
+  el.innerHTML = ordini.map(o => {
+    const fasi = fasiPerOrdine[o.id] || [];
+    const applicabili = fasi.filter(f => f.stato !== 'non_applicabile');
+    const completate = applicabili.filter(f => f.stato === 'completata').length;
+    const totale = applicabili.length || 1;
+    const pctTot = Math.round(completate / totale * 100);
+
+    const isAttesa = o.stato === 'attesa_spedizione';
+    const isSosp = o.stato === 'sospeso';
+    const oggi = new Date().toISOString().split('T')[0];
+    const inRitardo = o.scadenza && o.scadenza < oggi && !isAttesa;
+
+    // Progresso per macro
+    const macroBars = macroFasiCache.map(m => {
+      const faseMacroSet = new Set(m.fasi);
+      const mFasi = applicabili.filter(f => f.fase_id && faseMacroSet.has(f.fase_id));
+      const mComp = mFasi.filter(f => f.stato === 'completata').length;
+      const mTot = mFasi.length;
+      if (mTot === 0) return '';
+      const pct = Math.round(mComp / mTot * 100);
+      return `
+        <div class="ufficio-macro-row">
+          <div class="ufficio-macro-label">
+            <span style="color:${m.colore}">${escapeHtml(m.nome)}</span>
+            <span style="color:var(--muted)">${mComp}/${mTot} — ${pct}%</span>
+          </div>
+          <div class="ufficio-macro-track">
+            <div class="ufficio-macro-fill" style="width:${pct}%;background:${m.colore}"></div>
+          </div>
+        </div>`;
+    }).join('');
+
+    const scadenzaHtml = o.scadenza
+      ? `<div style="font-size:12px;${inRitardo ? 'color:var(--alert);font-weight:700' : 'color:var(--muted)'}">
+           ${inRitardo ? '⚠ Scad.' : '📅'} ${formatDate(o.scadenza)}${inRitardo ? ' (in ritardo)' : ''}
+         </div>`
+      : '';
+
+    const statoBadge = isAttesa
+      ? `<span class="badge badge-attesa_spedizione">✓ Pronto per spedizione</span>`
+      : isSosp
+      ? `<span class="badge badge-sospeso">⏸ Sospeso</span>`
+      : `<span class="badge badge-aperto">In produzione</span>`;
+
+    return `
+      <div class="ufficio-card" style="${isAttesa ? 'border-color:#10b981;background:#f0fdf4' : inRitardo ? 'border-color:var(--alert)' : ''}">
+        <div class="ufficio-card-hdr">
+          <div>
+            <div class="ufficio-card-title">${escapeHtml(o.cliente)} <span style="font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);font-weight:400">${escapeHtml(o.codice||'')}</span></div>
+            <div style="margin-top:4px;display:flex;gap:8px;align-items:center">${statoBadge}${scadenzaHtml}</div>
+          </div>
+          <div style="font-family:'DM Mono',monospace;font-size:22px;font-weight:700;color:${pctTot===100?'var(--ok)':'var(--ink)'}">${pctTot}%</div>
+        </div>
+        ${macroBars || '<div style="font-size:12px;color:var(--muted)">Nessuna macro fase configurata</div>'}
+        <div class="ufficio-totale-track">
+          <div class="ufficio-totale-fill" style="width:${pctTot}%"></div>
+        </div>
+      </div>`;
+  }).join('');
 }
 
 // ═══════════════════════════════════════════════
