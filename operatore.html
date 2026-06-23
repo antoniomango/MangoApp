@@ -583,6 +583,10 @@ async function doLoginPin() {
       showErr('Impossibile verificare il PIN offline. Connettiti per il primo accesso.'); return;
     }
   }
+  if (currentUser?.ruolo === 'sola_lettura') {
+    window.location.href = 'ufficio.html';
+    return;
+  }
   showApp();
 }
 
