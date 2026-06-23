@@ -72,7 +72,7 @@
 
 <!-- LOGIN -->
 <div id="login-screen">
-  <div class="login-logo">🥭 MangoApp</div>
+  <div class="login-logo">MangoApp</div>
   <div class="login-sub">Vista Ufficio — Solo lettura</div>
   <div class="login-card">
     <select id="login-user-select"><option value="">— Seleziona il tuo nome —</option></select>
@@ -91,7 +91,7 @@
 <div id="app-screen">
   <div class="topbar">
     <div>
-      <div class="topbar-title">🥭 Stato Produzione</div>
+      <div class="topbar-title">Stato Produzione</div>
       <div class="topbar-sub" id="topbar-sub">Caricamento...</div>
     </div>
     <div class="topbar-right">
@@ -117,6 +117,19 @@ let refreshTimer = null;
 
 // ── LOGIN ──
 async function init() {
+  // Se arriva da operatore.html già autenticato, salta il login
+  const saved = localStorage.getItem('ufficio-user');
+  if (saved) {
+    try {
+      currentUser = JSON.parse(saved);
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('app-screen').style.display = 'block';
+      await caricaMacroFasi();
+      await aggiornaUfficio();
+      refreshTimer = setInterval(aggiornaUfficio, 120000);
+      return;
+    } catch(e) { localStorage.removeItem('ufficio-user'); }
+  }
   const { data } = await sb.from('users').select('id, nome, cognome').in('ruolo', ['sola_lettura']).eq('attivo', true).order('cognome');
   const sel = document.getElementById('login-user-select');
   sel.innerHTML = '<option value="">— Seleziona il tuo nome —</option>' +
@@ -151,10 +164,8 @@ function showErr(msg) { document.getElementById('login-err').textContent = msg; 
 function doLogout() {
   clearInterval(refreshTimer);
   currentUser = null;
-  document.getElementById('app-screen').style.display = 'none';
-  document.getElementById('login-screen').style.display = 'flex';
-  [0,1,2,3].forEach(i => document.getElementById('pin'+i).value = '');
-  document.getElementById('login-err').textContent = '';
+  localStorage.removeItem('ufficio-user');
+  window.location.href = 'operatore.html';
 }
 
 // ── DATI ──
