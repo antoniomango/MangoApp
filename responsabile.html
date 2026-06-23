@@ -647,61 +647,119 @@ tr:hover td { background: var(--phase-bg); }
         <div class="page-hdr">
           <div>
             <h1>Orario di Lavoro</h1>
-            <div class="sub">Usato per calcolare i tempi KPI escludendo ore non lavorative</div>
+            <div class="sub">Configurazione usata per i calcoli KPI — esclude ore non lavorative</div>
           </div>
-          <button class="btn btn-primary" onclick="salvaOrario()">💾 Salva</button>
+          <button class="btn btn-primary" onclick="salvaOrario()">💾 Salva modifiche</button>
         </div>
-        <div class="card" style="max-width:520px">
 
-          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:14px">Orario giornaliero</div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Inizio turno</label>
-              <input type="time" id="or-inizio" value="08:00">
-            </div>
-            <div class="form-group">
-              <label>Fine turno</label>
-              <input type="time" id="or-fine" value="17:00">
-            </div>
-          </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:740px">
 
-          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:20px 0 14px">Sabato</div>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:10px">
-            <input type="checkbox" id="or-sabato" onchange="toggleOrarioSabato(this)">
-            Sabato lavorativo
-          </label>
-          <div id="or-sabato-ore-row" style="display:none">
-            <div class="form-group" style="max-width:200px">
-              <label>Ore lavorate il sabato</label>
-              <input type="number" id="or-ore-sabato" min="1" max="8" step="0.5" value="4">
+          <!-- Blocco: Turno base -->
+          <div class="card" style="grid-column:1/-1">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+              <div style="width:36px;height:36px;background:#FEF3C7;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px">🕐</div>
+              <div>
+                <div style="font-weight:700;font-size:14px">Turno base</div>
+                <div style="font-size:12px;color:var(--muted)">Orario standard lun–ven</div>
+              </div>
             </div>
-          </div>
-
-          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:20px 0 14px">Domenica</div>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:10px">
-            <input type="checkbox" id="or-domenica" onchange="toggleOrarioDomenica(this)">
-            Domenica lavorativa (casi eccezionali)
-          </label>
-          <div id="or-domenica-ore-row" style="display:none">
-            <div class="form-group" style="max-width:200px">
-              <label>Ore lavorate la domenica</label>
-              <input type="number" id="or-ore-domenica" min="1" max="8" step="0.5" value="4">
-            </div>
-          </div>
-
-          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:20px 0 14px">Straordinario</div>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:10px">
-            <input type="checkbox" id="or-straordinario" onchange="toggleOrarioStraordinario(this)">
-            Ammesso straordinario
-          </label>
-          <div id="or-straordinario-ore-row" style="display:none">
-            <div class="form-group" style="max-width:200px">
-              <label>Ore straordinario massime al giorno</label>
-              <input type="number" id="or-ore-straordinario" min="0.5" max="4" step="0.5" value="2">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+              <div class="form-group" style="margin:0">
+                <label>Inizio turno</label>
+                <input type="time" id="or-inizio" oninput="aggiornaRiepilogoOrario()">
+              </div>
+              <div class="form-group" style="margin:0">
+                <label>Fine turno</label>
+                <input type="time" id="or-fine" oninput="aggiornaRiepilogoOrario()">
+              </div>
+              <div class="form-group" style="margin:0">
+                <label>Pausa pranzo</label>
+                <div style="display:flex;align-items:center;gap:8px">
+                  <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap">
+                    <input type="checkbox" id="or-pausa" onchange="toggleOrarioPausa(this)"> Sì
+                  </label>
+                  <select id="or-minuti-pausa" style="flex:1" onchange="aggiornaRiepilogoOrario()">
+                    <option value="30">30 min</option>
+                    <option value="45">45 min</option>
+                    <option value="60" selected>1 ora</option>
+                    <option value="90">1h 30min</option>
+                  </select>
+                </div>
+                <div id="or-pausa-hint" style="font-size:11px;color:var(--muted);margin-top:4px;display:none">Sottratta dal totale ore</div>
+              </div>
             </div>
           </div>
 
-          <div style="margin-top:20px;padding:12px 14px;background:var(--surface);border-radius:8px;font-size:12px;color:var(--muted)" id="or-riepilogo"></div>
+          <!-- Blocco: Sabato -->
+          <div class="card">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+              <div style="width:36px;height:36px;background:#EDE9FE;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px">📅</div>
+              <div>
+                <div style="font-weight:700;font-size:14px">Sabato</div>
+                <div style="font-size:12px;color:var(--muted)">Turno del sabato mattina</div>
+              </div>
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:12px">
+              <input type="checkbox" id="or-sabato" onchange="toggleOrarioSabato(this)">
+              Sabato lavorativo
+            </label>
+            <div id="or-sabato-ore-row" style="display:none">
+              <div class="form-group" style="margin:0">
+                <label>Ore lavorate</label>
+                <input type="number" id="or-ore-sabato" min="1" max="12" step="0.5" value="4" oninput="aggiornaRiepilogoOrario()">
+              </div>
+            </div>
+          </div>
+
+          <!-- Blocco: Domenica + Straordinario -->
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div class="card" style="flex:1">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+                <div style="width:36px;height:36px;background:#FCE7F3;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px">🗓</div>
+                <div>
+                  <div style="font-weight:700;font-size:14px">Domenica</div>
+                  <div style="font-size:12px;color:var(--muted)">Solo per casi eccezionali</div>
+                </div>
+              </div>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:12px">
+                <input type="checkbox" id="or-domenica" onchange="toggleOrarioDomenica(this)">
+                Domenica lavorativa
+              </label>
+              <div id="or-domenica-ore-row" style="display:none">
+                <div class="form-group" style="margin:0">
+                  <label>Ore lavorate</label>
+                  <input type="number" id="or-ore-domenica" min="1" max="12" step="0.5" value="4" oninput="aggiornaRiepilogoOrario()">
+                </div>
+              </div>
+            </div>
+
+            <div class="card" style="flex:1">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+                <div style="width:36px;height:36px;background:#FEE2E2;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px">⏱</div>
+                <div>
+                  <div style="font-weight:700;font-size:14px">Straordinario</div>
+                  <div style="font-size:12px;color:var(--muted)">Ore extra oltre il turno</div>
+                </div>
+              </div>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:12px">
+                <input type="checkbox" id="or-straordinario" onchange="toggleOrarioStraordinario(this)">
+                Straordinario ammesso
+              </label>
+              <div id="or-straordinario-ore-row" style="display:none">
+                <div class="form-group" style="margin:0">
+                  <label>Ore max al giorno</label>
+                  <input type="number" id="or-ore-straordinario" min="0.5" max="4" step="0.5" value="2" oninput="aggiornaRiepilogoOrario()">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Riepilogo -->
+          <div style="grid-column:1/-1;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 20px">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px">Riepilogo settimanale</div>
+            <div id="or-riepilogo" style="font-size:13px;color:var(--ink);line-height:1.8"></div>
+          </div>
+
         </div>
       </section>
 
@@ -2099,6 +2157,9 @@ async function loadOrarioConfig() {
 function aggiornaRiepilogoOrario() {
   const inizio = document.getElementById('or-inizio').value;
   const fine = document.getElementById('or-fine').value;
+  if (!inizio || !fine) return;
+  const pausa = document.getElementById('or-pausa').checked;
+  const minPausa = pausa ? (parseInt(document.getElementById('or-minuti-pausa').value) || 60) : 0;
   const sabato = document.getElementById('or-sabato').checked;
   const oreSabato = parseFloat(document.getElementById('or-ore-sabato').value) || 0;
   const domenica = document.getElementById('or-domenica').checked;
@@ -2108,25 +2169,39 @@ function aggiornaRiepilogoOrario() {
 
   const [h1, m1] = inizio.split(':').map(Number);
   const [h2, m2] = fine.split(':').map(Number);
-  const oreGiorno = ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60;
+  const minTotali = (h2 * 60 + m2) - (h1 * 60 + m1);
+  const oreGiorno = (minTotali - minPausa) / 60;
   const oreMax = oreGiorno + (straordinario ? oreStraord : 0);
+
+  const fmtOre = h => {
+    const hh = Math.floor(h);
+    const mm = Math.round((h - hh) * 60);
+    return mm > 0 ? `${hh}h ${mm}min` : `${hh}h`;
+  };
 
   let settimana = oreGiorno * 5;
   if (sabato) settimana += oreSabato;
   if (domenica) settimana += oreDomenica;
 
-  document.getElementById('or-riepilogo').innerHTML =
-    `📅 <b>${oreGiorno.toFixed(1)} ore/giorno</b> (lun–ven)` +
-    (straordinario ? ` + max ${oreStraord}h straordinario = <b>${oreMax.toFixed(1)}h max</b>` : '') +
-    (sabato ? ` · Sab: ${oreSabato}h` : '') +
-    (domenica ? ` · Dom: ${oreDomenica}h` : '') +
-    ` · <b>${settimana.toFixed(1)} ore/settimana</b>`;
+  let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">`;
+  html += `<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">Ore nette / giorno (lun–ven)</div><div style="font-weight:700;font-size:16px">${fmtOre(oreGiorno)}</div></div>`;
+  if (pausa) html += `<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">Di cui pausa</div><div style="font-weight:700;font-size:16px">${minPausa} min</div></div>`;
+  if (straordinario) html += `<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">Max con straordinario</div><div style="font-weight:700;font-size:16px">${fmtOre(oreMax)}</div></div>`;
+  if (sabato) html += `<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">Sabato</div><div style="font-weight:700;font-size:16px">${fmtOre(oreSabato)}</div></div>`;
+  if (domenica) html += `<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">Domenica</div><div style="font-weight:700;font-size:16px">${fmtOre(oreDomenica)}</div></div>`;
+  html += `<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">Totale settimana</div><div style="font-weight:700;font-size:16px;color:var(--wood)">${fmtOre(settimana)}</div></div>`;
+  html += `</div>`;
+  document.getElementById('or-riepilogo').innerHTML = html;
 }
 
 function renderOrarioConfig() {
   if (!orarioConfig) return;
   document.getElementById('or-inizio').value = orarioConfig.ora_inizio?.slice(0,5) || '08:00';
   document.getElementById('or-fine').value = orarioConfig.ora_fine?.slice(0,5) || '17:00';
+  const pausa = orarioConfig.pausa_attiva ?? true;
+  document.getElementById('or-pausa').checked = pausa;
+  document.getElementById('or-minuti-pausa').value = orarioConfig.pausa_minuti || 60;
+  document.getElementById('or-pausa-hint').style.display = pausa ? '' : 'none';
   document.getElementById('or-sabato').checked = orarioConfig.sabato_lavorativo;
   document.getElementById('or-ore-sabato').value = orarioConfig.ore_sabato || 4;
   document.getElementById('or-sabato-ore-row').style.display = orarioConfig.sabato_lavorativo ? '' : 'none';
@@ -2139,6 +2214,10 @@ function renderOrarioConfig() {
   aggiornaRiepilogoOrario();
 }
 
+function toggleOrarioPausa(cb) {
+  document.getElementById('or-pausa-hint').style.display = cb.checked ? '' : 'none';
+  aggiornaRiepilogoOrario();
+}
 function toggleOrarioSabato(cb) {
   document.getElementById('or-sabato-ore-row').style.display = cb.checked ? '' : 'none';
   aggiornaRiepilogoOrario();
@@ -2156,6 +2235,8 @@ async function salvaOrario() {
   const payload = {
     ora_inizio: document.getElementById('or-inizio').value,
     ora_fine: document.getElementById('or-fine').value,
+    pausa_attiva: document.getElementById('or-pausa').checked,
+    pausa_minuti: parseInt(document.getElementById('or-minuti-pausa').value) || 60,
     sabato_lavorativo: document.getElementById('or-sabato').checked,
     ore_sabato: parseFloat(document.getElementById('or-ore-sabato').value) || 4,
     domenica_lavorativa: document.getElementById('or-domenica').checked,
@@ -2167,7 +2248,6 @@ async function salvaOrario() {
   if (error) { toast('Errore salvataggio: ' + error.message, 'err'); return; }
   orarioConfig = { ...orarioConfig, ...payload };
   toast('Orario salvato', 'ok');
-  aggiornaRiepilogoOrario();
 }
 
 // ═══════════════════════════════════════════════
