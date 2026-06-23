@@ -2320,7 +2320,7 @@ function renderMacroConfig() {
     return;
   }
   el.innerHTML = macroFasiCache.map((m, idx) => {
-    const checklist = fasiCache.map(f => `
+    const checklist = fasi.map(f => `
       <label>
         <input type="checkbox" data-macro="${m.id}" data-fase="${f.id}"
           ${m.fasi.includes(f.id) ? 'checked' : ''}>
@@ -2389,7 +2389,7 @@ async function salvaMacroFasi() {
     if (nome) await sb.from('macro_fasi').update({ nome, colore }).eq('id', m.id);
   }
   // Salva assegnazioni fasi: prima azzera tutto, poi riassegna
-  const toNull = fasiCache.map(f => f.id);
+  const toNull = fasi.map(f => f.id);
   if (toNull.length) await sb.from('fasi').update({ macro_fase_id: null }).in('id', toNull);
   for (const m of macroFasiCache) {
     const checked = [...document.querySelectorAll(`input[data-macro="${m.id}"]:checked`)].map(cb => parseInt(cb.dataset.fase));
