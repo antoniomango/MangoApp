@@ -1246,7 +1246,7 @@ async function loadOrdini() {
   const { data } = await sb.from('ordini')
     .select('*, creato_da_user:users!creato_da(nome, cognome)')
     .in('stato', ['aperto', 'sospeso', 'attesa_spedizione'])
-    .eq('eliminato', false);
+    .neq('eliminato', true);
   const prioOrd = { 'extra_urgente': 0, 'urgente': 1, 'normale': 2 };
   ordiniCache = (data || []).sort((a, b) => {
     const pd = prioOrd[a.priorita] - prioOrd[b.priorita];
@@ -1260,7 +1260,7 @@ async function loadOrdini() {
   const { data: spediti } = await sb.from('ordini')
     .select('*')
     .eq('stato', 'spedito')
-    .eq('eliminato', false)
+    .neq('eliminato', true)
     .order('spedito_il', { ascending: false });
   ordiniSpeditiCache = spediti || [];
 }
@@ -1276,7 +1276,7 @@ async function loadOperatori() {
   const { data } = await sb.from('users')
     .select('*')
     .in('ruolo', ['operatore', 'sola_lettura'])
-    .eq('eliminato', false)
+    .neq('eliminato', true)
     .order('cognome');
   operatoriCache = data || [];
 }
@@ -1830,7 +1830,7 @@ function renumberExtraFasi() {
 }
 
 async function caricaClienti() {
-  const { data } = await sb.from('ordini').select('cliente').eq('eliminato', false).order('cliente');
+  const { data } = await sb.from('ordini').select('cliente').neq('eliminato', true).order('cliente');
   const nomi = [...new Set((data || []).map(o => o.cliente).filter(Boolean))];
   const dl = document.getElementById('clienti-list');
   if (dl) dl.innerHTML = nomi.map(n => `<option value="${n}">`).join('');
@@ -2413,7 +2413,7 @@ async function salvaMacroFasi() {
 async function loadUfficio() {
   if (!macroFasiCache.length) await loadMacroFasi();
   const [{ data: ordini }, { data: ordFasi }] = await Promise.all([
-    sb.from('ordini').select('id, codice, cliente, scadenza, stato, priorita').in('stato', ['aperto', 'attesa_spedizione', 'sospeso']).eq('eliminato', false).order('scadenza', { ascending: true, nullsFirst: false }),
+    sb.from('ordini').select('id, codice, cliente, scadenza, stato, priorita').in('stato', ['aperto', 'attesa_spedizione', 'sospeso']).neq('eliminato', true).order('scadenza', { ascending: true, nullsFirst: false }),
     sb.from('ordine_fasi').select('ordine_id, fase_id, stato').in('stato', ['disponibile','in_corso','in_attesa','completata','non_applicabile'])
   ]);
   renderUfficio(ordini || [], ordFasi || []);
@@ -3024,7 +3024,7 @@ async function loadKpi() {
       .gte('completata_il', dal || '2000-01-01'),
     sb.from('ordini')
       .select('id, codice, cliente, stato, priorita, struttura, tipo_prodotto, scadenza, creato_il, spedito_il, completato_il, eliminato')
-      .eq('eliminato', false),
+      .neq('eliminato', true),
     sb.from('non_conformita')
       .select('id, stato, fase_id, segnalata_il, ordine_id')
       .gte('segnalata_il', dal || '2000-01-01'),
