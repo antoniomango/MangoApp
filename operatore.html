@@ -584,6 +584,7 @@ async function doLoginPin() {
     }
   }
   if (currentUser?.ruolo === 'sola_lettura') {
+    localStorage.setItem('ufficio-user', JSON.stringify(currentUser));
     window.location.href = 'ufficio.html';
     return;
   }
