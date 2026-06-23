@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>MangoApp — Vista Ufficio</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #FAFAF8; --surface: #FFFFFF; --border: #E8E4DC;
+    --ink: #1C1917; --muted: #78716C; --wood: #C2803C;
+    --ok: #16A34A; --warn: #D97706; --alert: #DC2626;
+    --phase-bg: #F5F3EF;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:var(--bg); color:var(--ink); min-height:100vh; }
+
+  /* LOGIN */
+  #login-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; padding:24px; background:var(--bg); }
+  .login-logo { font-size:32px; font-weight:800; color:var(--wood); margin-bottom:6px; letter-spacing:-1px; }
+  .login-sub { font-size:13px; color:var(--muted); margin-bottom:32px; }
+  .login-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:28px 24px; width:100%; max-width:360px; }
+  .login-card select { width:100%; padding:12px 14px; border:1px solid var(--border); border-radius:10px; font-size:14px; background:var(--bg); color:var(--ink); margin-bottom:18px; }
+  .pin-row { display:flex; gap:10px; justify-content:center; margin-bottom:20px; }
+  .pin-row input { width:54px; height:54px; text-align:center; font-size:22px; font-weight:700; border:2px solid var(--border); border-radius:12px; background:var(--bg); color:var(--ink); }
+  .pin-row input:focus { outline:none; border-color:var(--wood); }
+  .btn-login { width:100%; padding:14px; background:var(--wood); color:#fff; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer; }
+  .err { color:var(--alert); font-size:13px; text-align:center; margin-top:10px; min-height:20px; }
+
+  /* APP */
+  #app-screen { display:none; }
+  .topbar { background:var(--surface); border-bottom:1px solid var(--border); padding:14px 20px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; }
+  .topbar-title { font-weight:800; font-size:16px; color:var(--wood); }
+  .topbar-sub { font-size:12px; color:var(--muted); margin-top:1px; }
+  .topbar-right { display:flex; gap:10px; align-items:center; }
+  .btn-sm { padding:6px 12px; border:1px solid var(--border); border-radius:8px; font-size:12px; font-weight:600; background:var(--surface); color:var(--ink); cursor:pointer; }
+
+  main { padding:16px; max-width:700px; margin:0 auto; }
+
+  /* ORDINE CARD */
+  .ord-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px 20px; margin-bottom:14px; }
+  .ord-card.attesa { border-color:#10b981; background:#f0fdf4; }
+  .ord-card.ritardo { border-left:4px solid var(--alert); }
+  .ord-hdr { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; }
+  .ord-cliente { font-size:16px; font-weight:700; }
+  .ord-codice { font-size:11px; color:var(--muted); font-family:'Courier New',monospace; margin-top:2px; }
+  .ord-pct { font-size:26px; font-weight:800; font-family:'Courier New',monospace; }
+  .ord-pct.done { color:var(--ok); }
+  .ord-info { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
+  .badge { display:inline-block; font-size:11px; font-weight:700; padding:3px 9px; border-radius:99px; }
+  .badge-aperto { background:#DBEAFE; color:#1E40AF; }
+  .badge-attesa { background:#D1FAE5; color:#065F46; }
+  .badge-sospeso { background:#F3F4F6; color:#374151; }
+  .badge-ritardo { background:#FEE2E2; color:#991B1B; }
+  .scad { font-size:12px; color:var(--muted); }
+  .scad.late { color:var(--alert); font-weight:700; }
+
+  /* BARRE MACRO */
+  .macro-row { margin-bottom:10px; }
+  .macro-lbl { display:flex; justify-content:space-between; font-size:12px; font-weight:600; margin-bottom:4px; }
+  .macro-lbl-pct { color:var(--muted); font-weight:400; }
+  .macro-track { background:var(--phase-bg); border-radius:99px; height:9px; overflow:hidden; }
+  .macro-fill { height:100%; border-radius:99px; transition:width .5s; }
+  .tot-track { background:var(--phase-bg); border-radius:99px; height:13px; overflow:hidden; margin-top:14px; }
+  .tot-fill { height:100%; border-radius:99px; background:var(--wood); transition:width .5s; }
+
+  .empty { text-align:center; color:var(--muted); padding:48px 0; font-size:14px; }
+  .refresh-info { text-align:center; font-size:11px; color:var(--muted); margin:16px 0; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-logo">🥭 MangoApp</div>
+  <div class="login-sub">Vista Ufficio — Solo lettura</div>
+  <div class="login-card">
+    <select id="login-user-select"><option value="">— Seleziona il tuo nome —</option></select>
+    <div class="pin-row">
+      <input type="password" inputmode="numeric" maxlength="1" id="pin0" oninput="pinNext(0)">
+      <input type="password" inputmode="numeric" maxlength="1" id="pin1" oninput="pinNext(1)">
+      <input type="password" inputmode="numeric" maxlength="1" id="pin2" oninput="pinNext(2)">
+      <input type="password" inputmode="numeric" maxlength="1" id="pin3" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="btn-login" onclick="doLogin()">Accedi</button>
+    <div class="err" id="login-err"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app-screen">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title">🥭 Stato Produzione</div>
+      <div class="topbar-sub" id="topbar-sub">Caricamento...</div>
+    </div>
+    <div class="topbar-right">
+      <button class="btn-sm" onclick="aggiornaUfficio()">↻ Aggiorna</button>
+      <button class="btn-sm" onclick="doLogout()">Esci</button>
+    </div>
+  </div>
+  <main id="main-content">
+    <div class="empty">Caricamento ordini...</div>
+  </main>
+  <div class="refresh-info" id="refresh-info"></div>
+</div>
+
+<script>
+const SUPABASE_URL  = 'https://mtpzfxnyfkzikzlkomwz.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10cHpmeG55Zmt6aWt6bGtvbXd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2NzczNzEsImV4cCI6MjA5NzI1MzM3MX0.3JxpgQORCSUUdSgawmcizNgaJhpDnmQ_zT_c41WfJbs';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+
+let currentUser = null;
+let macroFasi = [];
+let refreshTimer = null;
+
+// ── LOGIN ──
+async function init() {
+  const { data } = await sb.from('users').select('id, nome, cognome').in('ruolo', ['sola_lettura']).eq('attivo', true).order('cognome');
+  const sel = document.getElementById('login-user-select');
+  sel.innerHTML = '<option value="">— Seleziona il tuo nome —</option>' +
+    (data || []).map(u => `<option value="${u.id}">${u.cognome} ${u.nome}</option>`).join('');
+}
+
+function pinNext(idx) {
+  const val = document.getElementById('pin' + idx).value;
+  if (val && idx < 3) document.getElementById('pin' + (idx + 1)).focus();
+}
+
+async function doLogin() {
+  const userId = document.getElementById('login-user-select').value;
+  if (!userId) { showErr('Seleziona il tuo nome'); return; }
+  const pin = [0,1,2,3].map(i => document.getElementById('pin'+i).value).join('');
+  if (pin.length !== 4) { showErr('PIN incompleto'); return; }
+
+  const { data } = await sb.rpc('verifica_pin', { p_user_id: userId, p_pin: pin });
+  if (!data?.ok) { showErr(data?.errore || 'PIN errato'); return; }
+
+  currentUser = data.user;
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'block';
+  await caricaMacroFasi();
+  await aggiornaUfficio();
+  // Auto-refresh ogni 2 minuti
+  refreshTimer = setInterval(aggiornaUfficio, 120000);
+}
+
+function showErr(msg) { document.getElementById('login-err').textContent = msg; }
+
+function doLogout() {
+  clearInterval(refreshTimer);
+  currentUser = null;
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  [0,1,2,3].forEach(i => document.getElementById('pin'+i).value = '');
+  document.getElementById('login-err').textContent = '';
+}
+
+// ── DATI ──
+async function caricaMacroFasi() {
+  const [{ data: macro }, { data: fasiConMacro }] = await Promise.all([
+    sb.from('macro_fasi').select('*').order('posizione').order('id'),
+    sb.from('fasi').select('id, macro_fase_id').not('macro_fase_id', 'is', null)
+  ]);
+  macroFasi = (macro || []).map(m => ({
+    ...m,
+    fasi: new Set((fasiConMacro || []).filter(f => f.macro_fase_id === m.id).map(f => f.id))
+  }));
+}
+
+async function aggiornaUfficio() {
+  const ora = new Date().toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' });
+  document.getElementById('topbar-sub').textContent = `Aggiornato alle ${ora}`;
+  document.getElementById('refresh-info').textContent = `Aggiornamento automatico ogni 2 minuti`;
+
+  const [{ data: ordini }, { data: ordFasi }] = await Promise.all([
+    sb.from('ordini').select('id, codice, cliente, scadenza, stato, priorita')
+      .in('stato', ['aperto', 'attesa_spedizione', 'sospeso'])
+      .eq('eliminato', false)
+      .order('scadenza', { ascending: true, nullsFirst: false }),
+    sb.from('ordine_fasi').select('ordine_id, fase_id, stato')
+  ]);
+
+  renderUfficio(ordini || [], ordFasi || []);
+}
+
+function renderUfficio(ordini, ordFasi) {
+  const el = document.getElementById('main-content');
+  if (!ordini.length) {
+    el.innerHTML = '<div class="empty">✓ Nessun ordine attivo in questo momento</div>';
+    return;
+  }
+
+  const oggi = new Date().toISOString().split('T')[0];
+
+  // Raggruppa fasi per ordine
+  const fasiMap = {};
+  ordFasi.forEach(f => {
+    if (!fasiMap[f.ordine_id]) fasiMap[f.ordine_id] = [];
+    fasiMap[f.ordine_id].push(f);
+  });
+
+  el.innerHTML = ordini.map(o => {
+    const fasi = fasiMap[o.id] || [];
+    const appl = fasi.filter(f => f.stato !== 'non_applicabile');
+    const comp = appl.filter(f => f.stato === 'completata').length;
+    const tot  = appl.length || 1;
+    const pct  = Math.round(comp / tot * 100);
+
+    const isAttesa  = o.stato === 'attesa_spedizione';
+    const isSosp    = o.stato === 'sospeso';
+    const inRitardo = o.scadenza && o.scadenza < oggi && !isAttesa;
+
+    const badge = isAttesa
+      ? `<span class="badge badge-attesa">✓ Pronto per spedizione</span>`
+      : isSosp ? `<span class="badge badge-sospeso">⏸ Sospeso</span>`
+      : inRitardo ? `<span class="badge badge-ritardo">⚠ In ritardo</span>`
+      : `<span class="badge badge-aperto">In produzione</span>`;
+
+    const scadHtml = o.scadenza
+      ? `<span class="scad ${inRitardo ? 'late' : ''}">📅 ${formatData(o.scadenza)}</span>`
+      : '';
+
+    // Barre macro
+    const bars = macroFasi.length ? macroFasi.map(m => {
+      const mAppl = appl.filter(f => f.fase_id && m.fasi.has(f.fase_id));
+      if (!mAppl.length) return '';
+      const mComp = mAppl.filter(f => f.stato === 'completata').length;
+      const mPct  = Math.round(mComp / mAppl.length * 100);
+      return `
+        <div class="macro-row">
+          <div class="macro-lbl">
+            <span style="color:${m.colore}">${esc(m.nome)}</span>
+            <span class="macro-lbl-pct">${mComp}/${mAppl.length} fasi — ${mPct}%</span>
+          </div>
+          <div class="macro-track"><div class="macro-fill" style="width:${mPct}%;background:${m.colore}"></div></div>
+        </div>`;
+    }).join('') : '<div style="font-size:12px;color:var(--muted)">Nessun gruppo macro configurato</div>';
+
+    return `
+      <div class="ord-card ${isAttesa ? 'attesa' : inRitardo ? 'ritardo' : ''}">
+        <div class="ord-hdr">
+          <div>
+            <div class="ord-cliente">${esc(o.cliente)}</div>
+            <div class="ord-codice">${esc(o.codice || '')}</div>
+          </div>
+          <div class="ord-pct ${pct===100 ? 'done' : ''}">${pct}%</div>
+        </div>
+        <div class="ord-info">${badge}${scadHtml}</div>
+        ${bars}
+        <div class="tot-track"><div class="tot-fill" style="width:${pct}%"></div></div>
+      </div>`;
+  }).join('');
+}
+
+function formatData(d) {
+  if (!d) return '';
+  const [y,m,g] = d.split('-');
+  return `${g}/${m}/${y.slice(2)}`;
+}
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+init();
+</script>
+</body>
+</html>
