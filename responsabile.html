@@ -1354,7 +1354,7 @@ function ordineRow(o, mini = false) {
   const rowClass = isAttesa ? 'style="background:#F0FDF4"' : '';
   return `<tr class="clickable ${scadenzaClass(o.scadenza)}" ${rowClass} onclick="openDettaglioOrdine('${o.id}')">
     <td><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div></td>
-    <td>${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}</td>
+    <td>${o.tipo_ordine === 'extra' ? '<span style="font-weight:600;color:var(--wood)">Ordine Extra</span>' : `${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}`}</td>
     <td><span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span></td>
     <td style="text-align:center;font-weight:600">${o.quantita || 1}</td>
     <td style="color:${isLate ? '#EF4444' : 'inherit'};font-weight:${isLate ? '700' : 'normal'}">${scad}${isLate ? ' ⚠️' : ''}</td>
