@@ -1316,34 +1316,19 @@ async function completaFase(ordFaseId, ordineId) {
 
 async function annullaPresaInCarico(ordFaseId, ordineId) {
   if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
-  if (!confirm('Annullare la tua presa in carico?\nL\'azione verrà registrata nel log.')) return;
+  if (!confirm('Annullare la tua presa in carico?')) return;
 
-  // Rimuovi dalla junction table
-  await sb.from('ordine_fasi_operatori')
-    .delete().eq('ordine_fase_id', ordFaseId).eq('operatore_id', currentUser.id);
-
-  // Controlla se restano altri operatori
-  const { data: rimasti } = await sb.from('ordine_fasi_operatori')
-    .select('operatore_id').eq('ordine_fase_id', ordFaseId);
-
-  if (!rimasti || rimasti.length === 0) {
-    // Nessun altro — riporta la fase a disponibile
-    const { error } = await sb.from('ordine_fasi').update({
-      stato: 'disponibile', operatore_id: null, iniziata_il: null,
-    }).eq('id', ordFaseId);
-    if (error) { toast('Errore: ' + error.message, 'err'); return; }
-    toast('Presa in carico annullata — fase tornata disponibile', 'ok');
-  } else {
-    // Restano altri — aggiorna solo il primary operatore_id con il primo rimasto
-    await sb.from('ordine_fasi').update({ operatore_id: rimasti[0].operatore_id }).eq('id', ordFaseId);
-    toast('Hai lasciato la fase — i tuoi colleghi continuano', 'ok');
-  }
-
-  await sb.from('archivio_log').insert({
-    ordine_id: ordineId, utente_id: currentUser.id,
-    azione: 'fase_iniziata',
-    dettaglio: { annullo_presa_in_carico: true, rimasti: rimasti?.length || 0, ordine_fase_id: ordFaseId }
+  const { data, error } = await sb.rpc('annulla_presa_in_carico', {
+    p_ordine_fase_id: ordFaseId,
+    p_operatore_id: currentUser.id
   });
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+
+  if (data?.rimasti > 0) {
+    toast('Hai lasciato la fase — i tuoi colleghi continuano', 'ok');
+  } else {
+    toast('Presa in carico annullata — fase tornata disponibile', 'ok');
+  }
 
   await renderFaseDetail(ordFaseId, ordineId);
   await renderOrdineDetail(ordineId);
