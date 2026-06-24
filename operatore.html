@@ -1095,21 +1095,20 @@ async function rimuoviCollegaExtra(faseExtraId, ordineId, opId, opNome) {
 }
 
 async function riapriFaseOp(ordFaseId, ordineId) {
-  if (!confirm('Sei sicuro di voler riaprire questa fase?')) return;
-  if (!confirm('Conferma: la fase tornerà disponibile e dovrai riprenderla in carico. Il tempo già lavorato viene conservato.')) return;
-  const { error } = await sb.from('ordine_fasi').update({
-    stato: 'disponibile', operatore_id: null, iniziata_il: null, completata_il: null
-  }).eq('id', ordFaseId);
-  if (error) { toast('Errore: ' + error.message, 'err'); return; }
-  await sb.from('ordine_fasi_operatori').delete().eq('ordine_fase_id', ordFaseId);
+  const nomeFase = document.getElementById('fase-det-title')?.textContent || 'questa fase';
+  if (!confirm('Hai altro lavoro da fare su questa fase? Riaprila.')) return;
+  if (!confirm(`Sei sicuro di voler riaprire la fase "${nomeFase}"?`)) return;
+  const { data, error } = await sb.rpc('riapri_fase_operatore', { p_ordine_fase_id: ordFaseId });
+  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   toast('Fase riaperta', 'ok');
   await renderFaseDetail(ordFaseId, ordineId);
   renderHome();
 }
 
 async function riapriFaseExtraOp(faseExtraId, ordineId) {
-  if (!confirm('Sei sicuro di voler riaprire questa fase?')) return;
-  if (!confirm('Conferma: la fase tornerà disponibile e dovrai riprenderla in carico. Il tempo già lavorato viene conservato.')) return;
+  const nomeFase = document.getElementById('fase-det-title')?.textContent || 'questa fase';
+  if (!confirm('Hai altro lavoro da fare su questa fase? Riaprila.')) return;
+  if (!confirm(`Sei sicuro di voler riaprire la fase "${nomeFase}"?`)) return;
   const { error } = await sb.from('fasi_ordine_extra').update({
     stato: 'disponibile', operatore_id: null, iniziata_il: null, completata_il: null
   }).eq('id', faseExtraId);
