@@ -959,11 +959,14 @@ async function openFaseExtraDetail(faseExtraId, ordineId) {
 }
 
 async function renderFaseExtraDetail(faseExtraId, ordineId) {
-  let f;
+  let f, opMulti = [];
   if (isOnline) {
-    const { data } = await sb.from('fasi_ordine_extra')
-      .select('*, users!operatore_id(nome, cognome)').eq('id', faseExtraId).single();
-    f = data;
+    const [{ data: fd }, { data: om }] = await Promise.all([
+      sb.from('fasi_ordine_extra').select('*, users!operatore_id(nome, cognome)').eq('id', faseExtraId).single(),
+      sb.from('fasi_extra_operatori').select('operatore_id, users(nome, cognome)').eq('fasi_ordine_extra_id', faseExtraId)
+    ]);
+    f = fd;
+    opMulti = om || [];
   } else {
     const cached = await cacheGet('fasi-extra-' + ordineId) || [];
     f = cached.find(x => x.id === faseExtraId);
@@ -971,8 +974,7 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
   if (!f) return;
 
   const ordine = ordiniCache.find(o => o.id === ordineId);
-  const isMia = f.operatore_id === currentUser.id;
-  const opNome = f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '';
+  const isMia = opMulti.some(o => o.operatore_id === currentUser.id) || f.operatore_id === currentUser.id;
   const sospeso = ordine?.stato === 'sospeso';
 
   document.getElementById('fase-det-title').textContent = `${f.numero}. ${f.nome}`;
@@ -982,28 +984,69 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
 
   let bodyHtml = '';
   if (f.note_responsabile) bodyHtml += `<div class="note-box"><strong>Note Responsabile</strong>${escapeHtml(f.note_responsabile)}</div>`;
-  if (f.note_operatore && isMia) bodyHtml += `<div class="note-box"><strong>Le tue note</strong>${escapeHtml(f.note_operatore)}</div>`;
-  if (opNome && !isMia) bodyHtml += `<div class="note-box"><strong>In carico a</strong>${escapeHtml(opNome)}</div>`;
+  if (f.note_operatore) bodyHtml += `<div class="note-box"><strong>Note Operatore</strong>${escapeHtml(f.note_operatore)}</div>`;
+
+  // Lista operatori sulla fase
+  if (opMulti.length > 0) {
+    const righe = opMulti.map(o => {
+      const n = `${o.users?.nome || ''} ${o.users?.cognome || ''}`.trim();
+      const sei_tu = o.operatore_id === currentUser.id;
+      const puoiRimuovere = isMia && !sei_tu && f.stato === 'in_corso';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0">
+        <span>${sei_tu ? `<strong>${escapeHtml(n)} (tu)</strong>` : escapeHtml(n)}</span>
+        ${puoiRimuovere ? `<button class="btn btn-alert" style="padding:3px 10px;font-size:12px" onclick="rimuoviCollegaExtra('${faseExtraId}','${ordineId}','${o.operatore_id}','${escapeHtml(n)}')">Rimuovi</button>` : ''}
+      </div>`;
+    }).join('');
+    bodyHtml += `<div class="note-box" style="border-color:var(--wood)"><strong>Operatori su questa fase</strong>${righe}</div>`;
+  }
+
   if (f.iniziata_il) bodyHtml += `<div class="meta-item" style="margin-bottom:10px"><label>Iniziata</label><span>${formatDateTime(f.iniziata_il)}</span></div>`;
   if (f.completata_il) bodyHtml += `<div class="meta-item" style="margin-bottom:10px"><label>Completata</label><span>${formatDateTime(f.completata_il)}</span></div>`;
 
   if (currentUser.ruolo === 'sola_lettura') {
     // nessuna azione
-  } else if (!sospeso) {
-    if (f.stato === 'disponibile') {
-      bodyHtml += `<div class="azione-box"><h4>Prendi in carico questa fase</h4>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Prendendo in carico la fase, gli altri operatori non potranno iniziarla.</p>
-        <button class="btn btn-primary" onclick="prendiInCaricoExtra('${faseExtraId}','${ordineId}')">▶ Prendi in carico</button></div>`;
-    } else if (f.stato === 'in_corso' && isMia) {
-      bodyHtml += `<div class="azione-box"><h4>Completa fase</h4>
-        <div class="form-group" style="margin-bottom:12px"><label>Le tue note (opzionale)</label>
-          <textarea id="note-op-extra" placeholder="Scrivi eventuali note…">${f.note_operatore || ''}</textarea></div>
-        <button class="btn btn-ok" onclick="completaFaseExtra('${faseExtraId}','${ordineId}')">✓ Segna come completata</button></div>`;
-    } else if (f.stato === 'in_corso' && !isMia) {
-      bodyHtml += `<div class="note-box" style="border:1px solid #93C5FD"><strong>In corso</strong>In carico a ${opNome}.</div>`;
-    }
-  } else {
+  } else if (sospeso) {
     bodyHtml += `<div class="note-box" style="border:1px solid var(--warn)"><strong>Ordine Sospeso</strong>Contatta il responsabile.</div>`;
+  } else if (f.stato === 'disponibile') {
+    bodyHtml += `<div class="azione-box"><h4>Prendi in carico questa fase</h4>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Puoi lavorarci insieme a un collega — entrambi dovete prendere in carico.</p>
+      <button class="btn btn-primary" onclick="prendiInCaricoExtra('${faseExtraId}','${ordineId}')">▶ Prendi in carico</button></div>`;
+  } else if (f.stato === 'in_corso' && isMia) {
+    const giaSulla = new Set(opMulti.map(o => o.operatore_id));
+    giaSulla.add(currentUser.id);
+    let opzioniColleghi = '';
+    if (isOnline) {
+      const { data: tuttiOp } = await sb.from('users').select('id, nome, cognome').eq('attivo', true).in('ruolo', ['operatore']).order('cognome');
+      const disponibili = (tuttiOp || []).filter(u => !giaSulla.has(u.id));
+      if (disponibili.length) {
+        const chips = disponibili.map(u =>
+          `<button class="btn btn-secondary" style="padding:8px 14px;font-size:13px" onclick="aggiungiCollegaExtra('${faseExtraId}','${ordineId}','${u.id}','${escapeHtml(u.nome)} ${escapeHtml(u.cognome)}')">${escapeHtml(u.nome)} ${escapeHtml(u.cognome)}</button>`
+        ).join('');
+        opzioniColleghi = `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);display:block;margin-bottom:8px">Aggiungi collega</label>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">${chips}</div>
+        </div>`;
+      }
+    }
+    bodyHtml += `<div class="azione-box"><h4>Completa fase</h4>
+      <div class="form-group" style="margin-bottom:12px"><label>Le tue note (opzionale)</label>
+        <textarea id="note-op-extra" placeholder="Scrivi eventuali note…">${f.note_operatore || ''}</textarea></div>
+      ${opzioniColleghi}
+      <button class="btn btn-ok" style="margin-top:14px" onclick="completaFaseExtra('${faseExtraId}','${ordineId}')">✓ Segna come completata</button>
+      <button class="btn btn-alert" style="margin-top:10px;font-size:12px;opacity:0.8" onclick="annullaPresaInCaricoExtra('${faseExtraId}','${ordineId}')">✕ Annulla presa in carico</button></div>`;
+  } else if (f.stato === 'in_corso' && !isMia) {
+    const altriNomi = opMulti.filter(o => o.operatore_id !== currentUser.id)
+      .map(o => `${o.users?.nome || ''} ${o.users?.cognome || ''}`.trim()).join(', ')
+      || (f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '');
+    bodyHtml += `
+      <div class="note-box" style="border:1px solid #93C5FD">
+        <strong>In corso</strong>${altriNomi ? `In carico a: ${escapeHtml(altriNomi)}` : 'Fase in corso.'}
+      </div>
+      <div class="azione-box" style="margin-top:12px">
+        <h4>Unisciti a questa fase</h4>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Puoi affiancare ${escapeHtml(altriNomi || 'il collega')} senza togliergli la fase.</p>
+        <button class="btn btn-primary" onclick="uniscitiAFaseExtra('${faseExtraId}','${ordineId}')">+ Unisciti</button>
+      </div>`;
   }
 
   document.getElementById('fase-det-body').innerHTML = bodyHtml;
@@ -1011,16 +1054,45 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
 
 async function prendiInCaricoExtra(faseExtraId, ordineId) {
   if (isOnline) {
-    const { error } = await sb.from('fasi_ordine_extra').update({
-      stato: 'in_corso', operatore_id: currentUser.id, iniziata_il: new Date().toISOString()
-    }).eq('id', faseExtraId).eq('stato', 'disponibile');
-    if (error) { toast('Errore: ' + error.message, 'err'); return; }
+    const { data, error } = await sb.rpc('prendi_in_carico_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id });
+    if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   } else {
     await queueAction({ type: 'prendi_fase_extra', faseExtraId, ordineId });
     await updateQueueBadge();
   }
   toast('Fase presa in carico!', 'ok');
   await renderFaseExtraDetail(faseExtraId, ordineId);
+  renderHome();
+}
+
+async function uniscitiAFaseExtra(faseExtraId, ordineId) {
+  const { data, error } = await sb.rpc('unisciti_fase_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id });
+  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
+  toast('Ti sei unito alla fase!', 'ok');
+  await renderFaseExtraDetail(faseExtraId, ordineId);
+  renderHome();
+}
+
+async function aggiungiCollegaExtra(faseExtraId, ordineId, opId, opNome) {
+  const { data, error } = await sb.rpc('aggiungi_collega_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: opId });
+  if (error || !data?.ok) { toast('Errore', 'err'); return; }
+  toast(`${opNome} aggiunto alla fase`, 'ok');
+  await renderFaseExtraDetail(faseExtraId, ordineId);
+}
+
+async function rimuoviCollegaExtra(faseExtraId, ordineId, opId, opNome) {
+  if (!confirm(`Rimuovere ${opNome} da questa fase?`)) return;
+  await sb.from('fasi_extra_operatori').delete().eq('fasi_ordine_extra_id', faseExtraId).eq('operatore_id', opId);
+  toast(`${opNome} rimosso`, 'ok');
+  await renderFaseExtraDetail(faseExtraId, ordineId);
+}
+
+async function annullaPresaInCaricoExtra(faseExtraId, ordineId) {
+  const { data, error } = await sb.rpc('annulla_presa_in_carico_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id });
+  if (error || !data?.ok) { toast('Errore annullamento', 'err'); return; }
+  toast('Presa in carico annullata', 'ok');
+  await renderFaseExtraDetail(faseExtraId, ordineId);
+  renderHome();
 }
 
 async function completaFaseExtra(faseExtraId, ordineId) {
