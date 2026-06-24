@@ -1635,8 +1635,8 @@ async function _salvaOnesignalId() {
       await new Promise(r => setTimeout(r, 1000));
     }
     if (subId) {
-      const { error } = await sb.rpc('salva_onesignal_id', { p_user_id: currentUser.id, p_onesignal_id: subId });
-      _debug(error ? 'ERRORE DB: ' + error.message : 'ID salvato nel DB!');
+      const { data, error } = await sb.rpc('salva_onesignal_id', { p_user_id: currentUser.id, p_onesignal_id: subId });
+      _debug(error ? 'ERRORE RPC: ' + error.message : 'RPC ok: ' + JSON.stringify(data));
     } else {
       _debug('ERRORE: subscription ID mai disponibile');
     }
