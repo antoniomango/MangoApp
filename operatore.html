@@ -220,6 +220,7 @@ textarea:focus { border-color: var(--wood); }
 .empty-state .icon { font-size: 36px; margin-bottom: 10px; }
 .queue-badge { background: var(--warn); color: white; border-radius: 12px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
 </style>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 </head>
 <body>
 
@@ -632,6 +633,7 @@ async function showApp() {
   setupRealtime();
   updateQueueBadge();
   syncQueue();
+  initOneSignal();
   renderHome();
   populateNcSelects();
   renderAttivita();
@@ -1552,6 +1554,35 @@ async function riprendiTutteFasi() {
   if (error || !data?.ok) { toast('Errore', 'err'); return; }
   toast('Tutte le fasi riprese', 'ok');
   await renderHome();
+}
+
+// ═══════════════════════════════════════════════
+// ONESIGNAL
+// ═══════════════════════════════════════════════
+const ONESIGNAL_APP_ID = 'f1b7b981-355e-46c2-a476-224e3d06d82b';
+// REST API Key: non condividere, non committare in repo pubblici
+// REST key gestita da Supabase Edge Function (non nel codice client)
+
+async function initOneSignal() {
+  if (!window.OneSignalDeferred) return;
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  window.OneSignalDeferred.push(async function(OneSignal) {
+    try {
+      await OneSignal.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/OneSignalSDKWorker.js' });
+      const permission = await OneSignal.Notifications.permission;
+      if (!permission) await OneSignal.Notifications.requestPermission();
+      await OneSignal.login(currentUser.id);
+      const subId = OneSignal.User.PushSubscription.id;
+      if (subId) await sb.from('users').update({ onesignal_id: subId }).eq('id', currentUser.id);
+    } catch(e) { console.warn('OneSignal init:', e); }
+  });
+}
+
+async function inviaNotificaPush(destinatarioId, titolo, messaggio) {
+  if (!isOnline) return;
+  try {
+    await sb.functions.invoke('send-push', { body: { destinatario_id: destinatarioId, messaggio } });
+  } catch(e) { console.warn('Push notification:', e); }
 }
 
 async function segnaSpedito(ordineId) {

@@ -330,6 +330,7 @@ tr:hover td { background: var(--phase-bg); }
 .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
 .empty-state p { font-size: 14px; }
 </style>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 </head>
 <body>
 
@@ -1205,6 +1206,7 @@ async function postLogin() {
   if (currentUserRow?.ruolo === 'responsabile') checkOrdiniInRitardo();
   // Realtime
   setupRealtime();
+  initOneSignalResp();
   // Render in base al ruolo
   if (currentUserRow?.ruolo === 'sola_lettura') {
     // Nascondi nav e funzioni non pertinenti all'ufficio
@@ -2924,16 +2926,44 @@ function escapeHtml(str) {
 // ═══════════════════════════════════════════════
 // NOTIFICHE — HELPER
 // ═══════════════════════════════════════════════
+// ONESIGNAL
+// ═══════════════════════════════════════════════
+const ONESIGNAL_APP_ID = 'f1b7b981-355e-46c2-a476-224e3d06d82b';
+// REST key gestita da Supabase Edge Function (non nel codice client)
+
+async function initOneSignalResp() {
+  if (!window.OneSignalDeferred) return;
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  window.OneSignalDeferred.push(async function(OneSignal) {
+    try {
+      await OneSignal.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/OneSignalSDKWorker.js' });
+      const permission = await OneSignal.Notifications.permission;
+      if (!permission) await OneSignal.Notifications.requestPermission();
+      await OneSignal.login(currentUserRow.id);
+      const subId = OneSignal.User.PushSubscription.id;
+      if (subId) await sb.from('users').update({ onesignal_id: subId }).eq('id', currentUserRow.id);
+    } catch(e) { console.warn('OneSignal init:', e); }
+  });
+}
+
+async function inviaNotificaPush(destinatarioId, titolo, messaggio) {
+  try {
+    await sb.functions.invoke('send-push', { body: { destinatario_id: destinatarioId, messaggio } });
+  } catch(e) { console.warn('Push:', e); }
+}
+
 async function inviaNotificaATutti(tipo, testo, ordineId = null) {
   const { data: utenti } = await sb.from('users').select('id').eq('attivo', true).neq('eliminato', true);
   if (!utenti?.length) return;
   await sb.from('notifiche').insert(utenti.map(u => ({ destinatario_id: u.id, tipo, testo, ordine_id: ordineId })));
+  for (const u of utenti) inviaNotificaPush(u.id, 'Mango Semilavorati', testo);
 }
 
 async function inviaNotificaAResponsabile(tipo, testo, ordineId = null) {
   const { data: resp } = await sb.from('users').select('id').eq('ruolo', 'responsabile').eq('attivo', true);
   if (!resp?.length) return;
   await sb.from('notifiche').insert(resp.map(u => ({ destinatario_id: u.id, tipo, testo, ordine_id: ordineId })));
+  for (const u of resp) inviaNotificaPush(u.id, 'Mango Semilavorati', testo);
 }
 
 async function checkOrdiniInRitardo() {
