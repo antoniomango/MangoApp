@@ -1424,7 +1424,7 @@ async function loadAvanzamenti(ids) {
   ids.forEach(id => {
     const el = document.getElementById('prog-' + id);
     if (!el) return;
-    const s = map[id] || { tot: 20, done: 0, inCorso: 0 };
+    const s = map[id] || { tot: 0, done: 0, inCorso: 0 };
     const pct = s.tot > 0 ? Math.round((s.done / s.tot) * 100) : 0;
     el.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px">
