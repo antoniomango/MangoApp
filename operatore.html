@@ -722,9 +722,13 @@ function showScreen(name) {
     const badge = document.getElementById('notif-badge-op');
     if (badge) badge.style.display = 'none';
     renderNotificheOp();
-    // Segna come lette nel DB in background
+    // Segna come lette nel DB (retry se fallisce)
     if (isOnline && currentUser) {
-      sb.from('notifiche').update({ letta: true }).eq('destinatario_id', currentUser.id).eq('letta', false);
+      sb.from('notifiche').update({ letta: true }).eq('destinatario_id', currentUser.id).eq('letta', false)
+        .then(({ error }) => {
+          if (error) setTimeout(() =>
+            sb.from('notifiche').update({ letta: true }).eq('destinatario_id', currentUser.id).eq('letta', false), 2000);
+        });
     }
   }
 }
