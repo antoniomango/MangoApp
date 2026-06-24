@@ -1188,8 +1188,7 @@ async function renderFaseDetail(ordFaseId, ordineId) {
 
   const banner = document.getElementById('fase-ordine-banner');
   if (ordine && banner) {
-    document.getElementById('fase-ordine-cliente').textContent = ordine.cliente || '';
-    document.getElementById('fase-ordine-codice').textContent = `N° ${ordine.codice || '—'}`;
+    banner.textContent = `${ordine.cliente} — ${ordine.codice || ''}`;
     banner.style.display = '';
   }
 
