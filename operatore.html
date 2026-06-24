@@ -719,6 +719,8 @@ function showScreen(name) {
   else if (name === 'attivita') renderAttivita();
   else if (name === 'nc') populateNcSelects();
   else if (name === 'notifiche') {
+    // Richiedi permesso notifiche push (richiede gesto utente su iOS)
+    richiediPermessoNotifiche();
     // Nascondi badge subito e aggiorna cache locale
     if (window._notificheOp) window._notificheOp.forEach(n => n.letta = true);
     const badge = document.getElementById('notif-badge-op');
@@ -1573,6 +1575,14 @@ async function riprendiTutteFasi() {
 const ONESIGNAL_APP_ID = 'f1b7b981-355e-46c2-a476-224e3d06d82b';
 // REST API Key: non condividere, non committare in repo pubblici
 // REST key gestita da Supabase Edge Function (non nel codice client)
+
+async function richiediPermessoNotifiche() {
+  if (!window.OneSignal) return;
+  try {
+    const permission = OneSignal.Notifications.permission;
+    if (!permission) await OneSignal.Notifications.requestPermission();
+  } catch(e) { console.warn('Permission request:', e); }
+}
 
 async function initOneSignal() {
   if (!window.OneSignalDeferred) return;
