@@ -566,6 +566,21 @@ tr:hover td { background: var(--phase-bg); }
           <div><h1>Notifiche</h1></div>
           <button class="btn btn-secondary" onclick="markAllRead()">Segna tutte come lette</button>
         </div>
+        <!-- INVIA COMUNICAZIONE -->
+        <div class="card" style="margin-bottom:16px;padding:20px">
+          <h3 style="margin-bottom:14px;font-size:14px">📢 Invia comunicazione</h3>
+          <div class="form-group" style="margin-bottom:10px">
+            <textarea id="com-testo" placeholder="Scrivi il messaggio…" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;resize:vertical;min-height:72px;background:var(--bg);color:var(--ink)"></textarea>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <select id="com-destinatario" style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--ink)">
+              <option value="tutti">Tutti gli operatori</option>
+              <option value="operatori">Solo operatori (no ufficio)</option>
+            </select>
+            <button class="btn btn-primary" onclick="inviaComunicazione()">Invia</button>
+          </div>
+        </div>
+        <!-- LISTA NOTIFICHE -->
         <div class="card" style="padding:0 20px" id="notif-list">
           <div style="text-align:center;padding:24px;color:var(--muted)">Caricamento…</div>
         </div>
@@ -1180,6 +1195,8 @@ async function postLogin() {
   await loadFasi();
   // Load data
   await Promise.all([loadOrdini(), loadNc(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadMacroFasi()]);
+  // Check ordini in ritardo (solo responsabile)
+  if (currentUserRow?.ruolo === 'responsabile') checkOrdiniInRitardo();
   // Realtime
   setupRealtime();
   // Render in base al ruolo
@@ -1288,11 +1305,21 @@ async function loadNotifiche() {
 // ═══════════════════════════════════════════════
 function setupRealtime() {
   sb.channel('production')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'ordini' }, async () => {
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ordini' }, async (payload) => {
+      if (payload.new?.stato === 'attesa_spedizione' && payload.old?.stato !== 'attesa_spedizione') {
+        await inviaNotificaAResponsabile('ordine_pronto_spedizione',
+          `Ordine pronto per spedizione: ${payload.new.cliente} — ${payload.new.codice || ''}`,
+          payload.new.id);
+      }
       await loadOrdini();
       renderDashboard();
       renderOrdiniTable();
       renderArchivioTable();
+    })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ordini' }, async () => {
+      await loadOrdini();
+      renderDashboard();
+      renderOrdiniTable();
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'ordine_fasi' }, async () => {
       if (currentOrdineId) renderDettaglioOrdine(currentOrdineId);
@@ -1897,6 +1924,8 @@ async function creaOrdine() {
   }
 
   await sb.from('archivio_log').insert({ ordine_id: newOrdine.id, utente_id: currentUserRow.id, azione: 'ordine_creato' });
+  await inviaNotificaATutti('ordine_creato',
+    `Nuovo ordine ${tipo === 'extra' ? 'extra' : 'standard'}: ${cliente} — ${codice}`, newOrdine.id);
 
   closeModal('modal-ordine');
   toast('Ordine creato con successo', 'ok');
@@ -1907,8 +1936,10 @@ async function creaOrdine() {
 
 async function sospendi(id) {
   if (!confirm('Sospendere questo ordine?')) return;
+  const o = ordiniCache.find(x => x.id === id);
   await sb.from('ordini').update({ stato: 'sospeso' }).eq('id', id);
   await sb.from('archivio_log').insert({ ordine_id: id, utente_id: currentUserRow.id, azione: 'ordine_sospeso' });
+  await inviaNotificaATutti('ordine_sospeso', `Ordine sospeso: ${o?.cliente || ''} — ${o?.codice || ''}`, id);
   toast('Ordine sospeso', 'ok');
   await loadOrdini();
   renderDashboard();
@@ -1917,8 +1948,10 @@ async function sospendi(id) {
 }
 
 async function riattiva(id) {
+  const o = ordiniCache.find(x => x.id === id);
   await sb.from('ordini').update({ stato: 'aperto' }).eq('id', id);
   await sb.from('archivio_log').insert({ ordine_id: id, utente_id: currentUserRow.id, azione: 'ordine_riattivato' });
+  await inviaNotificaATutti('ordine_sospeso', `Ordine riattivato: ${o?.cliente || ''} — ${o?.codice || ''}`, id);
   toast('Ordine riattivato', 'ok');
   await loadOrdini();
   renderDashboard();
@@ -2596,6 +2629,23 @@ async function markAllRead() {
   await renderNotifiche();
 }
 
+async function inviaComunicazione() {
+  const testo = document.getElementById('com-testo').value.trim();
+  if (!testo) { toast('Scrivi un messaggio', 'err'); return; }
+  const dest = document.getElementById('com-destinatario').value;
+  let query = sb.from('users').select('id').eq('attivo', true).neq('eliminato', true);
+  if (dest === 'operatori') query = query.eq('ruolo', 'operatore');
+  const { data: utenti } = await query;
+  if (!utenti?.length) { toast('Nessun destinatario trovato', 'err'); return; }
+  await sb.from('notifiche').insert(utenti.map(u => ({
+    destinatario_id: u.id, tipo: 'comunicazione',
+    testo: `📢 ${testo}`, ordine_id: null
+  })));
+  document.getElementById('com-testo').value = '';
+  toast('Comunicazione inviata', 'ok');
+  await renderNotifiche();
+}
+
 // ═══════════════════════════════════════════════
 // DETTAGLIO FASE EXTRA (ordini custom)
 // ═══════════════════════════════════════════════
@@ -2844,6 +2894,36 @@ function closeModal(id) {
 
 function escapeHtml(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ═══════════════════════════════════════════════
+// NOTIFICHE — HELPER
+// ═══════════════════════════════════════════════
+async function inviaNotificaATutti(tipo, testo, ordineId = null) {
+  const { data: utenti } = await sb.from('users').select('id').eq('attivo', true).neq('eliminato', true);
+  if (!utenti?.length) return;
+  await sb.from('notifiche').insert(utenti.map(u => ({ destinatario_id: u.id, tipo, testo, ordine_id: ordineId })));
+}
+
+async function inviaNotificaAResponsabile(tipo, testo, ordineId = null) {
+  const { data: resp } = await sb.from('users').select('id').eq('ruolo', 'responsabile').eq('attivo', true);
+  if (!resp?.length) return;
+  await sb.from('notifiche').insert(resp.map(u => ({ destinatario_id: u.id, tipo, testo, ordine_id: ordineId })));
+}
+
+async function checkOrdiniInRitardo() {
+  const oggi = new Date().toISOString().split('T')[0];
+  const inRitardo = ordiniCache.filter(o => o.stato === 'aperto' && o.scadenza && o.scadenza < oggi);
+  for (const o of inRitardo) {
+    // Controlla se già notificato oggi
+    const { data: esistente } = await sb.from('notifiche')
+      .select('id').eq('ordine_id', o.id).eq('tipo', 'ordine_in_ritardo')
+      .gte('creata_il', oggi + 'T00:00:00Z').limit(1);
+    if (!esistente?.length) {
+      await inviaNotificaAResponsabile('ordine_in_ritardo',
+        `Ordine in ritardo: ${o.cliente} — ${o.codice || ''} (scaduto il ${formatDate(o.scadenza)})`, o.id);
+    }
+  }
 }
 
 function scadenzaClass(scadenza) {
