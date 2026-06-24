@@ -1752,7 +1752,7 @@ async function svuotaArchivio() {
 
 async function riaprieFaseResp(ordFaseId, ordineId) {
   if (!confirm('Riaprire questa fase impostandola su "disponibile"?')) return;
-  const { error } = await sb.from('ordine_fasi').update({ stato: 'disponibile', operatore_id: null, iniziata_il: null, completata_il: null }).eq('id', ordFaseId);
+  const { error } = await sb.from('ordine_fasi').update({ stato: 'disponibile', operatore_id: null, iniziata_il: null, completata_il: null /* tempo_accumulato_minuti mantenuto */ }).eq('id', ordFaseId);
   if (error) { toast('Errore: ' + error.message, 'err'); return; }
   await sb.from('archivio_log').insert({ ordine_id: ordineId, utente_id: currentUserRow.id, azione: 'fase_iniziata', dettaglio: { riapertura_responsabile: true, ordine_fase_id: ordFaseId } });
   closeModal('modal-fase');
@@ -3097,7 +3097,7 @@ async function loadKpi() {
     { data: fasiCfg }
   ] = await Promise.all([
     sb.from('ordine_fasi')
-      .select('*, ordini(codice, cliente, struttura, tipo_prodotto, priorita, scadenza, creato_il, spedito_il, completato_il, eliminato)')
+      .select('id, ordine_id, fase_id, operatore_id, iniziata_il, completata_il, tempo_accumulato_minuti, ordini(codice, cliente, struttura, tipo_prodotto, priorita, scadenza, creato_il, spedito_il, completato_il, eliminato)')
       .not('completata_il', 'is', null)
       .gte('completata_il', dal || '2000-01-01'),
     sb.from('ordini')
@@ -3154,8 +3154,15 @@ async function loadKpi() {
   // il tempo reale per ordine è diviso per N (lavoro in parallelo ottimizzato)
   const faseTempo = {};
   fasi.forEach(f => {
-    if (!f.fase_id || !f.iniziata_il || !f.completata_il) return;
-    const hTotale = calcolaOreEffettive(f.iniziata_il, f.completata_il);
+    if (!f.fase_id) return;
+    let hTotale;
+    if (f.tempo_accumulato_minuti > 0) {
+      // Usa il tempo accumulato reale (somma di tutte le sessioni)
+      hTotale = f.tempo_accumulato_minuti / 60;
+    } else if (f.iniziata_il && f.completata_il) {
+      // Fallback per fasi completate prima dell'introduzione del campo
+      hTotale = calcolaOreEffettive(f.iniziata_il, f.completata_il);
+    } else return;
     if (hTotale <= 0 || hTotale > 500) return;
     // Conta quante fasi dello stesso tipo aveva in_corso lo stesso operatore in contemporanea
     const parallele = fasi.filter(g =>
