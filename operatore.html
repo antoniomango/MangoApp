@@ -1579,43 +1579,46 @@ const ONESIGNAL_APP_ID = 'f1b7b981-355e-46c2-a476-224e3d06d82b';
 async function richiediPermessoNotifiche() {
   if (!window.OneSignal) return;
   try {
-    const permission = OneSignal.Notifications.permission;
-    if (!permission) {
+    if (!OneSignal.Notifications.permission) {
       await OneSignal.Notifications.requestPermission();
     }
-    // Dopo consenso, salva l'ID
-    await salvaOneSignalId();
-  } catch(e) { console.warn('Permission request:', e); }
+    await _salvaOnesignalId();
+  } catch(e) { console.warn('Permission:', e); }
 }
 
 async function initOneSignal() {
   try {
     window.OneSignalDeferred = window.OneSignalDeferred || [];
-    await new Promise(resolve => {
-      window.OneSignalDeferred.push(async function(OS) {
-        await OS.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/sw.js' });
-        resolve(OS);
+    window.OneSignalDeferred.push(async function(OS) {
+      await OS.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/sw.js' });
+      // Ascolta cambiamenti subscription e salva l'ID automaticamente
+      OS.User.PushSubscription.addEventListener('change', async () => {
+        await _salvaOnesignalId();
       });
     });
-    await salvaOneSignalId();
   } catch(e) { console.warn('OneSignal init:', e); }
 }
 
-async function salvaOneSignalId() {
+async function _salvaOnesignalId() {
   try {
     if (!window.OneSignal || !currentUser) return;
+    // Collega l'utente Supabase a OneSignal
     await OneSignal.login(currentUser.id);
-    // Aspetta che l'ID sia disponibile
-    let subId = OneSignal.User.PushSubscription.id;
-    if (!subId) {
-      await new Promise(r => setTimeout(r, 1500));
+    // Aspetta fino a 5 secondi che l'ID sia disponibile
+    let subId = null;
+    for (let i = 0; i < 10; i++) {
       subId = OneSignal.User.PushSubscription.id;
+      if (subId) break;
+      await new Promise(r => setTimeout(r, 500));
     }
     if (subId) {
-      await sb.from('users').update({ onesignal_id: subId }).eq('id', currentUser.id);
-      console.log('OneSignal ID salvato:', subId);
+      const { error } = await sb.from('users').update({ onesignal_id: subId }).eq('id', currentUser.id);
+      if (!error) console.log('OneSignal ID salvato:', subId);
+      else console.warn('Errore salvataggio OneSignal ID:', error);
+    } else {
+      console.warn('OneSignal subscription ID non disponibile');
     }
-  } catch(e) { console.warn('salvaOneSignalId:', e); }
+  } catch(e) { console.warn('_salvaOnesignalId:', e); }
 }
 
 async function inviaNotificaPush(destinatarioId, titolo, messaggio) {
