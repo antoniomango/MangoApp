@@ -1580,23 +1580,42 @@ async function richiediPermessoNotifiche() {
   if (!window.OneSignal) return;
   try {
     const permission = OneSignal.Notifications.permission;
-    if (!permission) await OneSignal.Notifications.requestPermission();
+    if (!permission) {
+      await OneSignal.Notifications.requestPermission();
+    }
+    // Dopo consenso, salva l'ID
+    await salvaOneSignalId();
   } catch(e) { console.warn('Permission request:', e); }
 }
 
 async function initOneSignal() {
-  if (!window.OneSignalDeferred) return;
-  window.OneSignalDeferred = window.OneSignalDeferred || [];
-  window.OneSignalDeferred.push(async function(OneSignal) {
-    try {
-      await OneSignal.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/OneSignalSDKWorker.js' });
-      const permission = await OneSignal.Notifications.permission;
-      if (!permission) await OneSignal.Notifications.requestPermission();
-      await OneSignal.login(currentUser.id);
-      const subId = OneSignal.User.PushSubscription.id;
-      if (subId) await sb.from('users').update({ onesignal_id: subId }).eq('id', currentUser.id);
-    } catch(e) { console.warn('OneSignal init:', e); }
-  });
+  try {
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    await new Promise(resolve => {
+      window.OneSignalDeferred.push(async function(OS) {
+        await OS.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/OneSignalSDKWorker.js' });
+        resolve(OS);
+      });
+    });
+    await salvaOneSignalId();
+  } catch(e) { console.warn('OneSignal init:', e); }
+}
+
+async function salvaOneSignalId() {
+  try {
+    if (!window.OneSignal || !currentUser) return;
+    await OneSignal.login(currentUser.id);
+    // Aspetta che l'ID sia disponibile
+    let subId = OneSignal.User.PushSubscription.id;
+    if (!subId) {
+      await new Promise(r => setTimeout(r, 1500));
+      subId = OneSignal.User.PushSubscription.id;
+    }
+    if (subId) {
+      await sb.from('users').update({ onesignal_id: subId }).eq('id', currentUser.id);
+      console.log('OneSignal ID salvato:', subId);
+    }
+  } catch(e) { console.warn('salvaOneSignalId:', e); }
 }
 
 async function inviaNotificaPush(destinatarioId, titolo, messaggio) {
