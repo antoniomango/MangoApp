@@ -312,10 +312,13 @@ tr:hover td { background: var(--phase-bg); }
 /* ── SPINNER ── */
 .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-@keyframes blink-warn { 0%,100% { border-left-color: #F59E0B; } 50% { border-left-color: transparent; } }
+@keyframes blink-warn   { 0%,100% { border-left-color: #F59E0B; } 50% { border-left-color: transparent; } }
 @keyframes blink-danger { 0%,100% { border-left-color: #EF4444; } 50% { border-left-color: transparent; } }
+.scad-ok      { border-left: 4px solid #16A34A !important; }
 .scad-warning { border-left: 4px solid #F59E0B !important; animation: blink-warn 1.5s ease-in-out infinite; }
 .scad-danger  { border-left: 4px solid #EF4444 !important; animation: blink-danger 1.2s ease-in-out infinite; }
+.legenda-scad { display:flex; gap:16px; flex-wrap:wrap; padding:10px 16px; background:var(--surface); border:1px solid var(--border); border-radius:10px; margin-bottom:12px; font-size:12px; color:var(--muted); }
+.legenda-scad span { display:flex; align-items:center; gap:6px; }
 
 .empty-state { text-align: center; padding: 48px 20px; color: var(--muted); }
 .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
@@ -446,6 +449,11 @@ tr:hover td { background: var(--phase-bg); }
             <option value="portoncino">Portoncino</option>
             <option value="battente">Battente</option>
           </select>
+        </div>
+        <div class="legenda-scad">
+          <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#EF4444"></span>In ritardo</span>
+          <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#F59E0B"></span>Entro 3 giorni</span>
+          <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#16A34A"></span>Entro 7 giorni</span>
         </div>
         <div class="card">
           <table>
@@ -2843,7 +2851,8 @@ function scadenzaClass(scadenza) {
   const oggi = new Date(); oggi.setHours(0,0,0,0);
   const diff = Math.floor((new Date(scadenza) - oggi) / 86400000);
   if (diff < 0) return 'scad-danger';
-  if (diff < 3) return 'scad-warning';
+  if (diff <= 3) return 'scad-warning';
+  if (diff <= 7) return 'scad-ok';
   return '';
 }
 function formatDate(d) {
