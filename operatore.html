@@ -280,6 +280,7 @@ textarea:focus { border-color: var(--wood); }
 
         <!-- In corso -->
         <div class="section-title">Le mie fasi in corso</div>
+        <div id="btn-batch-completa" style="display:none;flex-direction:column;gap:8px;margin-bottom:8px"></div>
         <div id="btn-batch-fasi" style="display:none;flex-direction:row;gap:8px;margin-bottom:8px">
           <button class="btn btn-secondary" style="flex:1;font-size:13px" onclick="pausaTutteFasi()">⏸ Pausa tutte</button>
           <button class="btn btn-primary" style="flex:1;font-size:13px" onclick="riprendiTutteFasi()">▶ Riprendi tutte</button>
@@ -782,15 +783,35 @@ async function renderHome() {
   const tutteInCorso = [
     ...mieFasi.map(f => ({
       id: f.id, ordineId: f.ordine_id, nome: f.nome_custom || f.fasi?.nome || 'Fase',
+      faseId: f.fase_id || null,
       cliente: f.ordini?.cliente || '', codice: f.ordini?.codice || '', stato: f.stato, isExtra: false
     })),
     ...mieFasiExtra.map(f => ({
       id: f.id, ordineId: f.ordine_id, nome: f.nome || 'Fase extra',
+      faseId: null,
       cliente: f.ordini?.cliente || '', codice: f.ordini?.codice || '', stato: f.stato, isExtra: true
     }))
   ];
   const batchDiv = document.getElementById('btn-batch-fasi');
   if (batchDiv) batchDiv.style.display = tutteInCorso.length > 1 ? 'flex' : 'none';
+
+  // Bottoni "Completa tutte le X" per gruppi >= 3 fasi uguali in_corso
+  const soloInCorso = tutteInCorso.filter(f => f.stato === 'in_corso');
+  const gruppi = {};
+  soloInCorso.forEach(f => {
+    const key = f.isExtra ? `extra:${f.nome}` : `std:${f.faseId}`;
+    if (!gruppi[key]) gruppi[key] = { nome: f.nome, faseId: f.faseId, isExtra: f.isExtra, count: 0 };
+    gruppi[key].count++;
+  });
+  const batchCompleta = Object.values(gruppi).filter(g => g.count >= 3);
+  const batchCompletaDiv = document.getElementById('btn-batch-completa');
+  if (batchCompletaDiv) {
+    batchCompletaDiv.style.display = batchCompleta.length ? 'flex' : 'none';
+    batchCompletaDiv.innerHTML = batchCompleta.map(g => `
+      <button class="btn btn-ok" style="flex:1;font-size:13px" onclick="completaTutteFasiUguali('${g.isExtra ? g.nome : g.faseId}', ${g.isExtra})">
+        ✓ Completa tutte le "${escapeHtml(g.nome)}" (${g.count})
+      </button>`).join('');
+  }
 
   if (!tutteInCorso.length) {
     mieEl.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>Nessuna fase in corso</p></div>';
@@ -1552,6 +1573,22 @@ async function riprendi(ordFaseId, ordineId, forza) {
   toast('Fase ripresa!', 'ok');
   await renderFaseDetail(ordFaseId, ordineId);
   await renderOrdineDetail(ordineId);
+}
+
+async function completaTutteFasiUguali(chiave, isExtra) {
+  const tipo = isExtra ? 'fasi extra' : 'fasi';
+  if (!confirm(`Segnare come completate tutte le ${tipo} "${chiave}" che hai in corso?`)) return;
+  if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
+  let data, error;
+  if (isExtra) {
+    ({ data, error } = await sb.rpc('completa_fasi_extra_batch', { p_nome: chiave, p_operatore_id: currentUser.id }));
+  } else {
+    ({ data, error } = await sb.rpc('completa_fasi_batch', { p_fase_id: parseInt(chiave), p_operatore_id: currentUser.id }));
+  }
+  if (error || !data?.ok) { toast('Errore: ' + (error?.message || ''), 'err'); return; }
+  toast(`${data.completate} fasi completate!`, 'ok');
+  await loadOrdini();
+  await renderHome();
 }
 
 async function pausaTutteFasi() {
