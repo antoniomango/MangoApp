@@ -1135,8 +1135,9 @@ async function annullaPresaInCaricoExtra(faseExtraId, ordineId) {
   const { data, error } = await sb.rpc('annulla_presa_in_carico_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id });
   if (error || !data?.ok) { toast('Errore annullamento', 'err'); return; }
   toast('Presa in carico annullata', 'ok');
-  await renderFaseExtraDetail(faseExtraId, ordineId);
-  renderHome();
+  await renderHome();
+  await renderOrdineDetail(ordineId);
+  showScreen('ordine');
 }
 
 async function completaFaseExtra(faseExtraId, ordineId) {
@@ -1484,9 +1485,9 @@ async function annullaPresaInCarico(ordFaseId, ordineId) {
     toast('Presa in carico annullata — fase tornata disponibile', 'ok');
   }
 
-  await renderFaseDetail(ordFaseId, ordineId);
+  await renderHome();
   await renderOrdineDetail(ordineId);
-  renderHome();
+  showScreen('ordine');
 }
 
 async function mettiInAttesa(ordFaseId, ordineId) {
