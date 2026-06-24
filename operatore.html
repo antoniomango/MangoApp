@@ -712,7 +712,7 @@ function showScreen(name) {
 
   else if (name === 'attivita') renderAttivita();
   else if (name === 'nc') populateNcSelects();
-  else if (name === 'notifiche') renderNotificheOp();
+  else if (name === 'notifiche') { renderNotificheOp(); segnaNotificheLetteOp(); }
 }
 
 // ═══════════════════════════════════════════════
