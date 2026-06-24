@@ -719,18 +719,29 @@ function showScreen(name) {
   else if (name === 'attivita') renderAttivita();
   else if (name === 'nc') populateNcSelects();
   else if (name === 'notifiche') {
-    // Aggiorna cache locale subito: tutte le notifiche diventano lette
+    // Nascondi badge subito e aggiorna cache locale
     if (window._notificheOp) window._notificheOp.forEach(n => n.letta = true);
     const badge = document.getElementById('notif-badge-op');
     if (badge) badge.style.display = 'none';
     renderNotificheOp();
-    // Segna come lette nel DB (retry se fallisce)
+    // Segna come lette nel DB in modo affidabile
     if (isOnline && currentUser) {
-      sb.from('notifiche').update({ letta: true }).eq('destinatario_id', currentUser.id).eq('letta', false)
-        .then(({ error }) => {
-          if (error) setTimeout(() =>
-            sb.from('notifiche').update({ letta: true }).eq('destinatario_id', currentUser.id).eq('letta', false), 2000);
-        });
+      (async () => {
+        const { error } = await sb.from('notifiche')
+          .update({ letta: true })
+          .eq('destinatario_id', currentUser.id)
+          .eq('letta', false);
+        if (error) {
+          // Ritenta dopo 3 secondi
+          await new Promise(r => setTimeout(r, 3000));
+          await sb.from('notifiche')
+            .update({ letta: true })
+            .eq('destinatario_id', currentUser.id)
+            .eq('letta', false);
+        }
+        // Salva timestamp ultimo letto in localStorage
+        localStorage.setItem('notifiche-lette-il', Date.now().toString());
+      })();
     }
   }
 }
@@ -1789,9 +1800,11 @@ async function loadNotificheOp() {
     .order('creata_il', { ascending: false }).limit(30);
   const notifiche = data || [];
   window._notificheOp = notifiche;
-  // Non mostrare badge se la schermata notifiche è aperta (già tutte viste)
+  // Non mostrare badge se schermata aperta o se abbiamo segnato come lette di recente (< 10 sec)
   const schermataAperta = document.getElementById('screen-notifiche')?.classList.contains('active');
-  const unread = schermataAperta ? 0 : notifiche.filter(n => !n.letta).length;
+  const letteIl = parseInt(localStorage.getItem('notifiche-lette-il') || '0');
+  const letteDiRecente = (Date.now() - letteIl) < 10000;
+  const unread = (schermataAperta || letteDiRecente) ? 0 : notifiche.filter(n => !n.letta).length;
   const badge = document.getElementById('notif-badge-op');
   if (badge) {
     badge.textContent = unread;
