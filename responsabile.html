@@ -2529,7 +2529,8 @@ async function scaricaEliminaFoto(ordineId, codice, cliente) {
   const url = URL.createObjectURL(zipBlob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${codice}_${cliente}_foto.zip`.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+  const dataOggi = new Date().toISOString().split('T')[0];
+  a.download = `${cliente}_${codice}_${dataOggi}.zip`.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
   a.click();
   URL.revokeObjectURL(url);
 
