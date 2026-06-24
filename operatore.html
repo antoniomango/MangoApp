@@ -1619,13 +1619,20 @@ async function _salvaOnesignalId() {
     if (!window.OneSignal || !currentUser) { _debug('Skip: no OneSignal o no user'); return; }
     _debug('Login OneSignal con id: ' + currentUser.id);
     await OneSignal.login(currentUser.id);
-    _debug('Login ok. Cerco subscription ID...');
-    let subId = null;
-    for (let i = 0; i < 10; i++) {
-      subId = OneSignal.User.PushSubscription.id;
+    _debug('Login ok. Proprietà PushSubscription:');
+    const ps = OneSignal.User.PushSubscription;
+    _debug('id=' + ps.id);
+    _debug('token=' + ps.token);
+    _debug('optedIn=' + ps.optedIn);
+    _debug('keys=' + JSON.stringify(Object.keys(ps)));
+    await new Promise(r => setTimeout(r, 2000));
+    _debug('Dopo 2s: id=' + ps.id + ' token=' + ps.token);
+    let subId = ps.id || ps.token;
+    for (let i = 0; i < 5; i++) {
+      subId = OneSignal.User.PushSubscription.id || OneSignal.User.PushSubscription.token;
       _debug(`Tentativo ${i+1}: subId=${subId}`);
       if (subId) break;
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 1000));
     }
     if (subId) {
       const { error } = await sb.from('users').update({ onesignal_id: subId }).eq('id', currentUser.id);
