@@ -1730,13 +1730,15 @@ async function loadNotificheOp() {
     .select('*').eq('destinatario_id', currentUser.id)
     .order('creata_il', { ascending: false }).limit(30);
   const notifiche = data || [];
-  const unread = notifiche.filter(n => !n.letta).length;
+  window._notificheOp = notifiche;
+  // Non mostrare badge se la schermata notifiche è aperta (già tutte viste)
+  const schermataAperta = document.getElementById('screen-notifiche')?.classList.contains('active');
+  const unread = schermataAperta ? 0 : notifiche.filter(n => !n.letta).length;
   const badge = document.getElementById('notif-badge-op');
   if (badge) {
     badge.textContent = unread;
     badge.style.display = unread > 0 ? 'block' : 'none';
   }
-  window._notificheOp = notifiche;
 }
 
 function renderNotificheOp() {
