@@ -1479,12 +1479,7 @@ async function annullaPresaInCarico(ordFaseId, ordineId) {
   });
   if (error) { toast('Errore: ' + error.message, 'err'); return; }
 
-  if (data?.rimasti > 0) {
-    toast('Hai lasciato la fase — i tuoi colleghi continuano', 'ok');
-  } else {
-    toast('Presa in carico annullata — fase tornata disponibile', 'ok');
-  }
-
+  toast('Presa in carico annullata — fase tornata disponibile', 'ok');
   await renderHome();
   await renderOrdineDetail(ordineId);
   showScreen('ordine');
