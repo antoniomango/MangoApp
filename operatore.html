@@ -761,12 +761,17 @@ async function renderHome() {
   // Carica avanzamento fasi per la lista ordini
   let fasiPerOrdine = {};
   if (isOnline && aperti.length) {
-    const { data: tutteFasi } = await sb.from('ordine_fasi')
-      .select('ordine_id, stato')
-      .in('ordine_id', aperti.map(o => o.id));
-    for (const f of tutteFasi || []) {
-      if (!fasiPerOrdine[f.ordine_id]) fasiPerOrdine[f.ordine_id] = [];
-      fasiPerOrdine[f.ordine_id].push(f);
+    const stdIds   = aperti.filter(o => o.tipo !== 'extra').map(o => o.id);
+    const extraIds = aperti.filter(o => o.tipo === 'extra').map(o => o.id);
+    const fetches = [];
+    if (stdIds.length)   fetches.push(sb.from('ordine_fasi').select('ordine_id, stato').in('ordine_id', stdIds));
+    if (extraIds.length) fetches.push(sb.from('fasi_ordine_extra').select('ordine_id, stato').in('ordine_id', extraIds));
+    const results = await Promise.all(fetches);
+    for (const { data } of results) {
+      for (const f of data || []) {
+        if (!fasiPerOrdine[f.ordine_id]) fasiPerOrdine[f.ordine_id] = [];
+        fasiPerOrdine[f.ordine_id].push(f);
+      }
     }
   }
   window._ordiniAperti = aperti;

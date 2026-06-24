@@ -1408,19 +1408,36 @@ function ordineRow(o, mini = false) {
 // Carica avanzamento fasi per tutti gli ordini visibili
 async function loadAvanzamenti(ids) {
   if (!ids.length) return;
-  const { data } = await sb.from('ordine_fasi')
-    .select('ordine_id, stato')
-    .in('ordine_id', ids);
-  if (!data) return;
-  // Group by ordine
+
+  // Separa ordini standard da extra
+  const extraIds = ids.filter(id => ordiniCache.concat(ordiniSpeditiCache).find(o => o.id === id)?.tipo === 'extra');
+  const stdIds   = ids.filter(id => !extraIds.includes(id));
+
   const map = {};
-  data.forEach(f => {
-    if (!map[f.ordine_id]) map[f.ordine_id] = { tot: 0, done: 0, inCorso: 0 };
-    if (f.stato === 'non_applicabile') return; // escludi N/A dal conteggio
-    map[f.ordine_id].tot++;
-    if (f.stato === 'completata') map[f.ordine_id].done++;
-    if (f.stato === 'in_corso') map[f.ordine_id].inCorso++;
-  });
+
+  // Ordini standard → ordine_fasi
+  if (stdIds.length) {
+    const { data } = await sb.from('ordine_fasi').select('ordine_id, stato').in('ordine_id', stdIds);
+    (data || []).forEach(f => {
+      if (!map[f.ordine_id]) map[f.ordine_id] = { tot: 0, done: 0, inCorso: 0 };
+      if (f.stato === 'non_applicabile') return;
+      map[f.ordine_id].tot++;
+      if (f.stato === 'completata') map[f.ordine_id].done++;
+      if (f.stato === 'in_corso') map[f.ordine_id].inCorso++;
+    });
+  }
+
+  // Ordini extra → fasi_ordine_extra
+  if (extraIds.length) {
+    const { data } = await sb.from('fasi_ordine_extra').select('ordine_id, stato').in('ordine_id', extraIds);
+    (data || []).forEach(f => {
+      if (!map[f.ordine_id]) map[f.ordine_id] = { tot: 0, done: 0, inCorso: 0 };
+      map[f.ordine_id].tot++;
+      if (f.stato === 'completata') map[f.ordine_id].done++;
+      if (f.stato === 'in_corso') map[f.ordine_id].inCorso++;
+    });
+  }
+
   ids.forEach(id => {
     const el = document.getElementById('prog-' + id);
     if (!el) return;
