@@ -1051,7 +1051,7 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
     bodyHtml += `
       <div class="azione-box" style="border-color:var(--border)">
         <h4>↩ Riapri fase</h4>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Hai ancora lavoro da fare? Riaprila per continuare. Il tempo già lavorato verrà conservato.</p>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Hai ancora lavoro da fare su questa fase? Riaprila per continuare.</p>
         <button class="btn btn-secondary" onclick="riapriFaseExtraOp('${faseExtraId}','${ordineId}')">↩ Riapri fase</button>
       </div>`;
   }
@@ -1315,7 +1315,7 @@ async function renderFaseDetail(ordFaseId, ordineId) {
       bodyHtml += `
         <div class="azione-box" style="border-color:var(--border);margin-top:12px">
           <h4>↩ Riapri fase</h4>
-          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Hai ancora lavoro da fare su questa fase? Riaprila per continuare. Il tempo già lavorato verrà conservato.</p>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Hai ancora lavoro da fare su questa fase? Riaprila per continuare.</p>
           <button class="btn btn-secondary" onclick="riapriFaseOp('${ordFaseId}','${ordineId}')">↩ Riapri fase</button>
         </div>`;
     }
