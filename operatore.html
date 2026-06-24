@@ -1779,7 +1779,12 @@ function toast(msg, type = '') {
 // ═══════════════════════════════════════════════
 async function start() {
   await initDB();
-  // Riprendi sessione dalla cache (online o offline)
+  if (new URLSearchParams(window.location.search).get('logout') === '1') {
+    await cacheSet('current-user', null);
+    history.replaceState({}, '', 'operatore.html');
+    loadLoginUsers();
+    return;
+  }
   const cached = await cacheGet('current-user');
   if (cached) {
     currentUser = cached;

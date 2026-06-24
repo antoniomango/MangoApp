@@ -174,7 +174,7 @@ function doLogout() {
   clearInterval(refreshTimer);
   currentUser = null;
   localStorage.removeItem('ufficio-user');
-  window.location.href = 'operatore.html';
+  window.location.href = 'operatore.html?logout=1';
 }
 
 // ── DATI ──
@@ -194,18 +194,19 @@ async function aggiornaUfficio() {
   document.getElementById('topbar-sub').textContent = `Aggiornato alle ${ora}`;
   document.getElementById('refresh-info').textContent = `Aggiornamento automatico ogni 2 minuti`;
 
-  const [{ data: ordini }, { data: ordFasi }] = await Promise.all([
-    sb.from('ordini').select('id, codice, cliente, scadenza, stato, priorita')
+  const [{ data: ordini }, { data: ordFasi }, { data: fasiExtra }] = await Promise.all([
+    sb.from('ordini').select('id, codice, cliente, scadenza, stato, priorita, tipo')
       .in('stato', ['aperto', 'attesa_spedizione', 'sospeso'])
-      .eq('eliminato', false)
+      .neq('eliminato', true)
       .order('scadenza', { ascending: true, nullsFirst: false }),
-    sb.from('ordine_fasi').select('ordine_id, fase_id, stato')
+    sb.from('ordine_fasi').select('ordine_id, fase_id, stato'),
+    sb.from('fasi_ordine_extra').select('ordine_id, stato')
   ]);
 
-  renderUfficio(ordini || [], ordFasi || []);
+  renderUfficio(ordini || [], ordFasi || [], fasiExtra || []);
 }
 
-function renderUfficio(ordini, ordFasi) {
+function renderUfficio(ordini, ordFasi, fasiExtra) {
   const el = document.getElementById('main-content');
   if (!ordini.length) {
     el.innerHTML = '<div class="empty">✓ Nessun ordine attivo in questo momento</div>';
@@ -220,17 +221,50 @@ function renderUfficio(ordini, ordFasi) {
     if (!fasiMap[f.ordine_id]) fasiMap[f.ordine_id] = [];
     fasiMap[f.ordine_id].push(f);
   });
+  const fasiExtraMap = {};
+  fasiExtra.forEach(f => {
+    if (!fasiExtraMap[f.ordine_id]) fasiExtraMap[f.ordine_id] = [];
+    fasiExtraMap[f.ordine_id].push(f);
+  });
 
   // Intestazione con data odierna
   const oggiLabel = new Date().toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
   const intestazione = `<div class="data-oggi">📅 <strong>${oggiLabel.charAt(0).toUpperCase()+oggiLabel.slice(1)}</strong><span>— ${ordini.length} ordini attivi</span></div>`;
 
   el.innerHTML = intestazione + ordini.map(o => {
-    const fasi = fasiMap[o.id] || [];
-    const appl = fasi.filter(f => f.stato !== 'non_applicabile');
-    const comp = appl.filter(f => f.stato === 'completata').length;
-    const tot  = appl.length || 1;
-    const pct  = Math.round(comp / tot * 100);
+    const isExtra = o.tipo === 'extra';
+
+    let pct;
+    let bars;
+    if (isExtra) {
+      const fe = fasiExtraMap[o.id] || [];
+      const comp = fe.filter(f => f.stato === 'completata').length;
+      const tot  = fe.length || 1;
+      pct = Math.round(comp / tot * 100);
+      bars = fe.length
+        ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">${comp}/${fe.length} fasi completate</div>`
+        : '<div style="font-size:12px;color:var(--muted)">Nessuna fase inserita</div>';
+    } else {
+      const fasi = fasiMap[o.id] || [];
+      const appl = fasi.filter(f => f.stato !== 'non_applicabile');
+      const comp = appl.filter(f => f.stato === 'completata').length;
+      const tot  = appl.length || 1;
+      pct = Math.round(comp / tot * 100);
+      bars = macroFasi.length ? macroFasi.map(m => {
+        const mAppl = appl.filter(f => f.fase_id && m.fasi.has(f.fase_id));
+        if (!mAppl.length) return '';
+        const mComp = mAppl.filter(f => f.stato === 'completata').length;
+        const mPct  = Math.round(mComp / mAppl.length * 100);
+        return `
+          <div class="macro-row">
+            <div class="macro-lbl">
+              <span style="color:${m.colore}">${esc(m.nome)}</span>
+              <span class="macro-lbl-pct">${mComp}/${mAppl.length} fasi — ${mPct}%</span>
+            </div>
+            <div class="macro-track"><div class="macro-fill" style="width:${mPct}%;background:${m.colore}"></div></div>
+          </div>`;
+      }).join('') : '<div style="font-size:12px;color:var(--muted)">Nessun gruppo macro configurato</div>';
+    }
 
     const isAttesa  = o.stato === 'attesa_spedizione';
     const isSosp    = o.stato === 'sospeso';
@@ -246,28 +280,14 @@ function renderUfficio(ordini, ordFasi) {
       ? `<span class="scad ${inRitardo ? 'late' : ''}">Consegna richiesta: <strong>${formatData(o.scadenza)}</strong>${inRitardo ? ' ⚠ In ritardo' : ''}</span>`
       : `<span class="scad">Nessuna data di consegna</span>`;
 
-    // Barre macro
-    const bars = macroFasi.length ? macroFasi.map(m => {
-      const mAppl = appl.filter(f => f.fase_id && m.fasi.has(f.fase_id));
-      if (!mAppl.length) return '';
-      const mComp = mAppl.filter(f => f.stato === 'completata').length;
-      const mPct  = Math.round(mComp / mAppl.length * 100);
-      return `
-        <div class="macro-row">
-          <div class="macro-lbl">
-            <span style="color:${m.colore}">${esc(m.nome)}</span>
-            <span class="macro-lbl-pct">${mComp}/${mAppl.length} fasi — ${mPct}%</span>
-          </div>
-          <div class="macro-track"><div class="macro-fill" style="width:${mPct}%;background:${m.colore}"></div></div>
-        </div>`;
-    }).join('') : '<div style="font-size:12px;color:var(--muted)">Nessun gruppo macro configurato</div>';
+    const extraLabel = isExtra ? `<span style="font-size:11px;color:#F97316;font-weight:600">Ordine Extra</span> ` : '';
 
     return `
       <div class="ord-card ${isAttesa ? 'attesa' : inRitardo ? 'ritardo' : ''}">
         <div class="ord-hdr">
           <div>
             <div class="ord-cliente">${esc(o.cliente)}</div>
-            <div class="ord-codice">${esc(o.codice || '')}</div>
+            <div class="ord-codice">${extraLabel}${esc(o.codice || '')}</div>
           </div>
           <div class="ord-pct ${pct===100 ? 'done' : ''}">${pct}%</div>
         </div>
