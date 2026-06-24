@@ -279,6 +279,10 @@ textarea:focus { border-color: var(--wood); }
 
         <!-- In corso -->
         <div class="section-title">Le mie fasi in corso</div>
+        <div id="btn-batch-fasi" style="display:none;flex-direction:row;gap:8px;margin-bottom:8px">
+          <button class="btn btn-secondary" style="flex:1;font-size:13px" onclick="pausaTutteFasi()">⏸ Pausa tutte</button>
+          <button class="btn btn-primary" style="flex:1;font-size:13px" onclick="riprendiTutteFasi()">▶ Riprendi tutte</button>
+        </div>
         <div class="card" id="mie-fasi-card">
           <div class="empty-state"><div class="icon">✅</div><p>Nessuna fase in corso</p></div>
         </div>
@@ -765,6 +769,9 @@ async function renderHome() {
       cliente: f.ordini?.cliente || '', codice: f.ordini?.codice || '', stato: f.stato, isExtra: true
     }))
   ];
+  const batchDiv = document.getElementById('btn-batch-fasi');
+  if (batchDiv) batchDiv.style.display = tutteInCorso.length > 1 ? 'flex' : 'none';
+
   if (!tutteInCorso.length) {
     mieEl.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>Nessuna fase in corso</p></div>';
   } else {
@@ -1525,6 +1532,22 @@ async function riprendi(ordFaseId, ordineId, forza) {
   toast('Fase ripresa!', 'ok');
   await renderFaseDetail(ordFaseId, ordineId);
   await renderOrdineDetail(ordineId);
+}
+
+async function pausaTutteFasi() {
+  if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
+  const { data, error } = await sb.rpc('pausa_tutte_fasi', { p_operatore_id: currentUser.id });
+  if (error || !data?.ok) { toast('Errore', 'err'); return; }
+  toast('Tutte le fasi messe in pausa', 'ok');
+  await renderHome();
+}
+
+async function riprendiTutteFasi() {
+  if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
+  const { data, error } = await sb.rpc('riprendi_tutte_fasi', { p_operatore_id: currentUser.id });
+  if (error || !data?.ok) { toast('Errore', 'err'); return; }
+  toast('Tutte le fasi riprese', 'ok');
+  await renderHome();
 }
 
 async function segnaSpedito(ordineId) {
