@@ -681,6 +681,10 @@ function setupRealtime() {
       if (currentOrdineId) await renderOrdineDetail(currentOrdineId);
       renderHome();
     })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'fasi_ordine_extra' }, async () => {
+      if (currentOrdineId) await renderOrdineDetail(currentOrdineId);
+      renderHome();
+    })
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifiche',
       filter: `destinatario_id=eq.${currentUser.id}` }, async () => {
       await loadNotificheOp();
@@ -710,40 +714,54 @@ function showScreen(name) {
 // HOME
 // ═══════════════════════════════════════════════
 async function renderHome() {
-  // Mie fasi in corso (come operatore principale O aggiunto tramite junction)
+  // Mie fasi in corso — ordini standard (ordine_fasi) + ordini extra (fasi_ordine_extra)
   let mieFasi = [];
+  let mieFasiExtra = [];
   if (isOnline) {
-    const [{ data: primarie }, { data: junction }] = await Promise.all([
+    const [{ data: primarie }, { data: junction }, { data: extraInCorso }] = await Promise.all([
       sb.from('ordine_fasi')
         .select('*, ordini(codice, cliente, stato), fasi(nome)')
         .eq('operatore_id', currentUser.id)
         .in('stato', ['in_corso', 'in_attesa']),
       sb.from('ordine_fasi_operatori')
         .select('ordine_fase_id, ordine_fasi(*, ordini(codice, cliente, stato), fasi(nome))')
+        .eq('operatore_id', currentUser.id),
+      sb.from('fasi_ordine_extra')
+        .select('*, ordini(codice, cliente, stato)')
         .eq('operatore_id', currentUser.id)
+        .in('stato', ['in_corso', 'in_attesa'])
     ]);
     const ids = new Set((primarie || []).map(f => f.id));
     const daJunction = (junction || [])
       .map(j => j.ordine_fasi)
       .filter(f => f && !ids.has(f.id) && ['in_corso', 'in_attesa'].includes(f.stato));
     mieFasi = [...(primarie || []), ...daJunction];
+    mieFasiExtra = extraInCorso || [];
   }
 
   const mieEl = document.getElementById('mie-fasi-card');
-  if (!mieFasi.length) {
+  const tutteInCorso = [
+    ...mieFasi.map(f => ({
+      id: f.id, ordineId: f.ordine_id, nome: f.nome_custom || f.fasi?.nome || 'Fase',
+      cliente: f.ordini?.cliente || '', codice: f.ordini?.codice || '', stato: f.stato, isExtra: false
+    })),
+    ...mieFasiExtra.map(f => ({
+      id: f.id, ordineId: f.ordine_id, nome: f.nome || 'Fase extra',
+      cliente: f.ordini?.cliente || '', codice: f.ordini?.codice || '', stato: f.stato, isExtra: true
+    }))
+  ];
+  if (!tutteInCorso.length) {
     mieEl.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>Nessuna fase in corso</p></div>';
   } else {
-    mieEl.innerHTML = mieFasi.map(f => {
-      const nomeFase = f.nome_custom || f.fasi?.nome || 'Fase';
-      return `
-      <div class="card-row" onclick="openFaseDetail('${f.id}', '${f.ordine_id}')">
+    mieEl.innerHTML = tutteInCorso.map(f => `
+      <div class="card-row" onclick="${f.isExtra ? `openFaseExtraDetail('${f.id}','${f.ordineId}')` : `openFaseDetail('${f.id}','${f.ordineId}')`}">
         <div class="row-main">
-          <div class="row-title">${escapeHtml(nomeFase)}</div>
-          <div class="row-sub">${escapeHtml(f.ordini?.cliente || '')} · ${escapeHtml(f.ordini?.codice || '')}</div>
+          <div class="row-title">${escapeHtml(f.nome)}</div>
+          <div class="row-sub">${escapeHtml(f.cliente)} · ${escapeHtml(f.codice)}${f.isExtra ? ' · <em>Ordine Extra</em>' : ''}</div>
         </div>
         <span class="badge badge-${f.stato}">${f.stato === 'in_attesa' ? 'In attesa' : 'In corso'}</span>
         <span class="arrow">›</span>
-      </div>`}).join('');
+      </div>`).join('');
   }
 
   // Ordini disponibili (aperto + attesa_spedizione visibili in lista)
