@@ -378,6 +378,9 @@ textarea:focus { border-color: var(--wood); }
           <div class="page-title" style="margin-bottom:0">Notifiche</div>
           <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px" onclick="segnaNotificheLetteOp()">Segna tutte lette</button>
         </div>
+        <div id="onesignal-debug" style="background:#1a1a1a;border-radius:8px;padding:10px;margin-bottom:12px;font-size:11px;color:#aaa;font-family:monospace">
+          Caricamento debug...
+        </div>
         <div id="notif-list-op">
           <div class="empty-state"><div class="icon">🔔</div><p>Caricamento…</p></div>
         </div>
@@ -1576,14 +1579,26 @@ const ONESIGNAL_APP_ID = 'f1b7b981-355e-46c2-a476-224e3d06d82b';
 // REST API Key: non condividere, non committare in repo pubblici
 // REST key gestita da Supabase Edge Function (non nel codice client)
 
+function _debug(msg) {
+  const el = document.getElementById('onesignal-debug');
+  if (el) el.innerHTML += '<br>' + msg;
+  console.log('[OneSignal]', msg);
+}
+
 async function richiediPermessoNotifiche() {
+  const el = document.getElementById('onesignal-debug');
+  if (el) el.innerHTML = '';
+  _debug('OneSignal disponibile: ' + !!window.OneSignal);
   if (!window.OneSignal) return;
   try {
+    _debug('Permission attuale: ' + OneSignal.Notifications.permission);
     if (!OneSignal.Notifications.permission) {
+      _debug('Richiedo permesso...');
       await OneSignal.Notifications.requestPermission();
+      _debug('Permission dopo richiesta: ' + OneSignal.Notifications.permission);
     }
     await _salvaOnesignalId();
-  } catch(e) { console.warn('Permission:', e); }
+  } catch(e) { _debug('ERRORE: ' + e.message); }
 }
 
 async function initOneSignal() {
@@ -1601,24 +1616,24 @@ async function initOneSignal() {
 
 async function _salvaOnesignalId() {
   try {
-    if (!window.OneSignal || !currentUser) return;
-    // Collega l'utente Supabase a OneSignal
+    if (!window.OneSignal || !currentUser) { _debug('Skip: no OneSignal o no user'); return; }
+    _debug('Login OneSignal con id: ' + currentUser.id);
     await OneSignal.login(currentUser.id);
-    // Aspetta fino a 5 secondi che l'ID sia disponibile
+    _debug('Login ok. Cerco subscription ID...');
     let subId = null;
     for (let i = 0; i < 10; i++) {
       subId = OneSignal.User.PushSubscription.id;
+      _debug(`Tentativo ${i+1}: subId=${subId}`);
       if (subId) break;
       await new Promise(r => setTimeout(r, 500));
     }
     if (subId) {
       const { error } = await sb.from('users').update({ onesignal_id: subId }).eq('id', currentUser.id);
-      if (!error) console.log('OneSignal ID salvato:', subId);
-      else console.warn('Errore salvataggio OneSignal ID:', error);
+      _debug(error ? 'ERRORE DB: ' + error.message : 'ID salvato nel DB!');
     } else {
-      console.warn('OneSignal subscription ID non disponibile');
+      _debug('ERRORE: subscription ID mai disponibile');
     }
-  } catch(e) { console.warn('_salvaOnesignalId:', e); }
+  } catch(e) { _debug('ECCEZIONE: ' + e.message); }
 }
 
 async function inviaNotificaPush(destinatarioId, titolo, messaggio) {
