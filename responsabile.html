@@ -1503,9 +1503,11 @@ async function renderDettaglioOrdine(id) {
   document.getElementById('det-info').innerHTML = `
     <div class="detail-field"><label>Cliente</label><span>${escapeHtml(ordine.cliente)}</span></div>
     <div class="detail-field"><label>N° Ordine</label><span style="font-family:'DM Mono',monospace">${escapeHtml(ordine.codice||'—')}</span></div>
-    <div class="detail-field"><label>Struttura</label><span>${strutturaLabel(ordine.struttura)}</span></div>
+    ${ordine.tipo === 'extra'
+      ? `<div class="detail-field"><label>Tipo</label><span style="color:#F97316;font-weight:600">Ordine Extra</span></div>`
+      : `<div class="detail-field"><label>Struttura</label><span>${strutturaLabel(ordine.struttura)}</span></div>
     <div class="detail-field"><label>Tipo Prodotto</label><span>${tipoProdLabel(ordine.tipo_prodotto)}</span></div>
-    <div class="detail-field"><label>Materiale</label><span>${escapeHtml(ordine.materiale || '—')}</span></div>
+    <div class="detail-field"><label>Materiale</label><span>${escapeHtml(ordine.materiale || '—')}</span></div>`}
     <div class="detail-field"><label>Priorità</label><span class="badge badge-${ordine.priorita}">${prioLabel(ordine.priorita)}</span></div>
     <div class="detail-field"><label>Stato</label><span class="badge badge-${ordine.stato}">${statoLabel(ordine.stato)}</span></div>
     <div class="detail-field"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}${isLate ? ' ⚠️ In ritardo' : ''}</span></div>
