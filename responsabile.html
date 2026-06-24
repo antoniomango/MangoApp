@@ -2948,8 +2948,15 @@ async function initOneSignalResp() {
 
 async function inviaNotificaPush(destinatarioId, titolo, messaggio) {
   try {
-    await sb.functions.invoke('send-push', { body: { destinatario_id: destinatarioId, messaggio } });
-  } catch(e) { console.warn('Push:', e); }
+    const session = await sb.auth.getSession();
+    const token = session?.data?.session?.access_token || SUPABASE_ANON;
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/send-push`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ destinatario_id: destinatarioId, messaggio })
+    });
+    if (!res.ok) console.warn('Push response:', res.status, await res.text());
+  } catch(e) { console.warn('Push errore:', e); }
 }
 
 async function inviaNotificaATutti(tipo, testo, ordineId = null) {
