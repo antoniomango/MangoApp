@@ -1603,7 +1603,7 @@ async function initOneSignal() {
   try {
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.OneSignalDeferred.push(async function(OS) {
-      await OS.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/sw.js' });
+      await OS.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/OneSignalSDKWorker.js', serviceWorkerParam: { scope: '/MangoApp/' } });
       // Ascolta quando arriva l'ID dalla subscription (può richiedere secondi)
       OS.User.PushSubscription.addEventListener('change', async (event) => {
         const subId = event.current?.id;
