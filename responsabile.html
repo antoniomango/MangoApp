@@ -745,10 +745,14 @@ tr:hover td { background: var(--phase-bg); }
               <input type="checkbox" id="or-sabato" onchange="toggleOrarioSabato(this)">
               Sabato lavorativo
             </label>
-            <div id="or-sabato-ore-row" style="display:none">
+            <div id="or-sabato-ore-row" style="display:none;grid-template-columns:1fr 1fr;gap:10px">
               <div class="form-group" style="margin:0">
                 <label>Ore lavorate</label>
                 <input type="number" id="or-ore-sabato" min="1" max="12" step="0.5" value="4" oninput="aggiornaRiepilogoOrario()">
+              </div>
+              <div class="form-group" style="margin:0">
+                <label>Fine turno sabato</label>
+                <input type="time" id="or-fine-sabato" value="13:00" oninput="aggiornaRiepilogoOrario()">
               </div>
             </div>
           </div>
@@ -2297,7 +2301,8 @@ function renderOrarioConfig() {
   document.getElementById('or-pausa-hint').style.display = pausa ? '' : 'none';
   document.getElementById('or-sabato').checked = orarioConfig.sabato_lavorativo;
   document.getElementById('or-ore-sabato').value = orarioConfig.ore_sabato || 4;
-  document.getElementById('or-sabato-ore-row').style.display = orarioConfig.sabato_lavorativo ? '' : 'none';
+  document.getElementById('or-fine-sabato').value = orarioConfig.ora_fine_sabato?.slice(0,5) || '13:00';
+  document.getElementById('or-sabato-ore-row').style.display = orarioConfig.sabato_lavorativo ? 'grid' : 'none';
   document.getElementById('or-domenica').checked = orarioConfig.domenica_lavorativa;
   document.getElementById('or-ore-domenica').value = orarioConfig.ore_domenica || 4;
   document.getElementById('or-domenica-ore-row').style.display = orarioConfig.domenica_lavorativa ? '' : 'none';
@@ -2312,7 +2317,7 @@ function toggleOrarioPausa(cb) {
   aggiornaRiepilogoOrario();
 }
 function toggleOrarioSabato(cb) {
-  document.getElementById('or-sabato-ore-row').style.display = cb.checked ? '' : 'none';
+  document.getElementById('or-sabato-ore-row').style.display = cb.checked ? 'grid' : 'none';
   aggiornaRiepilogoOrario();
 }
 function toggleOrarioDomenica(cb) {
@@ -2332,6 +2337,7 @@ async function salvaOrario() {
     pausa_minuti: parseInt(document.getElementById('or-minuti-pausa').value) || 60,
     sabato_lavorativo: document.getElementById('or-sabato').checked,
     ore_sabato: parseFloat(document.getElementById('or-ore-sabato').value) || 4,
+    ora_fine_sabato: document.getElementById('or-fine-sabato').value || '13:00',
     domenica_lavorativa: document.getElementById('or-domenica').checked,
     ore_domenica: parseFloat(document.getElementById('or-ore-domenica').value) || 0,
     straordinario_attivo: document.getElementById('or-straordinario').checked,
