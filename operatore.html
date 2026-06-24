@@ -712,7 +712,16 @@ function showScreen(name) {
 
   else if (name === 'attivita') renderAttivita();
   else if (name === 'nc') populateNcSelects();
-  else if (name === 'notifiche') { renderNotificheOp(); segnaNotificheLetteOp(); }
+  else if (name === 'notifiche') {
+    // Nascondi badge subito, poi segna come lette in background
+    const badge = document.getElementById('notif-badge-op');
+    if (badge) badge.style.display = 'none';
+    renderNotificheOp();
+    if (isOnline && currentUser) {
+      sb.from('notifiche').update({ letta: true }).eq('destinatario_id', currentUser.id).eq('letta', false)
+        .then(() => loadNotificheOp());
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════
