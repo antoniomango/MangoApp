@@ -1606,9 +1606,14 @@ async function initOneSignal() {
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.OneSignalDeferred.push(async function(OS) {
       await OS.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/sw.js' });
-      // Ascolta cambiamenti subscription e salva l'ID automaticamente
-      OS.User.PushSubscription.addEventListener('change', async () => {
-        await _salvaOnesignalId();
+      // Ascolta quando arriva l'ID dalla subscription (può richiedere secondi)
+      OS.User.PushSubscription.addEventListener('change', async (event) => {
+        const subId = event.current?.id;
+        _debug('Subscription change event - id: ' + subId);
+        if (subId && currentUser) {
+          const { data, error } = await sb.rpc('salva_onesignal_id', { p_user_id: currentUser.id, p_onesignal_id: subId });
+          _debug(error ? 'ERRORE: ' + error.message : 'Salvato via event: ' + JSON.stringify(data));
+        }
       });
     });
   } catch(e) { console.warn('OneSignal init:', e); }
