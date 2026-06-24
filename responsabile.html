@@ -2936,7 +2936,7 @@ async function initOneSignalResp() {
   window.OneSignalDeferred = window.OneSignalDeferred || [];
   window.OneSignalDeferred.push(async function(OneSignal) {
     try {
-      await OneSignal.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/OneSignalSDKWorker.js' });
+      await OneSignal.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/sw.js' });
       const permission = await OneSignal.Notifications.permission;
       if (!permission) await OneSignal.Notifications.requestPermission();
       await OneSignal.login(currentUserRow.id);
