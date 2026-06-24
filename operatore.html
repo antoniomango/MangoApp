@@ -1047,6 +1047,13 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
         <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Puoi affiancare ${escapeHtml(altriNomi || 'il collega')} senza togliergli la fase.</p>
         <button class="btn btn-primary" onclick="uniscitiAFaseExtra('${faseExtraId}','${ordineId}')">+ Unisciti</button>
       </div>`;
+  } else if (f.stato === 'completata' && !sospeso) {
+    bodyHtml += `
+      <div class="azione-box" style="border-color:var(--border)">
+        <h4>↩ Riapri fase</h4>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Hai ancora lavoro da fare? Riaprila per continuare. Il tempo già lavorato verrà conservato.</p>
+        <button class="btn btn-secondary" onclick="riapriFaseExtraOp('${faseExtraId}','${ordineId}')">↩ Riapri fase</button>
+      </div>`;
   }
 
   document.getElementById('fase-det-body').innerHTML = bodyHtml;
@@ -1085,6 +1092,32 @@ async function rimuoviCollegaExtra(faseExtraId, ordineId, opId, opNome) {
   await sb.from('fasi_extra_operatori').delete().eq('fasi_ordine_extra_id', faseExtraId).eq('operatore_id', opId);
   toast(`${opNome} rimosso`, 'ok');
   await renderFaseExtraDetail(faseExtraId, ordineId);
+}
+
+async function riapriFaseOp(ordFaseId, ordineId) {
+  if (!confirm('Sei sicuro di voler riaprire questa fase?')) return;
+  if (!confirm('Conferma: la fase tornerà disponibile e dovrai riprenderla in carico. Il tempo già lavorato viene conservato.')) return;
+  const { error } = await sb.from('ordine_fasi').update({
+    stato: 'disponibile', operatore_id: null, iniziata_il: null, completata_il: null
+  }).eq('id', ordFaseId);
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  await sb.from('ordine_fasi_operatori').delete().eq('ordine_fase_id', ordFaseId);
+  toast('Fase riaperta', 'ok');
+  await renderFaseDetail(ordFaseId, ordineId);
+  renderHome();
+}
+
+async function riapriFaseExtraOp(faseExtraId, ordineId) {
+  if (!confirm('Sei sicuro di voler riaprire questa fase?')) return;
+  if (!confirm('Conferma: la fase tornerà disponibile e dovrai riprenderla in carico. Il tempo già lavorato viene conservato.')) return;
+  const { error } = await sb.from('fasi_ordine_extra').update({
+    stato: 'disponibile', operatore_id: null, iniziata_il: null, completata_il: null
+  }).eq('id', faseExtraId);
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  await sb.from('fasi_extra_operatori').delete().eq('fasi_ordine_extra_id', faseExtraId);
+  toast('Fase riaperta', 'ok');
+  await renderFaseExtraDetail(faseExtraId, ordineId);
+  renderHome();
 }
 
 async function annullaPresaInCaricoExtra(faseExtraId, ordineId) {
@@ -1278,6 +1311,14 @@ async function renderFaseDetail(ordFaseId, ordineId) {
             <button class="btn btn-ok" onclick="segnaSpedito('${ordineId}')">✓ Segna come spedito</button>
           </div>`;
       }
+    }
+    if (!sospeso) {
+      bodyHtml += `
+        <div class="azione-box" style="border-color:var(--border);margin-top:12px">
+          <h4>↩ Riapri fase</h4>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Hai ancora lavoro da fare su questa fase? Riaprila per continuare. Il tempo già lavorato verrà conservato.</p>
+          <button class="btn btn-secondary" onclick="riapriFaseOp('${ordFaseId}','${ordineId}')">↩ Riapri fase</button>
+        </div>`;
     }
   }
 
