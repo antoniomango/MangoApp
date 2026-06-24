@@ -2530,7 +2530,7 @@ function renderArchivioTable() {
   tbody.innerHTML = filtered.map(o => `
     <tr class="clickable" onclick="openDettaglioOrdine('${o.id}')">
       <td><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div></td>
-      <td>${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}</td>
+      <td>${o.tipo === 'extra' ? '<span style="color:#F97316;font-weight:600">Ordine Extra</span>' : `${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}`}</td>
       <td><span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span></td>
       <td>${formatDate(o.creato_il)}</td>
       <td>${o.spedito_il ? formatDate(o.spedito_il) : '—'}</td>
@@ -3295,6 +3295,7 @@ function openModificaOrdine(id) {
   document.getElementById('mod-scadenza').value = ordine.scadenza || '';
   document.getElementById('mod-note').value = ordine.note_generali || '';
   document.getElementById('modal-modifica').dataset.ordineId = id;
+  document.getElementById('modal-modifica').dataset.isExtra = isExtra ? 'true' : 'false';
   document.getElementById('modal-modifica').dataset.tipoProdOld = ordine.tipo_prodotto || 'portoncino';
   document.getElementById('modal-modifica').dataset.strutturaOld = ordine.struttura || 'quattro_lati';
   document.getElementById('modal-modifica').dataset.materialeOld = ordine.materiale || 'placcato';
@@ -3308,6 +3309,7 @@ async function salvaModificaOrdine() {
   if (!cliente) { toast('Inserisci il nome del cliente', 'err'); return; }
   if (!codice) { toast('Inserisci il numero ordine', 'err'); return; }
 
+  const isExtra = document.getElementById('modal-modifica').dataset.isExtra === 'true';
   const nuovoTipo = document.getElementById('mod-tipo-prodotto').value;
   const nuovaStruttura = document.getElementById('mod-struttura').value;
   const nuovoMateriale = document.getElementById('mod-materiale').value;
@@ -3315,21 +3317,25 @@ async function salvaModificaOrdine() {
   const vecchiaStruttura = document.getElementById('modal-modifica').dataset.strutturaOld;
   const vecchioMateriale = document.getElementById('modal-modifica').dataset.materialeOld;
 
-  const { error } = await sb.from('ordini').update({
+  const payload = {
     cliente,
     codice,
-    tipo_prodotto: nuovoTipo,
-    struttura: nuovaStruttura,
-    materiale: nuovoMateriale,
     priorita: document.getElementById('mod-prio').value,
     quantita: parseInt(document.getElementById('mod-quantita').value) || 1,
     scadenza: document.getElementById('mod-scadenza').value || null,
     note_generali: document.getElementById('mod-note').value.trim() || null,
-  }).eq('id', id);
+  };
+  if (!isExtra) {
+    payload.tipo_prodotto = nuovoTipo;
+    payload.struttura = nuovaStruttura;
+    payload.materiale = nuovoMateriale;
+  }
+
+  const { error } = await sb.from('ordini').update(payload).eq('id', id);
   if (error) { toast('Errore: ' + error.message, 'err'); return; }
 
-  // Ricalcola fasi N/A se tipo_prodotto, struttura o materiale sono cambiati
-  if (nuovoTipo !== vecchioTipo || nuovaStruttura !== vecchiaStruttura || nuovoMateriale !== vecchioMateriale) {
+  // Ricalcola fasi N/A se tipo_prodotto, struttura o materiale sono cambiati (solo ordini standard)
+  if (!isExtra && (nuovoTipo !== vecchioTipo || nuovaStruttura !== vecchiaStruttura || nuovoMateriale !== vecchioMateriale)) {
     await ricalcolaFasiNA(id, nuovoTipo, nuovaStruttura, nuovoMateriale);
   }
 
