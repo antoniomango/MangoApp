@@ -1386,10 +1386,14 @@ async function completaFase(ordFaseId, ordineId) {
     const { data } = await sb.rpc('completa_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_note_operatore: note });
     if (!data?.ok) {
       // Fallback: aggiorna direttamente (utente nella junction table)
+      // Leggi iniziata_il per calcolare durata da sommare all'accumulato
+      const { data: faseCorr } = await sb.from('ordine_fasi').select('iniziata_il, tempo_accumulato_minuti').eq('id', ordFaseId).single();
+      const durata = faseCorr?.iniziata_il ? Math.max(0, (Date.now() - new Date(faseCorr.iniziata_il).getTime()) / 60000) : 0;
       const { error } = await sb.from('ordine_fasi').update({
         stato: 'completata',
         completata_il: new Date().toISOString(),
-        note_operatore: note || null
+        note_operatore: note || null,
+        tempo_accumulato_minuti: (faseCorr?.tempo_accumulato_minuti || 0) + durata
       }).eq('id', ordFaseId).in('stato', ['in_corso', 'in_attesa']);
       if (error) {
         if (btnCompleta) { btnCompleta.disabled = false; btnCompleta.textContent = '✓ Segna come completata'; }
