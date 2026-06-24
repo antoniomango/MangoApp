@@ -713,13 +713,14 @@ function showScreen(name) {
   else if (name === 'attivita') renderAttivita();
   else if (name === 'nc') populateNcSelects();
   else if (name === 'notifiche') {
-    // Nascondi badge subito, poi segna come lette in background
+    // Aggiorna cache locale subito: tutte le notifiche diventano lette
+    if (window._notificheOp) window._notificheOp.forEach(n => n.letta = true);
     const badge = document.getElementById('notif-badge-op');
     if (badge) badge.style.display = 'none';
     renderNotificheOp();
+    // Segna come lette nel DB in background
     if (isOnline && currentUser) {
-      sb.from('notifiche').update({ letta: true }).eq('destinatario_id', currentUser.id).eq('letta', false)
-        .then(() => loadNotificheOp());
+      sb.from('notifiche').update({ letta: true }).eq('destinatario_id', currentUser.id).eq('letta', false);
     }
   }
 }
