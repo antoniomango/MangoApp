@@ -1593,7 +1593,7 @@ async function initOneSignal() {
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     await new Promise(resolve => {
       window.OneSignalDeferred.push(async function(OS) {
-        await OS.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/OneSignalSDKWorker.js' });
+        await OS.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/sw.js' });
         resolve(OS);
       });
     });
