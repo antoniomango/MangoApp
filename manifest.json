@@ -2,7 +2,7 @@
   "name": "Mango Semilavorati",
   "short_name": "Mango",
   "description": "Gestione produzione Mango Semilavorati in Legno",
-  "start_url": "/operatore.html",
+  "start_url": "/MangoApp/operatore.html",
   "display": "standalone",
   "background_color": "#111111",
   "theme_color": "#111111",
