@@ -316,6 +316,11 @@ textarea:focus { border-color: var(--wood); }
     <div class="screen" id="screen-fase">
       <div style="padding:16px">
         <button class="back-btn" id="fase-back-btn">← Torna all'ordine</button>
+        <div id="fase-ordine-banner" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:12px">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Ordine</div>
+          <div id="fase-ordine-cliente" style="font-weight:700;font-size:15px"></div>
+          <div id="fase-ordine-codice" style="font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)"></div>
+        </div>
         <div class="page-title" id="fase-det-title"></div>
         <span class="badge" id="fase-det-badge"></span>
         <div id="fase-det-body" style="margin-top:16px"></div>
@@ -977,6 +982,14 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
   const isMia = opMulti.some(o => o.operatore_id === currentUser.id) || f.operatore_id === currentUser.id;
   const sospeso = ordine?.stato === 'sospeso';
 
+  const banner = document.getElementById('fase-ordine-banner');
+  const ordinePerBanner = ordiniCache.find(o => o.id === ordineId);
+  if (ordinePerBanner && banner) {
+    document.getElementById('fase-ordine-cliente').textContent = ordinePerBanner.cliente || '';
+    document.getElementById('fase-ordine-codice').textContent = `N° ${ordinePerBanner.codice || '—'}`;
+    banner.style.display = '';
+  }
+
   document.getElementById('fase-det-title').textContent = `${f.numero}. ${f.nome}`;
   const badgeEl = document.getElementById('fase-det-badge');
   badgeEl.className = `badge badge-${f.stato}`;
@@ -1177,6 +1190,13 @@ async function renderFaseDetail(ordFaseId, ordineId) {
 
   // isMia = sono nella junction table O sono il primary operatore_id
   const isMia = opMulti.some(o => o.operatore_id === currentUser.id) || f.operatore_id === currentUser.id;
+
+  const banner = document.getElementById('fase-ordine-banner');
+  if (ordine && banner) {
+    document.getElementById('fase-ordine-cliente').textContent = ordine.cliente || '';
+    document.getElementById('fase-ordine-codice').textContent = `N° ${ordine.codice || '—'}`;
+    banner.style.display = '';
+  }
 
   document.getElementById('fase-det-title').textContent = `${numLabel}. ${nomeFase}`;
   const badgeEl = document.getElementById('fase-det-badge');
