@@ -1070,19 +1070,6 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
         <button class="btn btn-primary" onclick="uniscitiAFaseExtra('${faseExtraId}','${ordineId}')">+ Unisciti</button>
       </div>`;
   } else if (f.stato === 'completata' && !sospeso) {
-    // Controlla se tutte le fasi extra dell'ordine sono completate
-    if (ordine?.stato === 'aperto') {
-      const { data: tutteFasi } = await sb.from('fasi_ordine_extra').select('stato').eq('ordine_id', ordineId);
-      const allDone = (tutteFasi || []).length > 0 && (tutteFasi || []).every(x => x.stato === 'completata');
-      if (allDone && currentUser.ruolo !== 'sola_lettura') {
-        bodyHtml += `
-          <div class="azione-box" style="border-color:var(--ok)">
-            <h4>📦 Pronto per la spedizione</h4>
-            <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Tutte le fasi sono completate. Segna l'ordine come spedito.</p>
-            <button class="btn btn-ok" onclick="segnaSpedito('${ordineId}')">✓ Segna come spedito</button>
-          </div>`;
-      }
-    }
     bodyHtml += `
       <div class="azione-box" style="border-color:var(--border);margin-top:12px">
         <h4>↩ Riapri fase</h4>
