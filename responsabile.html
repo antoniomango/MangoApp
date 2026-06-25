@@ -2306,7 +2306,7 @@ async function loadFaseMediaMinuti() {
     .select('fase_id, tempo_accumulato_minuti')
     .eq('stato', 'completata')
     .gt('tempo_accumulato_minuti', 0)
-    .lt('tempo_accumulato_minuti', 1440) // max 24h, filtra outlier
+    .lt('tempo_accumulato_minuti', 20000) // max ~42 giorni lavorativi, filtra outlier estremi
     .not('fase_id', 'is', null);
   if (!data) return;
   const map = {};
