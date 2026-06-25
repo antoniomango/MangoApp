@@ -1414,7 +1414,7 @@ function ordineRow(o, mini = false) {
     <td>${o.tipo === 'extra' ? '<span style="font-weight:600;color:var(--wood)">Ordine Extra</span>' : `${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}`}</td>
     <td><span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span></td>
     <td style="text-align:center;font-weight:600">${o.quantita || 1}</td>
-    <td id="scad-cell-${o.id}" style="color:${isLate ? '#EF4444' : 'inherit'};font-weight:${isLate ? '700' : 'normal'}">${scad}${isLate ? ' ⚠️' : ''}</td>
+    <td><div style="color:${isLate ? '#EF4444' : 'inherit'};font-weight:${isLate ? '700' : 'normal'}">${scad}${isLate ? ' ⚠️' : ''}</div><div id="scad-stima-${o.id}" style="font-size:10px;margin-top:2px"></div></td>
     <td><span class="badge badge-${o.stato}">${statoLabel(o.stato)}</span></td>
     <td id="prog-${o.id}" style="min-width:120px">—</td>
     <td>
@@ -1494,22 +1494,22 @@ async function loadAvanzamenti(ids) {
 
     // Rischio ritardo stimato
     const ordine = ordiniCache.find(o => o.id === id);
-    const scadCell = document.getElementById('scad-cell-' + id);
+    const stimaEl = document.getElementById('scad-stima-' + id);
     tr.classList.remove('scad-rischio');
-    if (ordine?.scadenza && s.haveMedia && s.minRimanenti > 0) {
-      const quantita = ordine.quantita || 1;
+    if (stimaEl) stimaEl.innerHTML = '';
+    if (s.haveMedia && s.minRimanenti > 0) {
+      const quantita = ordine?.quantita || 1;
       const giorniRimanenti = Math.ceil((s.minRimanenti * quantita) / minutiGiorno);
       const dataStimata = new Date();
       dataStimata.setDate(dataStimata.getDate() + giorniRimanenti);
       const dataStimataStr = dataStimata.toISOString().split('T')[0];
-      const isRischio = dataStimataStr > ordine.scadenza;
-      const parziale = s.minRimanenti > 0 && !s.haveMedia;
+      const isRischio = ordine?.scadenza && dataStimataStr > ordine.scadenza;
       if (isRischio) tr.classList.add('scad-rischio');
-      if (scadCell) {
+      if (stimaEl) {
         const stimaFmt = dataStimata.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit' });
         const color = isRischio ? '#B45309' : 'var(--muted)';
         const icon = isRischio ? '⚠️' : '🔮';
-        scadCell.innerHTML = scadCell.innerHTML + `<div style="font-size:10px;color:${color};margin-top:2px">${icon} stima: ${stimaFmt}</div>`;
+        stimaEl.innerHTML = `<span style="color:${color}">${icon} stima: ${stimaFmt}</span>`;
       }
     }
   });
@@ -2303,17 +2303,16 @@ async function loadOrarioConfig() {
 
 async function loadFaseMediaMinuti() {
   const { data } = await sb.from('ordine_fasi')
-    .select('fase_id, tempo_accumulato_minuti, ordini(quantita)')
+    .select('fase_id, tempo_accumulato_minuti')
     .eq('stato', 'completata')
     .gt('tempo_accumulato_minuti', 0)
+    .lt('tempo_accumulato_minuti', 1440) // max 24h, filtra outlier
     .not('fase_id', 'is', null);
   if (!data) return;
   const map = {};
   data.forEach(f => {
-    const q = f.ordini?.quantita || 1;
-    const minPerPezzo = f.tempo_accumulato_minuti / q;
     if (!map[f.fase_id]) map[f.fase_id] = [];
-    map[f.fase_id].push(minPerPezzo);
+    map[f.fase_id].push(f.tempo_accumulato_minuti);
   });
   faseMediaMinutiMap = {};
   Object.entries(map).forEach(([id, vals]) => {
