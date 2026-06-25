@@ -622,6 +622,7 @@ function showErr(msg) {
 // APP INIT
 // ═══════════════════════════════════════════════
 async function showApp() {
+  localStorage.setItem('app-ultima-apertura', Date.now().toString());
   document.getElementById('login-screen').style.display = 'none';
   const app = document.getElementById('app-screen');
   app.style.display = 'flex';
@@ -1909,11 +1910,10 @@ async function loadNotificheOp() {
     .order('creata_il', { ascending: false }).limit(30);
   const notifiche = data || [];
   window._notificheOp = notifiche;
-  // Non mostrare badge se schermata aperta o se abbiamo segnato come lette di recente (< 10 sec)
-  const schermataAperta = document.getElementById('screen-notifiche')?.classList.contains('active');
-  const letteIl = parseInt(localStorage.getItem('notifiche-lette-il') || '0');
-  const letteDiRecente = (Date.now() - letteIl) < 10000;
-  const unread = (schermataAperta || letteDiRecente) ? 0 : notifiche.filter(n => !n.letta).length;
+
+  // Mostra badge solo per notifiche arrivate DOPO l'ultima apertura dell'app
+  const ultimaApertura = parseInt(localStorage.getItem('app-ultima-apertura') || '0');
+  const unread = notifiche.filter(n => !n.letta && new Date(n.creata_il).getTime() > ultimaApertura).length;
   const badge = document.getElementById('notif-badge-op');
   if (badge) {
     badge.textContent = unread;
