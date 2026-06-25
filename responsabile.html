@@ -1586,10 +1586,14 @@ async function renderDettaglioOrdine(id) {
     <div class="detail-field"><label>Priorità</label><span class="badge badge-${ordine.priorita}">${prioLabel(ordine.priorita)}</span></div>
     <div class="detail-field"><label>Stato</label><span class="badge badge-${ordine.stato}">${statoLabel(ordine.stato)}</span></div>
     <div class="detail-field"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}${isLate ? ' ⚠️ In ritardo' : ''}</span></div>
+    <div class="detail-field"><label>Consegna stimata</label><span id="det-stima-consegna" style="color:var(--muted)">Calcolo…</span></div>
     <div class="detail-field"><label>Quantità</label><span>${ordine.quantita || 1}</span></div>
     <div class="detail-field"><label>Creato il</label><span>${formatDateTime(ordine.creato_il)}</span></div>
     ${ordine.note_generali ? `<div class="detail-field" style="grid-column:1/-1"><label>Note generali</label><span>${escapeHtml(ordine.note_generali)}</span></div>` : ''}
   `;
+
+  // Calcola stima consegna per questo ordine (con coda)
+  calcolaStimaSingoloOrdine(id);
 
   // Actions
   const actEl = document.getElementById('det-actions');
@@ -3080,6 +3084,70 @@ async function checkOrdiniInRitardo() {
         `Ordine in ritardo: ${o.cliente} — ${o.codice || ''} (scaduto il ${formatDate(o.scadenza)})`, o.id);
     }
   }
+}
+
+async function calcolaStimaSingoloOrdine(id) {
+  const el = document.getElementById('det-stima-consegna');
+  if (!el) return;
+  const ordine = ordiniCache.find(o => o.id === id);
+  if (!ordine) { el.textContent = '—'; return; }
+
+  // Carica fasi rimanenti di questo ordine
+  const isExtra = ordine.tipo === 'extra';
+  let minRimanenti = 0;
+  let haveMedia = false;
+  if (isExtra) {
+    const { data } = await sb.from('fasi_ordine_extra').select('stato, nome').eq('ordine_id', id);
+    (data || []).forEach(f => {
+      if (f.stato === 'completata' || f.stato === 'non_applicabile') return;
+      // Per extra non abbiamo media per nome — saltiamo
+    });
+  } else {
+    const { data } = await sb.from('ordine_fasi').select('stato, fase_id').eq('ordine_id', id);
+    (data || []).forEach(f => {
+      if (f.stato === 'completata' || f.stato === 'non_applicabile') return;
+      const media = faseMediaMinutiMap[f.fase_id];
+      if (media) {
+        minRimanenti += f.stato === 'in_corso' ? media * 0.5 : media;
+        haveMedia = true;
+      }
+    });
+  }
+
+  if (!haveMedia || minRimanenti <= 0) { el.textContent = 'Dati insufficienti'; el.style.color = 'var(--muted)'; return; }
+
+  // Calcola minuti coda: somma lavoro rimanente degli ordini con scadenza precedente
+  const minutiGiorno = (() => {
+    if (!orarioConfig) return 480;
+    const [hi, mi] = (orarioConfig.ora_inizio || '08:00').split(':').map(Number);
+    const [hf, mf] = (orarioConfig.ora_fine   || '17:00').split(':').map(Number);
+    return Math.max(60, (hf * 60 + mf) - (hi * 60 + mi));
+  })();
+
+  // Ordini con scadenza prima o uguale a questo (escludi questo)
+  const ordiniPrecedenti = ordiniCache
+    .filter(o => o.id !== id && o.stato === 'aperto' && o.scadenza && ordine.scadenza && o.scadenza <= ordine.scadenza)
+    .sort((a, b) => a.scadenza.localeCompare(b.scadenza));
+
+  let minutiCoda = 0;
+  for (const op of ordiniPrecedenti) {
+    const { data } = await sb.from('ordine_fasi').select('stato, fase_id').eq('ordine_id', op.id);
+    let minOp = 0;
+    (data || []).forEach(f => {
+      if (f.stato === 'completata' || f.stato === 'non_applicabile') return;
+      const media = faseMediaMinutiMap[f.fase_id];
+      if (media) minOp += f.stato === 'in_corso' ? media * 0.5 : media;
+    });
+    minutiCoda += minOp * (op.quantita || 1);
+  }
+
+  const quantita = ordine.quantita || 1;
+  const giorniRimanenti = Math.ceil((minutiCoda + minRimanenti * quantita) / minutiGiorno);
+  const dataStimata = addGiorniLavorativi(new Date(), giorniRimanenti);
+  const dataStimataStr = dataStimata.toISOString().split('T')[0];
+  const isRischio = ordine.scadenza && dataStimataStr > ordine.scadenza;
+  el.textContent = formatDate(dataStimataStr) + (isRischio ? ' ⚠️' : ' ✓');
+  el.style.color = isRischio ? 'var(--alert)' : 'var(--ok)';
 }
 
 function addGiorniLavorativi(dataInizio, giorni) {
