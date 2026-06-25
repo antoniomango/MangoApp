@@ -1500,8 +1500,7 @@ async function loadAvanzamenti(ids) {
     if (s.haveMedia && s.minRimanenti > 0) {
       const quantita = ordine?.quantita || 1;
       const giorniRimanenti = Math.ceil((s.minRimanenti * quantita) / minutiGiorno);
-      const dataStimata = new Date();
-      dataStimata.setDate(dataStimata.getDate() + giorniRimanenti);
+      const dataStimata = addGiorniLavorativi(new Date(), giorniRimanenti);
       const dataStimataStr = dataStimata.toISOString().split('T')[0];
       const isRischio = ordine?.scadenza && dataStimataStr > ordine.scadenza;
       if (isRischio) tr.classList.add('scad-rischio');
@@ -3067,6 +3066,20 @@ async function checkOrdiniInRitardo() {
         `Ordine in ritardo: ${o.cliente} — ${o.codice || ''} (scaduto il ${formatDate(o.scadenza)})`, o.id);
     }
   }
+}
+
+function addGiorniLavorativi(dataInizio, giorni) {
+  const d = new Date(dataInizio);
+  if (giorni <= 0) return d;
+  let aggiunti = 0;
+  while (aggiunti < giorni) {
+    d.setDate(d.getDate() + 1);
+    const dow = d.getDay();
+    if (dow === 0) continue; // domenica sempre esclusa
+    if (dow === 6 && !orarioConfig?.sabato_lavorativo) continue; // sabato se non lavorativo
+    aggiunti++;
+  }
+  return d;
 }
 
 function scadenzaClass(scadenza) {
