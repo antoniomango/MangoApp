@@ -3158,7 +3158,7 @@ async function loadKpi() {
     { data: fasiCfg }
   ] = await Promise.all([
     sb.from('ordine_fasi')
-      .select('id, ordine_id, fase_id, operatore_id, iniziata_il, completata_il, tempo_accumulato_minuti, ordini(codice, cliente, struttura, tipo_prodotto, priorita, scadenza, creato_il, spedito_il, completato_il, eliminato)')
+      .select('id, ordine_id, fase_id, operatore_id, iniziata_il, completata_il, tempo_accumulato_minuti, ordini(codice, cliente, struttura, tipo_prodotto, priorita, scadenza, creato_il, spedito_il, completato_il, eliminato, quantita)')
       .not('completata_il', 'is', null)
       .gte('completata_il', dal || '2000-01-01'),
     sb.from('ordini')
@@ -3218,14 +3218,12 @@ async function loadKpi() {
     if (!f.fase_id) return;
     let hTotale;
     if (f.tempo_accumulato_minuti > 0) {
-      // Usa il tempo accumulato reale (somma di tutte le sessioni)
       hTotale = f.tempo_accumulato_minuti / 60;
     } else if (f.iniziata_il && f.completata_il) {
-      // Fallback per fasi completate prima dell'introduzione del campo
       hTotale = calcolaOreEffettive(f.iniziata_il, f.completata_il);
     } else return;
     if (hTotale <= 0 || hTotale > 500) return;
-    // Conta quante fasi dello stesso tipo aveva in_corso lo stesso operatore in contemporanea
+    const quantita = f.ordini?.quantita || 1;
     const parallele = fasi.filter(g =>
       g.fase_id === f.fase_id &&
       g.operatore_id === f.operatore_id &&
@@ -3233,7 +3231,8 @@ async function loadKpi() {
       g.iniziata_il < f.completata_il &&
       g.completata_il > f.iniziata_il
     ).length || 1;
-    const h = hTotale / parallele;
+    // Normalizza per pezzo: dividi per quantità e per fasi parallele
+    const h = hTotale / parallele / quantita;
     if (!faseTempo[f.fase_id]) faseTempo[f.fase_id] = [];
     faseTempo[f.fase_id].push(h);
   });
