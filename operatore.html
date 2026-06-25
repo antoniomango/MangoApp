@@ -440,6 +440,7 @@ let ordiniCache = [];
 let isOnline = navigator.onLine;
 let currentOrdineId = null;
 let currentFaseDetId = null; // ordine_fasi.id
+let faseMediaMinutiMap = {};
 
 // ═══════════════════════════════════════════════
 // INDEXEDDB — OFFLINE QUEUE
@@ -634,6 +635,7 @@ async function showApp() {
   await loadFasi();
   await loadOrdini();
   await loadNotificheOp();
+  loadFaseMediaMinuti(); // non-blocking, aggiorna stime in background
   setupRealtime();
   updateQueueBadge();
   syncQueue();
@@ -858,7 +860,7 @@ async function renderHome() {
     const stdIds   = aperti.filter(o => o.tipo !== 'extra').map(o => o.id);
     const extraIds = aperti.filter(o => o.tipo === 'extra').map(o => o.id);
     const fetches = [];
-    if (stdIds.length)   fetches.push(sb.from('ordine_fasi').select('ordine_id, stato').in('ordine_id', stdIds));
+    if (stdIds.length)   fetches.push(sb.from('ordine_fasi').select('ordine_id, stato, fase_id').in('ordine_id', stdIds));
     if (extraIds.length) fetches.push(sb.from('fasi_ordine_extra').select('ordine_id, stato').in('ordine_id', extraIds));
     const results = await Promise.all(fetches);
     for (const { data } of results) {
@@ -868,9 +870,34 @@ async function renderHome() {
       }
     }
   }
+  // Calcola stima consegna per ogni ordine
+  const stimaPerOrdine = {};
+  const minutiGiorno = 480; // default 8h, senza orarioConfig in operatore
+  aperti.forEach(o => {
+    const fasi = (fasiPerOrdine[o.id] || []).filter(f => f.stato !== 'non_applicabile' && f.stato !== 'completata');
+    let minRim = 0;
+    fasi.forEach(f => {
+      const media = faseMediaMinutiMap[parseInt(f.fase_id)];
+      if (media) minRim += f.stato === 'in_corso' ? media * 0.5 : media;
+    });
+    if (minRim > 0) {
+      const quantita = o.quantita || 1;
+      const giorni = Math.ceil(minRim * quantita / minutiGiorno);
+      const dataStimata = addGiorniLavorativi(new Date(), giorni);
+      const stimaStr = dataStimata.toISOString().split('T')[0];
+      const isRischio = o.scadenza && stimaStr > o.scadenza;
+      const oggi = new Date().toISOString().split('T')[0];
+      const isInRitardo = o.scadenza && oggi > o.scadenza;
+      stimaPerOrdine[o.id] = { dataStimata, stimaStr, isRischio, isInRitardo };
+    } else if (o.scadenza) {
+      const oggi = new Date().toISOString().split('T')[0];
+      stimaPerOrdine[o.id] = { isInRitardo: oggi > o.scadenza, isRischio: false };
+    }
+  });
   window._ordiniAperti = aperti;
   window._conDisp = conDisp;
   window._fasiPerOrdine = fasiPerOrdine;
+  window._stimaPerOrdine = stimaPerOrdine;
   filtraOrdini();
 }
 
@@ -901,8 +928,20 @@ function filtraOrdini() {
   }
 
   const fasiPerOrdine = window._fasiPerOrdine || {};
+  const stimaPerOrdine = window._stimaPerOrdine || {};
 
-  dispEl.innerHTML = legenda + filtrati.map(o => {
+  // Ordina: in ritardo > a rischio stima > scadenza vicina > resto
+  const urgenzaScore = (o) => {
+    const s = stimaPerOrdine[o.id];
+    if (s?.isInRitardo) return 0;
+    if (s?.isRischio) return 1;
+    const oggi = new Date(); oggi.setHours(0,0,0,0);
+    if (o.scadenza) return 2 + Math.max(0, Math.floor((new Date(o.scadenza) - oggi) / 86400000));
+    return 999;
+  };
+  const ordinati = [...filtrati].sort((a, b) => urgenzaScore(a) - urgenzaScore(b));
+
+  dispEl.innerHTML = legenda + ordinati.map(o => {
     const isAttesa = o.stato === 'attesa_spedizione';
     const extraStyle = isAttesa ? 'border-left:4px solid var(--ok);background:#F0FDF4' : '';
     const fasi = (fasiPerOrdine[o.id] || []).filter(f => f.stato !== 'non_applicabile');
@@ -910,6 +949,20 @@ function filtraOrdini() {
     const tot = fasi.length || 1;
     const pct = Math.round(comp / tot * 100);
     const isDone = pct === 100;
+    const stima = stimaPerOrdine[o.id];
+    let stimaBadge = '';
+    if (!isAttesa && stima?.stimaStr) {
+      const stimaFmt = stima.dataStimata.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit' });
+      if (stima.isInRitardo) {
+        stimaBadge = `<span style="font-size:11px;font-weight:700;color:#EF4444">🔴 IN RITARDO · stima: ${stimaFmt}</span>`;
+      } else if (stima.isRischio) {
+        stimaBadge = `<span style="font-size:11px;font-weight:700;color:#B45309">🟡 A RISCHIO · stima: ${stimaFmt}</span>`;
+      } else {
+        stimaBadge = `<span style="font-size:11px;color:var(--muted)">🟢 stima: ${stimaFmt}</span>`;
+      }
+    } else if (!isAttesa && stima?.isInRitardo) {
+      stimaBadge = `<span style="font-size:11px;font-weight:700;color:#EF4444">🔴 IN RITARDO</span>`;
+    }
     return `
     <div class="card card-row ${isAttesa ? '' : scadenzaClass(o.scadenza)}" style="${extraStyle}" onclick="openOrdineDetail('${o.id}')">
       <div class="row-main" style="width:100%">
@@ -919,6 +972,7 @@ function filtraOrdini() {
         </div>
         <div class="row-sub">${o.tipo === 'extra' ? 'Ordine Extra' : `${strutturaLabel(o.struttura)} · ${tipoProdLabel(o.tipo_prodotto)}`}</div>
         ${isAttesa ? '<div style="margin-top:3px;font-size:12px;font-weight:600;color:var(--ok)">✓ In attesa corriere</div>' : (o.scadenza ? `<div style="margin-top:3px">${scadenzaLabel(o.scadenza)}</div>` : '')}
+        ${stimaBadge ? `<div style="margin-top:2px">${stimaBadge}</div>` : ''}
         <div class="ord-progress-wrap">
           <div class="ord-progress-fill ${isDone ? 'done' : ''}" style="width:${pct}%"></div>
         </div>
@@ -1899,6 +1953,38 @@ function scadenzaLabel(scadenza) {
 }
 function formatDate(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
 function formatDateTime(d) { if (!d) return '—'; return new Date(d).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+
+function addGiorniLavorativi(dataInizio, giorni) {
+  const d = new Date(dataInizio);
+  if (giorni <= 0) return d;
+  let aggiunti = 0;
+  while (aggiunti < giorni) {
+    d.setDate(d.getDate() + 1);
+    const g = d.getDay();
+    if (g !== 0 && g !== 6) aggiunti++;
+  }
+  return d;
+}
+
+async function loadFaseMediaMinuti() {
+  if (!isOnline) return;
+  const { data } = await sb.from('ordine_fasi')
+    .select('fase_id, tempo_accumulato_minuti')
+    .eq('stato', 'completata')
+    .gt('tempo_accumulato_minuti', 0)
+    .lt('tempo_accumulato_minuti', 20000)
+    .not('fase_id', 'is', null);
+  if (!data) return;
+  const map = {};
+  data.forEach(f => {
+    if (!map[f.fase_id]) map[f.fase_id] = [];
+    map[f.fase_id].push(f.tempo_accumulato_minuti);
+  });
+  faseMediaMinutiMap = {};
+  Object.entries(map).forEach(([id, vals]) => {
+    faseMediaMinutiMap[parseInt(id)] = vals.reduce((a, b) => a + b, 0) / vals.length;
+  });
+}
 
 // ═══════════════════════════════════════════════
 // NOTIFICHE OPERATORE
