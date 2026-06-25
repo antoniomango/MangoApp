@@ -635,7 +635,7 @@ async function showApp() {
   await loadFasi();
   await loadOrdini();
   await loadNotificheOp();
-  loadFaseMediaMinuti(); // non-blocking, aggiorna stime in background
+  await loadFaseMediaMinuti();
   setupRealtime();
   updateQueueBadge();
   syncQueue();
@@ -1005,6 +1005,7 @@ async function renderOrdineDetail(ordineId) {
     <div class="meta-item"><label>Priorità</label><span class="badge badge-${ordine.priorita}">${prioLabel(ordine.priorita)}</span></div>
     <div class="meta-item"><label>Stato</label><span class="badge badge-${ordine.stato}">${ordine.stato}</span></div>
     <div class="meta-item"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}</span></div>
+    <div class="meta-item" id="ord-stima-item"><label>Consegna stimata</label><span id="ord-stima-val" style="color:var(--muted)">—</span></div>
     ${ordine.note_generali ? `<div class="meta-item" style="grid-column:1/-1"><label>Note</label><span>${ordine.note_generali}</span></div>` : ''}
   `;
 
@@ -1051,6 +1052,32 @@ async function renderOrdineDetail(ordineId) {
     } else {
       ordFasi = await cacheGet('fasi-' + ordineId) || [];
     }
+
+    // Calcola e mostra stima consegna
+    const stimaEl = document.getElementById('ord-stima-val');
+    if (stimaEl) {
+      let minRim = 0;
+      ordFasi.forEach(f => {
+        if (f.stato === 'completata' || f.stato === 'non_applicabile') return;
+        const media = faseMediaMinutiMap[parseInt(f.fase_id)];
+        if (media) minRim += f.stato === 'in_corso' ? media * 0.5 : media;
+      });
+      if (minRim > 0) {
+        const quantita = ordine.quantita || 1;
+        const giorni = Math.ceil(minRim * quantita / 480);
+        const dataStimata = addGiorniLavorativi(new Date(), giorni);
+        const stimaStr = dataStimata.toISOString().split('T')[0];
+        const stimaFmt = dataStimata.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' });
+        const isRischio = ordine.scadenza && stimaStr > ordine.scadenza;
+        const isInRitardo = ordine.scadenza && new Date().toISOString().split('T')[0] > ordine.scadenza;
+        stimaEl.textContent = stimaFmt + (isInRitardo ? ' ⚠️ IN RITARDO' : isRischio ? ' ⚠️ a rischio' : ' ✓');
+        stimaEl.style.color = isInRitardo ? '#EF4444' : isRischio ? '#B45309' : '#16A34A';
+        stimaEl.style.fontWeight = (isInRitardo || isRischio) ? '700' : '400';
+      } else {
+        stimaEl.textContent = 'Dati insufficienti';
+      }
+    }
+
     const struttura = ordine?.struttura || '';
     el.innerHTML = ordFasi.map(f => {
       const isCustom = !f.fase_id;
