@@ -1472,7 +1472,19 @@ async function loadAvanzamenti(ids) {
     return Math.max(60, (hf * 60 + mf) - (hi * 60 + mi));
   })();
 
-  ids.forEach(id => {
+  // Ordina gli id per scadenza (prima i più urgenti) per calcolo coda sequenziale
+  const idsSorted = [...ids].sort((a, b) => {
+    const oa = ordiniCache.find(o => o.id === a);
+    const ob = ordiniCache.find(o => o.id === b);
+    if (!oa?.scadenza && !ob?.scadenza) return 0;
+    if (!oa?.scadenza) return 1;
+    if (!ob?.scadenza) return -1;
+    return oa.scadenza.localeCompare(ob.scadenza);
+  });
+
+  let minutiCoda = 0; // minuti accumulati dagli ordini precedenti nella coda
+
+  idsSorted.forEach(id => {
     const el = document.getElementById('prog-' + id);
     if (!el) return;
     const s = map[id] || { tot: 0, done: 0, inCorso: 0, minRimanenti: 0, haveMedia: false };
@@ -1488,18 +1500,19 @@ async function loadAvanzamenti(ids) {
     const tr = el.closest('tr');
     if (!tr) return;
 
-    // In corso: bordo blu pulsante
     if (s.inCorso > 0) tr.classList.add('riga-in-corso');
     else tr.classList.remove('riga-in-corso');
 
-    // Rischio ritardo stimato
     const ordine = ordiniCache.find(o => o.id === id);
     const stimaEl = document.getElementById('scad-stima-' + id);
     tr.classList.remove('scad-rischio');
     if (stimaEl) stimaEl.innerHTML = '';
+
     if (s.haveMedia && s.minRimanenti > 0) {
       const quantita = ordine?.quantita || 1;
-      const giorniRimanenti = Math.ceil((s.minRimanenti * quantita) / minutiGiorno);
+      const minTotaleOrdine = s.minRimanenti * quantita;
+      // Stima = coda degli ordini precedenti + lavoro rimanente di questo ordine
+      const giorniRimanenti = Math.ceil((minutiCoda + minTotaleOrdine) / minutiGiorno);
       const dataStimata = addGiorniLavorativi(new Date(), giorniRimanenti);
       const dataStimataStr = dataStimata.toISOString().split('T')[0];
       const isRischio = ordine?.scadenza && dataStimataStr > ordine.scadenza;
@@ -1510,6 +1523,7 @@ async function loadAvanzamenti(ids) {
         const icon = isRischio ? '⚠️' : '🔮';
         stimaEl.innerHTML = `<span style="color:${color}">${icon} stima: ${stimaFmt}</span>`;
       }
+      minutiCoda += minTotaleOrdine; // questo ordine occupa capacità per i successivi
     }
   });
 }
