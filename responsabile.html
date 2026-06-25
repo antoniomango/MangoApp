@@ -320,11 +320,12 @@ tr:hover td { background: var(--phase-bg); }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes blink-warn   { 0%,100% { border-left-color: #F59E0B; } 50% { border-left-color: transparent; } }
 @keyframes blink-danger { 0%,100% { border-left-color: #EF4444; } 50% { border-left-color: transparent; } }
-@keyframes pulse-incorso { 0%,100% { background:#DBEAFE; } 50% { background:#EFF6FF; } }
-tr.riga-in-corso { animation: pulse-incorso 2s ease-in-out infinite; }
+@keyframes pulse-blu    { 0%,100% { border-left-color: #3B82F6; } 50% { border-left-color: #BFDBFE; } }
 .scad-ok      { border-left: 4px solid #16A34A !important; }
 .scad-warning { border-left: 4px solid #F59E0B !important; animation: blink-warn 1.5s ease-in-out infinite; }
 .scad-danger  { border-left: 4px solid #EF4444 !important; animation: blink-danger 1.2s ease-in-out infinite; }
+tr.scad-rischio { background: #FEF3C7 !important; }
+tr.riga-in-corso { border-left: 4px solid #3B82F6 !important; animation: pulse-blu 2s ease-in-out infinite !important; }
 .legenda-scad { display:flex; gap:16px; flex-wrap:wrap; padding:10px 16px; background:var(--surface); border:1px solid var(--border); border-radius:10px; margin-bottom:12px; font-size:12px; color:var(--muted); }
 .legenda-scad span { display:flex; align-items:center; gap:6px; }
 
@@ -1177,6 +1178,7 @@ let ncCache = [];
 let operatoriCache = [];
 let notificheCache = [];
 let currentOrdineId = null;
+let faseMediaMinutiMap = {}; // fase_id -> avg minuti per pezzo
 let currentFaseId = null; // per riassegna
 let riassegnaOrdFaseId = null;
 
@@ -1213,7 +1215,7 @@ async function postLogin() {
   // Load fasi
   await loadFasi();
   // Load data
-  await Promise.all([loadOrdini(), loadNc(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadMacroFasi()]);
+  await Promise.all([loadOrdini(), loadNc(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadMacroFasi(), loadFaseMediaMinuti()]);
   // Check ordini in ritardo (solo responsabile)
   if (currentUserRow?.ruolo === 'responsabile') checkOrdiniInRitardo();
   // Realtime
@@ -1412,7 +1414,7 @@ function ordineRow(o, mini = false) {
     <td>${o.tipo === 'extra' ? '<span style="font-weight:600;color:var(--wood)">Ordine Extra</span>' : `${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}`}</td>
     <td><span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span></td>
     <td style="text-align:center;font-weight:600">${o.quantita || 1}</td>
-    <td style="color:${isLate ? '#EF4444' : 'inherit'};font-weight:${isLate ? '700' : 'normal'}">${scad}${isLate ? ' ⚠️' : ''}</td>
+    <td id="scad-cell-${o.id}" style="color:${isLate ? '#EF4444' : 'inherit'};font-weight:${isLate ? '700' : 'normal'}">${scad}${isLate ? ' ⚠️' : ''}</td>
     <td><span class="badge badge-${o.stato}">${statoLabel(o.stato)}</span></td>
     <td id="prog-${o.id}" style="min-width:120px">—</td>
     <td>
@@ -1437,13 +1439,18 @@ async function loadAvanzamenti(ids) {
 
   // Ordini standard → ordine_fasi
   if (stdIds.length) {
-    const { data } = await sb.from('ordine_fasi').select('ordine_id, stato').in('ordine_id', stdIds);
+    const { data } = await sb.from('ordine_fasi').select('ordine_id, stato, fase_id').in('ordine_id', stdIds);
     (data || []).forEach(f => {
-      if (!map[f.ordine_id]) map[f.ordine_id] = { tot: 0, done: 0, inCorso: 0 };
+      if (!map[f.ordine_id]) map[f.ordine_id] = { tot: 0, done: 0, inCorso: 0, minRimanenti: 0, haveMedia: false };
       if (f.stato === 'non_applicabile') return;
       map[f.ordine_id].tot++;
       if (f.stato === 'completata') map[f.ordine_id].done++;
       if (f.stato === 'in_corso') map[f.ordine_id].inCorso++;
+      const media = faseMediaMinutiMap[f.fase_id];
+      if (media && (f.stato === 'disponibile' || f.stato === 'in_corso')) {
+        map[f.ordine_id].minRimanenti += f.stato === 'in_corso' ? media * 0.5 : media;
+        map[f.ordine_id].haveMedia = true;
+      }
     });
   }
 
@@ -1458,10 +1465,17 @@ async function loadAvanzamenti(ids) {
     });
   }
 
+  const minutiGiorno = (() => {
+    if (!orarioConfig) return 480;
+    const [hi, mi] = (orarioConfig.ora_inizio || '08:00').split(':').map(Number);
+    const [hf, mf] = (orarioConfig.ora_fine   || '17:00').split(':').map(Number);
+    return Math.max(60, (hf * 60 + mf) - (hi * 60 + mi));
+  })();
+
   ids.forEach(id => {
     const el = document.getElementById('prog-' + id);
     if (!el) return;
-    const s = map[id] || { tot: 0, done: 0, inCorso: 0 };
+    const s = map[id] || { tot: 0, done: 0, inCorso: 0, minRimanenti: 0, haveMedia: false };
     const pct = s.tot > 0 ? Math.round((s.done / s.tot) * 100) : 0;
     el.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px">
@@ -1470,10 +1484,33 @@ async function loadAvanzamenti(ids) {
         </div>
         <span style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap">${s.done}/${s.tot}${s.inCorso > 0 ? ` (${s.inCorso} ▶)` : ''}</span>
       </div>`;
+
     const tr = el.closest('tr');
-    if (tr) {
-      if (s.inCorso > 0) tr.classList.add('riga-in-corso');
-      else tr.classList.remove('riga-in-corso');
+    if (!tr) return;
+
+    // In corso: bordo blu pulsante
+    if (s.inCorso > 0) tr.classList.add('riga-in-corso');
+    else tr.classList.remove('riga-in-corso');
+
+    // Rischio ritardo stimato
+    const ordine = ordiniCache.find(o => o.id === id);
+    const scadCell = document.getElementById('scad-cell-' + id);
+    tr.classList.remove('scad-rischio');
+    if (ordine?.scadenza && s.haveMedia && s.minRimanenti > 0) {
+      const quantita = ordine.quantita || 1;
+      const giorniRimanenti = Math.ceil((s.minRimanenti * quantita) / minutiGiorno);
+      const dataStimata = new Date();
+      dataStimata.setDate(dataStimata.getDate() + giorniRimanenti);
+      const dataStimataStr = dataStimata.toISOString().split('T')[0];
+      const isRischio = dataStimataStr > ordine.scadenza;
+      const parziale = s.minRimanenti > 0 && !s.haveMedia;
+      if (isRischio) {
+        tr.classList.add('scad-rischio');
+        if (scadCell) {
+          const stimaFmt = dataStimata.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit' });
+          scadCell.innerHTML = scadCell.innerHTML + `<div style="font-size:10px;color:#B45309;margin-top:2px">🔮 stima: ${stimaFmt}</div>`;
+        }
+      }
     }
   });
 }
@@ -2262,6 +2299,26 @@ let orarioConfig = null;
 async function loadOrarioConfig() {
   const { data } = await sb.from('config_orario').select('*').single();
   orarioConfig = data;
+}
+
+async function loadFaseMediaMinuti() {
+  const { data } = await sb.from('ordine_fasi')
+    .select('fase_id, tempo_accumulato_minuti, ordini(quantita)')
+    .eq('stato', 'completata')
+    .gt('tempo_accumulato_minuti', 0)
+    .not('fase_id', 'is', null);
+  if (!data) return;
+  const map = {};
+  data.forEach(f => {
+    const q = f.ordini?.quantita || 1;
+    const minPerPezzo = f.tempo_accumulato_minuti / q;
+    if (!map[f.fase_id]) map[f.fase_id] = [];
+    map[f.fase_id].push(minPerPezzo);
+  });
+  faseMediaMinutiMap = {};
+  Object.entries(map).forEach(([id, vals]) => {
+    faseMediaMinutiMap[parseInt(id)] = vals.reduce((a, b) => a + b, 0) / vals.length;
+  });
 }
 
 function aggiornaRiepilogoOrario() {
