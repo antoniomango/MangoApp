@@ -639,6 +639,17 @@ async function showApp() {
   renderHome();
   populateNcSelects();
   renderAttivita();
+
+  const params = new URLSearchParams(window.location.search);
+  const deepOrdineId = params.get('ordine');
+  if (deepOrdineId) {
+    history.replaceState({}, '', 'operatore.html');
+    const ordine = ordini.find(o => o.id === deepOrdineId);
+    if (ordine) {
+      await renderOrdineDetail(deepOrdineId);
+      showScreen('ordine');
+    }
+  }
 }
 
 async function doLogout() {
