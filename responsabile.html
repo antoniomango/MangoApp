@@ -587,6 +587,12 @@ tr:hover td { background: var(--phase-bg); }
             <button class="btn btn-primary" onclick="inviaComunicazione()">Invia</button>
           </div>
         </div>
+        <!-- NOTIFICA AGGIORNAMENTO -->
+        <div class="card" style="margin-bottom:16px;padding:20px">
+          <h3 style="margin-bottom:8px;font-size:14px">🔄 Aggiornamento app</h3>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Invia una notifica a tutti per chiudere e riaprire l'app dopo un aggiornamento.</p>
+          <button class="btn btn-secondary" onclick="notificaAggiornamento()">Invia notifica aggiornamento</button>
+        </div>
         <!-- LISTA NOTIFICHE -->
         <div class="card" style="padding:0 20px" id="notif-list">
           <div style="text-align:center;padding:24px;color:var(--muted)">Caricamento…</div>
@@ -2660,6 +2666,12 @@ async function markAllRead() {
   await sb.from('notifiche').update({ letta: true }).eq('destinatario_id', currentUserRow.id).eq('letta', false);
   toast('Tutte le notifiche segnate come lette', 'ok');
   await renderNotifiche();
+}
+
+async function notificaAggiornamento() {
+  if (!confirm('Inviare notifica di aggiornamento a tutti gli operatori?')) return;
+  await inviaNotificaATutti('comunicazione', '🔄 App aggiornata — chiudi e riapri l\'app per ricevere le ultime modifiche.');
+  toast('Notifica aggiornamento inviata a tutti', 'ok');
 }
 
 async function inviaComunicazione() {

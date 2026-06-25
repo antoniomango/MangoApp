@@ -290,10 +290,11 @@ textarea:focus { border-color: var(--wood); }
         </div>
 
         <!-- Ricerca ordini -->
-        <div style="margin-bottom:12px">
+        <div style="margin-bottom:8px;display:flex;align-items:center;gap:10px">
           <input type="text" id="ordini-search" placeholder="🔍 Cerca cliente o codice ordine…" oninput="filtraOrdini()"
-            style="width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:10px;font-size:15px;background:var(--surface);color:var(--ink);outline:none">
+            style="flex:1;padding:12px 14px;border:1px solid var(--border);border-radius:10px;font-size:15px;background:var(--surface);color:var(--ink);outline:none">
         </div>
+        <div id="ordini-count" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
 
         <!-- Disponibili -->
         <div class="section-title">Ordini con fasi disponibili</div>
@@ -883,6 +884,9 @@ function filtraOrdini() {
     (o.cliente || '').toLowerCase().includes(q) ||
     (o.codice  || '').toLowerCase().includes(q)
   ) : aperti;
+
+  const countEl = document.getElementById('ordini-count');
+  if (countEl) countEl.textContent = q ? `${filtrati.length} di ${aperti.length} ordini in lista` : `${aperti.length} ordini in lista`;
 
   const legenda = `<div class="legenda-scad">
     <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#EF4444"></span>In ritardo</span>
