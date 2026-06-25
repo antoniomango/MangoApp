@@ -320,6 +320,8 @@ tr:hover td { background: var(--phase-bg); }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes blink-warn   { 0%,100% { border-left-color: #F59E0B; } 50% { border-left-color: transparent; } }
 @keyframes blink-danger { 0%,100% { border-left-color: #EF4444; } 50% { border-left-color: transparent; } }
+@keyframes pulse-incorso { 0%,100% { background:#DBEAFE; } 50% { background:#EFF6FF; } }
+tr.riga-in-corso { animation: pulse-incorso 2s ease-in-out infinite; }
 .scad-ok      { border-left: 4px solid #16A34A !important; }
 .scad-warning { border-left: 4px solid #F59E0B !important; animation: blink-warn 1.5s ease-in-out infinite; }
 .scad-danger  { border-left: 4px solid #EF4444 !important; animation: blink-danger 1.2s ease-in-out infinite; }
@@ -1468,6 +1470,11 @@ async function loadAvanzamenti(ids) {
         </div>
         <span style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;white-space:nowrap">${s.done}/${s.tot}${s.inCorso > 0 ? ` (${s.inCorso} ▶)` : ''}</span>
       </div>`;
+    const tr = el.closest('tr');
+    if (tr) {
+      if (s.inCorso > 0) tr.classList.add('riga-in-corso');
+      else tr.classList.remove('riga-in-corso');
+    }
   });
 }
 
