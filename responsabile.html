@@ -325,7 +325,7 @@ tr:hover td { background: var(--phase-bg); }
 .scad-warning { border-left: 4px solid #F59E0B !important; animation: blink-warn 1.5s ease-in-out infinite; }
 .scad-danger  { border-left: 4px solid #EF4444 !important; animation: blink-danger 1.2s ease-in-out infinite; }
 tr.scad-rischio { background: #FEF3C7 !important; }
-tr.riga-in-corso { border-left: 4px solid #3B82F6 !important; animation: pulse-blu 2s ease-in-out infinite !important; }
+tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !important; animation: pulse-blu 2s ease-in-out infinite !important; }
 .legenda-scad { display:flex; gap:16px; flex-wrap:wrap; padding:10px 16px; background:var(--surface); border:1px solid var(--border); border-radius:10px; margin-bottom:12px; font-size:12px; color:var(--muted); }
 .legenda-scad span { display:flex; align-items:center; gap:6px; }
 
@@ -1504,12 +1504,12 @@ async function loadAvanzamenti(ids) {
       const dataStimataStr = dataStimata.toISOString().split('T')[0];
       const isRischio = dataStimataStr > ordine.scadenza;
       const parziale = s.minRimanenti > 0 && !s.haveMedia;
-      if (isRischio) {
-        tr.classList.add('scad-rischio');
-        if (scadCell) {
-          const stimaFmt = dataStimata.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit' });
-          scadCell.innerHTML = scadCell.innerHTML + `<div style="font-size:10px;color:#B45309;margin-top:2px">🔮 stima: ${stimaFmt}</div>`;
-        }
+      if (isRischio) tr.classList.add('scad-rischio');
+      if (scadCell) {
+        const stimaFmt = dataStimata.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit' });
+        const color = isRischio ? '#B45309' : 'var(--muted)';
+        const icon = isRischio ? '⚠️' : '🔮';
+        scadCell.innerHTML = scadCell.innerHTML + `<div style="font-size:10px;color:${color};margin-top:2px">${icon} stima: ${stimaFmt}</div>`;
       }
     }
   });
