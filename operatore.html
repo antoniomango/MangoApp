@@ -626,11 +626,10 @@ function showErr(msg) {
 async function showApp() {
   // Controlla se il responsabile ha forzato il logout per questo utente
   if (navigator.onLine && currentUser?.id) {
-    const { data: check } = await sb.from('users').select('attivo, forzato_logout').eq('id', currentUser.id).single();
-    if (check?.forzato_logout || check?.attivo === false) {
+    const { data: check } = await sb.rpc('controlla_sessione', { p_user_id: currentUser.id });
+    if (check?.valida === false) {
       await cacheDelete('current-user');
       await cacheDelete('current-session-token');
-      await sb.from('users').update({ forzato_logout: false }).eq('id', currentUser.id);
       currentUser = null;
       document.getElementById('login-screen').style.display = 'flex';
       return;
