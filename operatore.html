@@ -2148,6 +2148,9 @@ start();
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/MangoApp/sw.js').catch(e => console.warn('SW:', e));
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data?.type === 'SW_UPDATED') window.location.reload();
+  });
 }
 </script>
 </body>
