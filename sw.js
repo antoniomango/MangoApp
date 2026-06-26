@@ -1,4 +1,4 @@
-const CACHE = 'mango-v6';
+const CACHE = 'mango-v7';
 const ASSETS = [
   '/MangoApp/operatore.html',
   '/MangoApp/responsabile.html',
@@ -14,14 +14,16 @@ self.addEventListener('install', e => {
 });
 
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-  ));
-  self.clients.claim();
+  e.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then(clients => clients.forEach(c => c.postMessage({ type: 'SW_UPDATED' })))
+  );
 });
 
 self.addEventListener('fetch', e => {
-  // Solo GET, non intercettare richieste Supabase
   if (e.request.method !== 'GET') return;
   if (e.request.url.includes('supabase.co')) return;
 
