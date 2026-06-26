@@ -3201,15 +3201,14 @@ async function inviaNotificaPush(destinatarioId, titolo, messaggio) {
 async function inviaNotificaATutti(tipo, testo, ordineId = null) {
   const { data: utenti } = await sb.from('users').select('id').eq('attivo', true).neq('eliminato', true);
   if (!utenti?.length) return;
+  // Il trigger DB trg_push_notifica invia automaticamente la push per ogni INSERT — non chiamare inviaNotificaPush qui
   await sb.from('notifiche').insert(utenti.map(u => ({ destinatario_id: u.id, tipo, testo, ordine_id: ordineId })));
-  for (const u of utenti) inviaNotificaPush(u.id, 'Mango Semilavorati', testo);
 }
 
 async function inviaNotificaAResponsabile(tipo, testo, ordineId = null) {
   const { data: resp } = await sb.from('users').select('id').eq('ruolo', 'responsabile').eq('attivo', true);
   if (!resp?.length) return;
   await sb.from('notifiche').insert(resp.map(u => ({ destinatario_id: u.id, tipo, testo, ordine_id: ordineId })));
-  for (const u of resp) inviaNotificaPush(u.id, 'Mango Semilavorati', testo);
 }
 
 async function checkOrdiniInRitardo() {
