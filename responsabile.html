@@ -1582,15 +1582,13 @@ async function loadAvanzamenti(ids) {
   if (stdIds.length) {
     const { data } = await sb.from('ordine_fasi').select('ordine_id, stato, fase_id').in('ordine_id', stdIds);
     (data || []).forEach(f => {
-      if (!map[f.ordine_id]) map[f.ordine_id] = { tot: 0, done: 0, inCorso: 0, minRimanenti: 0, haveMedia: false };
+      if (!map[f.ordine_id]) map[f.ordine_id] = { tot: 0, done: 0, inCorso: 0, fasiRim: [] };
       if (f.stato === 'non_applicabile') return;
       map[f.ordine_id].tot++;
       if (f.stato === 'completata') map[f.ordine_id].done++;
       if (f.stato === 'in_corso') map[f.ordine_id].inCorso++;
-      const media = faseMediaMinutiMap[f.fase_id];
-      if (media && (f.stato === 'disponibile' || f.stato === 'in_corso')) {
-        map[f.ordine_id].minRimanenti += f.stato === 'in_corso' ? media * 0.5 : media;
-        map[f.ordine_id].haveMedia = true;
+      if (f.stato === 'disponibile' || f.stato === 'in_corso') {
+        map[f.ordine_id].fasiRim.push({ fase_id: f.fase_id, inCorso: f.stato === 'in_corso' });
       }
     });
   }
@@ -1599,7 +1597,7 @@ async function loadAvanzamenti(ids) {
   if (extraIds.length) {
     const { data } = await sb.from('fasi_ordine_extra').select('ordine_id, stato').in('ordine_id', extraIds);
     (data || []).forEach(f => {
-      if (!map[f.ordine_id]) map[f.ordine_id] = { tot: 0, done: 0, inCorso: 0 };
+      if (!map[f.ordine_id]) map[f.ordine_id] = { tot: 0, done: 0, inCorso: 0, fasiRim: [] };
       map[f.ordine_id].tot++;
       if (f.stato === 'completata') map[f.ordine_id].done++;
       if (f.stato === 'in_corso') map[f.ordine_id].inCorso++;
@@ -1613,7 +1611,46 @@ async function loadAvanzamenti(ids) {
     return Math.max(60, (hf * 60 + mf) - (hi * 60 + mi));
   })();
 
-  // Ordina gli id per scadenza (prima i più urgenti) per calcolo coda sequenziale
+  // Costruisce coda per fase_id: stessa fase → stesso operatore la fa in sequenza
+  // Ordini con scadenza prima hanno priorità nella coda
+  const faseQueue = {}; // fase_id → [{ordine_id, minuti}] ordinato per scadenza
+  ids.forEach(id => {
+    const ordine = ordiniCache.find(o => o.id === id);
+    const s = map[id];
+    if (!s?.fasiRim?.length) return;
+    const q = ordine?.quantita || 1;
+    const scad = ordine?.scadenza || '9999-12-31';
+    s.fasiRim.forEach(f => {
+      const media = faseMediaMinutiMap[f.fase_id];
+      if (!media) return;
+      const minuti = (f.inCorso ? media * 0.5 : media) * q;
+      if (!faseQueue[f.fase_id]) faseQueue[f.fase_id] = [];
+      faseQueue[f.fase_id].push({ ordine_id: id, minuti, scad });
+    });
+  });
+  // Ordina ogni coda per scadenza (urgenti prima)
+  Object.values(faseQueue).forEach(q => q.sort((a, b) => a.scad.localeCompare(b.scad)));
+
+  // Per ogni ordine calcola ETA = critical path:
+  // max tra le fasi rimanenti di (attesa in coda per quella fase + tempo proprio)
+  const etaMinutiPerOrdine = {};
+  ids.forEach(id => {
+    const s = map[id];
+    if (!s?.fasiRim?.length) return;
+    let maxMinuti = 0;
+    s.fasiRim.forEach(f => {
+      const queue = faseQueue[f.fase_id];
+      if (!queue) return;
+      const myPos = queue.findIndex(item => item.ordine_id === id);
+      if (myPos < 0) return;
+      const attesa = queue.slice(0, myPos).reduce((sum, item) => sum + item.minuti, 0);
+      const proprio = queue[myPos].minuti;
+      maxMinuti = Math.max(maxMinuti, attesa + proprio);
+    });
+    if (maxMinuti > 0) etaMinutiPerOrdine[id] = maxMinuti;
+  });
+
+  // Ordina per scadenza per render
   const idsSorted = [...ids].sort((a, b) => {
     const oa = ordiniCache.find(o => o.id === a);
     const ob = ordiniCache.find(o => o.id === b);
@@ -1626,7 +1663,7 @@ async function loadAvanzamenti(ids) {
   idsSorted.forEach(id => {
     const el = document.getElementById('prog-' + id);
     if (!el) return;
-    const s = map[id] || { tot: 0, done: 0, inCorso: 0, minRimanenti: 0, haveMedia: false };
+    const s = map[id] || { tot: 0, done: 0, inCorso: 0, fasiRim: [] };
     const pct = s.tot > 0 ? Math.round((s.done / s.tot) * 100) : 0;
     el.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px">
@@ -1647,9 +1684,8 @@ async function loadAvanzamenti(ids) {
     tr.classList.remove('scad-rischio');
     if (stimaEl) stimaEl.innerHTML = '';
 
-    if (s.haveMedia && s.minRimanenti > 0) {
-      const quantita = ordine?.quantita || 1;
-      const minTotale = s.minRimanenti * quantita;
+    const minTotale = etaMinutiPerOrdine[id];
+    if (minTotale > 0) {
       const giorniRimanenti = Math.ceil(minTotale / minutiGiorno);
       const dataStimata = addGiorniLavorativi(new Date(), giorniRimanenti);
       const dataStimataStr = dataStimata.toISOString().split('T')[0];

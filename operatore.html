@@ -885,28 +885,52 @@ async function renderHome() {
       }
     }
   }
-  // Calcola stima consegna per ogni ordine
+  // Calcola stima consegna per ogni ordine — coda per fase_id + critical path
   const stimaPerOrdine = {};
   const minutiGiorno = getMinutiGiorno();
+
+  // Coda per fase_id: stessa fase → stesso operatore la fa in sequenza; scadenza prima = priorità
+  const faseQueue = {};
   aperti.forEach(o => {
-    const fasi = (fasiPerOrdine[o.id] || []).filter(f => f.stato !== 'non_applicabile' && f.stato !== 'completata');
-    let minRim = 0;
+    const fasi = (fasiPerOrdine[o.id] || []).filter(f => f.stato === 'disponibile' || f.stato === 'in_corso');
+    const q = o.quantita || 1;
+    const scad = o.scadenza || '9999-12-31';
     fasi.forEach(f => {
-      const media = faseMediaMinutiMap[parseInt(f.fase_id)];
-      if (media) minRim += f.stato === 'in_corso' ? media * 0.5 : media;
+      const fase_id = parseInt(f.fase_id);
+      const media = faseMediaMinutiMap[fase_id];
+      if (!media) return;
+      const minuti = (f.stato === 'in_corso' ? media * 0.5 : media) * q;
+      if (!faseQueue[fase_id]) faseQueue[fase_id] = [];
+      faseQueue[fase_id].push({ ordine_id: o.id, minuti, scad });
     });
-    if (minRim > 0) {
-      const quantita = o.quantita || 1;
-      const giorni = Math.ceil(minRim * quantita / minutiGiorno);
+  });
+  Object.values(faseQueue).forEach(q => q.sort((a, b) => a.scad.localeCompare(b.scad)));
+
+  // ETA = critical path: max tra le fasi rimanenti di (attesa in coda + tempo proprio)
+  // Fasi diverse → operatori diversi → parallele → si prende il massimo
+  aperti.forEach(o => {
+    const fasi = (fasiPerOrdine[o.id] || []).filter(f => f.stato === 'disponibile' || f.stato === 'in_corso');
+    let maxMinuti = 0;
+    fasi.forEach(f => {
+      const fase_id = parseInt(f.fase_id);
+      const queue = faseQueue[fase_id];
+      if (!queue) return;
+      const myPos = queue.findIndex(item => item.ordine_id === o.id);
+      if (myPos < 0) return;
+      const attesa = queue.slice(0, myPos).reduce((s, i) => s + i.minuti, 0);
+      maxMinuti = Math.max(maxMinuti, attesa + queue[myPos].minuti);
+    });
+
+    const oggi = new Date().toISOString().split('T')[0];
+    const isInRitardo = !!(o.scadenza && oggi > o.scadenza);
+    if (maxMinuti > 0) {
+      const giorni = Math.ceil(maxMinuti / minutiGiorno);
       const dataStimata = addGiorniLavorativi(new Date(), giorni);
       const stimaStr = dataStimata.toISOString().split('T')[0];
-      const isRischio = o.scadenza && stimaStr > o.scadenza;
-      const oggi = new Date().toISOString().split('T')[0];
-      const isInRitardo = o.scadenza && oggi > o.scadenza;
+      const isRischio = !!(o.scadenza && stimaStr > o.scadenza);
       stimaPerOrdine[o.id] = { dataStimata, stimaStr, isRischio, isInRitardo };
     } else if (o.scadenza) {
-      const oggi = new Date().toISOString().split('T')[0];
-      stimaPerOrdine[o.id] = { isInRitardo: oggi > o.scadenza, isRischio: false };
+      stimaPerOrdine[o.id] = { isInRitardo, isRischio: false };
     }
   });
   window._ordiniAperti = aperti;
