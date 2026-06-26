@@ -599,6 +599,7 @@ async function doLoginPin() {
     currentUser = data.user;
     await cacheSet('current-user', currentUser);
     await cacheSet('current-pin-hash', null); // non salviamo PIN in chiaro
+    if (data.session_token) await cacheSet('current-session-token', data.session_token);
   } else {
     const cached = await cacheGet('current-user');
     if (cached && cached.id === userId) {
@@ -659,6 +660,7 @@ async function showApp() {
 async function doLogout() {
   currentUser = null;
   await cacheSet('current-user', null);
+  await cacheSet('current-session-token', null);
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   [0, 1, 2, 3].forEach(i => document.getElementById('pin' + i).value = '');
@@ -1265,7 +1267,7 @@ async function riapriFaseOp(ordFaseId, ordineId) {
   const nomeFase = document.getElementById('fase-det-title')?.textContent || 'questa fase';
   if (!confirm('Hai altro lavoro da fare su questa fase? Riaprila.')) return;
   if (!confirm(`Sei sicuro di voler riaprire la fase "${nomeFase}"?`)) return;
-  const { data, error } = await sb.rpc('riapri_fase_operatore', { p_ordine_fase_id: ordFaseId });
+  const { data, error } = await sb.rpc('riapri_fase_operatore', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   toast('Fase riaperta', 'ok');
   await renderFaseDetail(ordFaseId, ordineId);
@@ -1743,7 +1745,8 @@ async function initOneSignal() {
         const subId = event.current?.id;
         _debug('Subscription change event - id: ' + subId);
         if (subId && currentUser) {
-          const { data, error } = await sb.rpc('salva_onesignal_id', { p_user_id: currentUser.id, p_onesignal_id: subId });
+          const sToken = await cacheGet('current-session-token');
+          const { data, error } = await sb.rpc('salva_onesignal_id', { p_user_id: currentUser.id, p_onesignal_id: subId, p_session_token: sToken });
           _debug(error ? 'ERRORE: ' + error.message : 'Salvato via event: ' + JSON.stringify(data));
         }
       });
@@ -1772,7 +1775,8 @@ async function _salvaOnesignalId() {
       await new Promise(r => setTimeout(r, 1000));
     }
     if (subId) {
-      const { data, error } = await sb.rpc('salva_onesignal_id', { p_user_id: currentUser.id, p_onesignal_id: subId });
+      const sToken = await cacheGet('current-session-token');
+      const { data, error } = await sb.rpc('salva_onesignal_id', { p_user_id: currentUser.id, p_onesignal_id: subId, p_session_token: sToken });
       _debug(error ? 'ERRORE RPC: ' + error.message : 'RPC ok: ' + JSON.stringify(data));
     } else {
       _debug('ERRORE: subscription ID mai disponibile');

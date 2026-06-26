@@ -2413,7 +2413,7 @@ async function salvaOperatore() {
     const aggiornamento = { nome, cognome, ruolo };
     if (pin) {
       // Aggiorna PIN via RPC (il PIN è hashato nel DB)
-      const { data: pinData } = await sb.rpc('aggiorna_pin_operatore', { p_operatore_id: editId, p_nuovo_pin: pin });
+      const { data: pinData } = await sb.rpc('aggiorna_pin_operatore', { p_operatore_id: editId, p_nuovo_pin: pin, p_responsabile_id: currentUserRow.id });
       if (!pinData?.ok) { toast(pinData?.errore || 'Errore aggiornamento PIN', 'err'); return; }
     }
     const { error } = await sb.from('users').update(aggiornamento).eq('id', editId);
@@ -2423,7 +2423,7 @@ async function salvaOperatore() {
   } else {
     // CREAZIONE
     if (!/^\d{4}$/.test(pin)) { toast('Il PIN deve essere 4 cifre numeriche', 'err'); return; }
-    const { data, error } = await sb.rpc('crea_operatore', { p_nome: nome, p_cognome: cognome, p_pin: pin, p_ruolo: ruolo });
+    const { data, error } = await sb.rpc('crea_operatore', { p_nome: nome, p_cognome: cognome, p_pin: pin, p_ruolo: ruolo, p_responsabile_id: currentUserRow.id });
     if (error || !data?.ok) { toast(error?.message || data?.errore || 'Errore', 'err'); return; }
     closeModal('modal-operatore');
     toast('Operatore creato', 'ok');
