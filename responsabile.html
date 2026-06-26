@@ -2364,10 +2364,18 @@ function renderOperatori() {
           ? `<button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="toggleOperatore('${op.id}', false)">Disattiva</button>`
           : `<button class="btn btn-ok" style="padding:5px 10px;font-size:12px" onclick="toggleOperatore('${op.id}', true)">Attiva</button>`
         }
+        <button class="btn" style="padding:5px 10px;font-size:12px;background:#F59E0B;color:#fff" onclick="forzaLogout('${op.id}', '${escapeHtml(op.nome)}')">⏏ Esci</button>
         <button class="btn" style="padding:5px 10px;font-size:12px;background:var(--alert);color:#fff" onclick="eliminaOperatore('${op.id}', '${escapeHtml(op.nome)} ${escapeHtml(op.cognome)}')">🗑</button>
       </div>
     </div>
   `).join('');
+}
+
+async function forzaLogout(id, nome) {
+  if (!confirm(`Vuoi buttare fuori "${nome}" dall'app? Dovrà reinserire il PIN al prossimo accesso.`)) return;
+  const { error } = await sb.from('users').update({ forzato_logout: true }).eq('id', id);
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  toast(`${nome} verrà disconnesso alla prossima apertura dell'app`, 'ok');
 }
 
 function openModalNuovoOperatore() {
