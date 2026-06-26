@@ -1239,6 +1239,7 @@ async function postLogin() {
   if (currentUserRow?.ruolo === 'responsabile') checkOrdiniInRitardo();
   // Realtime
   setupRealtime();
+  scheduleEndOfShiftRefresh();
   initOneSignalResp();
   // Render in base al ruolo
   if (currentUserRow?.ruolo === 'sola_lettura') {
@@ -1363,7 +1364,8 @@ function setupRealtime() {
       renderOrdiniTable();
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'ordine_fasi' }, async () => {
-      if (currentOrdineId) renderDettaglioOrdine(currentOrdineId);
+      await refreshStime();
+      if (currentOrdineId) calcolaStimaSingoloOrdine(currentOrdineId);
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'non_conformita' }, async () => {
       await loadNc();
@@ -1567,6 +1569,27 @@ function ordineRow(o, mini = false) {
           : `<button class="btn btn-ok" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();riattiva('${o.id}')">Riattiva</button>`}
     </td>
   </tr>`;
+}
+
+// Ricalcola stime per tutti gli ordini attivi (chiamato da realtime e fine turno)
+async function refreshStime() {
+  const ids = ordiniCache.filter(o => o.stato === 'aperto' || o.stato === 'attesa_spedizione').map(o => o.id);
+  if (ids.length) await loadAvanzamenti(ids);
+}
+
+// Schedula ricalcolo automatico a fine turno (quando il giorno lavorativo scorre avanti)
+function scheduleEndOfShiftRefresh() {
+  if (!orarioConfig?.ora_fine) return;
+  const [h, m] = orarioConfig.ora_fine.split(':').map(Number);
+  const now = new Date();
+  const target = new Date(now);
+  target.setHours(h, m, 0, 0);
+  if (target <= now) target.setDate(target.getDate() + 1); // già passato oggi → domani
+  const ms = target - now;
+  setTimeout(async () => {
+    await refreshStime();
+    scheduleEndOfShiftRefresh(); // ripianifica per il giorno dopo
+  }, ms);
 }
 
 // Carica avanzamento fasi per tutti gli ordini visibili
