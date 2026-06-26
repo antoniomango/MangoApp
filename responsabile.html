@@ -1623,8 +1623,6 @@ async function loadAvanzamenti(ids) {
     return oa.scadenza.localeCompare(ob.scadenza);
   });
 
-  let minutiCoda = 0; // minuti accumulati dagli ordini precedenti nella coda
-
   idsSorted.forEach(id => {
     const el = document.getElementById('prog-' + id);
     if (!el) return;
@@ -1651,9 +1649,8 @@ async function loadAvanzamenti(ids) {
 
     if (s.haveMedia && s.minRimanenti > 0) {
       const quantita = ordine?.quantita || 1;
-      const minTotaleOrdine = s.minRimanenti * quantita;
-      // Stima = coda degli ordini precedenti + lavoro rimanente di questo ordine
-      const giorniRimanenti = Math.ceil((minutiCoda + minTotaleOrdine) / minutiGiorno);
+      const minTotale = s.minRimanenti * quantita;
+      const giorniRimanenti = Math.ceil(minTotale / minutiGiorno);
       const dataStimata = addGiorniLavorativi(new Date(), giorniRimanenti);
       const dataStimataStr = dataStimata.toISOString().split('T')[0];
       const isRischio = ordine?.scadenza && dataStimataStr > ordine.scadenza;
@@ -1664,7 +1661,6 @@ async function loadAvanzamenti(ids) {
         const icon = isRischio ? '⚠️' : '🔮';
         stimaEl.innerHTML = `<span style="color:${color}">${icon} stima: ${stimaFmt}</span>`;
       }
-      minutiCoda += minTotaleOrdine; // questo ordine occupa capacità per i successivi
     }
   });
 }
@@ -2469,16 +2465,18 @@ async function loadOrarioConfig() {
 
 async function loadFaseMediaMinuti() {
   const { data } = await sb.from('ordine_fasi')
-    .select('fase_id, tempo_accumulato_minuti')
+    .select('fase_id, tempo_accumulato_minuti, ordini(quantita)')
     .eq('stato', 'completata')
     .gt('tempo_accumulato_minuti', 0)
-    .lt('tempo_accumulato_minuti', 20000) // max ~42 giorni lavorativi, filtra outlier estremi
+    .lt('tempo_accumulato_minuti', 20000)
     .not('fase_id', 'is', null);
   if (!data) return;
   const map = {};
   data.forEach(f => {
+    const q = f.ordini?.quantita || 1;
+    const minPerPezzo = f.tempo_accumulato_minuti / q; // normalizza per pezzo
     if (!map[f.fase_id]) map[f.fase_id] = [];
-    map[f.fase_id].push(f.tempo_accumulato_minuti);
+    map[f.fase_id].push(minPerPezzo);
   });
   faseMediaMinutiMap = {};
   Object.entries(map).forEach(([id, vals]) => {

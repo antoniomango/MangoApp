@@ -441,6 +441,7 @@ let isOnline = navigator.onLine;
 let currentOrdineId = null;
 let currentFaseDetId = null; // ordine_fasi.id
 let faseMediaMinutiMap = {};
+let orarioConfig = null;
 
 // ═══════════════════════════════════════════════
 // INDEXEDDB — OFFLINE QUEUE
@@ -648,7 +649,7 @@ async function showApp() {
   await loadFasi();
   await loadOrdini();
   await loadNotificheOp();
-  await loadFaseMediaMinuti();
+  await Promise.all([loadFaseMediaMinuti(), loadOrarioConfigOp()]);
   setupRealtime();
   updateQueueBadge();
   syncQueue();
@@ -886,7 +887,7 @@ async function renderHome() {
   }
   // Calcola stima consegna per ogni ordine
   const stimaPerOrdine = {};
-  const minutiGiorno = 480; // default 8h, senza orarioConfig in operatore
+  const minutiGiorno = getMinutiGiorno();
   aperti.forEach(o => {
     const fasi = (fasiPerOrdine[o.id] || []).filter(f => f.stato !== 'non_applicabile' && f.stato !== 'completata');
     let minRim = 0;
@@ -1078,7 +1079,7 @@ async function renderOrdineDetail(ordineId) {
       });
       if (minRim > 0) {
         const quantita = ordine.quantita || 1;
-        const giorni = Math.ceil(minRim * quantita / 480);
+        const giorni = Math.ceil(minRim * quantita / getMinutiGiorno());
         const dataStimata = addGiorniLavorativi(new Date(), giorni);
         const stimaStr = dataStimata.toISOString().split('T')[0];
         const stimaFmt = dataStimata.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' });
@@ -1997,6 +1998,19 @@ function scadenzaLabel(scadenza) {
 function formatDate(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
 function formatDateTime(d) { if (!d) return '—'; return new Date(d).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
 
+async function loadOrarioConfigOp() {
+  if (!isOnline) return;
+  const { data } = await sb.from('config_orario').select('ora_inizio, ora_fine').single();
+  if (data) orarioConfig = data;
+}
+
+function getMinutiGiorno() {
+  if (!orarioConfig) return 480;
+  const [hi, mi] = (orarioConfig.ora_inizio || '08:00').split(':').map(Number);
+  const [hf, mf] = (orarioConfig.ora_fine   || '17:00').split(':').map(Number);
+  return (hf * 60 + mf) - (hi * 60 + mi);
+}
+
 function addGiorniLavorativi(dataInizio, giorni) {
   const d = new Date(dataInizio);
   if (giorni <= 0) return d;
@@ -2012,7 +2026,7 @@ function addGiorniLavorativi(dataInizio, giorni) {
 async function loadFaseMediaMinuti() {
   if (!isOnline) return;
   const { data } = await sb.from('ordine_fasi')
-    .select('fase_id, tempo_accumulato_minuti')
+    .select('fase_id, tempo_accumulato_minuti, ordini(quantita)')
     .eq('stato', 'completata')
     .gt('tempo_accumulato_minuti', 0)
     .lt('tempo_accumulato_minuti', 20000)
@@ -2020,8 +2034,10 @@ async function loadFaseMediaMinuti() {
   if (!data) return;
   const map = {};
   data.forEach(f => {
+    const q = f.ordini?.quantita || 1;
+    const minPerPezzo = f.tempo_accumulato_minuti / q;
     if (!map[f.fase_id]) map[f.fase_id] = [];
-    map[f.fase_id].push(f.tempo_accumulato_minuti);
+    map[f.fase_id].push(minPerPezzo);
   });
   faseMediaMinutiMap = {};
   Object.entries(map).forEach(([id, vals]) => {
