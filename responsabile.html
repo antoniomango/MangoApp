@@ -1575,6 +1575,10 @@ function ordineRow(o, mini = false) {
 async function refreshStime() {
   const ids = ordiniCache.filter(o => o.stato === 'aperto' || o.stato === 'attesa_spedizione').map(o => o.id);
   if (ids.length) await loadAvanzamenti(ids);
+  // Se la pianificazione è visibile, ricarica anche quella (ha la sua fetch dei dati aggiornati)
+  if (document.getElementById('sec-pianificazione')?.classList.contains('active')) {
+    await renderPianificazione();
+  }
 }
 
 // Schedula ricalcolo automatico a fine turno (quando il giorno lavorativo scorre avanti)
