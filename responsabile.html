@@ -1197,6 +1197,7 @@ let operatoriCache = [];
 let notificheCache = [];
 let currentOrdineId = null;
 let faseMediaMinutiMap = {}; // fase_id -> avg minuti per pezzo
+let _etaMinutiCache = {}; // ordine_id -> minuti ETA (critical path), aggiornato da loadAvanzamenti e renderPianificazione
 let currentFaseId = null; // per riassegna
 let riassegnaOrdFaseId = null;
 
@@ -1439,31 +1440,31 @@ async function renderPianificazione() {
     return (hf * 60 + mf) - (hi * 60 + mi);
   })();
 
-  // Calcola stima per ogni ordine (semplice, senza coda — per avere un ranking rapido)
+  // Costruisce fasiMap e usa buildEtaFromFasi — stesso algoritmo di loadAvanzamenti
+  const fasiMapPiano = {};
+  attivi.forEach(o => {
+    fasiMapPiano[o.id] = (faseDati || []).filter(f => f.ordine_id === o.id);
+  });
+  const etaPiano = buildEtaFromFasi(attivi, fasiMapPiano);
+
   const stime = attivi.map(o => {
     const fasi = (faseDati || []).filter(f => f.ordine_id === o.id && f.stato !== 'non_applicabile');
     const tot = fasi.length;
     const done = fasi.filter(f => f.stato === 'completata').length;
     const pct = tot > 0 ? Math.round(done / tot * 100) : 0;
-    const rimanenti = fasi.filter(f => f.stato !== 'completata');
-    let minRim = 0;
-    rimanenti.forEach(f => {
-      const media = faseMediaMinutiMap[parseInt(f.fase_id)];
-      if (media) minRim += f.stato === 'in_corso' ? media * 0.5 : media;
-    });
-    const quantita = o.quantita || 1;
+    const minEta = etaPiano[o.id] || 0;
     let dataStimata = null;
     let stimaStr = null;
-    if (minRim > 0) {
-      const giorni = Math.ceil(minRim * quantita / minutiGiorno);
+    if (minEta > 0) {
+      const giorni = Math.ceil(minEta / minutiGiorno);
       dataStimata = addGiorniLavorativi(new Date(), giorni);
       stimaStr = dataStimata.toISOString().split('T')[0];
     }
     const oggi = new Date().toISOString().split('T')[0];
-    const isInRitardo = o.scadenza && oggi > o.scadenza;
-    const isRischio = !isInRitardo && stimaStr && o.scadenza && stimaStr > o.scadenza;
+    const isInRitardo = !!(o.scadenza && oggi > o.scadenza);
+    const isRischio = !isInRitardo && !!(stimaStr && o.scadenza && stimaStr > o.scadenza);
     const operatori = opPerOrdine[o.id] ? [...opPerOrdine[o.id]].join(', ') : '—';
-    return { o, pct, stimaStr, dataStimata, isInRitardo, isRischio, operatori, minRim };
+    return { o, pct, stimaStr, dataStimata, isInRitardo, isRischio, operatori };
   });
 
   // Ordina: ritardo → rischio → in tempo con scadenza → senza scadenza
@@ -1611,44 +1612,14 @@ async function loadAvanzamenti(ids) {
     return Math.max(60, (hf * 60 + mf) - (hi * 60 + mi));
   })();
 
-  // Costruisce coda per fase_id: stessa fase → stesso operatore la fa in sequenza
-  // Ordini con scadenza prima hanno priorità nella coda
-  const faseQueue = {}; // fase_id → [{ordine_id, minuti}] ordinato per scadenza
-  ids.forEach(id => {
-    const ordine = ordiniCache.find(o => o.id === id);
-    const s = map[id];
-    if (!s?.fasiRim?.length) return;
-    const q = ordine?.quantita || 1;
-    const scad = ordine?.scadenza || '9999-12-31';
-    s.fasiRim.forEach(f => {
-      const media = faseMediaMinutiMap[f.fase_id];
-      if (!media) return;
-      const minuti = (f.inCorso ? media * 0.5 : media) * q;
-      if (!faseQueue[f.fase_id]) faseQueue[f.fase_id] = [];
-      faseQueue[f.fase_id].push({ ordine_id: id, minuti, scad });
-    });
-  });
-  // Ordina ogni coda per scadenza (urgenti prima)
-  Object.values(faseQueue).forEach(q => q.sort((a, b) => a.scad.localeCompare(b.scad)));
-
-  // Per ogni ordine calcola ETA = critical path:
-  // max tra le fasi rimanenti di (attesa in coda per quella fase + tempo proprio)
-  const etaMinutiPerOrdine = {};
+  // Costruisce fasiMap nel formato atteso da buildEtaFromFasi
+  const fasiMap = {};
   ids.forEach(id => {
     const s = map[id];
-    if (!s?.fasiRim?.length) return;
-    let maxMinuti = 0;
-    s.fasiRim.forEach(f => {
-      const queue = faseQueue[f.fase_id];
-      if (!queue) return;
-      const myPos = queue.findIndex(item => item.ordine_id === id);
-      if (myPos < 0) return;
-      const attesa = queue.slice(0, myPos).reduce((sum, item) => sum + item.minuti, 0);
-      const proprio = queue[myPos].minuti;
-      maxMinuti = Math.max(maxMinuti, attesa + proprio);
-    });
-    if (maxMinuti > 0) etaMinutiPerOrdine[id] = maxMinuti;
+    fasiMap[id] = (s?.fasiRim || []).map(f => ({ fase_id: f.fase_id, stato: f.inCorso ? 'in_corso' : 'disponibile' }));
   });
+  const stdOrdini = ids.map(id => ordiniCache.find(o => o.id === id)).filter(Boolean);
+  const etaMinutiPerOrdine = buildEtaFromFasi(stdOrdini, fasiMap);
 
   // Ordina per scadenza per render
   const idsSorted = [...ids].sort((a, b) => {
@@ -3268,37 +3239,15 @@ async function checkOrdiniInRitardo() {
   }
 }
 
-async function calcolaStimaSingoloOrdine(id) {
+function calcolaStimaSingoloOrdine(id) {
   const el = document.getElementById('det-stima-consegna');
   if (!el) return;
   const ordine = ordiniCache.find(o => o.id === id);
   if (!ordine) { el.textContent = '—'; return; }
 
-  // Carica fasi rimanenti di questo ordine
-  const isExtra = ordine.tipo === 'extra';
-  let minRimanenti = 0;
-  let haveMedia = false;
-  if (isExtra) {
-    const { data } = await sb.from('fasi_ordine_extra').select('stato, nome').eq('ordine_id', id);
-    (data || []).forEach(f => {
-      if (f.stato === 'completata' || f.stato === 'non_applicabile') return;
-      // Per extra non abbiamo media per nome — saltiamo
-    });
-  } else {
-    const { data } = await sb.from('ordine_fasi').select('stato, fase_id').eq('ordine_id', id);
-    (data || []).forEach(f => {
-      if (f.stato === 'completata' || f.stato === 'non_applicabile') return;
-      const media = faseMediaMinutiMap[f.fase_id];
-      if (media) {
-        minRimanenti += f.stato === 'in_corso' ? media * 0.5 : media;
-        haveMedia = true;
-      }
-    });
-  }
+  const minTotale = _etaMinutiCache[id];
+  if (!minTotale) { el.textContent = 'Dati insufficienti'; el.style.color = 'var(--muted)'; return; }
 
-  if (!haveMedia || minRimanenti <= 0) { el.textContent = 'Dati insufficienti'; el.style.color = 'var(--muted)'; return; }
-
-  // Calcola minuti coda: somma lavoro rimanente degli ordini con scadenza precedente
   const minutiGiorno = (() => {
     if (!orarioConfig) return 480;
     const [hi, mi] = (orarioConfig.ora_inizio || '08:00').split(':').map(Number);
@@ -3306,30 +3255,49 @@ async function calcolaStimaSingoloOrdine(id) {
     return Math.max(60, (hf * 60 + mf) - (hi * 60 + mi));
   })();
 
-  // Ordini con scadenza prima o uguale a questo (escludi questo)
-  const ordiniPrecedenti = ordiniCache
-    .filter(o => o.id !== id && o.stato === 'aperto' && o.scadenza && ordine.scadenza && o.scadenza <= ordine.scadenza)
-    .sort((a, b) => a.scadenza.localeCompare(b.scadenza));
-
-  let minutiCoda = 0;
-  for (const op of ordiniPrecedenti) {
-    const { data } = await sb.from('ordine_fasi').select('stato, fase_id').eq('ordine_id', op.id);
-    let minOp = 0;
-    (data || []).forEach(f => {
-      if (f.stato === 'completata' || f.stato === 'non_applicabile') return;
-      const media = faseMediaMinutiMap[f.fase_id];
-      if (media) minOp += f.stato === 'in_corso' ? media * 0.5 : media;
-    });
-    minutiCoda += minOp * (op.quantita || 1);
-  }
-
-  const quantita = ordine.quantita || 1;
-  const giorniRimanenti = Math.ceil((minutiCoda + minRimanenti * quantita) / minutiGiorno);
-  const dataStimata = addGiorniLavorativi(new Date(), giorniRimanenti);
+  const giorni = Math.ceil(minTotale / minutiGiorno);
+  const dataStimata = addGiorniLavorativi(new Date(), giorni);
   const dataStimataStr = dataStimata.toISOString().split('T')[0];
   const isRischio = ordine.scadenza && dataStimataStr > ordine.scadenza;
   el.textContent = formatDate(dataStimataStr) + (isRischio ? ' ⚠️' : ' ✓');
   el.style.color = isRischio ? 'var(--alert)' : 'var(--ok)';
+}
+
+// Calcola ETA per lista ordini usando coda per fase_id (critical path).
+// fasiMap: { ordine_id -> [{fase_id, stato}] }
+// Ritorna { ordine_id -> minuti_eta } e aggiorna _etaMinutiCache.
+function buildEtaFromFasi(ordiniList, fasiMap) {
+  const faseQueue = {};
+  ordiniList.forEach(o => {
+    const q = o.quantita || 1;
+    const scad = o.scadenza || '9999-12-31';
+    (fasiMap[o.id] || []).filter(f => f.stato === 'disponibile' || f.stato === 'in_corso').forEach(f => {
+      const fid = parseInt(f.fase_id);
+      const media = faseMediaMinutiMap[fid];
+      if (!media) return;
+      const minuti = (f.stato === 'in_corso' ? media * 0.5 : media) * q;
+      if (!faseQueue[fid]) faseQueue[fid] = [];
+      faseQueue[fid].push({ ordine_id: o.id, minuti, scad });
+    });
+  });
+  Object.values(faseQueue).forEach(q => q.sort((a, b) => a.scad.localeCompare(b.scad)));
+
+  const eta = {};
+  ordiniList.forEach(o => {
+    let maxMin = 0;
+    (fasiMap[o.id] || []).filter(f => f.stato === 'disponibile' || f.stato === 'in_corso').forEach(f => {
+      const fid = parseInt(f.fase_id);
+      const queue = faseQueue[fid];
+      if (!queue) return;
+      const pos = queue.findIndex(i => i.ordine_id === o.id);
+      if (pos < 0) return;
+      const attesa = queue.slice(0, pos).reduce((s, i) => s + i.minuti, 0);
+      maxMin = Math.max(maxMin, attesa + queue[pos].minuti);
+    });
+    if (maxMin > 0) eta[o.id] = maxMin;
+  });
+  Object.assign(_etaMinutiCache, eta);
+  return eta;
 }
 
 function addGiorniLavorativi(dataInizio, giorni) {
