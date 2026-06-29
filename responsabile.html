@@ -1410,7 +1410,7 @@ async function renderPianificazione() {
   const el = document.getElementById('piano-content');
   el.innerHTML = '<div class="empty-state"><div class="icon">⏳</div><p>Calcolo stime...</p></div>';
 
-  const attivi = ordiniCache.filter(o => o.stato === 'aperto' || o.stato === 'attesa_spedizione');
+  const attivi = ordiniCache.filter(o => o.stato === 'aperto');
   if (!attivi.length) {
     el.innerHTML = '<div class="empty-state"><div class="icon">📅</div><p>Nessun ordine attivo</p></div>';
     return;
@@ -1573,7 +1573,7 @@ function ordineRow(o, mini = false) {
 
 // Ricalcola stime per tutti gli ordini attivi (chiamato da realtime e fine turno)
 async function refreshStime() {
-  const ids = ordiniCache.filter(o => o.stato === 'aperto' || o.stato === 'attesa_spedizione').map(o => o.id);
+  const ids = ordiniCache.filter(o => o.stato === 'aperto').map(o => o.id);
   if (ids.length) await loadAvanzamenti(ids);
   // Se la pianificazione è visibile, ricarica anche quella (ha la sua fetch dei dati aggiornati)
   if (document.getElementById('sec-pianificazione')?.classList.contains('active')) {
@@ -1721,7 +1721,20 @@ function renderOrdiniTable() {
     tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="icon">📋</div><p>Nessun ordine trovato</p></div></td></tr>';
     return;
   }
-  tbody.innerHTML = filtered.map(o => ordineRow(o)).join('');
+  const meseKey = (o) => o.scadenza ? o.scadenza.substring(0, 7) : '9999-99';
+  let meseCorrente = null;
+  tbody.innerHTML = filtered.map(o => {
+    const meseDato = meseKey(o);
+    let sep = '';
+    if (meseDato !== meseCorrente) {
+      meseCorrente = meseDato;
+      const label = meseDato === '9999-99'
+        ? 'Senza scadenza'
+        : new Date(meseDato + '-02').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+      sep = `<tr><td colspan="8" style="padding:6px 12px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;background:var(--bg,#fafafa);border-top:2px solid var(--border)">📅 ${label}</td></tr>`;
+    }
+    return sep + ordineRow(o);
+  }).join('');
   loadAvanzamenti(filtered.map(o => o.id));
 }
 
