@@ -533,15 +533,11 @@ async function syncQueue() {
         const { data } = await sb.rpc('completa_fase', { p_ordine_fase_id: item.ordFaseId, p_operatore_id: currentUser.id, p_note_operatore: item.note });
         ok = data?.ok;
       } else if (item.type === 'prendi_fase_extra') {
-        const { error } = await sb.from('fasi_ordine_extra').update({
-          stato: 'in_corso', operatore_id: currentUser.id, iniziata_il: new Date().toISOString()
-        }).eq('id', item.faseExtraId).eq('stato', 'disponibile');
-        ok = !error;
+        const { data } = await sb.rpc('prendi_in_carico_extra', { p_fase_extra_id: item.faseExtraId, p_operatore_id: currentUser.id });
+        ok = data?.ok;
       } else if (item.type === 'completa_fase_extra') {
-        const { error } = await sb.from('fasi_ordine_extra').update({
-          stato: 'completata', completata_il: new Date().toISOString(), note_operatore: item.note
-        }).eq('id', item.faseExtraId).eq('operatore_id', currentUser.id);
-        ok = !error;
+        const { data } = await sb.rpc('completa_fase_extra', { p_fase_extra_id: item.faseExtraId, p_operatore_id: currentUser.id, p_note: item.note });
+        ok = data?.ok;
       } else if (item.type === 'nc') {
         const { error } = await sb.from('non_conformita').insert(item.payload);
         ok = !error;
@@ -1296,7 +1292,8 @@ async function aggiungiCollegaExtra(faseExtraId, ordineId, opId, opNome) {
 
 async function rimuoviCollegaExtra(faseExtraId, ordineId, opId, opNome) {
   if (!confirm(`Rimuovere ${opNome} da questa fase?`)) return;
-  await sb.from('fasi_extra_operatori').delete().eq('fasi_ordine_extra_id', faseExtraId).eq('operatore_id', opId);
+  const { data, error } = await sb.rpc('rimuovi_collega_extra', { p_fase_extra_id: faseExtraId, p_collega_id: opId, p_richiedente_id: currentUser.id });
+  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   toast(`${opNome} rimosso`, 'ok');
   await renderFaseExtraDetail(faseExtraId, ordineId);
 }
@@ -1316,11 +1313,8 @@ async function riapriFaseExtraOp(faseExtraId, ordineId) {
   const nomeFase = document.getElementById('fase-det-title')?.textContent || 'questa fase';
   if (!confirm('Hai altro lavoro da fare su questa fase? Riaprila.')) return;
   if (!confirm(`Sei sicuro di voler riaprire la fase "${nomeFase}"?`)) return;
-  const { error } = await sb.from('fasi_ordine_extra').update({
-    stato: 'disponibile', operatore_id: null, iniziata_il: null, completata_il: null
-  }).eq('id', faseExtraId);
-  if (error) { toast('Errore: ' + error.message, 'err'); return; }
-  await sb.from('fasi_extra_operatori').delete().eq('fasi_ordine_extra_id', faseExtraId);
+  const { data, error } = await sb.rpc('annulla_presa_in_carico_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id });
+  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   toast('Fase riaperta', 'ok');
   await renderFaseExtraDetail(faseExtraId, ordineId);
   renderHome();
@@ -1338,10 +1332,8 @@ async function annullaPresaInCaricoExtra(faseExtraId, ordineId) {
 async function completaFaseExtra(faseExtraId, ordineId) {
   const note = document.getElementById('note-op-extra')?.value.trim() || null;
   if (isOnline) {
-    const { error } = await sb.from('fasi_ordine_extra').update({
-      stato: 'completata', completata_il: new Date().toISOString(), note_operatore: note
-    }).eq('id', faseExtraId).eq('operatore_id', currentUser.id);
-    if (error) { toast('Errore: ' + error.message, 'err'); return; }
+    const { data, error } = await sb.rpc('completa_fase_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id, p_note: note });
+    if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   } else {
     await queueAction({ type: 'completa_fase_extra', faseExtraId, note });
     await updateQueueBadge();
@@ -1546,11 +1538,7 @@ async function prendiInCarico(ordFaseId, ordineId) {
   if (isOnline) {
     const { data } = await sb.rpc('prendi_in_carico_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id });
     if (!data?.ok) { toast(data?.errore || 'Errore', 'err'); return; }
-    // Registra nella junction table
-    await sb.from('ordine_fasi_operatori').upsert(
-      { ordine_fase_id: ordFaseId, operatore_id: currentUser.id },
-      { onConflict: 'ordine_fase_id,operatore_id' }
-    );
+    // La junction table è gestita internamente dal RPC prendi_in_carico_fase
   } else {
     await queueAction({ type: 'prendi_fase', ordFaseId, ts: Date.now() });
     toast('Azione salvata offline — sarà sincronizzata alla riconnessione', 'ok');
@@ -1563,11 +1551,8 @@ async function prendiInCarico(ordFaseId, ordineId) {
 
 async function aggiungiCollega(ordFaseId, ordineId, collegaId, collegaNome) {
   if (!confirm(`Aggiungere ${collegaNome} a questa fase?`)) return;
-  const { error } = await sb.from('ordine_fasi_operatori').upsert(
-    { ordine_fase_id: ordFaseId, operatore_id: collegaId },
-    { onConflict: 'ordine_fase_id,operatore_id' }
-  );
-  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  const { data, error } = await sb.rpc('aggiungi_collega_fase', { p_ordine_fase_id: ordFaseId, p_collega_id: collegaId, p_richiedente_id: currentUser.id });
+  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   await sb.from('archivio_log').insert({
     ordine_id: ordineId, utente_id: currentUser.id,
     azione: 'fase_iniziata', dettaglio: { aggiunto_da: currentUser.id, operatore_id: collegaId, ordine_fase_id: ordFaseId }
@@ -1578,9 +1563,8 @@ async function aggiungiCollega(ordFaseId, ordineId, collegaId, collegaNome) {
 
 async function rimuoviCollega(ordFaseId, ordineId, collegaId, collegaNome) {
   if (!confirm(`Rimuovere ${collegaNome} da questa fase?`)) return;
-  const { error } = await sb.from('ordine_fasi_operatori').delete()
-    .eq('ordine_fase_id', ordFaseId).eq('operatore_id', collegaId);
-  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  const { data, error } = await sb.rpc('rimuovi_collega_fase', { p_ordine_fase_id: ordFaseId, p_collega_id: collegaId, p_richiedente_id: currentUser.id });
+  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   await sb.from('archivio_log').insert({
     ordine_id: ordineId, utente_id: currentUser.id,
     azione: 'fase_annullata', dettaglio: { rimosso_da: currentUser.id, operatore_id: collegaId, ordine_fase_id: ordFaseId }
@@ -1591,11 +1575,8 @@ async function rimuoviCollega(ordFaseId, ordineId, collegaId, collegaNome) {
 
 async function uniscitiAFase(ordFaseId, ordineId) {
   if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
-  const { error } = await sb.from('ordine_fasi_operatori').upsert(
-    { ordine_fase_id: ordFaseId, operatore_id: currentUser.id },
-    { onConflict: 'ordine_fase_id,operatore_id' }
-  );
-  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  const { data, error } = await sb.rpc('aggiungi_collega_fase', { p_ordine_fase_id: ordFaseId, p_collega_id: currentUser.id, p_richiedente_id: currentUser.id });
+  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   await sb.from('archivio_log').insert({
     ordine_id: ordineId, utente_id: currentUser.id,
     azione: 'fase_iniziata', dettaglio: { unione: true, ordine_fase_id: ordFaseId }
@@ -1625,8 +1606,8 @@ async function completaFase(ordFaseId, ordineId) {
       const { error: upErr } = await sb.storage.from('allegati-fasi').upload(path, file, { upsert: true });
       if (upErr) { console.error('Upload foto:', upErr); toast(`Foto ${caricate + 1}: errore upload`, 'err'); }
       else {
-        const { error: insErr } = await sb.from('allegati').insert({ ordine_fase_id: ordFaseId, url_file: path, caricato_da: currentUser.id });
-        if (insErr) console.error('Insert allegato:', insErr);
+        const { data: insData } = await sb.rpc('salva_allegato', { p_ordine_fase_id: ordFaseId, p_url_file: path, p_operatore_id: currentUser.id });
+        if (!insData?.ok) console.error('Insert allegato: non autorizzato o errore');
         else caricate++;
       }
     }
