@@ -412,6 +412,9 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
       <div class="nav-item" onclick="showSection('fasi-config')" id="nav-fasi-config">
         <span class="icon">⚙️</span> Config. Fasi
       </div>
+      <div class="nav-item" onclick="showSection('tipi-prodotto-config')" id="nav-tipi-prodotto-config">
+        <span class="icon">🏷️</span> Tipi Prodotto
+      </div>
       <div class="nav-item" onclick="showSection('macro-config')" id="nav-macro-config">
         <span class="icon">📊</span> Macro Fasi
       </div>
@@ -459,8 +462,6 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
           </select>
           <select id="flt-tipo-prodotto" onchange="renderOrdiniTable()">
             <option value="">Tutti i tipi</option>
-            <option value="portoncino">Portoncino</option>
-            <option value="battente">Battente</option>
           </select>
         </div>
         <div class="legenda-scad">
@@ -859,6 +860,20 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
           <div id="fasi-config-list">Caricamento…</div>
         </div>
       </section>
+
+      <!-- TIPI PRODOTTO -->
+      <section class="section" id="sec-tipi-prodotto-config">
+        <div class="page-hdr">
+          <div>
+            <h1>Tipi Prodotto</h1>
+            <div class="sub">Gestisci i tipi di prodotto disponibili — si aggiornano ovunque in automatico</div>
+          </div>
+          <button class="btn btn-primary" onclick="openModalNuovoTipoProdotto()">+ Nuovo Tipo</button>
+        </div>
+        <div class="card" style="padding:4px 20px 16px">
+          <div id="tipi-prodotto-list">Caricamento…</div>
+        </div>
+      </section>
     </main>
   </div>
 </div>
@@ -915,8 +930,6 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
           <div class="form-group">
             <label>Tipo Prodotto *</label>
             <select id="ord-tipo-prodotto">
-              <option value="portoncino">Portoncino</option>
-              <option value="battente">Battente</option>
             </select>
           </div>
         </div>
@@ -1006,8 +1019,6 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
         <div class="form-group">
           <label>Tipo Prodotto</label>
           <select id="mod-tipo-prodotto">
-            <option value="portoncino">Portoncino</option>
-            <option value="battente">Battente</option>
           </select>
         </div>
         <div class="form-group">
@@ -1151,6 +1162,70 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
   </div>
 </div>
 
+<!-- MODALE NUOVA FASE -->
+<div class="modal-overlay" id="modal-nuova-fase">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-hdr">
+      <h3>Nuova Fase</h3>
+      <button class="modal-close" onclick="closeModal('modal-nuova-fase')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nome fase *</label>
+          <input type="text" id="nf-nome" placeholder="es. Preparazione ferramenta">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Descrizione <span style="color:var(--muted);font-weight:400">(opzionale)</span></label>
+        <input type="text" id="nf-desc" placeholder="Descrizione breve">
+      </div>
+      <div class="form-group">
+        <label>Inserisci dopo la fase *</label>
+        <select id="nf-posizione">
+          <option value="0">— In cima alla lista</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Applicabile solo a tipo prodotto</label>
+        <select id="nf-trigger">
+          <option value="">Tutti i tipi (nessun vincolo)</option>
+        </select>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Se scegli un tipo, la fase sarà N/A automaticamente per tutti gli altri tipi di prodotto.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-nuova-fase')">Annulla</button>
+      <button class="btn btn-primary" onclick="confermaNuovaFase()">Aggiungi fase</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE NUOVO TIPO PRODOTTO -->
+<div class="modal-overlay" id="modal-nuovo-tipo-prodotto">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-hdr">
+      <h3 id="modal-tipo-title">Nuovo Tipo Prodotto</h3>
+      <button class="modal-close" onclick="closeModal('modal-nuovo-tipo-prodotto')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>ID interno * <span style="color:var(--muted);font-weight:400">(es. scorrevole — solo minuscole, senza spazi)</span></label>
+        <input type="text" id="ntp-id" placeholder="es. scorrevole" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_]/g,'')">
+      </div>
+      <div class="form-group">
+        <label>Etichetta visualizzata *</label>
+        <input type="text" id="ntp-label" placeholder="es. Scorrevole">
+      </div>
+      <input type="hidden" id="ntp-edit-id">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-nuovo-tipo-prodotto')">Annulla</button>
+      <button class="btn btn-primary" onclick="confermaTipoProdotto()">Salva</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODALE RIASSEGNA FASE -->
 <div class="modal-overlay" id="modal-riassegna">
   <div class="modal" style="max-width:420px">
@@ -1189,7 +1264,8 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ═══════════════════════════════════════════════
 let currentUser = null;
 let currentUserRow = null;
-let fasi = []; // [{id, nome, descrizione}]
+let fasi = []; // [{id, nome, descrizione, posizione, trigger_tipo_prodotto}]
+let tipiProdotto = []; // [{id, label, posizione}]
 let ordiniCache = [];
 let ordiniSpeditiCache = [];
 let ncCache = [];
@@ -1231,8 +1307,8 @@ async function postLogin() {
   currentUserRow = data;
   document.getElementById('user-label').textContent = data ? `${data.nome} ${data.cognome}` : currentUser.email;
   document.getElementById('header-date').textContent = new Date().toLocaleDateString('it-IT', { weekday:'short', day:'numeric', month:'short' });
-  // Load fasi
-  await loadFasi();
+  // Load fasi e tipi prodotto (devono precedere il resto)
+  await Promise.all([loadFasi(), loadTipiProdotto()]);
   // Load data
   await Promise.all([loadOrdini(), loadNc(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadMacroFasi(), loadFaseMediaMinuti()]);
   // Check ordini in ritardo (solo responsabile)
@@ -1283,6 +1359,26 @@ async function doLogout() {
 async function loadFasi() {
   const { data } = await sb.from('fasi').select('*').order('posizione').order('id');
   fasi = data || [];
+}
+
+async function loadTipiProdotto() {
+  const { data } = await sb.from('tipi_prodotto').select('*').order('posizione').order('id');
+  tipiProdotto = data || [];
+  popolaTipiProdottoSelects();
+}
+
+function popolaTipiProdottoSelects() {
+  const opts = tipiProdotto.map(t => `<option value="${t.id}">${t.label}</option>`).join('');
+  const optsConTutti = `<option value="">Tutti i tipi</option>` + opts;
+  const optsConNessuno = `<option value="">Tutti i tipi (nessun vincolo)</option>` + opts;
+  const flt = document.getElementById('flt-tipo-prodotto');
+  const crea = document.getElementById('ord-tipo-prodotto');
+  const mod = document.getElementById('mod-tipo-prodotto');
+  const nfTrigger = document.getElementById('nf-trigger');
+  if (flt) flt.innerHTML = optsConTutti;
+  if (crea) crea.innerHTML = opts;
+  if (mod) mod.innerHTML = opts;
+  if (nfTrigger) nfTrigger.innerHTML = optsConNessuno;
 }
 
 async function loadOrdini() {
@@ -1401,6 +1497,7 @@ function showSection(name) {
   else if (name === 'ufficio') loadUfficio();
   else if (name === 'kpi') loadKpi();
   else if (name === 'pianificazione') renderPianificazione();
+  else if (name === 'tipi-prodotto-config') renderTipiProdottoConfig();
 }
 
 // ═══════════════════════════════════════════════
@@ -2201,6 +2298,14 @@ async function creaOrdine() {
     await sb.from('ordine_fasi').insert({
       ordine_id: newOrdine.id, fase_id: null, nome_custom: 'Spazzolatura', stato: 'disponibile'
     });
+  }
+
+  // Fix gap: applica subito trigger_tipo_prodotto per ordini standard
+  if (tipo === 'standard') {
+    const tipoProd = document.getElementById('ord-tipo-prodotto')?.value || '';
+    const struttura = document.getElementById('ord-struttura')?.value || '';
+    const materiale = document.getElementById('ord-materiale')?.value || '';
+    await ricalcolaFasiNA(newOrdine.id, tipoProd, struttura, materiale);
   }
 
   await sb.from('archivio_log').insert({ ordine_id: newOrdine.id, utente_id: currentUserRow.id, azione: 'ordine_creato' });
@@ -3024,7 +3129,15 @@ async function salvaNotaFaseExtra(faseExtraId, ordineId) {
 function renderFasiConfig() {
   const el = document.getElementById('fasi-config-list');
   const n = fasi.length;
-  el.innerHTML = fasi.map((f, i) => `
+  el.innerHTML = fasi.map((f, i) => {
+    const triggerLabel = f.trigger_tipo_prodotto
+      ? `<span style="font-size:11px;font-weight:600;background:#EEF2FF;color:#4338CA;padding:2px 7px;border-radius:4px;white-space:nowrap">Solo: ${tipoProdLabel(f.trigger_tipo_prodotto)}</span>`
+      : `<span style="font-size:11px;color:var(--muted)">Tutti</span>`;
+    const triggerSelect = `<select id="fase-trigger-${f.id}" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface)">
+      <option value="">Tutti i tipi</option>
+      ${tipiProdotto.map(t => `<option value="${t.id}" ${f.trigger_tipo_prodotto === t.id ? 'selected' : ''}>${t.label}</option>`).join('')}
+    </select>`;
+    return `
     <div class="fase-config-item" id="fase-cfg-row-${f.id}">
       <div class="fase-move-btns">
         <button class="fase-move-btn" onclick="spostaFase(${f.id},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
@@ -3034,10 +3147,14 @@ function renderFasiConfig() {
       <div class="fase-config-inputs">
         <input type="text" id="fase-nome-${f.id}" value="${escapeHtml(f.nome)}" placeholder="Nome fase">
         <input type="text" id="fase-desc-${f.id}" value="${escapeHtml(f.descrizione || '')}" placeholder="Descrizione (opzionale)">
+        <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
+          <span style="font-size:11px;color:var(--muted)">Tipo:</span>
+          ${triggerSelect}
+        </div>
       </div>
       <button class="fase-del-btn" title="Elimina fase" onclick="eliminaFase(${f.id})">✕</button>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 async function spostaFase(id, dir) {
@@ -3057,58 +3174,76 @@ async function spostaFase(id, dir) {
   renderFasiConfig();
 }
 
-async function aggiungiNuovaFase() {
-  const nome = prompt('Nome della nuova fase:');
-  if (!nome?.trim()) return;
-  const desc = prompt('Descrizione (opzionale, premi Invio per saltare):') || null;
-
-  // Chiedi posizione
-  const listaFasi = fasi.map((f, i) => `${i + 1}. ${f.nome}`).join('\n');
-  const sceltaRaw = prompt(
-    `Inserire la fase dopo quale posizione?\n(0 = in cima alla lista)\n\n${listaFasi}`
-  );
-  if (sceltaRaw === null) return; // annullato
-  const sceltaIdx = parseInt(sceltaRaw);
-  if (isNaN(sceltaIdx) || sceltaIdx < 0 || sceltaIdx > fasi.length) {
-    toast('Posizione non valida', 'err'); return;
+function aggiungiNuovaFase() {
+  // Popola select posizione
+  const sel = document.getElementById('nf-posizione');
+  if (sel) {
+    sel.innerHTML = '<option value="0">— In cima alla lista</option>' +
+      fasi.map((f, i) => `<option value="${i + 1}">${i + 1}. ${f.nome}</option>`).join('');
   }
+  // Popola trigger tipi prodotto
+  const trg = document.getElementById('nf-trigger');
+  if (trg) {
+    trg.innerHTML = '<option value="">Tutti i tipi (nessun vincolo)</option>' +
+      tipiProdotto.map(t => `<option value="${t.id}">${t.label}</option>`).join('');
+  }
+  // Reset campi
+  ['nf-nome','nf-desc'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  document.getElementById('modal-nuova-fase').classList.add('open');
+}
 
-  // Normalizza PRIMA le posizioni esistenti a multipli di 10 (evita decimali)
+async function confermaNuovaFase() {
+  const nome = document.getElementById('nf-nome')?.value.trim();
+  if (!nome) { toast('Inserisci il nome della fase', 'err'); return; }
+  const desc = document.getElementById('nf-desc')?.value.trim() || null;
+  const sceltaIdx = parseInt(document.getElementById('nf-posizione')?.value ?? '0');
+  const triggerTipo = document.getElementById('nf-trigger')?.value || null;
+
   await normalizzaPosizioni();
   await loadFasi();
 
-  // Ora posizioni = 10, 20, 30... il punto medio è sempre intero (X5)
   let nuovaPosizione;
   if (sceltaIdx === 0) {
     nuovaPosizione = (fasi[0]?.posizione ?? 10) - 5;
   } else {
-    const dopo = fasi[sceltaIdx - 1].posizione ?? (sceltaIdx * 10);
+    const dopo = fasi[sceltaIdx - 1]?.posizione ?? (sceltaIdx * 10);
     const successiva = fasi[sceltaIdx]?.posizione ?? (dopo + 10);
     nuovaPosizione = Math.round((dopo + successiva) / 2);
   }
 
-  const nextId = Math.max(...fasi.map(f => f.id)) + 1;
+  const nextId = Math.max(...fasi.map(f => f.id), 0) + 1;
   const { error } = await sb.from('fasi').insert({
-    id: nextId, nome: nome.trim(), descrizione: desc?.trim() || null, posizione: nuovaPosizione
+    id: nextId,
+    nome,
+    descrizione: desc,
+    posizione: nuovaPosizione,
+    trigger_tipo_prodotto: triggerTipo || null
   });
   if (error) { toast('Errore: ' + error.message, 'err'); return; }
 
-  // Rinormalizza di nuovo per includere la nuova fase
   await loadFasi();
   await normalizzaPosizioni();
 
-  // Aggiungi la fase a tutti gli ordini attivi
+  // Aggiungi la fase agli ordini attivi rispettando il trigger (whitelist)
   const ordiniAttivi = ordiniCache.filter(o => o.stato !== 'spedito' && !o.eliminato);
   if (ordiniAttivi.length) {
-    const { error: insErr } = await sb.from('ordine_fasi').insert(
-      ordiniAttivi.map(o => ({ ordine_id: o.id, fase_id: nextId, stato: 'disponibile' }))
-    );
-    if (insErr) toast(`Fase creata ma errore aggiornamento ordini: ${insErr.message}`, 'err');
-    else toast(`Fase aggiunta in posizione ${sceltaIdx + 1} e applicata a ${ordiniAttivi.length} ordini attivi`, 'ok');
+    const righe = ordiniAttivi.map(o => {
+      // Se c'è un trigger, la fase è N/A per ordini che non corrispondono al tipo
+      const statoIniziale = triggerTipo && o.tipo_prodotto !== triggerTipo ? 'non_applicabile' : 'disponibile';
+      return { ordine_id: o.id, fase_id: nextId, stato: statoIniziale };
+    });
+    const { error: insErr } = await sb.from('ordine_fasi').insert(righe);
+    if (insErr) toast(`Fase creata ma errore su ordini: ${insErr.message}`, 'err');
+    else {
+      const naCount = righe.filter(r => r.stato === 'non_applicabile').length;
+      const dispCount = righe.length - naCount;
+      toast(`Fase aggiunta: ${dispCount} disponibile, ${naCount} N/A per tipo prodotto`, 'ok');
+    }
   } else {
     toast('Fase aggiunta', 'ok');
   }
 
+  closeModal('modal-nuova-fase');
   await loadFasi();
   renderFasiConfig();
 }
@@ -3146,13 +3281,102 @@ async function saveFasiConfig(silent = false) {
   const updates = fasi.map(f => ({
     id: f.id,
     nome: document.getElementById(`fase-nome-${f.id}`)?.value.trim() || f.nome,
-    descrizione: document.getElementById(`fase-desc-${f.id}`)?.value.trim() || null
+    descrizione: document.getElementById(`fase-desc-${f.id}`)?.value.trim() || null,
+    trigger_tipo_prodotto: document.getElementById(`fase-trigger-${f.id}`)?.value || null
   }));
   for (const u of updates) {
-    await sb.from('fasi').update({ nome: u.nome, descrizione: u.descrizione }).eq('id', u.id);
+    await sb.from('fasi').update({
+      nome: u.nome,
+      descrizione: u.descrizione,
+      trigger_tipo_prodotto: u.trigger_tipo_prodotto
+    }).eq('id', u.id);
   }
   await loadFasi();
   if (!silent) toast('Configurazione fasi salvata', 'ok');
+}
+
+// ═══════════════════════════════════════════════
+// TIPI PRODOTTO CRUD
+// ═══════════════════════════════════════════════
+function renderTipiProdottoConfig() {
+  const el = document.getElementById('tipi-prodotto-list');
+  if (!tipiProdotto.length) {
+    el.innerHTML = '<p style="color:var(--muted);padding:12px 0">Nessun tipo prodotto configurato.</p>';
+    return;
+  }
+  el.innerHTML = tipiProdotto.map(t => `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px;font-weight:600;flex:1">${escapeHtml(t.label)}</span>
+      <span style="font-size:11px;color:var(--muted);font-family:monospace">${escapeHtml(t.id)}</span>
+      <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="openModalModificaTipoProdotto('${escapeHtml(t.id)}')">Modifica</button>
+      <button class="btn btn-danger" style="padding:4px 10px;font-size:12px" onclick="eliminaTipoProdotto('${escapeHtml(t.id)}')">✕</button>
+    </div>
+  `).join('');
+}
+
+function openModalNuovoTipoProdotto() {
+  document.getElementById('modal-tipo-title').textContent = 'Nuovo Tipo Prodotto';
+  document.getElementById('ntp-id').value = '';
+  document.getElementById('ntp-id').disabled = false;
+  document.getElementById('ntp-label').value = '';
+  document.getElementById('ntp-edit-id').value = '';
+  document.getElementById('modal-nuovo-tipo-prodotto').classList.add('open');
+}
+
+function openModalModificaTipoProdotto(id) {
+  const t = tipiProdotto.find(x => x.id === id);
+  if (!t) return;
+  document.getElementById('modal-tipo-title').textContent = 'Modifica Tipo Prodotto';
+  document.getElementById('ntp-id').value = t.id;
+  document.getElementById('ntp-id').disabled = true; // ID non modificabile
+  document.getElementById('ntp-label').value = t.label;
+  document.getElementById('ntp-edit-id').value = t.id;
+  document.getElementById('modal-nuovo-tipo-prodotto').classList.add('open');
+}
+
+async function confermaTipoProdotto() {
+  const editId = document.getElementById('ntp-edit-id').value;
+  const id = document.getElementById('ntp-id').value.trim();
+  const label = document.getElementById('ntp-label').value.trim();
+  if (!label) { toast('Inserisci l\'etichetta', 'err'); return; }
+
+  if (editId) {
+    // Modifica
+    const { data, error } = await sb.rpc('aggiorna_tipo_prodotto', {
+      p_id: editId, p_label: label, p_posizione: tipiProdotto.find(t => t.id === editId)?.posizione ?? 0,
+      p_responsabile_id: currentUserRow.id
+    });
+    if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message), 'err'); return; }
+    toast('Tipo prodotto aggiornato', 'ok');
+  } else {
+    // Nuovo
+    if (!id) { toast('Inserisci l\'ID interno', 'err'); return; }
+    const posizione = (Math.max(...tipiProdotto.map(t => t.posizione), 0)) + 10;
+    const { data, error } = await sb.rpc('aggiungi_tipo_prodotto', {
+      p_id: id, p_label: label, p_posizione: posizione, p_responsabile_id: currentUserRow.id
+    });
+    if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message), 'err'); return; }
+    toast('Tipo prodotto aggiunto', 'ok');
+  }
+
+  closeModal('modal-nuovo-tipo-prodotto');
+  await loadTipiProdotto();
+  renderTipiProdottoConfig();
+  renderFasiConfig(); // aggiorna select trigger nelle fasi
+}
+
+async function eliminaTipoProdotto(id) {
+  const t = tipiProdotto.find(x => x.id === id);
+  const label = t?.label || id;
+  if (!confirm(`Eliminare il tipo prodotto "${label}"?\nLe fasi collegate perderanno il vincolo di tipo.`)) return;
+  const { data, error } = await sb.rpc('elimina_tipo_prodotto', {
+    p_id: id, p_responsabile_id: currentUserRow.id
+  });
+  if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message), 'err'); return; }
+  toast(`"${label}" eliminato`, 'ok');
+  await loadTipiProdotto();
+  renderTipiProdottoConfig();
+  renderFasiConfig();
 }
 
 async function importaFasiDaExcel(input) {
@@ -3417,7 +3641,11 @@ async function riassegnaFaseExtra(faseExtraId, ordineId) {
 // START
 // ═══════════════════════════════════════════════
 function strutturaLabel(s) { return { "quattro_lati": "4 Lati", "barra_l": "Barra ad L", "complanare": "Complanare" }[s] || (s || "—"); }
-function tipoProdLabel(t) { return { "portoncino": "Portoncino", "battente": "Battente" }[t] || (t || "—"); }
+function tipoProdLabel(t) {
+  if (!t) return '—';
+  const found = tipiProdotto.find(x => x.id === t);
+  return found ? found.label : t;
+}
 function tipoLabel(t) { return strutturaLabel(t); }
 function getFaseNome(faseId) {
   const f = fasi.find(x => x.id === faseId);
@@ -3790,22 +4018,25 @@ async function ricalcolaFasiNA(ordineId, tipoProd, struttura, materiale) {
     .eq('ordine_id', ordineId);
   if (!fasiOrdine) return;
 
-  const isBattente   = tipoProd === 'battente';
+  // Regole struttura/materiale: rimangono hardcoded (non legate a tipo_prodotto)
   const isBarraOComp = struttura === 'barra_l' || struttura === 'complanare';
   const isMdf        = (materiale || '').toLowerCase() === 'hdf';
 
   for (const f of fasiOrdine) {
     let dovrebbeEssereNA = false;
 
-    // F8 → N/A se HDF
+    // Regole hardcoded struttura/materiale
     if (f.fase_id === 8 && isMdf) dovrebbeEssereNA = true;
-    // F9, F11 → N/A se barra_l o complanare
     if ((f.fase_id === 9 || f.fase_id === 11) && isBarraOComp) dovrebbeEssereNA = true;
-    // F17-F20 → N/A se battente
-    if (f.fase_id >= 17 && f.fase_id <= 20 && isBattente) dovrebbeEssereNA = true;
+
+    // Regola config-driven: trigger_tipo_prodotto (whitelist)
+    // Se la fase ha un trigger, è N/A per tutti gli ordini che NON sono quel tipo
+    const faseDef = fasi.find(x => x.id === f.fase_id);
+    if (faseDef?.trigger_tipo_prodotto && tipoProd !== faseDef.trigger_tipo_prodotto) {
+      dovrebbeEssereNA = true;
+    }
 
     const eNA = f.stato === 'non_applicabile';
-
     if (dovrebbeEssereNA && !eNA && f.stato === 'disponibile') {
       await sb.from('ordine_fasi').update({ stato: 'non_applicabile' }).eq('id', f.id);
     } else if (!dovrebbeEssereNA && eNA) {
