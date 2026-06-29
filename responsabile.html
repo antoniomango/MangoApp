@@ -1969,11 +1969,7 @@ async function confermaConclusioneFase() {
   }).eq('id', ordFaseId);
   if (error) { toast('Errore: ' + error.message, 'err'); return; }
 
-  // Aggiorna junction table: rimuovi vecchi, inserisci selezionati
-  await sb.from('ordine_fasi_operatori').delete().eq('ordine_fase_id', ordFaseId);
-  await sb.from('ordine_fasi_operatori').insert(
-    selezionati.map(opId => ({ ordine_fase_id: ordFaseId, operatore_id: opId }))
-  );
+  // Junction table gestita internamente da riassegna_fase — nessuna scrittura diretta
 
   await sb.from('archivio_log').insert({
     ordine_id: ordineId,
@@ -2165,12 +2161,14 @@ async function creaOrdine() {
 
   if (error) { toast('Errore: ' + error.message, 'err'); return; }
 
-  // Inserisci fasi extra (ordini tipo extra)
+  // Inserisci fasi extra tramite RPC (verifica ruolo responsabile lato DB)
   if (tipo === 'extra' && fasiExtra.length) {
-    const { error: eErr } = await sb.from('fasi_ordine_extra').insert(
-      fasiExtra.map(f => ({ ordine_id: newOrdine.id, ...f }))
-    );
-    if (eErr) { toast('Errore fasi extra: ' + eErr.message, 'err'); return; }
+    const { data: eData } = await sb.rpc('crea_fasi_extra', {
+      p_ordine_id: newOrdine.id,
+      p_fasi: fasiExtra,
+      p_responsabile_id: currentUserRow.id
+    });
+    if (!eData?.ok) { toast('Errore fasi extra', 'err'); return; }
   }
 
   // Inserisci fasi aggiuntive per ordini standard
@@ -2879,8 +2877,8 @@ async function scaricaEliminaFoto(ordineId, codice, cliente) {
   const paths = allegati.map(a => a.url_file);
   await sb.storage.from('allegati-fasi').remove(paths);
 
-  // Elimina record dalla tabella
-  await sb.from('allegati').delete().in('ordine_fase_id', fasiIds);
+  // Elimina record tramite RPC (verifica ruolo responsabile lato DB)
+  await sb.rpc('elimina_allegati_fasi', { p_fase_ids: fasiIds, p_responsabile_id: currentUserRow.id });
 
   toast(`${allegati.length} foto scaricate ed eliminate dal cloud`, 'ok');
 }
@@ -3000,7 +2998,8 @@ async function openFaseExtraDetail(faseExtraId, ordineId, readonly) {
 
 async function salvaNotaFaseExtra(faseExtraId, ordineId) {
   const note = document.getElementById('note-resp-extra')?.value || '';
-  await sb.from('fasi_ordine_extra').update({ note_responsabile: note }).eq('id', faseExtraId);
+  const { data } = await sb.rpc('salva_nota_fase_extra', { p_fase_extra_id: faseExtraId, p_note: note, p_responsabile_id: currentUserRow.id });
+  if (!data?.ok) { toast('Errore aggiornamento note', 'err'); return; }
   closeModal('modal-fase');
   toast('Note aggiornate', 'ok');
   renderDettaglioOrdine(ordineId);
@@ -3394,7 +3393,8 @@ function toast(msg, type = 'info') {
 async function riassegnaFaseExtra(faseExtraId, ordineId) {
   const opId = document.getElementById('riassegna-op-select')?.value;
   if (!opId) { toast('Seleziona un operatore', 'err'); return; }
-  await sb.from('fasi_ordine_extra').update({ operatore_id: opId }).eq('id', faseExtraId);
+  const { data } = await sb.rpc('riassegna_fase_extra', { p_fase_extra_id: faseExtraId, p_nuovo_op: opId, p_responsabile_id: currentUserRow.id });
+  if (!data?.ok) { toast('Errore riassegnazione', 'err'); return; }
   closeModal('modal-riassegna');
   toast('Fase riassegnata', 'ok');
   renderDettaglioOrdine(ordineId);
