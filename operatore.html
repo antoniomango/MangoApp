@@ -318,6 +318,7 @@ textarea:focus { border-color: var(--wood); }
         <button class="back-btn" onclick="showScreen('home')">← Torna alla home</button>
         <div class="page-title" id="ord-det-title"></div>
         <div class="order-meta" id="ord-det-meta"></div>
+        <div id="ord-det-btn-spedito"></div>
         <div class="section-title">Fasi di produzione</div>
         <div class="card" id="ord-det-fasi"></div>
       </div>
@@ -975,9 +976,25 @@ function filtraOrdini() {
     if (o.scadenza) return 2 + Math.max(0, Math.floor((new Date(o.scadenza) - oggi) / 86400000));
     return 999;
   };
-  const ordinati = [...filtrati].sort((a, b) => urgenzaScore(a) - urgenzaScore(b));
+  // Ordina per mese di scadenza, poi urgenza dentro lo stesso mese
+  const meseKey = (o) => o.scadenza ? o.scadenza.substring(0, 7) : '9999-99';
+  const ordinati = [...filtrati].sort((a, b) => {
+    const mA = meseKey(a), mB = meseKey(b);
+    if (mA !== mB) return mA.localeCompare(mB);
+    return urgenzaScore(a) - urgenzaScore(b);
+  });
 
+  let meseCorrente = null;
   dispEl.innerHTML = legenda + ordinati.map(o => {
+    const meseDato = meseKey(o);
+    let sep = '';
+    if (meseDato !== meseCorrente) {
+      meseCorrente = meseDato;
+      const label = meseDato === '9999-99'
+        ? 'Senza scadenza'
+        : new Date(meseDato + '-02').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+      sep = `<div style="padding:5px 4px 3px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:6px;border-bottom:1px solid var(--border)">📅 ${label}</div>`;
+    }
     const isAttesa = o.stato === 'attesa_spedizione';
     const extraStyle = isAttesa ? 'border-left:4px solid var(--ok);background:#F0FDF4' : '';
     const fasi = (fasiPerOrdine[o.id] || []).filter(f => f.stato !== 'non_applicabile');
@@ -999,7 +1016,7 @@ function filtraOrdini() {
     } else if (!isAttesa && stima?.isInRitardo) {
       stimaBadge = `<span style="font-size:11px;font-weight:700;color:#EF4444">🔴 IN RITARDO</span>`;
     }
-    return `
+    return sep + `
     <div class="card card-row ${isAttesa ? '' : scadenzaClass(o.scadenza)}" style="${extraStyle}" onclick="openOrdineDetail('${o.id}')">
       <div class="row-main" style="width:100%">
         <div style="display:flex;justify-content:space-between;align-items:center">
@@ -1015,7 +1032,8 @@ function filtraOrdini() {
         <div style="font-size:11px;color:var(--muted);margin-top:2px">${pct}% completato</div>
       </div>
       <span class="arrow">›</span>
-    </div>`}).join('');
+    </div>`;
+  }).join('');
 }
 
 // ═══════════════════════════════════════════════
@@ -1044,6 +1062,16 @@ async function renderOrdineDetail(ordineId) {
     <div class="meta-item" id="ord-stima-item"><label>Consegna stimata</label><span id="ord-stima-val" style="color:var(--muted)">—</span></div>
     ${ordine.note_generali ? `<div class="meta-item" style="grid-column:1/-1"><label>Note</label><span>${ordine.note_generali}</span></div>` : ''}
   `;
+
+  // Pulsante Spedisci — visibile solo se ordine in attesa corriere
+  const btnSpeditoEl = document.getElementById('ord-det-btn-spedito');
+  if (btnSpeditoEl) {
+    if (ordine.stato === 'attesa_spedizione') {
+      btnSpeditoEl.innerHTML = `<button class="btn btn-ok" style="width:100%;margin-top:8px;padding:12px" onclick="segnaSpedito('${ordineId}')">📦 Segna come spedito</button>`;
+    } else {
+      btnSpeditoEl.innerHTML = '';
+    }
+  }
 
   // Fasi — standard o extra
   const el = document.getElementById('ord-det-fasi');
