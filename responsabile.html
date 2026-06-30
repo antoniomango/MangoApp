@@ -2991,12 +2991,12 @@ async function scaricaEliminaFoto(ordineId, codice, cliente) {
   a.click();
   URL.revokeObjectURL(url);
 
-  // Elimina file dallo storage
-  const paths = allegati.map(a => a.url_file);
-  await sb.storage.from('allegati-fasi').remove(paths);
-
-  // Elimina record tramite RPC (verifica ruolo responsabile lato DB)
-  await sb.rpc('elimina_allegati_fasi', { p_fase_ids: fasiIds, p_responsabile_id: currentUserRow.id });
+  // Elimina record DB prima (RPC), poi rimuove i file fisici dallo Storage con i path confermati
+  const { data: delData } = await sb.rpc('elimina_allegati_fasi', { p_fase_ids: fasiIds, p_responsabile_id: currentUserRow.id });
+  if (!delData?.ok) { toast('Errore eliminazione allegati: ' + (delData?.errore || ''), 'err'); return; }
+  if (delData.url_eliminati?.length) {
+    await sb.storage.from('allegati-fasi').remove(delData.url_eliminati);
+  }
 
   toast(`${allegati.length} foto scaricate ed eliminate dal cloud`, 'ok');
 }
