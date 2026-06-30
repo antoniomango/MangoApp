@@ -9,3 +9,30 @@ deploy_v4_b64.txt
 
 # Archivi ZIP di deploy (binari - non necessari nel repository)
 *.zip
+
+# Node.js
+node_modules/
+package-lock.json
+
+# File operativi locali (script di setup/backup/watchdog)
+AVVIA_SETUP_ADMIN.vbs
+DOWNLOAD_PGDUMP.ps1
+FIX_PGDUMP.ps1
+INSTALLA_BACKUP.ps1
+PUSH_GITHUB.bat
+REGISTER_WATCHDOG.ps1
+SETUP_BACKUP_ADMIN.bat
+TEST_CONNESSIONE.ps1
+UPGRADE_PGDUMP17.ps1
+genera_pdf.mjs
+push_to_github.ps1
+run_push.vbs
+watchdog.log
+pgsql/
+
+# Report/export locali
+stato_progetto.html
+stato_progetto.pdf
+guida_operatori.pdf
+logo.png
+package.json
