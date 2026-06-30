@@ -1113,6 +1113,14 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
         <label>Note Generali</label>
         <textarea id="mod-note" rows="2" style="resize:vertical"></textarea>
       </div>
+      <!-- Sezione gestione fasi catalogo -->
+      <div id="mod-section-fasi-catalogo" style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <strong style="font-size:13px">Fasi di produzione</strong>
+          <span style="font-size:11px;color:var(--muted)">attiva/disattiva per questo ordine</span>
+        </div>
+        <div id="mod-fasi-catalogo-list" style="font-size:13px"></div>
+      </div>
       <!-- Sezione fasi extra — visibile solo per ordini tipo extra -->
       <div id="mod-section-fasi-extra" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
@@ -1124,7 +1132,7 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
         <div id="mod-aggiungi-fase-form" style="display:none;margin-top:12px;padding:12px;background:var(--surface-2,#f9f9f7);border-radius:8px;border:1px solid var(--border)">
           <div class="form-group" style="margin-bottom:8px">
             <label style="font-size:12px">Nome fase</label>
-            <input type="text" id="nef-nome" placeholder="es. Spazzolatura esterna">
+            <input type="text" id="nef-nome" placeholder="es. Spazzolatura esterna" list="nomi-fasi-extra-storia" autocomplete="off">
           </div>
           <div class="form-group" style="margin-bottom:8px">
             <label style="font-size:12px">Tipo gestione</label>
@@ -1150,6 +1158,9 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
     </div>
   </div>
 </div>
+
+<!-- Datalist autocomplete nomi fasi extra (popolato da JS) -->
+<datalist id="nomi-fasi-extra-storia"></datalist>
 
 <!-- MODALE DETTAGLIO FASE -->
 <div class="modal-overlay" id="modal-fase">
@@ -1390,7 +1401,7 @@ async function postLogin() {
   // Load fasi e tipi prodotto (devono precedere il resto)
   await Promise.all([loadFasi(), loadTipiProdotto()]);
   // Load data
-  await Promise.all([loadOrdini(), loadNc(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadMacroFasi(), loadFaseMediaMinuti(), loadFaseExtraMediaMinuti()]);
+  await Promise.all([loadOrdini(), loadNc(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadMacroFasi(), loadFaseMediaMinuti(), loadFaseExtraMediaMinuti(), caricaNomiFasiExtraStoria()]);
   // Check ordini in ritardo (solo responsabile)
   if (currentUserRow?.ruolo === 'responsabile') checkOrdiniInRitardo();
   // Realtime
@@ -1436,6 +1447,20 @@ async function doLogout() {
 // ═══════════════════════════════════════════════
 // DATA LOADING
 // ═══════════════════════════════════════════════
+async function caricaNomiFasiExtraStoria() {
+  const { data } = await sb.from('fasi_ordine_extra')
+    .select('nome')
+    .not('nome', 'is', null)
+    .order('nome');
+  if (!data) return;
+  // Conta frequenza e ordina per numero utilizzi (più usati prima)
+  const freq = {};
+  data.forEach(r => { if (r.nome) freq[r.nome] = (freq[r.nome] || 0) + 1; });
+  const ordinati = Object.entries(freq).sort((a, b) => b[1] - a[1]).map(e => e[0]);
+  const dl = document.getElementById('nomi-fasi-extra-storia');
+  if (dl) dl.innerHTML = ordinati.map(n => `<option value="${escapeHtml(n)}">`).join('');
+}
+
 async function loadFasi() {
   const { data } = await sb.from('fasi').select('*, tipo_gestione').order('posizione').order('id');
   fasi = data || [];
@@ -1541,7 +1566,10 @@ function setupRealtime() {
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'ordine_fasi' }, async () => {
       await refreshStime();
-      if (currentOrdineId) calcolaStimaSingoloOrdine(currentOrdineId);
+      if (currentOrdineId) {
+        calcolaStimaSingoloOrdine(currentOrdineId);
+        renderDettaglioOrdine(currentOrdineId);
+      }
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'non_conformita' }, async () => {
       await loadNc();
@@ -2261,7 +2289,7 @@ function addStdFaseExtra() {
   const list = document.getElementById('std-extra-fasi-list');
   const row = document.createElement('div');
   row.className = 'extra-std-row';
-  row.innerHTML = `<input type="text" placeholder="Nome fase aggiuntiva…"><button type="button" onclick="this.parentElement.remove()" title="Rimuovi">✕</button>`;
+  row.innerHTML = `<input type="text" placeholder="Nome fase aggiuntiva…" list="nomi-fasi-extra-storia" autocomplete="off"><button type="button" onclick="this.parentElement.remove()" title="Rimuovi">✕</button>`;
   list.appendChild(row);
   row.querySelector('input').focus();
 }
@@ -2277,7 +2305,7 @@ function addFaseExtra() {
   row.style.cssText = 'display:flex;gap:6px;align-items:center';
   row.innerHTML = `
     <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);min-width:20px;text-align:right">${count + 1}</span>
-    <input type="text" class="extra-fase-nome" placeholder="Nome fase ${count + 1}…"
+    <input type="text" class="extra-fase-nome" placeholder="Nome fase ${count + 1}…" list="nomi-fasi-extra-storia" autocomplete="off"
       style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-family:'Inter',sans-serif;font-size:13px;background:var(--bg);color:var(--ink);outline:none">
     <input type="text" class="extra-fase-note" placeholder="Note (opz.)"
       style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-family:'Inter',sans-serif;font-size:13px;background:var(--bg);color:var(--ink);outline:none">
@@ -2389,10 +2417,13 @@ async function creaOrdine() {
     }
   }
 
-  // Inserisci fase Spazzolatura se richiesta
+  // Attiva fase Spazzolatura (catalogo id=24) se richiesta
   if (tipo === 'standard' && document.getElementById('ord-spazzolatura')?.checked) {
-    await sb.from('ordine_fasi').insert({
-      ordine_id: newOrdine.id, fase_id: null, nome_custom: 'Spazzolatura', stato: 'disponibile'
+    await sb.rpc('imposta_fase_ordine', {
+      p_ordine_id: newOrdine.id,
+      p_fase_id: 24,
+      p_attiva: true,
+      p_responsabile_id: currentUserRow.id
     });
   }
 
@@ -4210,6 +4241,9 @@ function openModificaOrdine(id) {
   document.getElementById('mod-section-fasi-extra').style.display = '';
   document.getElementById('mod-aggiungi-fase-form').style.display = 'none';
   caricaFasiExtraModal(id);
+  // Sezione fasi catalogo — solo per ordini standard
+  document.getElementById('mod-section-fasi-catalogo').style.display = isExtra ? 'none' : '';
+  if (!isExtra) caricaFasiCatalogoModal(id);
   document.getElementById('modal-modifica').classList.add('open');
 }
 
@@ -4295,6 +4329,60 @@ async function eliminaFaseExtra(faseExtraId, nomeFase, ordineId) {
   }
   toast(`Fase "${nomeFase}" eliminata`, 'ok');
   await caricaFasiExtraModal(ordineId);
+}
+
+async function caricaFasiCatalogoModal(ordineId) {
+  const el = document.getElementById('mod-fasi-catalogo-list');
+  if (!el) return;
+  // Carica fasi catalogo e stato corrente per questo ordine
+  const [{ data: fasiCat }, { data: ordFasi }] = await Promise.all([
+    sb.from('fasi').select('id, nome, posizione, tipo_gestione, opzionale').order('posizione'),
+    sb.from('ordine_fasi').select('id, fase_id, stato, spedita_il').eq('ordine_id', ordineId)
+  ]);
+  if (!fasiCat) { el.innerHTML = '<em>Errore caricamento fasi</em>'; return; }
+  const statoMap = {};
+  (ordFasi || []).forEach(r => { statoMap[r.fase_id] = r; });
+
+  el.innerHTML = fasiCat.map(f => {
+    const riga = statoMap[f.id];
+    const stato = riga?.stato || 'non_applicabile';
+    const attiva = stato !== 'non_applicabile';
+    const bloccata = ['in_corso','completata'].includes(stato) || (riga?.spedita_il != null);
+    const tgBadge = f.tipo_gestione !== 'standard'
+      ? `<span style="font-size:9px;background:#EDE9FE;color:#5B21B6;padding:1px 5px;border-radius:3px;margin-left:4px">${f.tipo_gestione==='conferma_ricezione'?'CONF.RIC.':'SPED.EXT.'}</span>`
+      : '';
+    const optBadge = f.opzionale ? `<span style="font-size:9px;background:#FEF9C3;color:#92400E;padding:1px 5px;border-radius:3px;margin-left:4px">OPZ</span>` : '';
+    const statoColor = {disponibile:'#D1FAE5',in_corso:'#DBEAFE',completata:'#E0E7FF',in_attesa:'#FEF9C3',non_applicabile:'#F3F4F6'}[stato]||'#F3F4F6';
+    const motivo = bloccata ? (stato==='in_corso'?'in corso':stato==='completata'?'completata':'spedizione avviata') : '';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
+      <span style="background:${statoColor};padding:1px 7px;border-radius:8px;font-size:10px;white-space:nowrap;min-width:80px;text-align:center">${stato}</span>
+      <span style="flex:1;font-size:13px">${escapeHtml(f.nome)}${tgBadge}${optBadge}</span>
+      ${bloccata
+        ? `<span style="font-size:11px;color:var(--muted);white-space:nowrap">${motivo}</span>`
+        : `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;font-size:12px">
+             <input type="checkbox" ${attiva?'checked':''} style="width:15px;height:15px;cursor:pointer"
+               onchange="impostaFaseCatalogo('${ordineId}',${f.id},this.checked,this)">
+             ${attiva?'Attiva':'Attiva'}
+           </label>`
+      }
+    </div>`;
+  }).join('');
+}
+
+async function impostaFaseCatalogo(ordineId, faseId, attiva, chk) {
+  const { data, error } = await sb.rpc('imposta_fase_ordine', {
+    p_ordine_id: ordineId,
+    p_fase_id: faseId,
+    p_attiva: attiva,
+    p_responsabile_id: currentUserRow.id
+  });
+  if (error || !data?.ok) {
+    toast('Errore: ' + (data?.messaggio || data?.errore || error?.message || ''), 'err');
+    chk.checked = !attiva; // ripristina
+    return;
+  }
+  toast(attiva ? 'Fase attivata' : 'Fase disattivata', 'ok');
+  await caricaFasiCatalogoModal(ordineId);
 }
 
 function apriAggiungiExtraFase() {

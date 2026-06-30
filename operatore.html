@@ -1414,6 +1414,15 @@ async function confermaRicezioneFase(ordFaseId, ordineId) {
   renderHome();
 }
 
+async function segnaSpedizioneFase(ordFaseId, ordineId) {
+  if (!confirm('Confermi la spedizione al fornitore? Verrà registrata la data di uscita.')) return;
+  const { data, error } = await sb.rpc('segna_spedizione_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id });
+  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
+  toast('Spedizione registrata!', 'ok');
+  await renderFaseDetail(ordFaseId, ordineId);
+  renderHome();
+}
+
 async function segnaSpedizioneExtra(faseExtraId, ordineId) {
   if (!confirm('Confermi la spedizione al fornitore? Verrà registrata la data di uscita.')) return;
   const { data, error } = await sb.rpc('segna_spedizione_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id });
@@ -1549,12 +1558,22 @@ async function renderFaseDetail(ordFaseId, ordineId) {
   if (solaLettura) {
     // nessuna azione
   } else if (f.stato === 'disponibile' && !sospeso) {
+    const tgDisp = f.fasi?.tipo_gestione || 'standard';
+    if (tgDisp === 'spedizione_esterna') {
+      bodyHtml += `
+        <div class="azione-box" style="border-color:#C4B5FD">
+          <h4>📤 Spedisci al fornitore</h4>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Quando spedisci il pezzo al fornitore, registra l'uscita. Il tempo sarà misurato fino alla ricezione.</p>
+          <button class="btn btn-primary" onclick="segnaSpedizioneFase('${ordFaseId}','${ordineId}')">📤 Segna come spedito</button>
+        </div>`;
+    } else {
     bodyHtml += `
       <div class="azione-box">
         <h4>Prendi in carico questa fase</h4>
         <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Puoi lavorarci insieme a un collega — entrambi dovete prendere in carico.</p>
         <button class="btn btn-primary" onclick="prendiInCarico('${ordFaseId}', '${ordineId}')">▶ Prendi in carico</button>
       </div>`;
+    } // fine else spedizione_esterna
   } else if (f.stato === 'in_corso' && isMia) {
     // Carica operatori disponibili (escludi chi è già sulla fase)
     const giaSulla = new Set(opMulti.map(o => o.operatore_id));
@@ -1612,6 +1631,14 @@ async function renderFaseDetail(ordFaseId, ordineId) {
           <h4>📦 Attesa materiale esterno</h4>
           <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Il materiale è arrivato? Conferma la ricezione per chiudere questa fase.</p>
           <button class="btn btn-ok" onclick="confermaRicezioneFase('${ordFaseId}','${ordineId}')">✅ Conferma ricezione</button>
+        </div>`;
+    } else if (tipoGestione === 'spedizione_esterna') {
+      const spedIl = f.spedita_il ? `<div class="meta-item" style="margin-bottom:10px"><label>Spedito il</label><span>${formatDateTime(f.spedita_il)}</span></div>` : '';
+      bodyHtml += `${spedIl}
+        <div class="azione-box" style="border-color:#86EFAC">
+          <h4>📦 Pezzo rientrato dal fornitore?</h4>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Il pezzo è tornato? Conferma la ricezione per chiudere la fase e registrare il tempo.</p>
+          <button class="btn btn-ok" onclick="confermaRicezioneFase('${ordFaseId}','${ordineId}')">✅ Conferma ricezione pezzo</button>
         </div>`;
     } else {
       bodyHtml += `
