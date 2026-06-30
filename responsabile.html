@@ -1322,6 +1322,7 @@ let operatoriCache = [];
 let notificheCache = [];
 let currentOrdineId = null;
 let faseMediaMinutiMap = {}; // fase_id -> avg minuti per pezzo
+let faseExtraMediaMinutiMap = {}; // nome_lower -> mediana minuti per unità (fasi_ordine_extra)
 let _etaMinutiCache = {}; // ordine_id -> minuti ETA (critical path), aggiornato da loadAvanzamenti e renderPianificazione
 let currentFaseId = null; // per riassegna
 let riassegnaOrdFaseId = null;
@@ -1359,7 +1360,7 @@ async function postLogin() {
   // Load fasi e tipi prodotto (devono precedere il resto)
   await Promise.all([loadFasi(), loadTipiProdotto()]);
   // Load data
-  await Promise.all([loadOrdini(), loadNc(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadMacroFasi(), loadFaseMediaMinuti()]);
+  await Promise.all([loadOrdini(), loadNc(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadMacroFasi(), loadFaseMediaMinuti(), loadFaseExtraMediaMinuti()]);
   // Check ordini in ritardo (solo responsabile)
   if (currentUserRow?.ruolo === 'responsabile') checkOrdiniInRitardo();
   // Realtime
@@ -1770,12 +1771,23 @@ async function loadAvanzamenti(ids) {
 
   // Ordini extra → fasi_ordine_extra
   if (extraIds.length) {
-    const { data } = await sb.from('fasi_ordine_extra').select('ordine_id, stato').in('ordine_id', extraIds);
+    const { data } = await sb.from('fasi_ordine_extra')
+      .select('ordine_id, nome, stato, e_attesa_esterna')
+      .in('ordine_id', extraIds);
     (data || []).forEach(f => {
       if (!map[f.ordine_id]) map[f.ordine_id] = { tot: 0, done: 0, inCorso: 0, fasiRim: [] };
       map[f.ordine_id].tot++;
       if (f.stato === 'completata') map[f.ordine_id].done++;
       if (f.stato === 'in_corso') map[f.ordine_id].inCorso++;
+    });
+    // ETA per ordini extra (mediana per nome, fallback globale, poi kpi_config default=30)
+    const allExtraVals = Object.values(faseExtraMediaMinutiMap).filter(v => v > 0);
+    allExtraVals.sort((a, b) => a - b);
+    const extraFallback = allExtraVals.length ? allExtraVals[Math.floor(allExtraVals.length / 2)] : 30;
+    (data || []).filter(f => f.stato !== 'completata' && !f.e_attesa_esterna).forEach(f => {
+      const med = faseExtraMediaMinutiMap[f.nome?.toLowerCase()] ?? extraFallback;
+      const contrib = f.stato === 'in_corso' ? med * 0.5 : med;
+      _etaMinutiCache[f.ordine_id] = (_etaMinutiCache[f.ordine_id] || 0) + contrib;
     });
   }
 
@@ -2239,6 +2251,9 @@ function addFaseExtra() {
       style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-family:'Inter',sans-serif;font-size:13px;background:var(--bg);color:var(--ink);outline:none">
     <input type="text" class="extra-fase-note" placeholder="Note (opz.)"
       style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-family:'Inter',sans-serif;font-size:13px;background:var(--bg);color:var(--ink);outline:none">
+    <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer">
+      <input type="checkbox" class="extra-fase-esterna"> Attesa esterna
+    </label>
   `;
   list.appendChild(row);
   renumberExtraFasi();
@@ -2296,7 +2311,8 @@ async function creaOrdine() {
     fasiExtra = Array.from(rows).map((row, i) => ({
       numero: i + 1,
       nome: row.querySelector('.extra-fase-nome').value.trim(),
-      note_responsabile: row.querySelector('.extra-fase-note').value.trim() || null
+      note_responsabile: row.querySelector('.extra-fase-note').value.trim() || null,
+      e_attesa_esterna: row.querySelector('.extra-fase-esterna')?.checked ?? false
     }));
     if (fasiExtra.some(f => !f.nome)) { toast('Inserisci il nome di tutte le fasi', 'err'); return; }
     if (!fasiExtra.length) { toast('Aggiungi almeno una fase', 'err'); return; }
@@ -2681,6 +2697,25 @@ async function loadFaseMediaMinuti() {
   faseMediaMinutiMap = {};
   Object.entries(map).forEach(([id, vals]) => {
     faseMediaMinutiMap[parseInt(id)] = vals.reduce((a, b) => a + b, 0) / vals.length;
+  });
+}
+
+async function loadFaseExtraMediaMinuti() {
+  const { data } = await sb.from('fasi_ordine_extra')
+    .select('nome, tempo_accumulato_minuti, n_ordini_batch')
+    .eq('stato', 'completata')
+    .gt('tempo_accumulato_minuti', 0);
+  if (!data) return;
+  const map = {};
+  data.forEach(r => {
+    const key = r.nome.toLowerCase();
+    if (!map[key]) map[key] = [];
+    map[key].push(r.tempo_accumulato_minuti / Math.max(r.n_ordini_batch || 1, 1));
+  });
+  faseExtraMediaMinutiMap = {};
+  Object.entries(map).forEach(([name, vals]) => {
+    vals.sort((a, b) => a - b);
+    faseExtraMediaMinutiMap[name] = vals[Math.floor(vals.length / 2)];
   });
 }
 
