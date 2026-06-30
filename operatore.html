@@ -1240,10 +1240,33 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
   if (f.iniziata_il) bodyHtml += `<div class="meta-item" style="margin-bottom:10px"><label>Iniziata</label><span>${formatDateTime(f.iniziata_il)}</span></div>`;
   if (f.completata_il) bodyHtml += `<div class="meta-item" style="margin-bottom:10px"><label>Completata</label><span>${formatDateTime(f.completata_il)}</span></div>`;
 
+  const tipoGestioneExtra = f.tipo_gestione || 'standard';
+
   if (currentUser.ruolo === 'sola_lettura') {
     // nessuna azione
   } else if (sospeso) {
     bodyHtml += `<div class="note-box" style="border:1px solid var(--warn)"><strong>Ordine Sospeso</strong>Contatta il responsabile.</div>`;
+  } else if (tipoGestioneExtra === 'spedizione_esterna') {
+    if (f.stato === 'disponibile') {
+      bodyHtml += `<div class="azione-box" style="border-color:#C4B5FD">
+        <h4>📤 Spedisci al fornitore</h4>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Quando spedisci il pezzo al fornitore esterno, registra l'uscita. Il tempo sarà misurato fino alla ricezione.</p>
+        <button class="btn btn-primary" onclick="segnaSpedizioneExtra('${faseExtraId}','${ordineId}')">📤 Segna come spedito</button>
+      </div>`;
+    } else if (f.stato === 'in_attesa') {
+      const spedIl = f.spedita_il ? `<div class="meta-item" style="margin-bottom:10px"><label>Spedito il</label><span>${formatDateTime(f.spedita_il)}</span></div>` : '';
+      bodyHtml += `${spedIl}<div class="azione-box" style="border-color:#86EFAC">
+        <h4>📦 Pezzo rientrato?</h4>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Il pezzo è tornato dal fornitore? Conferma la ricezione per chiudere la fase e registrare il tempo di attesa.</p>
+        <button class="btn btn-ok" onclick="confermaRicezioneExtra('${faseExtraId}','${ordineId}')">✅ Conferma ricezione pezzo</button>
+      </div>`;
+    } else if (f.stato === 'completata') {
+      bodyHtml += `<div class="azione-box" style="border-color:var(--border);margin-top:12px">
+        <h4>↩ Riapri fase</h4>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Hai ancora lavoro da fare su questa fase? Riaprila per continuare.</p>
+        <button class="btn btn-secondary" onclick="riapriFaseExtraOp('${faseExtraId}','${ordineId}')">↩ Riapri fase</button>
+      </div>`;
+    }
   } else if (f.stato === 'disponibile') {
     bodyHtml += `<div class="azione-box"><h4>Prendi in carico questa fase</h4>
       <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Puoi lavorarci insieme a un collega — entrambi dovete prendere in carico.</p>
@@ -1354,6 +1377,33 @@ async function riapriFaseExtraOp(faseExtraId, ordineId) {
   renderHome();
 }
 
+async function confermaRicezioneFase(ordFaseId, ordineId) {
+  if (!confirm('Confermi la ricezione del materiale? La fase verrà chiusa.')) return;
+  const { data, error } = await sb.rpc('conferma_ricezione_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id });
+  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
+  toast('Ricezione confermata!', 'ok');
+  await renderFaseDetail(ordFaseId, ordineId);
+  renderHome();
+}
+
+async function segnaSpedizioneExtra(faseExtraId, ordineId) {
+  if (!confirm('Confermi la spedizione al fornitore? Verrà registrata la data di uscita.')) return;
+  const { data, error } = await sb.rpc('segna_spedizione_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id });
+  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
+  toast('Spedizione registrata!', 'ok');
+  await renderFaseExtraDetail(faseExtraId, ordineId);
+  renderHome();
+}
+
+async function confermaRicezioneExtra(faseExtraId, ordineId) {
+  if (!confirm('Il pezzo è tornato dal fornitore? Confermi la ricezione?')) return;
+  const { data, error } = await sb.rpc('conferma_ricezione_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id });
+  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
+  toast('Ricezione confermata!', 'ok');
+  await renderFaseExtraDetail(faseExtraId, ordineId);
+  renderHome();
+}
+
 async function annullaPresaInCaricoExtra(faseExtraId, ordineId) {
   const { data, error } = await sb.rpc('annulla_presa_in_carico_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id });
   if (error || !data?.ok) { toast('Errore annullamento', 'err'); return; }
@@ -1392,7 +1442,7 @@ async function renderFaseDetail(ordFaseId, ordineId) {
   let f, opMulti = [];
   if (isOnline) {
     const [{ data: fd }, { data: om }] = await Promise.all([
-      sb.from('ordine_fasi').select('*, users!operatore_id(nome, cognome)').eq('id', ordFaseId).single(),
+      sb.from('ordine_fasi').select('*, users!operatore_id(nome, cognome), fasi(tipo_gestione)').eq('id', ordFaseId).single(),
       sb.from('ordine_fasi_operatori').select('operatore_id, users(nome, cognome)').eq('ordine_fase_id', ordFaseId),
     ]);
     f = fd;
@@ -1527,14 +1577,24 @@ async function renderFaseDetail(ordFaseId, ordineId) {
         <button class="btn btn-primary" onclick="uniscitiAFase('${ordFaseId}', '${ordineId}')">+ Unisciti</button>
       </div>`;
   } else if (f.stato === 'in_attesa' && !sospeso) {
-    bodyHtml += `
-      <div class="azione-box" style="border-color:#FDBA74">
-        <h4>⏸ Fase in attesa</h4>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">
-          ${isMia ? 'Hai messo questa fase in attesa. Puoi riprenderla tu o lasciare che un collega la continui.' : 'Questa fase è in attesa. Puoi riprenderla tu.'}
-        </p>
-        <button class="btn btn-primary" onclick="riprendi('${ordFaseId}', '${ordineId}', false)">▶ Riprendi fase</button>
-      </div>`;
+    const tipoGestione = f.fasi?.tipo_gestione || 'standard';
+    if (tipoGestione === 'conferma_ricezione') {
+      bodyHtml += `
+        <div class="azione-box" style="border-color:#86EFAC">
+          <h4>📦 Attesa materiale esterno</h4>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Il materiale è arrivato? Conferma la ricezione per chiudere questa fase.</p>
+          <button class="btn btn-ok" onclick="confermaRicezioneFase('${ordFaseId}','${ordineId}')">✅ Conferma ricezione</button>
+        </div>`;
+    } else {
+      bodyHtml += `
+        <div class="azione-box" style="border-color:#FDBA74">
+          <h4>⏸ Fase in attesa</h4>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">
+            ${isMia ? 'Hai messo questa fase in attesa. Puoi riprenderla tu o lasciare che un collega la continui.' : 'Questa fase è in attesa. Puoi riprenderla tu.'}
+          </p>
+          <button class="btn btn-primary" onclick="riprendi('${ordFaseId}', '${ordineId}', false)">▶ Riprendi fase</button>
+        </div>`;
+    }
   } else if (f.stato === 'completata') {
     // Mostra pulsante spedizione se l'ultima fase applicabile è completata
     if (ordine?.stato === 'aperto') {
