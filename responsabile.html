@@ -1113,6 +1113,36 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
         <label>Note Generali</label>
         <textarea id="mod-note" rows="2" style="resize:vertical"></textarea>
       </div>
+      <!-- Sezione fasi extra — visibile solo per ordini tipo extra -->
+      <div id="mod-section-fasi-extra" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <strong style="font-size:13px">Fasi extra ordine</strong>
+          <button class="btn btn-secondary" style="font-size:12px;padding:5px 12px" onclick="apriAggiungiExtraFase()">+ Aggiungi fase</button>
+        </div>
+        <div id="mod-fasi-extra-list" style="font-size:13px;color:var(--muted)">—</div>
+        <!-- Form aggiunta inline -->
+        <div id="mod-aggiungi-fase-form" style="display:none;margin-top:12px;padding:12px;background:var(--surface-2,#f9f9f7);border-radius:8px;border:1px solid var(--border)">
+          <div class="form-group" style="margin-bottom:8px">
+            <label style="font-size:12px">Nome fase</label>
+            <input type="text" id="nef-nome" placeholder="es. Spazzolatura esterna">
+          </div>
+          <div class="form-group" style="margin-bottom:8px">
+            <label style="font-size:12px">Tipo gestione</label>
+            <select id="nef-tipo-gestione" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-size:13px">
+              <option value="standard">Standard (prendi in carico → completa)</option>
+              <option value="spedizione_esterna">Spedizione esterna (spedisci → ricevi)</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:10px">
+            <label style="font-size:12px">Note (opzionale)</label>
+            <input type="text" id="nef-note" placeholder="">
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" style="font-size:12px" onclick="aggiungiExtraFase()">Aggiungi</button>
+            <button class="btn btn-secondary" style="font-size:12px" onclick="document.getElementById('mod-aggiungi-fase-form').style.display='none'">Annulla</button>
+          </div>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-modifica')">Annulla</button>
@@ -1407,7 +1437,7 @@ async function doLogout() {
 // DATA LOADING
 // ═══════════════════════════════════════════════
 async function loadFasi() {
-  const { data } = await sb.from('fasi').select('*').order('posizione').order('id');
+  const { data } = await sb.from('fasi').select('*, tipo_gestione').order('posizione').order('id');
   fasi = data || [];
 }
 
@@ -3257,6 +3287,14 @@ function renderFasiConfig() {
             <span style="font-size:11px;color:var(--muted)">Tipo:</span>
             ${triggerSelect}
           </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:11px;color:var(--muted)">Gestione:</span>
+            <select id="fase-tg-${f.id}" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface)">
+              <option value="standard" ${(f.tipo_gestione||'standard')==='standard' ? 'selected' : ''}>Standard</option>
+              <option value="conferma_ricezione" ${f.tipo_gestione==='conferma_ricezione' ? 'selected' : ''}>Conferma ricezione</option>
+              <option value="spedizione_esterna" ${f.tipo_gestione==='spedizione_esterna' ? 'selected' : ''}>Spedizione esterna</option>
+            </select>
+          </div>
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--muted);white-space:nowrap">
             <input type="checkbox" id="fase-esterna-${f.id}" ${f.e_attesa_esterna ? 'checked' : ''}
               style="width:14px;height:14px;cursor:pointer">
@@ -3395,14 +3433,16 @@ async function saveFasiConfig(silent = false) {
     nome: document.getElementById(`fase-nome-${f.id}`)?.value.trim() || f.nome,
     descrizione: document.getElementById(`fase-desc-${f.id}`)?.value.trim() || null,
     trigger_tipo_prodotto: document.getElementById(`fase-trigger-${f.id}`)?.value || null,
-    e_attesa_esterna: document.getElementById(`fase-esterna-${f.id}`)?.checked ?? f.e_attesa_esterna
+    e_attesa_esterna: document.getElementById(`fase-esterna-${f.id}`)?.checked ?? f.e_attesa_esterna,
+    tipo_gestione: document.getElementById(`fase-tg-${f.id}`)?.value || 'standard'
   }));
   for (const u of updates) {
     await sb.from('fasi').update({
       nome: u.nome,
       descrizione: u.descrizione,
       trigger_tipo_prodotto: u.trigger_tipo_prodotto,
-      e_attesa_esterna: u.e_attesa_esterna
+      e_attesa_esterna: u.e_attesa_esterna,
+      tipo_gestione: u.tipo_gestione
     }).eq('id', u.id);
   }
   await loadFasi();
@@ -4166,6 +4206,10 @@ function openModificaOrdine(id) {
   document.getElementById('modal-modifica').dataset.tipoProdOld = ordine.tipo_prodotto || 'portoncino';
   document.getElementById('modal-modifica').dataset.strutturaOld = ordine.struttura || 'quattro_lati';
   document.getElementById('modal-modifica').dataset.materialeOld = ordine.materiale || 'placcato';
+  // Sezione fasi extra
+  document.getElementById('mod-section-fasi-extra').style.display = isExtra ? '' : 'none';
+  document.getElementById('mod-aggiungi-fase-form').style.display = 'none';
+  if (isExtra) caricaFasiExtraModal(id);
   document.getElementById('modal-modifica').classList.add('open');
 }
 
@@ -4213,6 +4257,50 @@ async function salvaModificaOrdine() {
   renderDashboard();
   renderOrdiniTable();
   renderDettaglioOrdine(id);
+}
+
+async function caricaFasiExtraModal(ordineId) {
+  const { data } = await sb.from('fasi_ordine_extra')
+    .select('id, numero, nome, stato, tipo_gestione')
+    .eq('ordine_id', ordineId)
+    .order('numero');
+  const el = document.getElementById('mod-fasi-extra-list');
+  if (!data || data.length === 0) { el.innerHTML = '<em>Nessuna fase extra</em>'; return; }
+  el.innerHTML = data.map(f => {
+    const badge = { disponibile:'#D1FAE5', in_corso:'#DBEAFE', completata:'#E0E7FF', in_attesa:'#FEF9C3' }[f.stato] || '#F3F4F6';
+    const tgLabel = { standard:'', conferma_ricezione:' · Conf. ricezione', spedizione_esterna:' · Sped. esterna' }[f.tipo_gestione] || '';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)">
+      <span style="background:${badge};padding:2px 8px;border-radius:10px;font-size:11px;white-space:nowrap">${f.stato}</span>
+      <span style="font-size:13px">${escapeHtml(f.nome)}${tgLabel}</span>
+    </div>`;
+  }).join('');
+}
+
+function apriAggiungiExtraFase() {
+  document.getElementById('nef-nome').value = '';
+  document.getElementById('nef-tipo-gestione').value = 'standard';
+  document.getElementById('nef-note').value = '';
+  document.getElementById('mod-aggiungi-fase-form').style.display = '';
+  document.getElementById('nef-nome').focus();
+}
+
+async function aggiungiExtraFase() {
+  const ordineId = document.getElementById('modal-modifica').dataset.ordineId;
+  const nome = document.getElementById('nef-nome').value.trim();
+  const tipoGestione = document.getElementById('nef-tipo-gestione').value;
+  const note = document.getElementById('nef-note').value.trim() || null;
+  if (!nome) { toast('Inserisci il nome della fase', 'err'); return; }
+  // Determina prossimo numero
+  const { data: esistenti } = await sb.from('fasi_ordine_extra').select('numero').eq('ordine_id', ordineId).order('numero', { ascending: false }).limit(1);
+  const prossimoNumero = (esistenti?.[0]?.numero || 0) + 1;
+  const { data, error } = await sb.rpc('crea_fasi_extra', {
+    p_ordine_id: ordineId,
+    p_fasi: [{ numero: prossimoNumero, nome, note_interne: note, tipo_gestione: tipoGestione }]
+  });
+  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
+  toast(`Fase "${nome}" aggiunta`, 'ok');
+  document.getElementById('mod-aggiungi-fase-form').style.display = 'none';
+  await caricaFasiExtraModal(ordineId);
 }
 
 // Ricalcola fasi N/A dopo cambio tipo_prodotto, struttura o materiale
