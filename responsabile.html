@@ -421,6 +421,9 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
       <div class="nav-item" onclick="showSection('orario-config')" id="nav-orario-config">
         <span class="icon">🕐</span> Orario Lavoro
       </div>
+      <div class="nav-item" onclick="showSection('kpi-config')" id="nav-kpi-config">
+        <span class="icon">⚙️</span> Soglie KPI
+      </div>
     </nav>
 
     <main>
@@ -689,6 +692,27 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
           <div id="kpi-priorita"></div>
         </div>
 
+        <!-- RIGA 5: Capacità produttiva -->
+        <div class="card" style="padding:20px;margin-bottom:16px">
+          <h3 style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--wood)">⚡ Capacità produttiva stimata</h3>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Backlog reale vs produttività storica — fasi di attesa esterna escluse</div>
+          <div id="kpi-capacita"></div>
+        </div>
+
+        <!-- RIGA 6: Lista priorità giornaliera -->
+        <div class="card" style="padding:20px;margin-bottom:16px">
+          <h3 style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--wood)">🎯 Lista priorità ordini</h3>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Ordini ordinati per urgenza — rapporto ore rimanenti / giorni disponibili</div>
+          <div id="kpi-lista-priorita"></div>
+        </div>
+
+        <!-- RIGA 7: Confronto operatori -->
+        <div class="card" style="padding:20px;margin-bottom:16px">
+          <h3 style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--wood)">👷 Confronto operatori per fase</h3>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Tempo mediano effettivo per operatore — solo fasi con ≥ 2 campioni — ⚠ = dati scarsi (&lt;3)</div>
+          <div id="kpi-operatori"></div>
+        </div>
+
       </section>
 
       <!-- VISTA UFFICIO (sola_lettura) -->
@@ -834,6 +858,31 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
             <div id="or-riepilogo" style="font-size:13px;color:var(--ink);line-height:1.8"></div>
           </div>
 
+        </div>
+      </section>
+
+      <!-- KPI CONFIG -->
+      <section class="section" id="sec-kpi-config">
+        <div class="page-hdr">
+          <div>
+            <h1>Soglie KPI</h1>
+            <div class="sub">Parametri usati dai calcoli di priorità e capacità produttiva</div>
+          </div>
+          <button class="btn btn-primary" onclick="salvaKpiConfig()">💾 Salva modifiche</button>
+        </div>
+        <div class="card" style="padding:20px;max-width:540px">
+          <div class="form-group" style="margin-bottom:16px">
+            <label style="font-size:13px;font-weight:600">Margine minimo a rischio (giorni)</label>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Un ordine è marcato "a rischio" se la scadenza è entro questo numero di giorni</div>
+            <input type="number" id="kpicfg-soglia" min="0" max="30" step="1" value="1"
+              style="width:100px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label style="font-size:13px;font-weight:600">Settimane storico capacità</label>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Quante settimane passate usare per stimare la produttività media settimanale</div>
+            <input type="number" id="kpicfg-settimane" min="1" max="52" step="1" value="6"
+              style="width:100px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+          </div>
         </div>
       </section>
 
@@ -1496,6 +1545,7 @@ function showSection(name) {
   else if (name === 'macro-config') renderMacroConfig();
   else if (name === 'ufficio') loadUfficio();
   else if (name === 'kpi') loadKpi();
+  else if (name === 'kpi-config') loadKpiConfig();
   else if (name === 'pianificazione') renderPianificazione();
   else if (name === 'tipi-prodotto-config') renderTipiProdottoConfig();
 }
@@ -2712,6 +2762,26 @@ function toggleOrarioStraordinario(cb) {
   aggiornaRiepilogoOrario();
 }
 
+async function loadKpiConfig() {
+  const { data } = await sb.from('kpi_config').select('chiave, valore');
+  if (!data) return;
+  const map = Object.fromEntries(data.map(r => [r.chiave, r.valore]));
+  const s = document.getElementById('kpicfg-soglia');
+  const w = document.getElementById('kpicfg-settimane');
+  if (s) s.value = map['soglia_rischio_giorni'] ?? 1;
+  if (w) w.value = map['settimane_storico_capacita'] ?? 6;
+}
+
+async function salvaKpiConfig() {
+  const soglia    = parseFloat(document.getElementById('kpicfg-soglia')?.value) || 1;
+  const settimane = parseInt(document.getElementById('kpicfg-settimane')?.value) || 6;
+  await Promise.all([
+    sb.from('kpi_config').upsert({ chiave: 'soglia_rischio_giorni',      valore: soglia }),
+    sb.from('kpi_config').upsert({ chiave: 'settimane_storico_capacita', valore: settimane })
+  ]);
+  toast('Soglie KPI salvate', 'ok');
+}
+
 async function salvaOrario() {
   const payload = {
     ora_inizio: document.getElementById('or-inizio').value,
@@ -3147,9 +3217,16 @@ function renderFasiConfig() {
       <div class="fase-config-inputs">
         <input type="text" id="fase-nome-${f.id}" value="${escapeHtml(f.nome)}" placeholder="Nome fase">
         <input type="text" id="fase-desc-${f.id}" value="${escapeHtml(f.descrizione || '')}" placeholder="Descrizione (opzionale)">
-        <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
-          <span style="font-size:11px;color:var(--muted)">Tipo:</span>
-          ${triggerSelect}
+        <div style="display:flex;align-items:center;gap:16px;margin-top:2px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:11px;color:var(--muted)">Tipo:</span>
+            ${triggerSelect}
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--muted);white-space:nowrap">
+            <input type="checkbox" id="fase-esterna-${f.id}" ${f.e_attesa_esterna ? 'checked' : ''}
+              style="width:14px;height:14px;cursor:pointer">
+            Attesa esterna (escludi da stime)
+          </label>
         </div>
       </div>
       <button class="fase-del-btn" title="Elimina fase" onclick="eliminaFase(${f.id})">✕</button>
@@ -3282,13 +3359,15 @@ async function saveFasiConfig(silent = false) {
     id: f.id,
     nome: document.getElementById(`fase-nome-${f.id}`)?.value.trim() || f.nome,
     descrizione: document.getElementById(`fase-desc-${f.id}`)?.value.trim() || null,
-    trigger_tipo_prodotto: document.getElementById(`fase-trigger-${f.id}`)?.value || null
+    trigger_tipo_prodotto: document.getElementById(`fase-trigger-${f.id}`)?.value || null,
+    e_attesa_esterna: document.getElementById(`fase-esterna-${f.id}`)?.checked ?? f.e_attesa_esterna
   }));
   for (const u of updates) {
     await sb.from('fasi').update({
       nome: u.nome,
       descrizione: u.descrizione,
-      trigger_tipo_prodotto: u.trigger_tipo_prodotto
+      trigger_tipo_prodotto: u.trigger_tipo_prodotto,
+      e_attesa_esterna: u.e_attesa_esterna
     }).eq('id', u.id);
   }
   await loadFasi();
@@ -3734,7 +3813,7 @@ async function loadKpi() {
     { data: fasiCfg }
   ] = await Promise.all([
     sb.from('ordine_fasi')
-      .select('id, ordine_id, fase_id, operatore_id, iniziata_il, completata_il, tempo_accumulato_minuti, ordini(codice, cliente, struttura, tipo_prodotto, priorita, scadenza, creato_il, spedito_il, completato_il, eliminato, quantita)')
+      .select('id, ordine_id, fase_id, operatore_id, iniziata_il, completata_il, tempo_accumulato_minuti, n_ordini_batch, ordini(codice, cliente, struttura, tipo_prodotto, priorita, scadenza, creato_il, spedito_il, completato_il, eliminato, quantita)')
       .not('completata_il', 'is', null)
       .gte('completata_il', dal || '2000-01-01'),
     sb.from('ordini')
@@ -3746,7 +3825,7 @@ async function loadKpi() {
     sb.from('fasi').select('id, nome').order('posizione').order('id')
   ]);
 
-  const fasi = ordFasi || [];
+  const ordFasiArr = ordFasi || [];
   const tuttiOrdini = ordini || [];
   const tutteNc = nc || [];
   const fasiNomi = Object.fromEntries((fasiCfg || []).map(f => [f.id, f.nome]));
@@ -3754,7 +3833,7 @@ async function loadKpi() {
 
   // ── Raggruppa fasi per ordine ──
   const perOrdine = {};
-  fasi.forEach(f => {
+  ordFasiArr.forEach(f => {
     if (!f.ordini || f.ordini.eliminato) return;
     const oid = f.ordine_id;
     if (!perOrdine[oid]) perOrdine[oid] = { minInizio: f.iniziata_il, maxFine: f.completata_il, ord: f.ordini };
@@ -3786,29 +3865,20 @@ async function loadKpi() {
     <div class="kpi-card"><div class="kpi-label">Tempo ciclo medio</div><div class="kpi-value">${tmCiclo ? formatOre(tmCiclo) : '—'}</div><div class="kpi-sub">ore lavorative/ordine</div></div>
   `;
 
-  // ── TEMPO MEDIO PER FASE (ore lavorative) ──
-  // Se lo stesso operatore aveva N ordini in_corso per la stessa fase nello stesso periodo,
-  // il tempo reale per ordine è diviso per N (lavoro in parallelo ottimizzato)
+  // ── TEMPO MEDIO PER FASE — CORRETTO: usa n_ordini_batch, non approssimazione timestamp ──
   const faseTempo = {};
-  fasi.forEach(f => {
+  ordFasiArr.forEach(f => {
     if (!f.fase_id) return;
     let hTotale;
     if (f.tempo_accumulato_minuti > 0) {
-      hTotale = f.tempo_accumulato_minuti / 60;
+      // Divide per n_ordini_batch (dato esatto) poi per quantità
+      hTotale = f.tempo_accumulato_minuti / (f.n_ordini_batch || 1) / 60;
     } else if (f.iniziata_il && f.completata_il) {
       hTotale = calcolaOreEffettive(f.iniziata_il, f.completata_il);
     } else return;
     if (hTotale <= 0 || hTotale > 500) return;
     const quantita = f.ordini?.quantita || 1;
-    const parallele = fasi.filter(g =>
-      g.fase_id === f.fase_id &&
-      g.operatore_id === f.operatore_id &&
-      g.iniziata_il && g.completata_il &&
-      g.iniziata_il < f.completata_il &&
-      g.completata_il > f.iniziata_il
-    ).length || 1;
-    // Normalizza per pezzo: dividi per quantità e per fasi parallele
-    const h = hTotale / parallele / quantita;
+    const h = hTotale / quantita;
     if (!faseTempo[f.fase_id]) faseTempo[f.fase_id] = [];
     faseTempo[f.fase_id].push(h);
   });
@@ -3821,13 +3891,23 @@ async function loadKpi() {
     new Date(2024,0,1,parseInt((orarioConfig?.ora_fine||'17:00').split(':')[0]),   parseInt((orarioConfig?.ora_fine||'17:00').split(':')[1])).toISOString()
   ) || 8;
 
+  // Conta fasi in coda (disponibile/in_corso) per fase — per collo di bottiglia
+  const { data: fasiInCoda } = await sb.from('ordine_fasi')
+    .select('fase_id')
+    .in('stato', ['disponibile', 'in_corso'])
+    .not('fase_id', 'is', null);
+  const codaPerFase = {};
+  (fasiInCoda || []).forEach(f => { codaPerFase[f.fase_id] = (codaPerFase[f.fase_id] || 0) + 1; });
+
   document.getElementById('kpi-fasi-tempo').innerHTML = faseTempoArr.length ? faseTempoArr.slice(0, 15).map(f => {
     const color = f.media > oreGiornoRef ? 'var(--alert)' : f.media > oreGiornoRef/2 ? 'var(--warn)' : 'var(--ok)';
+    const coda = codaPerFase[f.id] || 0;
+    const codaBadge = coda > 0 ? `<span style="font-size:10px;color:var(--muted);margin-left:6px">${coda} in coda</span>` : '';
     return `<div class="kpi-bar-row">
       <div class="kpi-bar-label" title="${escapeHtml(f.nome)}">${escapeHtml(f.nome)}</div>
       <div class="kpi-bar-track"><div class="kpi-bar-fill" style="width:${Math.round(f.media/maxOre*100)}%;background:${color}"></div></div>
       <div class="kpi-bar-val">${formatOre(f.media)}</div>
-    </div><div style="font-size:10px;color:var(--muted);margin:-6px 0 8px 150px">${f.count} campioni</div>`;
+    </div><div style="font-size:10px;color:var(--muted);margin:-6px 0 8px 150px">${f.count} campioni${codaBadge}</div>`;
   }).join('') : '<div class="kpi-empty">Nessun dato nel periodo</div>';
 
   // ── TREND MENSILE ──
@@ -3850,7 +3930,7 @@ async function loadKpi() {
     </div>`;
   }).join('') : '<div class="kpi-empty">Nessun ordine completato nel periodo</div>';
 
-  // ── TEMPO CICLO PER TIPOLOGIA (ore lavorative) ──
+  // ── TEMPO CICLO PER TIPOLOGIA ──
   const strMap = {};
   Object.values(perOrdine).forEach(o => {
     if (!o.ord || !o.minInizio || !o.maxFine) return;
@@ -3931,6 +4011,96 @@ async function loadKpi() {
         <div class="kpi-bar-val">${v} (${Math.round(v/totPrio*100)}%)</div>
       </div>`).join('') +
     `<div style="font-size:11px;color:var(--muted);margin-top:8px">Totale ordini attivi: ${totPrio}</div>`;
+
+  // ── CAPACITÀ PRODUTTIVA (RPC) ──
+  const { data: cap } = await sb.rpc('capacita_produttiva_stimata');
+  if (cap) {
+    const smalt = cap.settimane_smaltimento;
+    const smaltColor = smalt == null ? 'var(--muted)'
+      : smalt > 4 ? 'var(--alert)' : smalt > 2 ? 'var(--warn)' : 'var(--ok)';
+    document.getElementById('kpi-capacita').innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px">
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Backlog reale</div>
+          <div style="font-size:28px;font-weight:700;font-family:'DM Mono',monospace">${cap.backlog_ore}h</div>
+          <div style="font-size:11px;color:var(--muted)">ore di lavoro rimanenti</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Produttività media</div>
+          <div style="font-size:28px;font-weight:700;font-family:'DM Mono',monospace">${cap.ore_per_settimana}h</div>
+          <div style="font-size:11px;color:var(--muted)">ore/settimana (ultimi ${cap.settimane_storico} sett.)</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Stima smaltimento</div>
+          <div style="font-size:28px;font-weight:700;font-family:'DM Mono',monospace;color:${smaltColor}">${smalt != null ? smalt + ' sett.' : '—'}</div>
+          <div style="font-size:11px;color:var(--muted)">al ritmo attuale</div>
+        </div>
+      </div>`;
+  } else {
+    document.getElementById('kpi-capacita').innerHTML = '<div class="kpi-empty">Dati insufficienti</div>';
+  }
+
+  // ── LISTA PRIORITÀ GIORNALIERA (RPC) ──
+  const { data: priorita } = await sb.rpc('lista_priorita_giornaliera');
+  const pEl = document.getElementById('kpi-lista-priorita');
+  if (priorita?.length) {
+    const prioLabel = { normale: 'Normale', urgente: 'Urgente', extra_urgente: 'Extra Urg.' };
+    const prioC = { normale: 'var(--ok)', urgente: 'var(--warn)', extra_urgente: 'var(--alert)' };
+    pEl.innerHTML = `<table class="kpi-table">
+      <thead><tr><th>#</th><th>Cliente / Codice</th><th>Priorità</th><th>Scadenza</th><th>Ore rim.</th><th>Rapporto</th></tr></thead>
+      <tbody>` +
+      priorita.map((o, i) => {
+        const isRitardo = o.giorni_scadenza < 0;
+        const isOggi = o.giorni_scadenza === 0;
+        const rowStyle = o.a_rischio ? 'background:#FEF2F2' : '';
+        const rapportoStr = o.rapporto_critico >= 9990 ? (isRitardo ? '⚠ IN RITARDO' : '⚠ OGGI') : o.rapporto_critico.toFixed(2);
+        const rapportoColor = o.rapporto_critico >= 9990 ? 'var(--alert)' : o.rapporto_critico > 0.5 ? 'var(--alert)' : o.rapporto_critico > 0.2 ? 'var(--warn)' : 'var(--ink)';
+        const ggStr = isRitardo ? `<span style="color:var(--alert)">-${Math.abs(o.giorni_scadenza)}gg</span>` :
+          isOggi ? `<span style="color:var(--alert)">oggi</span>` :
+          `+${o.giorni_scadenza}gg`;
+        return `<tr style="${rowStyle}">
+          <td style="color:var(--muted);font-size:11px">${i+1}</td>
+          <td>${escapeHtml(o.cliente||'')} <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">${escapeHtml(o.codice||'')}</span></td>
+          <td><span style="color:${prioC[o.priorita]||'var(--ink)'};font-size:11px">${prioLabel[o.priorita]||o.priorita}</span></td>
+          <td>${formatDate(o.scadenza)} ${ggStr}</td>
+          <td style="font-family:'DM Mono',monospace">${o.ore_rimaste}h</td>
+          <td style="font-weight:700;color:${rapportoColor}">${rapportoStr}</td>
+        </tr>`;
+      }).join('') + `</tbody></table>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px">Rapporto = ore rimanenti / (450 min/giorno × giorni a scadenza). Valori alti = urgente.</div>`;
+  } else {
+    pEl.innerHTML = '<div class="kpi-empty" style="color:var(--ok)">✓ Nessun ordine con scadenza impostata</div>';
+  }
+
+  // ── CONFRONTO OPERATORI PER FASE (RPC) ──
+  const { data: opData } = await sb.rpc('confronto_operatori_per_fase');
+  const oEl = document.getElementById('kpi-operatori');
+  if (opData?.length) {
+    // Raggruppa per fase
+    const perFase = {};
+    opData.forEach(r => {
+      if (!perFase[r.fase_nome]) perFase[r.fase_nome] = [];
+      perFase[r.fase_nome].push(r);
+    });
+    let html = `<table class="kpi-table">
+      <thead><tr><th>Fase</th><th>Operatore</th><th>Mediana</th><th>Campioni</th></tr></thead><tbody>`;
+    let lastFase = null;
+    opData.forEach(r => {
+      const isNewFase = r.fase_nome !== lastFase;
+      const scarso = r.campioni < 3;
+      html += `<tr>
+        <td style="color:${isNewFase ? 'var(--ink)' : 'transparent'};font-weight:${isNewFase ? '600' : '400'}">${isNewFase ? escapeHtml(r.fase_nome) : '↳'}</td>
+        <td>${escapeHtml(r.operatore_nome)}</td>
+        <td style="font-family:'DM Mono',monospace">${r.mediana_min} min${scarso ? ' <span title="Dati scarsi — meno di 3 campioni" style="color:var(--warn)">⚠</span>' : ''}</td>
+        <td style="color:var(--muted);font-size:11px">${r.campioni}</td>
+      </tr>`;
+      lastFase = r.fase_nome;
+    });
+    html += `</tbody></table>`;
+    oEl.innerHTML = html;
+  } else {
+    oEl.innerHTML = '<div class="kpi-empty">Nessun dato — serve storico con almeno 2 completamenti per operatore per fase</div>';
+  }
 }
 
 function formatOre(h) {
