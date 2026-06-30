@@ -2176,7 +2176,7 @@ function addGiorniLavorativi(dataInizio, giorni) {
 async function loadFaseMediaMinuti() {
   if (!isOnline) return;
   const { data } = await sb.from('ordine_fasi')
-    .select('fase_id, tempo_accumulato_minuti, ordini(quantita)')
+    .select('fase_id, tempo_accumulato_minuti, n_ordini_batch, ordini(quantita)')
     .eq('stato', 'completata')
     .gt('tempo_accumulato_minuti', 0)
     .lt('tempo_accumulato_minuti', 20000)
@@ -2185,7 +2185,7 @@ async function loadFaseMediaMinuti() {
   const map = {};
   data.forEach(f => {
     const q = f.ordini?.quantita || 1;
-    const minPerPezzo = f.tempo_accumulato_minuti / q;
+    const minPerPezzo = f.tempo_accumulato_minuti / (f.n_ordini_batch || 1) / q;
     if (!map[f.fase_id]) map[f.fase_id] = [];
     map[f.fase_id].push(minPerPezzo);
   });
