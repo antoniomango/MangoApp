@@ -1173,6 +1173,34 @@ async function renderOrdineDetail(ordineId) {
         ${isNA ? '' : '<span class="arrow">›</span>'}
       </div>`;
     }).join('');
+
+    // Fasi extra aggiunte manualmente (su qualsiasi tipo ordine)
+    let fasiExtStd = [];
+    if (isOnline) {
+      const { data: feData } = await sb.from('fasi_ordine_extra')
+        .select('*, users!operatore_id(nome, cognome)')
+        .eq('ordine_id', ordineId).order('numero');
+      fasiExtStd = feData || [];
+    }
+    if (fasiExtStd.length > 0) {
+      el.innerHTML += `<div style="margin-top:14px;padding-top:10px;border-top:2px dashed var(--border)">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:6px">Lavorazioni aggiuntive</div>
+        ${fasiExtStd.map(f => {
+          const opNome = f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '';
+          const isMia = f.operatore_id === currentUser.id;
+          const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '▶' : f.stato === 'in_attesa' ? '⏸' : '★';
+          return `<div class="fase-row ${f.stato}" onclick="openFaseExtraDetail('${f.id}', '${ordineId}')">
+            <div class="fase-num-circle" style="background:var(--wood,#8B6914);color:#fff">${icon}</div>
+            <div class="fase-info">
+              <div class="fn">${escapeHtml(f.nome)}<span style="font-size:9px;font-weight:700;background:#92400E;color:#fff;padding:1px 4px;border-radius:3px;margin-left:5px">AGG</span></div>
+              <div class="fo">${opNome ? opNome + (isMia ? ' (tu)' : '') : 'Disponibile'}</div>
+            </div>
+            <span class="badge badge-${f.stato}" style="font-size:10px">${statoFaseLabel(f.stato)}</span>
+            <span class="arrow">›</span>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }
   }
 }
 
