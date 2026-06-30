@@ -4206,10 +4206,10 @@ function openModificaOrdine(id) {
   document.getElementById('modal-modifica').dataset.tipoProdOld = ordine.tipo_prodotto || 'portoncino';
   document.getElementById('modal-modifica').dataset.strutturaOld = ordine.struttura || 'quattro_lati';
   document.getElementById('modal-modifica').dataset.materialeOld = ordine.materiale || 'placcato';
-  // Sezione fasi extra
-  document.getElementById('mod-section-fasi-extra').style.display = isExtra ? '' : 'none';
+  // Sezione fasi extra — visibile su tutti gli ordini
+  document.getElementById('mod-section-fasi-extra').style.display = '';
   document.getElementById('mod-aggiungi-fase-form').style.display = 'none';
-  if (isExtra) caricaFasiExtraModal(id);
+  caricaFasiExtraModal(id);
   document.getElementById('modal-modifica').classList.add('open');
 }
 
