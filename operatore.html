@@ -163,6 +163,12 @@ textarea:focus { border-color: var(--wood); }
 .upload-btn:active { background: var(--border); }
 .foto-preview { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .foto-thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; }
+.foto-sel-wrapper { position:relative; width:72px; height:72px; cursor:pointer; }
+.foto-sel-wrapper img { width:72px; height:72px; object-fit:cover; border-radius:8px; border:2px solid transparent; transition:border-color .15s; display:block; }
+.foto-sel-wrapper.selezionata img { border-color:var(--wood); }
+.foto-sel-check { position:absolute; top:3px; right:3px; width:20px; height:20px; border-radius:50%; background:rgba(0,0,0,.45); border:2px solid #fff; display:flex; align-items:center; justify-content:center; font-size:11px; color:#fff; transition:background .15s; }
+.foto-sel-wrapper.selezionata .foto-sel-check { background:var(--wood); }
+.btn-elimina-sel { width:100%; margin-top:10px; padding:11px; background:#EF4444; color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; }
 
 /* ── LIGHTBOX ── */
 #lightbox { display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.92); flex-direction:column; align-items:center; justify-content:center; }
@@ -1448,15 +1454,13 @@ async function renderFaseDetail(ordFaseId, ordineId) {
 
   // Foto allegate
   if (isOnline) {
-    const { data: allegati } = await sb.from('allegati').select('url_file').eq('ordine_fase_id', ordFaseId);
+    const { data: allegati } = await sb.from('allegati')
+      .select('id, url_file, caricato_da')
+      .eq('ordine_fase_id', ordFaseId);
     if (allegati?.length) {
-      const urls = allegati.map(a => sb.storage.from('allegati-fasi').getPublicUrl(a.url_file).data.publicUrl);
-      const urlsJson = escHtml(JSON.stringify(urls));
-      bodyHtml += `<div class="note-box" style="margin-bottom:12px"><strong>Foto allegate (${allegati.length})</strong><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">`;
-      urls.forEach((url, i) => {
-        bodyHtml += `<img src="${url}" class="foto-thumb" onclick='lbOpen(${urlsJson},${i})'>`;
-      });
-      bodyHtml += `</div></div>`;
+      bodyHtml += `<div id="foto-fase-container" data-fase-id="${ordFaseId}" data-ordine-id="${ordineId}"></div>`;
+      // renderFotoFase viene chiamata dopo l'inject nel DOM
+      window._fotoFaseData = allegati;
     }
   }
 
@@ -1560,6 +1564,12 @@ async function renderFaseDetail(ordFaseId, ordineId) {
   }
 
   document.getElementById('fase-det-body').innerHTML = bodyHtml;
+
+  // Renderizza sezione foto se presenti
+  if (window._fotoFaseData) {
+    renderFotoFase(window._fotoFaseData, false);
+    window._fotoFaseData = null;
+  }
 }
 
 async function prendiInCarico(ordFaseId, ordineId) {
@@ -1863,6 +1873,99 @@ async function populateNcSelects() {
   };
   document.getElementById('nc-descrizione').value = '';
   document.getElementById('nc-foto-preview').innerHTML = '';
+}
+
+// ── GESTIONE FOTO ALLEGATE (selezione + cancellazione selettiva) ──
+
+let _fotoSelezionate = new Set();
+
+function renderFotoFase(allegati, modoSelezione) {
+  const container = document.getElementById('foto-fase-container');
+  if (!container) return;
+  window._fotoFaseCache = allegati;
+  if (!modoSelezione) _fotoSelezionate.clear();
+
+  const puoCancellare = currentUser.ruolo === 'responsabile' ||
+    allegati.some(a => a.caricato_da === currentUser.id);
+
+  const urls = allegati.map(a =>
+    sb.storage.from('allegati-fasi').getPublicUrl(a.url_file).data.publicUrl
+  );
+  const urlsJson = escHtml(JSON.stringify(urls));
+
+  let html = `<div class="note-box" style="margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <strong>Foto allegate (${allegati.length})</strong>`;
+
+  if (puoCancellare && allegati.length > 0) {
+    html += modoSelezione
+      ? `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="renderFotoFase(window._fotoFaseCache,false)">Annulla</button>`
+      : `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="renderFotoFase(window._fotoFaseCache,true)">Seleziona</button>`;
+  }
+  html += `</div><div style="display:flex;flex-wrap:wrap;gap:8px">`;
+
+  allegati.forEach((a, i) => {
+    const pubUrl = urls[i];
+    if (!modoSelezione) {
+      html += `<img src="${pubUrl}" class="foto-thumb" onclick='lbOpen(${urlsJson},${i})'>`;
+    } else {
+      const sel = _fotoSelezionate.has(a.id);
+      html += `<div class="foto-sel-wrapper${sel ? ' selezionata' : ''}" onclick="toggleFotoItem('${a.id}')">
+        <img src="${pubUrl}">
+        <div class="foto-sel-check">${sel ? '✓' : ''}</div>
+      </div>`;
+    }
+  });
+
+  html += `</div>`;
+  if (modoSelezione && _fotoSelezionate.size > 0) {
+    html += `<button class="btn-elimina-sel" onclick="eliminaFotoSelezionate()">
+      🗑 Elimina selezionate (${_fotoSelezionate.size})
+    </button>`;
+  }
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+function toggleFotoItem(allegatoId) {
+  if (_fotoSelezionate.has(allegatoId)) _fotoSelezionate.delete(allegatoId);
+  else _fotoSelezionate.add(allegatoId);
+  renderFotoFase(window._fotoFaseCache, true);
+}
+
+async function eliminaFotoSelezionate() {
+  if (!_fotoSelezionate.size) return;
+  const n = _fotoSelezionate.size;
+  if (!confirm(`Eliminare ${n} foto selezionat${n === 1 ? 'a' : 'e'}? L'operazione è irreversibile.`)) return;
+
+  const ids = Array.from(_fotoSelezionate);
+  const { data, error } = await sb.rpc('elimina_allegati', {
+    p_allegato_ids: ids,
+    p_operatore_id: currentUser.id
+  });
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+
+  // Cancella i file fisici nello Storage (solo quelli confermati dal DB)
+  if (data.url_eliminati?.length) {
+    await sb.storage.from('allegati-fasi').remove(data.url_eliminati);
+  }
+
+  if (data.rifiutati?.length) {
+    toast(`${data.eliminati?.length || 0} eliminate, ${data.rifiutati.length} non autorizzate`, 'err');
+  } else {
+    toast(`${data.eliminati?.length || 0} foto eliminate`, 'ok');
+  }
+
+  // Aggiorna cache escludendo le eliminate (non quelle rifiutate)
+  const rifiutatiSet = new Set(data.rifiutati || []);
+  const nuovi = (window._fotoFaseCache || []).filter(a => !ids.includes(a.id) || rifiutatiSet.has(a.id));
+  _fotoSelezionate.clear();
+  if (nuovi.length === 0) {
+    const c = document.getElementById('foto-fase-container');
+    if (c) c.innerHTML = '';
+  } else {
+    renderFotoFase(nuovi, false);
+  }
 }
 
 function previewNcFoto(input) {
