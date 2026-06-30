@@ -4265,15 +4265,36 @@ async function caricaFasiExtraModal(ordineId) {
     .eq('ordine_id', ordineId)
     .order('numero');
   const el = document.getElementById('mod-fasi-extra-list');
-  if (!data || data.length === 0) { el.innerHTML = '<em>Nessuna fase extra</em>'; return; }
+  if (!data || data.length === 0) { el.innerHTML = '<em style="color:var(--muted);font-size:13px">Nessuna fase aggiuntiva</em>'; return; }
   el.innerHTML = data.map(f => {
     const badge = { disponibile:'#D1FAE5', in_corso:'#DBEAFE', completata:'#E0E7FF', in_attesa:'#FEF9C3' }[f.stato] || '#F3F4F6';
     const tgLabel = { standard:'', conferma_ricezione:' · Conf. ricezione', spedizione_esterna:' · Sped. esterna' }[f.tipo_gestione] || '';
-    return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)">
+    const canDelete = f.stato !== 'completata';
+    const delBtn = canDelete
+      ? `<button class="btn btn-alert" style="padding:2px 8px;font-size:11px;margin-left:auto;flex-shrink:0"
+           onclick="eliminaFaseExtra('${f.id}','${escapeHtml(f.nome)}','${ordineId}')">✕ Elimina</button>`
+      : `<span style="font-size:11px;color:var(--muted);margin-left:auto;flex-shrink:0">completata</span>`;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
       <span style="background:${badge};padding:2px 8px;border-radius:10px;font-size:11px;white-space:nowrap">${f.stato}</span>
-      <span style="font-size:13px">${escapeHtml(f.nome)}${tgLabel}</span>
+      <span style="font-size:13px;flex:1">${escapeHtml(f.nome)}${tgLabel}</span>
+      ${delBtn}
     </div>`;
   }).join('');
+}
+
+async function eliminaFaseExtra(faseExtraId, nomeFase, ordineId) {
+  if (!confirm(`Eliminare la fase "${nomeFase}"? Questa azione non può essere annullata.`)) return;
+  const { data, error } = await sb.rpc('elimina_fase_extra', {
+    p_fase_extra_id: faseExtraId,
+    p_responsabile_id: currentUserRow.id
+  });
+  if (error || !data?.ok) {
+    const msg = data?.messaggio || data?.errore || error?.message || 'Errore sconosciuto';
+    toast('Errore: ' + msg, 'err');
+    return;
+  }
+  toast(`Fase "${nomeFase}" eliminata`, 'ok');
+  await caricaFasiExtraModal(ordineId);
 }
 
 function apriAggiungiExtraFase() {
@@ -4295,7 +4316,8 @@ async function aggiungiExtraFase() {
   const prossimoNumero = (esistenti?.[0]?.numero || 0) + 1;
   const { data, error } = await sb.rpc('crea_fasi_extra', {
     p_ordine_id: ordineId,
-    p_fasi: [{ numero: prossimoNumero, nome, note_interne: note, tipo_gestione: tipoGestione }]
+    p_fasi: [{ numero: prossimoNumero, nome, note_responsabile: note, tipo_gestione: tipoGestione }],
+    p_responsabile_id: currentUserRow.id
   });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   toast(`Fase "${nome}" aggiunta`, 'ok');
