@@ -415,6 +415,15 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
       <div class="nav-item" onclick="showSection('tipi-prodotto-config')" id="nav-tipi-prodotto-config">
         <span class="icon">🏷️</span> Tipi Prodotto
       </div>
+      <div class="nav-item" onclick="showSection('strutture-config')" id="nav-strutture-config">
+        <span class="icon">🏗️</span> Strutture
+      </div>
+      <div class="nav-item" onclick="showSection('materiali-config')" id="nav-materiali-config">
+        <span class="icon">🪵</span> Materiali
+      </div>
+      <div class="nav-item" onclick="showSection('priorita-config')" id="nav-priorita-config">
+        <span class="icon">⚡</span> Priorità
+      </div>
       <div class="nav-item" onclick="showSection('macro-config')" id="nav-macro-config">
         <span class="icon">📊</span> Macro Fasi
       </div>
@@ -453,15 +462,9 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
           </select>
           <select id="ord-priorita" onchange="renderOrdiniTable()">
             <option value="">Tutte le priorità</option>
-            <option value="normale">Normale</option>
-            <option value="urgente">Urgente</option>
-            <option value="extra_urgente">Extra Urgente</option>
           </select>
           <select id="flt-struttura" onchange="renderOrdiniTable()">
             <option value="">Tutte le strutture</option>
-            <option value="quattro_lati">4 Lati</option>
-            <option value="barra_l">Barra ad L</option>
-            <option value="complanare">Complanare</option>
           </select>
           <select id="flt-tipo-prodotto" onchange="renderOrdiniTable()">
             <option value="">Tutti i tipi</option>
@@ -957,6 +960,45 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
           <div id="tipi-prodotto-list">Caricamento…</div>
         </div>
       </section>
+
+      <!-- STRUTTURE -->
+      <section class="section" id="sec-strutture-config">
+        <div class="page-hdr">
+          <div>
+            <h1>Strutture</h1>
+            <div class="sub">Gestisci le opzioni struttura disponibili nel form ordine</div>
+          </div>
+        </div>
+        <div class="card" style="padding:4px 20px 20px">
+          <div id="strutture-config-list">Caricamento…</div>
+        </div>
+      </section>
+
+      <!-- MATERIALI -->
+      <section class="section" id="sec-materiali-config">
+        <div class="page-hdr">
+          <div>
+            <h1>Materiali</h1>
+            <div class="sub">Gestisci le opzioni materiale disponibili nel form ordine</div>
+          </div>
+        </div>
+        <div class="card" style="padding:4px 20px 20px">
+          <div id="materiali-config-list">Caricamento…</div>
+        </div>
+      </section>
+
+      <!-- PRIORITÀ -->
+      <section class="section" id="sec-priorita-config">
+        <div class="page-hdr">
+          <div>
+            <h1>Priorità</h1>
+            <div class="sub">Gestisci i livelli di priorità — il peso determina l'ordinamento</div>
+          </div>
+        </div>
+        <div class="card" style="padding:4px 20px 20px">
+          <div id="priorita-config-list">Caricamento…</div>
+        </div>
+      </section>
     </main>
   </div>
 </div>
@@ -992,11 +1034,7 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
       <div class="form-row">
         <div class="form-group">
           <label>Priorità</label>
-          <select id="ord-prio">
-            <option value="normale">Normale</option>
-            <option value="urgente">Urgente</option>
-            <option value="extra_urgente">Extra Urgente</option>
-          </select>
+          <select id="ord-prio"></select>
         </div>
       </div>
       <!-- Campi visibili solo per ordini standard -->
@@ -1004,11 +1042,7 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
         <div class="form-row">
           <div class="form-group">
             <label>Struttura *</label>
-            <select id="ord-struttura">
-              <option value="quattro_lati">4 Lati</option>
-              <option value="barra_l">Barra ad L</option>
-              <option value="complanare">Complanare</option>
-            </select>
+            <select id="ord-struttura"></select>
           </div>
           <div class="form-group">
             <label>Tipo Prodotto *</label>
@@ -1018,11 +1052,7 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
         </div>
         <div class="form-group">
           <label>Materiale *</label>
-          <select id="ord-materiale">
-            <option value="placcato">Placcato</option>
-            <option value="hdf">HDF</option>
-            <option value="grezzo">Grezzo</option>
-          </select>
+          <select id="ord-materiale"></select>
         </div>
       </div>
       <div class="form-row">
@@ -1053,13 +1083,7 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
           Aggiungi fasi extra a questo ordine
         </label>
       </div>
-      <div id="std-spazzolatura-row" style="margin-top:10px;display:none">
-        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;font-weight:600">
-          <input type="checkbox" id="ord-spazzolatura">
-          🪥 Spazzolatura richiesta
-        </label>
-        <div style="font-size:11px;color:var(--muted);margin-left:24px;margin-top:2px">Se attivata, verrà aggiunta la fase "Spazzolatura" a questo ordine</div>
-      </div>
+      <div id="std-fasi-opzionali-container" style="margin-top:10px;display:none"></div>
       <!-- Fasi extra (visibile solo se tipo=extra) -->
       <div id="extra-fasi-section" style="display:none;margin-top:8px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
@@ -1106,31 +1130,19 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
         </div>
         <div class="form-group">
           <label>Struttura</label>
-          <select id="mod-struttura">
-            <option value="quattro_lati">4 Lati</option>
-            <option value="barra_l">Barra ad L</option>
-            <option value="complanare">Complanare</option>
-          </select>
+          <select id="mod-struttura"></select>
         </div>
       </div>
       <div class="form-row" id="mod-row-materiale">
         <div class="form-group">
           <label>Materiale</label>
-          <select id="mod-materiale">
-            <option value="placcato">Placcato</option>
-            <option value="hdf">HDF</option>
-            <option value="grezzo">Grezzo</option>
-          </select>
+          <select id="mod-materiale"></select>
         </div>
       </div>
       <div class="form-row">
         <div class="form-group">
           <label>Priorità</label>
-          <select id="mod-prio">
-            <option value="normale">Normale</option>
-            <option value="urgente">Urgente</option>
-            <option value="extra_urgente">Extra Urgente</option>
-          </select>
+          <select id="mod-prio"></select>
         </div>
         <div class="form-group">
           <label>Quantità</label>
@@ -1325,6 +1337,34 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
   </div>
 </div>
 
+<!-- MODALE PRIORITÀ -->
+<div class="modal-overlay" id="modal-priorita">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-hdr">
+      <h3 id="prn-title">Nuova Priorità</h3>
+      <button class="modal-close" onclick="closeModal('modal-priorita')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group" id="prn-id-row">
+        <label>ID interno * <span style="color:var(--muted);font-weight:400">(es. molto_urgente — solo minuscole)</span></label>
+        <input type="text" id="prn-id" placeholder="es. molto_urgente" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_]/g,'')">
+      </div>
+      <div class="form-group">
+        <label>Etichetta visualizzata *</label>
+        <input type="text" id="prn-etichetta" placeholder="es. Molto Urgente">
+      </div>
+      <div class="form-group">
+        <label>Peso (ordinamento — valore più alto = priorità maggiore)</label>
+        <input type="number" id="prn-peso" value="10" min="1" style="width:100%">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-priorita')">Annulla</button>
+      <button class="btn btn-primary" onclick="salvaModalePriorita()">Salva</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODALE NUOVO TIPO PRODOTTO -->
 <div class="modal-overlay" id="modal-nuovo-tipo-prodotto">
   <div class="modal" style="max-width:400px">
@@ -1402,6 +1442,8 @@ let minutiGiornoGlobale = 480; // aggiornato da loadAvanzamenti e calcolaStimaSi
 let faseExtraMediaMinutiMap = {}; // nome_lower -> mediana minuti per unità (fasi_ordine_extra)
 let _etaMinutiCache = {}; // ordine_id -> minuti ETA equivalenti (critico interno + calendario esterno scalato)
 let currentFaseId = null; // per riassegna
+let prioritaConfig = []; // [{id, etichetta, peso, posizione, attivo}] da priorita_ordine_config
+let attributiConfig = []; // [{chiave, etichetta, opzioni:[{valore,etichetta,posizione}]}] da attributi_prodotto_config
 let riassegnaOrdFaseId = null;
 
 // ═══════════════════════════════════════════════
@@ -1435,7 +1477,7 @@ async function postLogin() {
   document.getElementById('user-label').textContent = data ? `${data.nome} ${data.cognome}` : currentUser.email;
   document.getElementById('header-date').textContent = new Date().toLocaleDateString('it-IT', { weekday:'short', day:'numeric', month:'short' });
   // Load fasi e tipi prodotto (devono precedere il resto)
-  await Promise.all([loadFasi(), loadTipiProdotto()]);
+  await Promise.all([loadFasi(), loadTipiProdotto(), loadPrioritaConfig(), loadAttributiConfig()]);
   // Load data
   await Promise.all([loadOrdini(), loadNc(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadMacroFasi(), loadFaseMediaMinuti(), loadFaseExtraMediaMinuti(), caricaNomiFasiExtraStoria()]);
   // Check ordini in ritardo (solo responsabile)
@@ -1500,6 +1542,68 @@ async function caricaNomiFasiExtraStoria() {
 async function loadFasi() {
   const { data } = await sb.from('fasi').select('*, tipo_gestione').order('posizione').order('id');
   fasi = data || [];
+  renderFasiOpzionaliForm();
+}
+
+async function loadPrioritaConfig() {
+  const { data } = await sb.from('priorita_ordine_config').select('*').order('posizione');
+  prioritaConfig = data || [];
+  popolaPrioritaSelects();
+}
+
+async function loadAttributiConfig() {
+  const { data } = await sb.from('attributi_prodotto_config').select('*').order('posizione');
+  attributiConfig = data || [];
+  popolaAttributiSelects();
+}
+
+function popolaPrioritaSelects() {
+  const opts = prioritaConfig.filter(p => p.attivo).map(p =>
+    `<option value="${escapeHtml(p.id)}">${escapeHtml(p.etichetta)}</option>`
+  ).join('');
+  const allOpts = `<option value="">Tutte le priorità</option>` + opts;
+  ['ord-prio', 'mod-prio'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = opts;
+  });
+  const fltEl = document.getElementById('ord-priorita');
+  if (fltEl) fltEl.innerHTML = allOpts;
+}
+
+function popolaAttributiSelects() {
+  attributiConfig.forEach(attr => {
+    const sorted = [...(attr.opzioni || [])].sort((a, b) => (a.posizione||0) - (b.posizione||0));
+    const opts = sorted.map(o =>
+      `<option value="${escapeHtml(o.valore)}">${escapeHtml(o.etichetta)}</option>`
+    ).join('');
+    if (attr.chiave === 'struttura') {
+      ['ord-struttura', 'mod-struttura'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = opts;
+      });
+      const fltEl = document.getElementById('flt-struttura');
+      if (fltEl) fltEl.innerHTML = `<option value="">Tutte le strutture</option>` + opts;
+    } else if (attr.chiave === 'materiale') {
+      ['ord-materiale', 'mod-materiale'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = opts;
+      });
+    }
+  });
+}
+
+function renderFasiOpzionaliForm() {
+  const container = document.getElementById('std-fasi-opzionali-container');
+  if (!container) return;
+  const fasiOp = fasi.filter(f => f.opzionale);
+  if (!fasiOp.length) { container.style.display = 'none'; return; }
+  container.innerHTML = fasiOp.map(f => `
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;font-weight:600;margin-bottom:4px">
+      <input type="checkbox" id="ord-fase-opz-${f.id}">
+      ${escapeHtml(f.nome)}
+    </label>
+  `).join('');
+  container.style.display = '';
 }
 
 async function loadTipiProdotto() {
@@ -1527,9 +1631,9 @@ async function loadOrdini() {
     .select('*, creato_da_user:users!creato_da(nome, cognome)')
     .in('stato', ['aperto', 'sospeso', 'attesa_spedizione'])
     .neq('eliminato', true);
-  const prioOrd = { 'extra_urgente': 0, 'urgente': 1, 'normale': 2 };
+  const prioWeights = Object.fromEntries(prioritaConfig.map(p => [p.id, p.peso]));
   ordiniCache = (data || []).sort((a, b) => {
-    const pd = prioOrd[a.priorita] - prioOrd[b.priorita];
+    const pd = (prioWeights[b.priorita] ?? 0) - (prioWeights[a.priorita] ?? 0);
     if (pd !== 0) return pd;
     if (a.scadenza && b.scadenza) return new Date(a.scadenza) - new Date(b.scadenza);
     if (a.scadenza) return -1;
@@ -1643,6 +1747,9 @@ function showSection(name) {
   else if (name === 'kpi-config') loadKpiConfig();
   else if (name === 'pianificazione') renderPianificazione();
   else if (name === 'tipi-prodotto-config') renderTipiProdottoConfig();
+  else if (name === 'strutture-config') renderAttributoConfig('struttura');
+  else if (name === 'materiali-config') renderAttributoConfig('materiale');
+  else if (name === 'priorita-config') renderPrioritaConfig();
 }
 
 // ═══════════════════════════════════════════════
@@ -2301,10 +2408,13 @@ function setTipoOrdine(tipo) {
   document.getElementById('standard-fields-section').style.display = tipo === 'standard' ? '' : 'none';
   // Toggle fasi extra standard (checkbox)
   document.getElementById('std-extra-toggle-row').style.display = tipo === 'standard' ? '' : 'none';
-  document.getElementById('std-spazzolatura-row').style.display = tipo === 'standard' ? '' : 'none';
+  document.getElementById('std-fasi-opzionali-container').style.display = tipo === 'standard' ? '' : 'none';
   if (tipo !== 'standard') {
     document.getElementById('ord-extra-toggle').checked = false;
-    document.getElementById('ord-spazzolatura').checked = false;
+    fasi.filter(f => f.opzionale).forEach(f => {
+      const el = document.getElementById(`ord-fase-opz-${f.id}`);
+      if (el) el.checked = false;
+    });
     document.getElementById('std-extra-fasi-section').style.display = 'none';
     document.getElementById('std-extra-fasi-list').innerHTML = '';
   }
@@ -2394,9 +2504,9 @@ function openModalNuovoOrdine() {
   const struEl = document.getElementById('ord-struttura');
   const tipoPEl = document.getElementById('ord-tipo-prodotto');
   const matEl = document.getElementById('ord-materiale');
-  if (struEl) struEl.value = 'quattro_lati';
-  if (tipoPEl) tipoPEl.value = 'portoncino';
-  if (matEl) matEl.value = 'placcato';
+  if (struEl && struEl.options.length) struEl.selectedIndex = 0;
+  if (tipoPEl && tipoPEl.options.length) tipoPEl.selectedIndex = 0;
+  if (matEl && matEl.options.length) matEl.selectedIndex = 0;
   setTipoOrdine('standard');
   document.getElementById('modal-ordine').classList.add('open');
 }
@@ -2436,6 +2546,7 @@ async function creaOrdine() {
     insertPayload.struttura = document.getElementById('ord-struttura').value;
     insertPayload.tipo_prodotto = document.getElementById('ord-tipo-prodotto').value;
     insertPayload.materiale = document.getElementById('ord-materiale').value;
+    insertPayload.attributi = { struttura: insertPayload.struttura, materiale: insertPayload.materiale };
   }
   const { data: newOrdine, error } = await sb.from('ordini').insert(insertPayload).select().single();
 
@@ -2463,14 +2574,18 @@ async function creaOrdine() {
     }
   }
 
-  // Attiva fase Spazzolatura (catalogo id=24) se richiesta
-  if (tipo === 'standard' && document.getElementById('ord-spazzolatura')?.checked) {
-    await sb.rpc('imposta_fase_ordine', {
-      p_ordine_id: newOrdine.id,
-      p_fase_id: 24,
-      p_attiva: true,
-      p_responsabile_id: currentUserRow.id
-    });
+  // Attiva fasi opzionali selezionate
+  if (tipo === 'standard') {
+    for (const f of fasi.filter(f => f.opzionale)) {
+      if (document.getElementById(`ord-fase-opz-${f.id}`)?.checked) {
+        await sb.rpc('imposta_fase_ordine', {
+          p_ordine_id: newOrdine.id,
+          p_fase_id: f.id,
+          p_attiva: true,
+          p_responsabile_id: currentUserRow.id
+        });
+      }
+    }
   }
 
   // Fix gap: applica subito trigger_tipo_prodotto per ordini standard
@@ -3615,6 +3730,114 @@ async function eliminaTipoProdotto(id) {
   renderFasiConfig();
 }
 
+// ═══════════════════════════════════════════════
+// STRUTTURE / MATERIALI (attributi_prodotto_config)
+// ═══════════════════════════════════════════════
+function renderAttributoConfig(chiave) {
+  const elId = chiave === 'struttura' ? 'strutture-config-list' : 'materiali-config-list';
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const attr = attributiConfig.find(a => a.chiave === chiave);
+  const opzioni = attr ? [...(attr.opzioni || [])].sort((a,b) => (a.posizione||0)-(b.posizione||0)) : [];
+  el.innerHTML = (opzioni.length ? opzioni.map(o => `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <span style="font-size:13px;font-weight:600;flex:1">${escapeHtml(o.etichetta)}</span>
+      <span style="font-size:11px;color:var(--muted);font-family:monospace">${escapeHtml(o.valore)}</span>
+      <button class="btn btn-danger" style="padding:4px 10px;font-size:12px" onclick="rimuoviOpzioneAttributo('${chiave}','${escapeHtml(o.valore)}')">✕</button>
+    </div>
+  `).join('') : '<p style="color:var(--muted);padding:12px 0">Nessuna opzione.</p>') + `
+    <div style="display:flex;gap:8px;margin-top:14px;align-items:flex-end">
+      <div class="form-group" style="margin:0;flex:1">
+        <label style="font-size:12px">Valore interno</label>
+        <input type="text" id="new-opt-valore-${chiave}" placeholder="es. verniciato" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface)">
+      </div>
+      <div class="form-group" style="margin:0;flex:1">
+        <label style="font-size:12px">Etichetta</label>
+        <input type="text" id="new-opt-etichetta-${chiave}" placeholder="es. Verniciato" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface)">
+      </div>
+      <button class="btn btn-primary" style="padding:7px 14px;font-size:13px;white-space:nowrap" onclick="aggiungiOpzioneAttributo('${chiave}')">+ Aggiungi</button>
+    </div>`;
+}
+
+async function rimuoviOpzioneAttributo(chiave, valore) {
+  if (!confirm(`Rimuovere "${valore}" da ${chiave}?`)) return;
+  const attr = attributiConfig.find(a => a.chiave === chiave);
+  const nuove = (attr?.opzioni || []).filter(o => o.valore !== valore);
+  const { error } = await sb.from('attributi_prodotto_config').update({ opzioni: nuove }).eq('chiave', chiave);
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  await loadAttributiConfig();
+  renderAttributoConfig(chiave);
+  toast('Opzione rimossa', 'ok');
+}
+
+async function aggiungiOpzioneAttributo(chiave) {
+  const valore = document.getElementById(`new-opt-valore-${chiave}`)?.value.trim();
+  const etichetta = document.getElementById(`new-opt-etichetta-${chiave}`)?.value.trim();
+  if (!valore || !etichetta) { toast('Inserisci valore e etichetta', 'err'); return; }
+  const attr = attributiConfig.find(a => a.chiave === chiave);
+  if ((attr?.opzioni || []).some(o => o.valore === valore)) { toast('Valore già esistente', 'err'); return; }
+  const maxPos = Math.max(...(attr?.opzioni || []).map(o => o.posizione||0), 0);
+  const nuove = [...(attr?.opzioni || []), { valore, etichetta, posizione: maxPos + 10 }];
+  const { error } = await sb.from('attributi_prodotto_config').update({ opzioni: nuove }).eq('chiave', chiave);
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  await loadAttributiConfig();
+  renderAttributoConfig(chiave);
+  toast('Opzione aggiunta', 'ok');
+}
+
+// ═══════════════════════════════════════════════
+// PRIORITÀ (priorita_ordine_config)
+// ═══════════════════════════════════════════════
+let _editPrioritaId = null;
+
+function renderPrioritaConfig() {
+  const el = document.getElementById('priorita-config-list');
+  if (!el) return;
+  el.innerHTML = (!prioritaConfig.length ? '<p style="color:var(--muted);padding:12px 0">Nessuna priorità configurata.</p>' :
+    prioritaConfig.map(p => `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;font-weight:600;flex:1">${escapeHtml(p.etichetta)}</span>
+        <span style="font-size:11px;color:var(--muted);font-family:monospace">${escapeHtml(p.id)} · peso ${p.peso}</span>
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="openModalPriorita('${escapeHtml(p.id)}')">Modifica</button>
+      </div>
+    `).join('')) + `
+    <div style="margin-top:14px">
+      <button class="btn btn-primary" onclick="openModalPriorita(null)" style="font-size:13px">+ Nuova Priorità</button>
+    </div>`;
+}
+
+function openModalPriorita(id) {
+  _editPrioritaId = id;
+  const p = id ? prioritaConfig.find(x => x.id === id) : null;
+  document.getElementById('prn-title').textContent = id ? 'Modifica Priorità' : 'Nuova Priorità';
+  document.getElementById('prn-id-row').style.display = id ? 'none' : '';
+  document.getElementById('prn-id').value = '';
+  document.getElementById('prn-etichetta').value = p?.etichetta || '';
+  document.getElementById('prn-peso').value = p?.peso ?? 10;
+  document.getElementById('modal-priorita').classList.add('open');
+}
+
+async function salvaModalePriorita() {
+  const et = document.getElementById('prn-etichetta').value.trim();
+  const peso = parseInt(document.getElementById('prn-peso').value) || 10;
+  if (!et) { toast('Inserisci etichetta', 'err'); return; }
+  if (_editPrioritaId) {
+    const { error } = await sb.from('priorita_ordine_config').update({ etichetta: et, peso }).eq('id', _editPrioritaId);
+    if (error) { toast('Errore: ' + error.message, 'err'); return; }
+    toast('Priorità aggiornata', 'ok');
+  } else {
+    const id = document.getElementById('prn-id').value.trim().toLowerCase().replace(/\s+/g,'_');
+    if (!id) { toast('Inserisci ID', 'err'); return; }
+    const maxPos = Math.max(...prioritaConfig.map(p => p.posizione||0), 0);
+    const { error } = await sb.from('priorita_ordine_config').insert({ id, etichetta: et, peso, posizione: maxPos + 10 });
+    if (error) { toast('Errore: ' + error.message, 'err'); return; }
+    toast('Priorità aggiunta', 'ok');
+  }
+  closeModal('modal-priorita');
+  await loadPrioritaConfig();
+  renderPrioritaConfig();
+}
+
 async function importaFasiDaExcel(input) {
   const file = input.files[0];
   if (!file) return;
@@ -3866,7 +4089,8 @@ function formatDateTime(d) {
 }
 
 function prioLabel(p) {
-  return { 'normale': 'Normale', 'urgente': 'Urgente', 'extra_urgente': 'Extra Urgente' }[p] || p;
+  const cfg = prioritaConfig.find(c => c.id === p);
+  return cfg ? cfg.etichetta : (p || '—');
 }
 
 function statoLabel(s) {
@@ -3909,7 +4133,11 @@ async function riassegnaFaseExtra(faseExtraId, ordineId) {
 // ═══════════════════════════════════════════════
 // START
 // ═══════════════════════════════════════════════
-function strutturaLabel(s) { return { "quattro_lati": "4 Lati", "barra_l": "Barra ad L", "complanare": "Complanare" }[s] || (s || "—"); }
+function strutturaLabel(s) {
+  const cfg = attributiConfig.find(c => c.chiave === 'struttura');
+  if (cfg) { const opt = (cfg.opzioni || []).find(o => o.valore === s); if (opt) return opt.etichetta; }
+  return s || '—';
+}
 function tipoProdLabel(t) {
   if (!t) return '—';
   const found = tipiProdotto.find(x => x.id === t);
@@ -4188,18 +4416,24 @@ async function loadKpi() {
     : '<div class="kpi-empty" style="color:var(--ok)">✓ Nessuna fase in attesa</div>';
 
   // ── DISTRIBUZIONE PRIORITÀ ──
-  const prioCount = { normale: 0, urgente: 0, extra_urgente: 0 };
-  tuttiOrdini.filter(o => ['aperto','attesa_spedizione'].includes(o.stato)).forEach(o => { if (prioCount[o.priorita] !== undefined) prioCount[o.priorita]++; });
-  const totPrio = Object.values(prioCount).reduce((a,b)=>a+b,0) || 1;
-  const prioColors = { normale: 'var(--ok)', urgente: 'var(--warn)', extra_urgente: 'var(--alert)' };
-  const prioLabels = { normale: 'Normale', urgente: 'Urgente', extra_urgente: 'Extra Urgente' };
+  const prioDefaultColors = { normale: 'var(--ok)', urgente: 'var(--warn)', extra_urgente: 'var(--alert)' };
+  const prioCountMap = {};
+  prioritaConfig.forEach(p => { prioCountMap[p.id] = 0; });
+  tuttiOrdini.filter(o => ['aperto','attesa_spedizione'].includes(o.stato)).forEach(o => {
+    if (prioCountMap[o.priorita] !== undefined) prioCountMap[o.priorita]++;
+  });
+  const totPrio = Object.values(prioCountMap).reduce((a,b)=>a+b,0) || 1;
   document.getElementById('kpi-priorita').innerHTML =
-    Object.entries(prioCount).map(([k, v]) => `
-      <div class="kpi-bar-row">
-        <div class="kpi-bar-label">${prioLabels[k]}</div>
-        <div class="kpi-bar-track"><div class="kpi-bar-fill" style="width:${Math.round(v/totPrio*100)}%;background:${prioColors[k]}"></div></div>
-        <div class="kpi-bar-val">${v} (${Math.round(v/totPrio*100)}%)</div>
-      </div>`).join('') +
+    prioritaConfig.map(p => {
+      const v = prioCountMap[p.id] || 0;
+      const color = prioDefaultColors[p.id] || 'var(--wood)';
+      return `
+        <div class="kpi-bar-row">
+          <div class="kpi-bar-label">${escapeHtml(p.etichetta)}</div>
+          <div class="kpi-bar-track"><div class="kpi-bar-fill" style="width:${Math.round(v/totPrio*100)}%;background:${color}"></div></div>
+          <div class="kpi-bar-val">${v} (${Math.round(v/totPrio*100)}%)</div>
+        </div>`;
+    }).join('') +
     `<div style="font-size:11px;color:var(--muted);margin-top:8px">Totale ordini attivi: ${totPrio}</div>`;
 
   // ── CAPACITÀ PRODUTTIVA (RPC) ──
@@ -4488,8 +4722,8 @@ function openModificaOrdine(id) {
   document.getElementById('mod-cliente').value = ordine.cliente || '';
   document.getElementById('mod-codice').value = ordine.codice || '';
   document.getElementById('mod-tipo-prodotto').value = ordine.tipo_prodotto || 'portoncino';
-  document.getElementById('mod-struttura').value = ordine.struttura || 'quattro_lati';
-  document.getElementById('mod-materiale').value = ordine.materiale || 'placcato';
+  document.getElementById('mod-struttura').value = ordine.struttura || '';
+  document.getElementById('mod-materiale').value = ordine.materiale || '';
   document.getElementById('mod-prio').value = ordine.priorita || 'normale';
   document.getElementById('mod-quantita').value = ordine.quantita || 1;
   document.getElementById('mod-scadenza').value = ordine.scadenza || '';
@@ -4536,6 +4770,7 @@ async function salvaModificaOrdine() {
     payload.tipo_prodotto = nuovoTipo;
     payload.struttura = nuovaStruttura;
     payload.materiale = nuovoMateriale;
+    payload.attributi = { struttura: nuovaStruttura, materiale: nuovoMateriale };
   }
 
   const { error } = await sb.from('ordini').update(payload).eq('id', id);
