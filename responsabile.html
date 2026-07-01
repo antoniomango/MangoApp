@@ -4545,23 +4545,33 @@ async function inizializzaFiltriSchede() {
   if (_schedeFiltriPronti) return; // popola i select solo la prima volta
   _schedeFiltriPronti = true;
 
-  // Valori distinti da ordini
-  const { data: ordiniDistinti } = await sb.from('ordini')
-    .select('struttura, materiale, tipo_prodotto')
-    .eq('eliminato', false);
+  // Struttura: da attributi_prodotto_config, chiave='struttura', ordinate per posizione opzione
+  const cfgStruttura = attributiConfig.find(a => a.chiave === 'struttura');
+  const strutture = cfgStruttura
+    ? [...(cfgStruttura.opzioni || [])].sort((a, b) => (a.posizione || 0) - (b.posizione || 0))
+    : [];
 
-  const strutture   = [...new Set((ordiniDistinti||[]).map(o=>o.struttura).filter(Boolean))].sort();
-  const materiali   = [...new Set((ordiniDistinti||[]).map(o=>o.materiale).filter(Boolean))].sort();
-  const tipi        = [...new Set((ordiniDistinti||[]).map(o=>o.tipo_prodotto).filter(Boolean))].sort();
+  // Materiale: da attributi_prodotto_config, chiave='materiale', ordinate per posizione opzione
+  const cfgMateriale = attributiConfig.find(a => a.chiave === 'materiale');
+  const materiali = cfgMateriale
+    ? [...(cfgMateriale.opzioni || [])].sort((a, b) => (a.posizione || 0) - (b.posizione || 0))
+    : [];
 
-  const populate = (id, vals) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.innerHTML = vals.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
-  };
-  populate('sch-struttura', strutture);
-  populate('sch-materiale', materiali);
-  populate('sch-tipo', tipi);
+  const elStruttura = document.getElementById('sch-struttura');
+  if (elStruttura) elStruttura.innerHTML = strutture.map(o =>
+    `<option value="${escapeHtml(o.valore)}">${escapeHtml(o.etichetta)}</option>`
+  ).join('');
+
+  const elMateriale = document.getElementById('sch-materiale');
+  if (elMateriale) elMateriale.innerHTML = materiali.map(o =>
+    `<option value="${escapeHtml(o.valore)}">${escapeHtml(o.etichetta)}</option>`
+  ).join('');
+
+  // Tipo prodotto: da tipiProdotto (già caricato al startup, ordinato per posizione)
+  const elTipo = document.getElementById('sch-tipo');
+  if (elTipo) elTipo.innerHTML = tipiProdotto.map(t =>
+    `<option value="${escapeHtml(t.id)}">${escapeHtml(t.label)}</option>`
+  ).join('');
 
   // Fasi opzionali dal catalogo
   const { data: fasiOpz } = await sb.from('fasi').select('id, nome').eq('opzionale', true).order('posizione');
