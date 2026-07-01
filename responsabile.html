@@ -713,6 +713,40 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
           <div id="kpi-operatori"></div>
         </div>
 
+        <!-- RIGA 8: Schede di riferimento -->
+        <div class="card" style="padding:20px;margin-bottom:16px">
+          <h3 style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--wood)">📋 Schede di riferimento</h3>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Benchmark congelati su combinazioni di filtri — confronto storico vs attuale</div>
+
+          <!-- Form creazione scheda -->
+          <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:16px">
+            <div style="font-size:12px;font-weight:600;margin-bottom:10px">Nuova scheda</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+              <div>
+                <label style="font-size:11px;color:var(--muted)">Struttura</label>
+                <select id="sch-struttura" multiple style="width:100%;height:60px;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px"></select>
+              </div>
+              <div>
+                <label style="font-size:11px;color:var(--muted)">Materiale</label>
+                <select id="sch-materiale" multiple style="width:100%;height:60px;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px"></select>
+              </div>
+              <div>
+                <label style="font-size:11px;color:var(--muted)">Tipo prodotto</label>
+                <select id="sch-tipo" multiple style="width:100%;height:60px;font-size:12px;border:1px solid var(--border);border-radius:4px;padding:2px"></select>
+              </div>
+            </div>
+            <div id="sch-fasi-opz-container" style="margin-bottom:8px"></div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input id="sch-nome" type="text" placeholder="Nome scheda (es. Battente Rovere con Spazzolatura)"
+                style="flex:1;padding:6px 10px;font-size:12px;border:1px solid var(--border);border-radius:4px">
+              <button class="btn btn-ok" style="padding:6px 14px;font-size:12px" onclick="creaSchedaKpi()">+ Crea scheda</button>
+            </div>
+          </div>
+
+          <!-- Lista schede salvate -->
+          <div id="kpi-schede"></div>
+        </div>
+
       </section>
 
       <!-- VISTA UFFICIO (sola_lettura) -->
@@ -1363,8 +1397,10 @@ let operatoriCache = [];
 let notificheCache = [];
 let currentOrdineId = null;
 let faseMediaMinutiMap = {}; // fase_id -> avg minuti per pezzo
+let faseEsternaSet = new Set(); // fase_id (int) delle fasi con e_attesa_esterna=true
+let minutiGiornoGlobale = 480; // aggiornato da loadAvanzamenti e calcolaStimaSingoloOrdine
 let faseExtraMediaMinutiMap = {}; // nome_lower -> mediana minuti per unità (fasi_ordine_extra)
-let _etaMinutiCache = {}; // ordine_id -> minuti ETA (critical path), aggiornato da loadAvanzamenti e renderPianificazione
+let _etaMinutiCache = {}; // ordine_id -> minuti ETA equivalenti (critico interno + calendario esterno scalato)
 let currentFaseId = null; // per riassegna
 let riassegnaOrdFaseId = null;
 
@@ -1818,11 +1854,15 @@ async function loadAvanzamenti(ids) {
     (data || []).forEach(f => {
       if (!map[f.ordine_id]) map[f.ordine_id] = { tot: 0, done: 0, inCorso: 0, fasiRim: [] };
       if (f.stato === 'non_applicabile') return;
+      const isEsterna = faseEsternaSet.has(parseInt(f.fase_id));
       map[f.ordine_id].tot++;
       if (f.stato === 'completata') map[f.ordine_id].done++;
       if (f.stato === 'in_corso') map[f.ordine_id].inCorso++;
       if (f.stato === 'disponibile' || f.stato === 'in_corso') {
-        map[f.ordine_id].fasiRim.push({ fase_id: f.fase_id, inCorso: f.stato === 'in_corso' });
+        map[f.ordine_id].fasiRim.push({ fase_id: f.fase_id, inCorso: f.stato === 'in_corso', esterna: isEsterna });
+      } else if (f.stato === 'in_attesa' && isEsterna) {
+        // Fase esterna già inviata al fornitore: contribuisce al tempo cliente (0.5x = circa a metà)
+        map[f.ordine_id].fasiRim.push({ fase_id: f.fase_id, inCorso: true, esterna: true });
       }
     });
   }
@@ -1855,12 +1895,17 @@ async function loadAvanzamenti(ids) {
     const [hf, mf] = (orarioConfig.ora_fine   || '17:00').split(':').map(Number);
     return Math.max(60, (hf * 60 + mf) - (hi * 60 + mi));
   })();
+  minutiGiornoGlobale = minutiGiorno;
 
-  // Costruisce fasiMap nel formato atteso da buildEtaFromFasi
+  // Costruisce fasiMap nel formato atteso da buildEtaFromFasi (con flag esterna)
   const fasiMap = {};
   ids.forEach(id => {
     const s = map[id];
-    fasiMap[id] = (s?.fasiRim || []).map(f => ({ fase_id: f.fase_id, stato: f.inCorso ? 'in_corso' : 'disponibile' }));
+    fasiMap[id] = (s?.fasiRim || []).map(f => ({
+      fase_id: f.fase_id,
+      stato: f.inCorso ? 'in_corso' : 'disponibile',
+      esterna: f.esterna || false,
+    }));
   });
   const stdOrdini = ids.map(id => ordiniCache.find(o => o.id === id)).filter(Boolean);
   const etaMinutiPerOrdine = buildEtaFromFasi(stdOrdini, fasiMap);
@@ -2741,12 +2786,17 @@ async function loadOrarioConfig() {
 }
 
 async function loadFaseMediaMinuti() {
-  const { data } = await sb.from('ordine_fasi')
-    .select('fase_id, tempo_accumulato_minuti, n_ordini_batch, ordini(quantita)')
-    .eq('stato', 'completata')
-    .gt('tempo_accumulato_minuti', 0)
-    .lt('tempo_accumulato_minuti', 20000)
-    .not('fase_id', 'is', null);
+  const [{ data }, { data: fasiCatalogo }] = await Promise.all([
+    sb.from('ordine_fasi')
+      .select('fase_id, tempo_accumulato_minuti, n_ordini_batch, ordini(quantita)')
+      .eq('stato', 'completata')
+      .gt('tempo_accumulato_minuti', 0)
+      .lt('tempo_accumulato_minuti', 20000)
+      .not('fase_id', 'is', null),
+    sb.from('fasi').select('id, e_attesa_esterna'),
+  ]);
+  // Costruisce il set di fase_id con attesa esterna
+  faseEsternaSet = new Set((fasiCatalogo || []).filter(f => f.e_attesa_esterna).map(f => f.id));
   if (!data) return;
   const map = {};
   data.forEach(f => {
@@ -3702,6 +3752,7 @@ function calcolaStimaSingoloOrdine(id) {
     const [hf, mf] = (orarioConfig.ora_fine   || '17:00').split(':').map(Number);
     return Math.max(60, (hf * 60 + mf) - (hi * 60 + mi));
   })();
+  minutiGiornoGlobale = minutiGiorno;
 
   const giorni = Math.ceil(minTotale / minutiGiorno);
   const dataStimata = addGiorniLavorativi(new Date(), giorni);
@@ -3714,36 +3765,68 @@ function calcolaStimaSingoloOrdine(id) {
 // Calcola ETA per lista ordini usando coda per fase_id (critical path).
 // fasiMap: { ordine_id -> [{fase_id, stato}] }
 // Ritorna { ordine_id -> minuti_eta } e aggiorna _etaMinutiCache.
+// Calcola ETA per lista ordini.
+// Fasi INTERNE: modello coda per fase (critical path con altri ordini in attesa).
+// Fasi ESTERNE: aggiunte direttamente all'ETA come giorni-calendario-equivalenti
+//   (il fornitore lavora in parallelo, non fa coda con gli operatori interni).
+// Il valore in _etaMinutiCache è in "minuti-lavorativi-equivalenti":
+//   diviso per minutiGiornoGlobale dà i giorni totali stimati per il cliente.
 function buildEtaFromFasi(ordiniList, fasiMap) {
+  const minGiorno = minutiGiornoGlobale || 480;
+
+  // Coda per fasi INTERNE (seriali per fase, condivise tra ordini)
   const faseQueue = {};
   ordiniList.forEach(o => {
     const q = o.quantita || 1;
     const scad = o.scadenza || '9999-12-31';
-    (fasiMap[o.id] || []).filter(f => f.stato === 'disponibile' || f.stato === 'in_corso').forEach(f => {
-      const fid = parseInt(f.fase_id);
-      const media = faseMediaMinutiMap[fid];
-      if (!media) return;
-      const minuti = (f.stato === 'in_corso' ? media * 0.5 : media) * q;
-      if (!faseQueue[fid]) faseQueue[fid] = [];
-      faseQueue[fid].push({ ordine_id: o.id, minuti, scad });
-    });
+    (fasiMap[o.id] || [])
+      .filter(f => !f.esterna && (f.stato === 'disponibile' || f.stato === 'in_corso'))
+      .forEach(f => {
+        const fid = parseInt(f.fase_id);
+        const media = faseMediaMinutiMap[fid];
+        if (!media) return;
+        const minuti = (f.stato === 'in_corso' ? media * 0.5 : media) * q;
+        if (!faseQueue[fid]) faseQueue[fid] = [];
+        faseQueue[fid].push({ ordine_id: o.id, minuti, scad });
+      });
   });
   Object.values(faseQueue).forEach(q => q.sort((a, b) => a.scad.localeCompare(b.scad)));
 
   const eta = {};
+
+  // Critical path interno (con attesa in coda)
   ordiniList.forEach(o => {
     let maxMin = 0;
-    (fasiMap[o.id] || []).filter(f => f.stato === 'disponibile' || f.stato === 'in_corso').forEach(f => {
-      const fid = parseInt(f.fase_id);
-      const queue = faseQueue[fid];
-      if (!queue) return;
-      const pos = queue.findIndex(i => i.ordine_id === o.id);
-      if (pos < 0) return;
-      const attesa = queue.slice(0, pos).reduce((s, i) => s + i.minuti, 0);
-      maxMin = Math.max(maxMin, attesa + queue[pos].minuti);
-    });
+    (fasiMap[o.id] || [])
+      .filter(f => !f.esterna && (f.stato === 'disponibile' || f.stato === 'in_corso'))
+      .forEach(f => {
+        const fid = parseInt(f.fase_id);
+        const queue = faseQueue[fid];
+        if (!queue) return;
+        const pos = queue.findIndex(i => i.ordine_id === o.id);
+        if (pos < 0) return;
+        const attesa = queue.slice(0, pos).reduce((s, i) => s + i.minuti, 0);
+        maxMin = Math.max(maxMin, attesa + queue[pos].minuti);
+      });
     if (maxMin > 0) eta[o.id] = maxMin;
   });
+
+  // Fasi ESTERNE: aggiunta diretta come minuti-calendario scalati
+  // Scaling: min_cal * (minGiorno/1440) → quando diviso per minGiorno = giorni calendario
+  ordiniList.forEach(o => {
+    let extEquiv = 0;
+    (fasiMap[o.id] || [])
+      .filter(f => f.esterna)
+      .forEach(f => {
+        const fid = parseInt(f.fase_id);
+        const media = faseMediaMinutiMap[fid];
+        if (!media) return;
+        const minCal = f.inCorso ? media * 0.5 : media; // in_corso/in_attesa = metà restante
+        extEquiv += minCal * (minGiorno / 1440);
+      });
+    if (extEquiv > 0) eta[o.id] = (eta[o.id] || 0) + extEquiv;
+  });
+
   Object.assign(_etaMinutiCache, eta);
   return eta;
 }
@@ -4153,7 +4236,7 @@ async function loadKpi() {
     const prioLabel = { normale: 'Normale', urgente: 'Urgente', extra_urgente: 'Extra Urg.' };
     const prioC = { normale: 'var(--ok)', urgente: 'var(--warn)', extra_urgente: 'var(--alert)' };
     pEl.innerHTML = `<table class="kpi-table">
-      <thead><tr><th>#</th><th>Cliente / Codice</th><th>Priorità</th><th>Scadenza</th><th>Ore rim.</th><th>Rapporto</th></tr></thead>
+      <thead><tr><th>#</th><th>Cliente / Codice</th><th>Priorità</th><th>Scadenza</th><th>Ore int.</th><th>Stima cons.</th><th>Rapporto</th></tr></thead>
       <tbody>` +
       priorita.map((o, i) => {
         const isRitardo = o.giorni_scadenza < 0;
@@ -4164,16 +4247,18 @@ async function loadKpi() {
         const ggStr = isRitardo ? `<span style="color:var(--alert)">-${Math.abs(o.giorni_scadenza)}gg</span>` :
           isOggi ? `<span style="color:var(--alert)">oggi</span>` :
           `+${o.giorni_scadenza}gg`;
+        const stimaColor = o.a_rischio ? 'var(--alert)' : 'var(--muted)';
         return `<tr style="${rowStyle}">
           <td style="color:var(--muted);font-size:11px">${i+1}</td>
           <td>${escapeHtml(o.cliente||'')} <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">${escapeHtml(o.codice||'')}</span></td>
           <td><span style="color:${prioC[o.priorita]||'var(--ink)'};font-size:11px">${prioLabel[o.priorita]||o.priorita}</span></td>
           <td>${formatDate(o.scadenza)} ${ggStr}</td>
           <td style="font-family:'DM Mono',monospace">${o.ore_rimaste}h</td>
+          <td style="font-family:'DM Mono',monospace;color:${stimaColor}">${o.giorni_stima_consegna != null ? o.giorni_stima_consegna + 'gg' : '—'}</td>
           <td style="font-weight:700;color:${rapportoColor}">${rapportoStr}</td>
         </tr>`;
       }).join('') + `</tbody></table>
-      <div style="font-size:11px;color:var(--muted);margin-top:8px">Rapporto = ore rimanenti / (450 min/giorno × giorni a scadenza). Valori alti = urgente.</div>`;
+      <div style="font-size:11px;color:var(--muted);margin-top:8px">Ore int. = carico operatori (senza attese esterne). Stima cons. = stima cliente in giorni (interne + esterne). Rapporto = stima / giorni a scadenza — valori &gt;1 = a rischio.</div>`;
   } else {
     pEl.innerHTML = '<div class="kpi-empty" style="color:var(--ok)">✓ Nessun ordine con scadenza impostata</div>';
   }
@@ -4207,6 +4292,182 @@ async function loadKpi() {
   } else {
     oEl.innerHTML = '<div class="kpi-empty">Nessun dato — serve storico con almeno 2 completamenti per operatore per fase</div>';
   }
+
+  // ── SCHEDE DI RIFERIMENTO ──
+  await Promise.all([
+    inizializzaFiltriSchede(),
+    renderSchedeKpi(),
+  ]);
+}
+
+// ═══════════════════════════════════════════════
+// SCHEDE DI RIFERIMENTO
+// ═══════════════════════════════════════════════
+
+let _schedeFiltriPronti = false;
+
+async function inizializzaFiltriSchede() {
+  if (_schedeFiltriPronti) return; // popola i select solo la prima volta
+  _schedeFiltriPronti = true;
+
+  // Valori distinti da ordini
+  const { data: ordiniDistinti } = await sb.from('ordini')
+    .select('struttura, materiale, tipo_prodotto')
+    .eq('eliminato', false);
+
+  const strutture   = [...new Set((ordiniDistinti||[]).map(o=>o.struttura).filter(Boolean))].sort();
+  const materiali   = [...new Set((ordiniDistinti||[]).map(o=>o.materiale).filter(Boolean))].sort();
+  const tipi        = [...new Set((ordiniDistinti||[]).map(o=>o.tipo_prodotto).filter(Boolean))].sort();
+
+  const populate = (id, vals) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.innerHTML = vals.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+  };
+  populate('sch-struttura', strutture);
+  populate('sch-materiale', materiali);
+  populate('sch-tipo', tipi);
+
+  // Fasi opzionali dal catalogo
+  const { data: fasiOpz } = await sb.from('fasi').select('id, nome').eq('opzionale', true).order('posizione');
+  const cont = document.getElementById('sch-fasi-opz-container');
+  if (cont && fasiOpz?.length) {
+    cont.innerHTML = `<div style="font-size:11px;color:var(--muted);margin-bottom:4px">Fasi opzionali</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">` +
+      fasiOpz.map(f => `
+        <div style="display:flex;align-items:center;gap:4px;background:var(--border);border-radius:4px;padding:3px 8px">
+          <span style="font-size:11px">${escapeHtml(f.nome)}</span>
+          <select id="sch-fase-${f.id}" style="font-size:11px;border:none;background:transparent;padding:0">
+            <option value="">indifferente</option>
+            <option value="inclusa">deve essere presente</option>
+            <option value="esclusa">deve essere assente</option>
+          </select>
+        </div>`).join('') +
+      `</div>`;
+  }
+}
+
+async function creaSchedaKpi() {
+  const nome = document.getElementById('sch-nome')?.value?.trim();
+  if (!nome) { toast('Inserisci un nome per la scheda', 'error'); return; }
+
+  // Raccoglie i valori selezionati dai multi-select
+  const getSelected = id => Array.from(document.getElementById(id)?.selectedOptions||[]).map(o=>o.value);
+  const struttura    = getSelected('sch-struttura');
+  const materiale    = getSelected('sch-materiale');
+  const tipo_prodotto = getSelected('sch-tipo');
+
+  // Raccoglie lo stato delle fasi opzionali
+  const fasi_incluse = [], fasi_escluse = [];
+  document.querySelectorAll('[id^="sch-fase-"]').forEach(sel => {
+    const faseId = parseInt(sel.id.replace('sch-fase-',''));
+    if (sel.value === 'inclusa') fasi_incluse.push(faseId);
+    else if (sel.value === 'esclusa') fasi_escluse.push(faseId);
+  });
+
+  const criteri = {};
+  if (struttura.length)    criteri.struttura     = struttura;
+  if (materiale.length)    criteri.materiale     = materiale;
+  if (tipo_prodotto.length) criteri.tipo_prodotto = tipo_prodotto;
+  if (fasi_incluse.length) criteri.fasi_incluse  = fasi_incluse;
+  if (fasi_escluse.length) criteri.fasi_escluse  = fasi_escluse;
+
+  const btn = document.querySelector('[onclick="creaSchedaKpi()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Calcolo…'; }
+
+  const { data, error } = await sb.rpc('crea_scheda_kpi', {
+    p_nome: nome,
+    p_criteri: criteri,
+    p_responsabile_id: currentUserRow.id,
+  });
+
+  if (btn) { btn.disabled = false; btn.textContent = '+ Crea scheda'; }
+
+  if (error || !data?.ok) {
+    toast('Errore: ' + (data?.errore || error?.message || 'sconosciuto'), 'error');
+    return;
+  }
+  const camp = data.n_campioni_iniziali;
+  toast(`Scheda creata — ${camp} ordine${camp!==1?'i':''} nel campione`);
+  document.getElementById('sch-nome').value = '';
+  await renderSchedeKpi();
+}
+
+async function renderSchedeKpi() {
+  const el = document.getElementById('kpi-schede');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--muted);font-size:12px">Caricamento…</div>';
+
+  const { data, error } = await sb.rpc('lista_schede_kpi');
+  if (error) { el.innerHTML = '<div class="kpi-empty">Errore caricamento schede</div>'; return; }
+  if (!data?.length) { el.innerHTML = '<div class="kpi-empty" style="color:var(--muted)">Nessuna scheda. Usa il form sopra per crearne una.</div>'; return; }
+
+  const varHtml = (pct, label) => {
+    if (pct == null) return `<span style="color:var(--muted)">—</span>`;
+    const color = pct > 5 ? 'var(--alert)' : pct < -5 ? 'var(--ok)' : 'var(--muted)';
+    const icon  = pct > 5 ? '▲' : pct < -5 ? '▼' : '≈';
+    return `<span style="color:${color};font-weight:600">${icon} ${Math.abs(pct).toFixed(1)}%</span>
+            <span style="color:var(--muted);font-size:10px"> ${pct > 0 ? 'peggiorato' : pct < 0 ? 'migliorato' : 'stabile'}</span>`;
+  };
+
+  const criteriHtml = c => {
+    const parti = [];
+    if (c.struttura?.length)    parti.push('Struttura: ' + c.struttura.join(', '));
+    if (c.materiale?.length)    parti.push('Materiale: ' + c.materiale.join(', '));
+    if (c.tipo_prodotto?.length) parti.push('Tipo: ' + c.tipo_prodotto.join(', '));
+    if (c.fasi_incluse?.length)  parti.push('Con fasi: ' + c.fasi_incluse.join(', '));
+    if (c.fasi_escluse?.length)  parti.push('Senza fasi: ' + c.fasi_escluse.join(', '));
+    return parti.length ? parti.join(' · ') : '(tutti gli ordini)';
+  };
+
+  el.innerHTML = data.map(s => {
+    const scarso = (s.n_campioni_correnti || 0) < 3;
+    return `<div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div>
+          <div style="font-size:13px;font-weight:600">${escapeHtml(s.nome)}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">${escapeHtml(criteriHtml(s.criteri))}</div>
+        </div>
+        <button class="btn btn-secondary" style="padding:3px 10px;font-size:11px;color:var(--alert)"
+          onclick="eliminaSchedaKpi('${s.id}','${escapeHtml(s.nome)}')">Elimina</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="background:var(--bg);border-radius:6px;padding:10px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Ore lavorazione interna</div>
+          <div style="display:flex;gap:16px;align-items:baseline">
+            <span style="font-family:'DM Mono',monospace;font-size:14px">${s.ore_interne_correnti != null ? s.ore_interne_correnti + 'h' : '—'}</span>
+            <span style="font-size:11px;color:var(--muted)">era ${s.ore_interne_iniziali != null ? s.ore_interne_iniziali + 'h' : '—'}</span>
+            ${varHtml(s.var_ore_pct, 'ore')}
+          </div>
+        </div>
+        <div style="background:var(--bg);border-radius:6px;padding:10px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Giorni calendario (creazione → spedizione)</div>
+          <div style="display:flex;gap:16px;align-items:baseline">
+            <span style="font-family:'DM Mono',monospace;font-size:14px">${s.giorni_calendario_correnti != null ? s.giorni_calendario_correnti + 'gg' : '—'}</span>
+            <span style="font-size:11px;color:var(--muted)">era ${s.giorni_calendario_iniziali != null ? s.giorni_calendario_iniziali + 'gg' : '—'}</span>
+            ${varHtml(s.var_giorni_pct, 'giorni')}
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:6px;font-size:11px;color:var(--muted)">
+        Campioni correnti: <strong>${s.n_campioni_correnti ?? 0}</strong>
+        ${scarso ? '<span style="color:var(--warn);margin-left:4px">⚠ Dati scarsi (&lt;3 ordini)</span>' : ''}
+        · Creata il ${formatDate(s.creata_il)}
+        · Campioni al momento della creazione: ${s.n_campioni_iniziali ?? 0}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function eliminaSchedaKpi(id, nome) {
+  if (!confirm(`Eliminare la scheda "${nome}"?`)) return;
+  const { data } = await sb.rpc('elimina_scheda_kpi', {
+    p_id: id,
+    p_responsabile_id: currentUserRow.id,
+  });
+  if (!data?.ok) { toast('Errore eliminazione: ' + (data?.errore||'sconosciuto'), 'error'); return; }
+  toast('Scheda eliminata');
+  await renderSchedeKpi();
 }
 
 function formatOre(h) {
