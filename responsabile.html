@@ -1794,8 +1794,9 @@ function ordineRow(o, mini = false) {
   const scad = o.scadenza ? formatDate(o.scadenza) : '—';
   const isLate = o.scadenza && o.scadenza < new Date().toISOString().split('T')[0] && o.stato === 'aperto';
   const isAttesa = o.stato === 'attesa_spedizione';
-  const rowClass = isAttesa ? 'style="background:#F0FDF4"' : '';
-  return `<tr class="clickable ${scadenzaClass(o.scadenza)}" ${rowClass} onclick="openDettaglioOrdine('${o.id}')">
+  const isSosp = o.stato === 'sospeso';
+  const rowClass = isAttesa ? 'style="background:#F0FDF4"' : isSosp ? 'style="background:#FFFBEB;opacity:0.85"' : '';
+  return `<tr class="clickable ${isSosp ? '' : scadenzaClass(o.scadenza)}" ${rowClass} onclick="openDettaglioOrdine('${o.id}')">
     <td><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div></td>
     <td>${o.tipo === 'extra' ? '<span style="font-weight:600;color:var(--wood)">Ordine Extra</span>' : `${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}`}</td>
     <td><span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span></td>
@@ -1974,7 +1975,7 @@ function renderOrdiniTable() {
     if (prio && o.priorita !== prio) return false;
     if (struttura && o.struttura !== struttura) return false;
     if (tipoProd && o.tipo_prodotto !== tipoProd) return false;
-    if (search && !o.cliente.toLowerCase().includes(search) && !o.codice.toLowerCase().includes(search)) return false;
+    if (search && !(o.cliente || '').toLowerCase().includes(search) && !(o.codice || '').toLowerCase().includes(search)) return false;
     return true;
   });
 
@@ -3148,7 +3149,7 @@ function renderArchivioTable() {
 
   let filtered = ordiniSpeditiCache.filter(o => {
     if (tipo && o.tipo !== tipo) return false;
-    if (search && !o.cliente.toLowerCase().includes(search) && !o.codice.toLowerCase().includes(search)) return false;
+    if (search && !(o.cliente || '').toLowerCase().includes(search) && !(o.codice || '').toLowerCase().includes(search)) return false;
     if (dal && o.spedito_il && o.spedito_il.split('T')[0] < dal) return false;
     if (al && o.spedito_il && o.spedito_il.split('T')[0] > al) return false;
     return true;
