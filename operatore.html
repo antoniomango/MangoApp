@@ -1002,15 +1002,22 @@ function filtraOrdini() {
       sep = `<div style="padding:5px 4px 3px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:6px;border-bottom:1px solid var(--border)">📅 ${label}</div>`;
     }
     const isAttesa = o.stato === 'attesa_spedizione';
-    const extraStyle = isAttesa ? 'border-left:4px solid var(--ok);background:#F0FDF4' : '';
+    const isSosp = o.stato === 'sospeso';
+    const extraStyle = isAttesa ? 'border-left:4px solid var(--ok);background:#F0FDF4'
+      : isSosp ? 'border-left:4px solid #D97706;background:#FFFBEB;opacity:0.88' : '';
     const fasi = (fasiPerOrdine[o.id] || []).filter(f => f.stato !== 'non_applicabile');
     const comp = fasi.filter(f => f.stato === 'completata').length;
     const tot = fasi.length || 1;
     const pct = Math.round(comp / tot * 100);
     const isDone = pct === 100;
     const stima = stimaPerOrdine[o.id];
+    // Determina se ci sono fasi disponibili (standard via conDisp, extra via fasiPerOrdine)
+    const hasDisp = isAttesa || isSosp ||
+      (o.tipo === 'extra'
+        ? (fasiPerOrdine[o.id] || []).some(f => f.stato === 'disponibile')
+        : conDisp.has(o.id));
     let stimaBadge = '';
-    if (!isAttesa && stima?.stimaStr) {
+    if (!isAttesa && !isSosp && stima?.stimaStr) {
       const stimaFmt = stima.dataStimata.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit' });
       if (stima.isInRitardo) {
         stimaBadge = `<span style="font-size:11px;font-weight:700;color:#EF4444">🔴 IN RITARDO · stima: ${stimaFmt}</span>`;
@@ -1019,18 +1026,21 @@ function filtraOrdini() {
       } else {
         stimaBadge = `<span style="font-size:11px;color:var(--muted)">🟢 stima: ${stimaFmt}</span>`;
       }
-    } else if (!isAttesa && stima?.isInRitardo) {
+    } else if (!isAttesa && !isSosp && stima?.isInRitardo) {
       stimaBadge = `<span style="font-size:11px;font-weight:700;color:#EF4444">🔴 IN RITARDO</span>`;
     }
     return sep + `
-    <div class="card card-row ${isAttesa ? '' : scadenzaClass(o.scadenza)}" style="${extraStyle}" onclick="openOrdineDetail('${o.id}')">
+    <div class="card card-row ${isSosp ? '' : (isAttesa ? '' : scadenzaClass(o.scadenza))}" style="${extraStyle}" onclick="openOrdineDetail('${o.id}')">
       <div class="row-main" style="width:100%">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div class="row-title">${escapeHtml(o.cliente)} — ${escapeHtml(o.codice || '')}</div>
           <span class="badge badge-${o.priorita}" style="margin-left:8px">${prioLabel(o.priorita)}</span>
         </div>
         <div class="row-sub">${o.tipo === 'extra' ? 'Ordine Extra' : `${strutturaLabel(o.struttura)} · ${tipoProdLabel(o.tipo_prodotto)}`}</div>
-        ${isAttesa ? '<div style="margin-top:3px;font-size:12px;font-weight:600;color:var(--ok)">✓ In attesa corriere</div>' : (o.scadenza ? `<div style="margin-top:3px">${scadenzaLabel(o.scadenza)}</div>` : '')}
+        ${isAttesa ? '<div style="margin-top:3px;font-size:12px;font-weight:600;color:var(--ok)">✓ In attesa corriere</div>'
+          : isSosp ? '<div style="margin-top:3px;font-size:12px;font-weight:700;color:#92400E">⏸ SOSPESO</div>'
+          : (o.scadenza ? `<div style="margin-top:3px">${scadenzaLabel(o.scadenza)}</div>` : '')}
+        ${!hasDisp && !isAttesa && !isSosp ? '<div style="margin-top:2px;font-size:11px;color:var(--muted)">⬜ Nessuna fase disponibile</div>' : ''}
         ${stimaBadge ? `<div style="margin-top:2px">${stimaBadge}</div>` : ''}
         <div class="ord-progress-wrap">
           <div class="ord-progress-fill ${isDone ? 'done' : ''}" style="width:${pct}%"></div>
