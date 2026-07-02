@@ -547,8 +547,15 @@ async function syncQueue() {
         const { data } = await sb.rpc('completa_fase_extra', { p_fase_extra_id: item.faseExtraId, p_operatore_id: currentUser.id, p_note: item.note, p_session_token: sessionToken });
         ok = data?.ok;
       } else if (item.type === 'nc') {
-        const { error } = await sb.from('non_conformita').insert(item.payload);
-        ok = !error;
+        const { data: ncR } = await sb.rpc('segnala_non_conformita', {
+          p_ordine_id: item.payload.ordine_id,
+          p_fase_id: item.payload.fase_id,
+          p_descrizione: item.payload.descrizione,
+          p_foto_url: item.payload.foto_url || null,
+          p_operatore_id: currentUser.id,
+          p_session_token: sessionToken
+        });
+        ok = ncR?.ok;
       }
       if (ok) await deleteQueued(item.id);
     } catch (e) { console.warn('sync error', e); }
@@ -1733,10 +1740,6 @@ async function aggiungiCollega(ordFaseId, ordineId, collegaId, collegaNome) {
   if (!confirm(`Aggiungere ${collegaNome} a questa fase?`)) return;
   const { data, error } = await sb.rpc('aggiungi_collega_fase', { p_ordine_fase_id: ordFaseId, p_collega_id: collegaId, p_richiedente_id: currentUser.id, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
-  await sb.from('archivio_log').insert({
-    ordine_id: ordineId, utente_id: currentUser.id,
-    azione: 'fase_iniziata', dettaglio: { aggiunto_da: currentUser.id, operatore_id: collegaId, ordine_fase_id: ordFaseId }
-  });
   toast(`${collegaNome} aggiunto alla fase`, 'ok');
   await renderFaseDetail(ordFaseId, ordineId);
 }
@@ -1745,10 +1748,6 @@ async function rimuoviCollega(ordFaseId, ordineId, collegaId, collegaNome) {
   if (!confirm(`Rimuovere ${collegaNome} da questa fase?`)) return;
   const { data, error } = await sb.rpc('rimuovi_collega_fase', { p_ordine_fase_id: ordFaseId, p_collega_id: collegaId, p_richiedente_id: currentUser.id, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
-  await sb.from('archivio_log').insert({
-    ordine_id: ordineId, utente_id: currentUser.id,
-    azione: 'fase_annullata', dettaglio: { rimosso_da: currentUser.id, operatore_id: collegaId, ordine_fase_id: ordFaseId }
-  });
   toast(`${collegaNome} rimosso dalla fase`, 'ok');
   await renderFaseDetail(ordFaseId, ordineId);
 }
@@ -1757,10 +1756,6 @@ async function uniscitiAFase(ordFaseId, ordineId) {
   if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
   const { data, error } = await sb.rpc('aggiungi_collega_fase', { p_ordine_fase_id: ordFaseId, p_collega_id: currentUser.id, p_richiedente_id: currentUser.id, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
-  await sb.from('archivio_log').insert({
-    ordine_id: ordineId, utente_id: currentUser.id,
-    azione: 'fase_iniziata', dettaglio: { unione: true, ordine_fase_id: ordFaseId }
-  });
   toast('Ti sei unito alla fase!', 'ok');
   await renderFaseDetail(ordFaseId, ordineId);
   await renderOrdineDetail(ordineId);
@@ -1797,25 +1792,18 @@ async function completaFase(ordFaseId, ordineId) {
   if (btnCompleta) btnCompleta.textContent = 'Completamento...';
 
   if (isOnline) {
-    // Prova prima col RPC (operatore primario); se fallisce per permessi usa UPDATE diretto (operatore aggiunto via junction)
     const { data } = await sb.rpc('completa_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_note_operatore: note, p_session_token: sessionToken });
     if (!data?.ok) {
-      // Fallback: aggiorna direttamente (utente nella junction table)
-      // Leggi iniziata_il per calcolare durata da sommare all'accumulato
-      const { data: faseCorr } = await sb.from('ordine_fasi').select('iniziata_il, tempo_accumulato_minuti').eq('id', ordFaseId).single();
-      const durata = faseCorr?.iniziata_il ? Math.max(0, (Date.now() - new Date(faseCorr.iniziata_il).getTime()) / 60000) : 0;
-      const { error } = await sb.from('ordine_fasi').update({
-        stato: 'completata',
-        completata_il: new Date().toISOString(),
-        note_operatore: note || null,
-        tempo_accumulato_minuti: (faseCorr?.tempo_accumulato_minuti || 0) + durata
-      }).eq('id', ordFaseId).in('stato', ['in_corso', 'in_attesa']);
-      if (error) {
-        if (btnCompleta) { btnCompleta.disabled = false; btnCompleta.textContent = '✓ Segna come completata'; }
-        toast(error.message || 'Errore', 'err');
-        return;
-      }
-      await sb.from('archivio_log').insert({ ordine_id: ordineId, utente_id: currentUser.id, azione: 'fase_completata', dettaglio: { ordine_fase_id: ordFaseId } });
+      if (btnCompleta) { btnCompleta.disabled = false; btnCompleta.textContent = '✓ Segna come completata'; }
+      const errori = {
+        sessione_non_valida: 'Sessione scaduta, effettua di nuovo l\'accesso',
+        non_autorizzato: 'Non sei autorizzato a completare questa fase',
+        stato_non_in_corso: 'La fase non è più in corso — potrebbe essere già stata completata',
+        usa_conferma_ricezione: 'Usa il pulsante specifico per questo tipo di fase',
+        accesso_sola_lettura: 'Account in sola lettura, operazione non consentita',
+      };
+      toast(errori[data?.errore] || data?.errore || 'Errore completamento fase', 'err');
+      return;
     }
   } else {
     await queueAction({ type: 'completa_fase', ordFaseId, note });
@@ -2183,20 +2171,15 @@ async function inviaNC() {
   };
 
   if (isOnline) {
-    const { error } = await sb.from('non_conformita').insert(payload);
-    if (error) { toast('Errore: ' + error.message, 'err'); return; }
-    // Notifica al responsabile
-    const { data: resp } = await sb.from('users').select('id').eq('ruolo', 'responsabile').single();
-    if (resp) {
-      const ordine = ordiniCache.find(o => o.id === ordineId);
-      await sb.from('notifiche').insert({
-        destinatario_id: resp.id,
-        tipo: 'nc_segnalata',
-        testo: `NC segnalata su ${ordine?.codice || 'ordine'} — ${desc.substring(0, 60)}`,
-        ordine_id: ordineId
-      });
-    }
-    await sb.from('archivio_log').insert({ ordine_id: ordineId, fase_id: parseInt(faseId), utente_id: currentUser.id, azione: 'nc_segnalata' });
+    const { data: ncData, error } = await sb.rpc('segnala_non_conformita', {
+      p_ordine_id: ordineId,
+      p_fase_id: parseInt(faseId),
+      p_descrizione: desc,
+      p_foto_url: fotoUrl,
+      p_operatore_id: currentUser.id,
+      p_session_token: sessionToken
+    });
+    if (error || !ncData?.ok) { toast('Errore: ' + (error?.message || ncData?.errore || ''), 'err'); return; }
   } else {
     await queueAction({ type: 'nc', payload });
     await updateQueueBadge();
@@ -2420,7 +2403,13 @@ start();
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/MangoApp/sw.js').catch(e => console.warn('SW:', e));
   navigator.serviceWorker.addEventListener('message', e => {
-    if (e.data?.type === 'SW_UPDATED') window.location.reload();
+    if (e.data?.type === 'SW_UPDATED') {
+      const banner = document.createElement('div');
+      banner.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;padding:12px 22px;border-radius:12px;z-index:9999;cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,0.4);font-size:14px;white-space:nowrap;font-family:inherit';
+      banner.textContent = '🔄 Nuova versione disponibile — tocca per aggiornare';
+      banner.onclick = () => window.location.reload();
+      document.body.appendChild(banner);
+    }
   });
 }
 </script>
