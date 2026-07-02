@@ -679,12 +679,26 @@ async function showApp() {
 
 async function doLogout() {
   currentUser = null;
+  sessionToken = null;
   await cacheSet('current-user', null);
   await cacheSet('current-session-token', null);
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   [0, 1, 2, 3].forEach(i => document.getElementById('pin' + i).value = '');
 }
+
+// Intercetta sessione_non_valida su tutte le chiamate RPC: reindirizza al login.
+(function() {
+  const _orig = sb.rpc.bind(sb);
+  sb.rpc = async function(...args) {
+    const result = await _orig(...args);
+    if (result.data?.errore === 'sessione_non_valida') {
+      toast('Sessione scaduta — effettua di nuovo l\'accesso', 'err');
+      setTimeout(doLogout, 1500);
+    }
+    return result;
+  };
+})();
 
 // ═══════════════════════════════════════════════
 // DATA
