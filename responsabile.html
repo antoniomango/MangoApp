@@ -320,12 +320,16 @@ tr:hover td { background: var(--phase-bg); }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes blink-warn   { 0%,100% { border-left-color: #F59E0B; } 50% { border-left-color: transparent; } }
 @keyframes blink-danger { 0%,100% { border-left-color: #EF4444; } 50% { border-left-color: transparent; } }
-@keyframes pulse-blu    { 0%,100% { border-left-color: #3B82F6; } 50% { border-left-color: #BFDBFE; } }
+@keyframes pulse-blu         { 0%,100% { border-left-color: #3B82F6; } 50% { border-left-color: #BFDBFE; } }
+@keyframes pulse-blu-danger  { 0%,33%  { border-left-color: #3B82F6; } 50%,83% { border-left-color: #EF4444; } 100% { border-left-color: #3B82F6; } }
+@keyframes pulse-blu-warning { 0%,33%  { border-left-color: #3B82F6; } 50%,83% { border-left-color: #F59E0B; } 100% { border-left-color: #3B82F6; } }
 .scad-ok      { border-left: 4px solid #16A34A !important; }
 .scad-warning { border-left: 4px solid #F59E0B !important; animation: blink-warn 1.5s ease-in-out infinite; }
 .scad-danger  { border-left: 4px solid #EF4444 !important; animation: blink-danger 1.2s ease-in-out infinite; }
 tr.scad-rischio { background: #FEF3C7 !important; }
-tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !important; animation: pulse-blu 2s ease-in-out infinite !important; }
+tr.riga-in-corso         { border-left-width: 4px !important; border-left-style: solid !important; animation: pulse-blu 2s ease-in-out infinite !important; }
+tr.riga-in-corso-danger  { border-left-width: 4px !important; border-left-style: solid !important; animation: pulse-blu-danger  1.5s ease-in-out infinite !important; }
+tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style: solid !important; animation: pulse-blu-warning 1.5s ease-in-out infinite !important; }
 .legenda-scad { display:flex; gap:16px; flex-wrap:wrap; padding:10px 16px; background:var(--surface); border:1px solid var(--border); border-radius:10px; margin-bottom:12px; font-size:12px; color:var(--muted); }
 .legenda-scad span { display:flex; align-items:center; gap:6px; }
 
@@ -505,6 +509,10 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
             <div class="fasi-grid" id="det-fasi"></div>
           </div>
         </div>
+        <div class="card" id="det-foto-card" style="display:none">
+          <div class="card-hdr"><h3>Foto allegate</h3></div>
+          <div style="padding:16px" id="det-foto-galleria"></div>
+        </div>
         <div class="card">
           <div class="card-hdr"><h3>Log Attività</h3></div>
           <div style="padding:16px">
@@ -555,7 +563,8 @@ tr.riga-in-corso { border-left-width: 4px !important; border-left-style: solid !
           <div><h1>Archivio Spediti</h1></div>
           <div style="display:flex;gap:8px">
             <button class="btn btn-secondary export-btn" onclick="exportCSV()">⬇ Esporta CSV</button>
-            <button class="btn" style="background:var(--alert);color:#fff" onclick="svuotaArchivio()">🗑 Svuota archivio</button>
+            <button class="btn btn-secondary" onclick="esportaBulkArchivio()">📦 Esporta e svuota foto</button>
+            <button class="btn" style="background:var(--alert);color:#fff" onclick="svuotaArchivio()" title="Segna tutti gli ordini come eliminati (soft-delete). Le foto rimangono nel cloud finché non le esporti.)">🗑 Svuota archivio</button>
           </div>
         </div>
         <div class="filters">
@@ -1903,7 +1912,7 @@ function ordineRow(o, mini = false) {
   const isAttesa = o.stato === 'attesa_spedizione';
   const isSosp = o.stato === 'sospeso';
   const rowClass = isAttesa ? 'style="background:#F0FDF4"' : isSosp ? 'style="background:#FFFBEB;opacity:0.85"' : '';
-  return `<tr class="clickable ${isSosp ? '' : scadenzaClass(o.scadenza)}" ${rowClass} onclick="openDettaglioOrdine('${o.id}')">
+  return `<tr class="clickable ${isSosp ? '' : scadenzaClass(o.scadenza)}" data-scad="${isSosp ? '' : scadenzaClass(o.scadenza)}" ${rowClass} onclick="openDettaglioOrdine('${o.id}')">
     <td><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div></td>
     <td>${o.tipo === 'extra' ? '<span style="font-weight:600;color:var(--wood)">Ordine Extra</span>' : `${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}`}</td>
     <td><span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span></td>
@@ -2044,8 +2053,15 @@ async function loadAvanzamenti(ids) {
     const tr = el.closest('tr');
     if (!tr) return;
 
-    if (s.inCorso > 0) tr.classList.add('riga-in-corso');
-    else tr.classList.remove('riga-in-corso');
+    const scadCls = tr.dataset.scad || '';
+    tr.classList.remove('riga-in-corso', 'riga-in-corso-danger', 'riga-in-corso-warning', 'scad-danger', 'scad-warning');
+    if (s.inCorso > 0) {
+      if (scadCls === 'scad-danger')       tr.classList.add('riga-in-corso-danger');
+      else if (scadCls === 'scad-warning') tr.classList.add('riga-in-corso-warning');
+      else                                 tr.classList.add('riga-in-corso');
+    } else {
+      if (scadCls) tr.classList.add(scadCls);
+    }
 
     const ordine = ordiniCache.find(o => o.id === id);
     const stimaEl = document.getElementById('scad-stima-' + id);
@@ -2213,6 +2229,34 @@ async function renderDettaglioOrdine(id) {
     }).join('');
   }
 
+  // Galleria foto aggregate di tutte le fasi dell'ordine
+  const fotoGalleriaEl = document.getElementById('det-foto-galleria');
+  const fotoCard = document.getElementById('det-foto-card');
+  if (fotoGalleriaEl) {
+    const { data: fasiIds } = await sb.from('ordine_fasi').select('id').eq('ordine_id', id);
+    const ids4foto = (fasiIds || []).map(f => f.id);
+    let hasFoto = false;
+    if (ids4foto.length) {
+      const { data: tutteAllegati } = await sb.from('allegati').select('id, url_file, ordine_fase_id').in('ordine_fase_id', ids4foto);
+      if (tutteAllegati?.length) {
+        const signedResults = await Promise.all(
+          tutteAllegati.map(a => sb.storage.from('allegati-fasi').createSignedUrl(a.url_file, 3600))
+        );
+        const items = tutteAllegati.map((a, i) => ({ a, url: signedResults[i]?.data?.signedUrl })).filter(x => x.url);
+        if (items.length) {
+          hasFoto = true;
+          const allUrlsJson = JSON.stringify(items.map(x => x.url)).replace(/'/g, '&#39;');
+          fotoGalleriaEl.innerHTML = `<div class="foto-grid">${items.map((x, i) =>
+            `<img src="${x.url}" class="foto-thumb" onerror="this.style.display='none'"
+              onclick='lbOpen(${allUrlsJson},${i})' title="${escapeHtml(x.a.url_file.split('/').pop())}">`
+          ).join('')}</div>`;
+        }
+      }
+    }
+    if (fotoCard) fotoCard.style.display = hasFoto ? '' : 'none';
+    if (!hasFoto) fotoGalleriaEl.innerHTML = '';
+  }
+
   // Log
   const { data: log } = await sb.from('archivio_log')
     .select('*, users!utente_id(nome, cognome), fasi(nome)')
@@ -2259,9 +2303,19 @@ async function openFaseDetail(ordFaseId, ordineId, readonly) {
     ? opList.map(o => `<span style="display:inline-block;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:12px;margin:2px">${escapeHtml(o.users?.nome || '')} ${escapeHtml(o.users?.cognome || '')}</span>`).join('')
     : (f['users'] ? `<span>${f['users'].nome} ${f['users'].cognome}</span>` : '<span style="color:var(--muted)">—</span>');
 
-  const fotoHtml = (allegati || []).length
-    ? `<div class="foto-grid">${(allegati || []).map(a => `<img src="${SUPABASE_URL}/storage/v1/object/public/allegati-fasi/${a.url_file}" class="foto-thumb" onerror="this.style.display='none'">`).join('')}</div>`
-    : '';
+  let fotoHtml = '';
+  if ((allegati || []).length) {
+    const signedResults = await Promise.all(
+      allegati.map(a => sb.storage.from('allegati-fasi').createSignedUrl(a.url_file, 3600))
+    );
+    const signedUrls = signedResults.map(r => r.data?.signedUrl).filter(Boolean);
+    if (signedUrls.length) {
+      const urlsJson = JSON.stringify(signedUrls).replace(/'/g, '&#39;');
+      fotoHtml = `<div class="foto-grid">${signedUrls.map((u, i) =>
+        `<img src="${u}" class="foto-thumb" onerror="this.style.display='none'" onclick='lbOpen(${urlsJson},${i})'>`
+      ).join('')}</div>`;
+    }
+  }
 
   document.getElementById('modal-fase-body').innerHTML = `
     <div class="fase-detail">
@@ -3283,54 +3337,147 @@ function renderArchivioTable() {
       <td>${formatDate(o.creato_il)}</td>
       <td>${o.spedito_il ? formatDate(o.spedito_il) : '—'}</td>
       <td onclick="event.stopPropagation()">
-        <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="scaricaEliminaFoto('${o.id}','${escapeHtml(o.codice||o.id)}','${escapeHtml(o.cliente)}')">📥 Scarica & elimina foto</button>
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="scaricaEliminaFoto('${o.id}','${escapeHtml(o.codice||o.id)}','${escapeHtml(o.cliente)}')">📦 Esporta & rimuovi foto</button>
       </td>
     </tr>
   `).join('');
 }
 
-async function scaricaEliminaFoto(ordineId, codice, cliente) {
-  if (!confirm(`Scaricare tutte le foto dell'ordine ${codice} — ${cliente} e eliminarle dal cloud?`)) return;
+// Esporta un singolo ordine: dettagli.json + log.csv + foto/ → zip scaricato
+async function esportaOrdineZip(ordineId, zipNameBase) {
+  const ordine = [...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === ordineId);
+  if (!ordine) throw new Error('Ordine non trovato');
 
-  // Recupera tutte le fasi dell'ordine
-  const { data: fasi } = await sb.from('ordine_fasi').select('id').eq('ordine_id', ordineId);
-  const fasiIds = (fasi || []).map(f => f.id);
-  if (!fasiIds.length) { toast('Nessuna fase trovata per questo ordine', 'err'); return; }
+  const [{ data: fasiOrd }, { data: logOrd }] = await Promise.all([
+    sb.from('ordine_fasi').select('id, fase_id, stato, tempo_accumulato_minuti, iniziata_il, completata_il, note_operatore').eq('ordine_id', ordineId),
+    sb.from('archivio_log').select('azione, utente_id, timestamp, dettaglio, users!utente_id(nome,cognome)').eq('ordine_id', ordineId).order('timestamp'),
+  ]);
 
-  // Recupera tutti gli allegati
-  const { data: allegati } = await sb.from('allegati').select('*').in('ordine_fase_id', fasiIds);
-  if (!allegati?.length) { toast('Nessuna foto da scaricare per questo ordine', 'ok'); return; }
-
-  toast('Download in corso…', 'ok');
+  const fasiIds = (fasiOrd || []).map(f => f.id);
+  const { data: allegati } = fasiIds.length
+    ? await sb.from('allegati').select('id, url_file, ordine_fase_id').in('ordine_fase_id', fasiIds)
+    : { data: [] };
 
   const zip = new JSZip();
-  for (const a of allegati) {
-    const { data: { publicUrl } } = sb.storage.from('allegati-fasi').getPublicUrl(a.url_file);
+
+  // dettagli.json
+  zip.file('dettagli.json', JSON.stringify({
+    id: ordine.id, codice: ordine.codice, cliente: ordine.cliente,
+    struttura: ordine.struttura, materiale: ordine.materiale,
+    tipo_prodotto: ordine.tipo_prodotto, priorita: ordine.priorita,
+    stato: ordine.stato, quantita: ordine.quantita,
+    creato_il: ordine.creato_il, scadenza: ordine.scadenza,
+    spedito_il: ordine.spedito_il, note_generali: ordine.note_generali,
+    fasi: fasiOrd || [],
+  }, null, 2));
+
+  // log.csv
+  const logHeader = 'timestamp,azione,utente,dettaglio\n';
+  const logRows = (logOrd || []).map(l => {
+    const u = l.users ? `${l.users.nome} ${l.users.cognome}` : l.utente_id;
+    const det = l.dettaglio ? JSON.stringify(l.dettaglio).replace(/"/g, '""') : '';
+    return `"${l.timestamp}","${l.azione}","${u}","${det}"`;
+  }).join('\n');
+  zip.file('log.csv', '﻿' + logHeader + logRows);
+
+  // foto/ — scarica usando signed URL per bucket privato
+  const fotoFolder = zip.folder('foto');
+  let fotoCont = 0;
+  for (const a of (allegati || [])) {
+    const { data: signed } = await sb.storage.from('allegati-fasi').createSignedUrl(a.url_file, 300);
+    if (!signed?.signedUrl) continue;
     try {
-      const resp = await fetch(publicUrl);
+      const resp = await fetch(signed.signedUrl);
+      if (!resp.ok) continue;
       const blob = await resp.blob();
       const nomeFile = a.url_file.split('/').pop();
-      zip.file(nomeFile, blob);
-    } catch (e) { console.error('Errore download foto:', e); }
+      fotoFolder.file(nomeFile, blob);
+      fotoCont++;
+    } catch (e) { console.warn('Errore download foto:', e); }
   }
 
   const zipBlob = await zip.generateAsync({ type: 'blob' });
-  const url = URL.createObjectURL(zipBlob);
-  const a = document.createElement('a');
-  a.href = url;
-  const dataOggi = new Date().toISOString().split('T')[0];
-  a.download = `${cliente}_${codice}_${dataOggi}.zip`.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
-  a.click();
-  URL.revokeObjectURL(url);
+  return { zipBlob, allegatiUrls: (allegati || []).map(a => a.url_file), fotoCont, totAllegati: (allegati || []).length };
+}
 
-  // Elimina record DB prima (RPC), poi rimuove i file fisici dallo Storage con i path confermati
-  const { data: delData } = await sb.rpc('elimina_allegati_fasi', { p_fase_ids: fasiIds, p_responsabile_id: currentUserRow.id });
-  if (!delData?.ok) { toast('Errore eliminazione allegati: ' + (delData?.errore || ''), 'err'); return; }
-  if (delData.url_eliminati?.length) {
-    await sb.storage.from('allegati-fasi').remove(delData.url_eliminati);
+// Helper: scarica zip con <a>
+function _downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+async function scaricaEliminaFoto(ordineId, codice, cliente) {
+  if (!confirm(`Esportare i dati completi dell'ordine ${codice} — ${cliente} (dettagli, log e foto) e rimuovere le foto dal cloud?\n\nLe righe nel database vengono conservate.`)) return;
+
+  toast('Esportazione in corso…', 'ok');
+  try {
+    const { zipBlob, allegatiUrls, fotoCont, totAllegati } = await esportaOrdineZip(ordineId, codice);
+    if (!totAllegati) { toast('Nessuna foto trovata per questo ordine', 'ok'); return; }
+
+    const dataOggi = new Date().toISOString().split('T')[0];
+    const zipName = `${cliente}_${codice}_${dataOggi}.zip`.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+    _downloadBlob(zipBlob, zipName);
+
+    // Elimina solo i file fisici dallo Storage (righe allegati conservate come audit trail)
+    if (allegatiUrls.length) {
+      await sb.storage.from('allegati-fasi').remove(allegatiUrls);
+    }
+    toast(`Esportazione completata: ${fotoCont} foto. Rimosse dal cloud. Dati DB conservati.`, 'ok');
+  } catch (e) {
+    console.error('Errore esportazione:', e);
+    toast('Errore durante l\'esportazione: ' + e.message, 'err');
+  }
+}
+
+async function esportaBulkArchivio() {
+  const ordini = ordiniSpeditiCache.filter(o => !o.eliminato);
+  if (!ordini.length) { toast('Archivio vuoto', 'ok'); return; }
+
+  // Prova File System Access API (Chrome/Edge); fallback a download zip individuali
+  let dirHandle = null;
+  const hasFSA = typeof window.showDirectoryPicker === 'function';
+  if (hasFSA) {
+    try { dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' }); }
+    catch (e) { if (e.name === 'AbortError') return; /* utente ha annullato */ }
+  } else {
+    toast('Safari non supporta la selezione cartella — verrà scaricato uno zip per ogni ordine.', 'ok');
+    await new Promise(r => setTimeout(r, 1500));
   }
 
-  toast(`${allegati.length} foto scaricate ed eliminate dal cloud`, 'ok');
+  const totale = ordini.length;
+  const falliti = [];
+
+  for (let i = 0; i < totale; i++) {
+    const o = ordini[i];
+    toast(`Esportazione ordine ${i + 1}/${totale}: ${o.codice || o.cliente}…`, 'ok');
+    try {
+      const { zipBlob, allegatiUrls, totAllegati } = await esportaOrdineZip(o.id, o.codice);
+      const dataOggi = new Date().toISOString().split('T')[0];
+      const zipName = `${o.cliente}_${o.codice || o.id}_${dataOggi}.zip`.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+
+      if (dirHandle) {
+        const fileHandle = await dirHandle.getFileHandle(zipName, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(zipBlob); await writable.close();
+      } else {
+        _downloadBlob(zipBlob, zipName);
+        await new Promise(r => setTimeout(r, 800)); // piccolo delay tra download
+      }
+
+      // Elimina file fisici (DB conservato)
+      if (allegatiUrls.length) await sb.storage.from('allegati-fasi').remove(allegatiUrls);
+    } catch (e) {
+      console.error('Errore export ordine', o.codice, e);
+      falliti.push(o.codice || o.id);
+    }
+  }
+
+  if (falliti.length) {
+    alert(`Esportazione completata con ${falliti.length} errori.\nOrdini non esportati (foto NON eliminate):\n${falliti.join(', ')}`);
+  } else {
+    toast(`Esportazione bulk completata: ${totale} ordini. Foto rimosse dal cloud.`, 'ok');
+  }
 }
 
 function exportCSV() {
