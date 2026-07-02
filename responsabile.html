@@ -1472,7 +1472,7 @@ async function postLogin() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-screen').style.display = 'block';
   // Fetch user row
-  const { data } = await sb.from('users').select('*').eq('email', currentUser.email).single();
+  const { data } = await sb.from('users').select('id, nome, cognome, email, ruolo, attivo, eliminato, forzato_logout, onesignal_id, creato_il').eq('email', currentUser.email).single();
   currentUserRow = data;
   document.getElementById('user-label').textContent = data ? `${data.nome} ${data.cognome}` : currentUser.email;
   document.getElementById('header-date').textContent = new Date().toLocaleDateString('it-IT', { weekday:'short', day:'numeric', month:'short' });
