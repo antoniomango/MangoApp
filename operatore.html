@@ -1510,6 +1510,7 @@ async function openFaseDetail(ordFaseId, ordineId) {
 }
 
 async function renderFaseDetail(ordFaseId, ordineId) {
+  _fotoAccumulate = []; // reset accumulo foto quando si apre una fase diversa
   let f, opMulti = [];
   if (isOnline) {
     const [{ data: fd }, { data: om }] = await Promise.all([
@@ -1769,10 +1770,9 @@ async function completaFase(ordFaseId, ordineId) {
   const btnCompleta = document.getElementById('btn-completa-fase');
   if (btnCompleta) { btnCompleta.disabled = true; btnCompleta.textContent = 'Attendere...'; }
 
-  // Upload foto con progress
-  const fotoInput = document.getElementById('fase-foto-input');
-  if (fotoInput?.files?.length && isOnline) {
-    const files = Array.from(fotoInput.files);
+  // Upload foto accumulate (supporta scatti separati su mobile)
+  if (_fotoAccumulate.length && isOnline) {
+    const files = [..._fotoAccumulate];
     let caricate = 0;
     for (const file of files) {
       if (btnCompleta) btnCompleta.textContent = `Caricamento foto ${caricate + 1}/${files.length}...`;
@@ -2010,8 +2010,10 @@ async function populateNcSelects() {
 // ── GESTIONE FOTO ALLEGATE (selezione + cancellazione selettiva) ──
 
 let _fotoSelezionate = new Set();
+// Foto accumulate per la fase correntemente aperta (reset su apertura nuova fase)
+let _fotoAccumulate = [];
 
-function renderFotoFase(allegati, modoSelezione) {
+async function renderFotoFase(allegati, modoSelezione) {
   const container = document.getElementById('foto-fase-container');
   if (!container) return;
   window._fotoFaseCache = allegati;
@@ -2020,9 +2022,11 @@ function renderFotoFase(allegati, modoSelezione) {
   const puoCancellare = currentUser.ruolo === 'responsabile' ||
     allegati.some(a => a.caricato_da === currentUser.id);
 
-  const urls = allegati.map(a =>
-    sb.storage.from('allegati-fasi').getPublicUrl(a.url_file).data.publicUrl
+  // URL firmati per bucket privato (scadenza 1h)
+  const signedResults = await Promise.all(
+    allegati.map(a => sb.storage.from('allegati-fasi').createSignedUrl(a.url_file, 3600))
   );
+  const urls = signedResults.map(r => r.data?.signedUrl || '');
   const urlsJson = escHtml(JSON.stringify(urls));
 
   let html = `<div class="note-box" style="margin-bottom:12px">
@@ -2030,9 +2034,18 @@ function renderFotoFase(allegati, modoSelezione) {
       <strong>Foto allegate (${allegati.length})</strong>`;
 
   if (puoCancellare && allegati.length > 0) {
-    html += modoSelezione
-      ? `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="renderFotoFase(window._fotoFaseCache,false)">Annulla</button>`
-      : `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="renderFotoFase(window._fotoFaseCache,true)">Seleziona</button>`;
+    if (modoSelezione) {
+      const tutteSelezionate = allegati.every(a => _fotoSelezionate.has(a.id));
+      html += `<div style="display:flex;gap:6px">
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px"
+          onclick="${tutteSelezionate ? 'toggleSelezionaTutte(false)' : 'toggleSelezionaTutte(true)'}">
+          ${tutteSelezionate ? 'Deseleziona tutte' : 'Seleziona tutte'}
+        </button>
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="renderFotoFase(window._fotoFaseCache,false)">Annulla</button>
+      </div>`;
+    } else {
+      html += `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="renderFotoFase(window._fotoFaseCache,true)">Seleziona</button>`;
+    }
   }
   html += `</div><div style="display:flex;flex-wrap:wrap;gap:8px">`;
 
@@ -2062,6 +2075,14 @@ function renderFotoFase(allegati, modoSelezione) {
 function toggleFotoItem(allegatoId) {
   if (_fotoSelezionate.has(allegatoId)) _fotoSelezionate.delete(allegatoId);
   else _fotoSelezionate.add(allegatoId);
+  renderFotoFase(window._fotoFaseCache, true);
+}
+
+function toggleSelezionaTutte(seleziona) {
+  (window._fotoFaseCache || []).forEach(a => {
+    if (seleziona) _fotoSelezionate.add(a.id);
+    else _fotoSelezionate.delete(a.id);
+  });
   renderFotoFase(window._fotoFaseCache, true);
 }
 
@@ -2113,13 +2134,38 @@ function previewNcFoto(input) {
 }
 
 function previewFaseFoto(input) {
-  const el = document.getElementById('fase-foto-preview');
-  el.innerHTML = '';
+  // Accumula i nuovi file a quelli già selezionati in precedenza
   for (const file of input.files) {
+    _fotoAccumulate.push(file);
+  }
+  // Resetta l'input così il prossimo scatto non confonde il browser
+  input.value = '';
+  _renderFotoAccumulate();
+}
+
+function _renderFotoAccumulate() {
+  const el = document.getElementById('fase-foto-preview');
+  if (!el) return;
+  el.innerHTML = '';
+  _fotoAccumulate.forEach((file, idx) => {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;display:inline-block';
     const img = document.createElement('img');
     img.className = 'foto-thumb';
     img.src = URL.createObjectURL(file);
-    el.appendChild(img);
+    const btn = document.createElement('button');
+    btn.textContent = '✕';
+    btn.title = 'Rimuovi foto';
+    btn.style.cssText = 'position:absolute;top:2px;right:2px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;line-height:1;padding:0';
+    btn.onclick = () => { _fotoAccumulate.splice(idx, 1); _renderFotoAccumulate(); };
+    wrap.appendChild(img); wrap.appendChild(btn);
+    el.appendChild(wrap);
+  });
+  if (_fotoAccumulate.length > 0) {
+    const cnt = document.createElement('div');
+    cnt.style.cssText = 'font-size:12px;color:var(--muted);margin-top:4px';
+    cnt.textContent = `${_fotoAccumulate.length} foto selezionat${_fotoAccumulate.length === 1 ? 'a' : 'e'}`;
+    el.appendChild(cnt);
   }
 }
 
