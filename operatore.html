@@ -442,6 +442,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // STATE
 // ═══════════════════════════════════════════════
 let currentUser = null; // {id, nome, cognome, ruolo}
+let sessionToken = null; // session_token UUID da verifica_pin
 let fasi = [];
 let ordiniCache = [];
 let isOnline = navigator.onLine;
@@ -534,16 +535,16 @@ async function syncQueue() {
     try {
       let ok = false;
       if (item.type === 'prendi_fase') {
-        const { data } = await sb.rpc('prendi_in_carico_fase', { p_ordine_fase_id: item.ordFaseId, p_operatore_id: currentUser.id });
+        const { data } = await sb.rpc('prendi_in_carico_fase', { p_ordine_fase_id: item.ordFaseId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
         ok = data?.ok;
       } else if (item.type === 'completa_fase') {
-        const { data } = await sb.rpc('completa_fase', { p_ordine_fase_id: item.ordFaseId, p_operatore_id: currentUser.id, p_note_operatore: item.note });
+        const { data } = await sb.rpc('completa_fase', { p_ordine_fase_id: item.ordFaseId, p_operatore_id: currentUser.id, p_note_operatore: item.note, p_session_token: sessionToken });
         ok = data?.ok;
       } else if (item.type === 'prendi_fase_extra') {
-        const { data } = await sb.rpc('prendi_in_carico_extra', { p_fase_extra_id: item.faseExtraId, p_operatore_id: currentUser.id });
+        const { data } = await sb.rpc('prendi_in_carico_extra', { p_fase_extra_id: item.faseExtraId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
         ok = data?.ok;
       } else if (item.type === 'completa_fase_extra') {
-        const { data } = await sb.rpc('completa_fase_extra', { p_fase_extra_id: item.faseExtraId, p_operatore_id: currentUser.id, p_note: item.note });
+        const { data } = await sb.rpc('completa_fase_extra', { p_fase_extra_id: item.faseExtraId, p_operatore_id: currentUser.id, p_note: item.note, p_session_token: sessionToken });
         ok = data?.ok;
       } else if (item.type === 'nc') {
         const { error } = await sb.from('non_conformita').insert(item.payload);
@@ -603,7 +604,7 @@ async function doLoginPin() {
     currentUser = data.user;
     await cacheSet('current-user', currentUser);
     await cacheSet('current-pin-hash', null); // non salviamo PIN in chiaro
-    if (data.session_token) await cacheSet('current-session-token', data.session_token);
+    if (data.session_token) { sessionToken = data.session_token; await cacheSet('current-session-token', data.session_token); }
   } else {
     const cached = await cacheGet('current-user');
     if (cached && cached.id === userId) {
@@ -628,6 +629,8 @@ function showErr(msg) {
 // APP INIT
 // ═══════════════════════════════════════════════
 async function showApp() {
+  // Carica session token in memoria se non già impostato (es. login da cache)
+  if (!sessionToken) sessionToken = await cacheGet('current-session-token') || null;
   // Controlla se il responsabile ha forzato il logout per questo utente
   if (navigator.onLine && currentUser?.id) {
     const { data: check } = await sb.rpc('controlla_sessione', { p_user_id: currentUser.id });
@@ -1359,7 +1362,7 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
 
 async function prendiInCaricoExtra(faseExtraId, ordineId) {
   if (isOnline) {
-    const { data, error } = await sb.rpc('prendi_in_carico_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id });
+    const { data, error } = await sb.rpc('prendi_in_carico_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
     if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   } else {
     await queueAction({ type: 'prendi_fase_extra', faseExtraId, ordineId });
@@ -1371,7 +1374,7 @@ async function prendiInCaricoExtra(faseExtraId, ordineId) {
 }
 
 async function uniscitiAFaseExtra(faseExtraId, ordineId) {
-  const { data, error } = await sb.rpc('unisciti_fase_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id });
+  const { data, error } = await sb.rpc('unisciti_fase_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   toast('Ti sei unito alla fase!', 'ok');
   await renderFaseExtraDetail(faseExtraId, ordineId);
@@ -1379,7 +1382,7 @@ async function uniscitiAFaseExtra(faseExtraId, ordineId) {
 }
 
 async function aggiungiCollegaExtra(faseExtraId, ordineId, opId, opNome) {
-  const { data, error } = await sb.rpc('aggiungi_collega_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: opId });
+  const { data, error } = await sb.rpc('aggiungi_collega_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: opId, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore', 'err'); return; }
   toast(`${opNome} aggiunto alla fase`, 'ok');
   await renderFaseExtraDetail(faseExtraId, ordineId);
@@ -1387,7 +1390,7 @@ async function aggiungiCollegaExtra(faseExtraId, ordineId, opId, opNome) {
 
 async function rimuoviCollegaExtra(faseExtraId, ordineId, opId, opNome) {
   if (!confirm(`Rimuovere ${opNome} da questa fase?`)) return;
-  const { data, error } = await sb.rpc('rimuovi_collega_extra', { p_fase_extra_id: faseExtraId, p_collega_id: opId, p_richiedente_id: currentUser.id });
+  const { data, error } = await sb.rpc('rimuovi_collega_extra', { p_fase_extra_id: faseExtraId, p_collega_id: opId, p_richiedente_id: currentUser.id, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   toast(`${opNome} rimosso`, 'ok');
   await renderFaseExtraDetail(faseExtraId, ordineId);
@@ -1397,7 +1400,7 @@ async function riapriFaseOp(ordFaseId, ordineId) {
   const nomeFase = document.getElementById('fase-det-title')?.textContent || 'questa fase';
   if (!confirm('Hai altro lavoro da fare su questa fase? Riaprila.')) return;
   if (!confirm(`Sei sicuro di voler riaprire la fase "${nomeFase}"?`)) return;
-  const { data, error } = await sb.rpc('riapri_fase_operatore', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id });
+  const { data, error } = await sb.rpc('riapri_fase_operatore', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   toast('Fase riaperta', 'ok');
   await renderFaseDetail(ordFaseId, ordineId);
@@ -1408,7 +1411,7 @@ async function riapriFaseExtraOp(faseExtraId, ordineId) {
   const nomeFase = document.getElementById('fase-det-title')?.textContent || 'questa fase';
   if (!confirm('Hai altro lavoro da fare su questa fase? Riaprila.')) return;
   if (!confirm(`Sei sicuro di voler riaprire la fase "${nomeFase}"?`)) return;
-  const { data, error } = await sb.rpc('annulla_presa_in_carico_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id });
+  const { data, error } = await sb.rpc('annulla_presa_in_carico_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   toast('Fase riaperta', 'ok');
   await renderFaseExtraDetail(faseExtraId, ordineId);
@@ -1417,7 +1420,7 @@ async function riapriFaseExtraOp(faseExtraId, ordineId) {
 
 async function confermaRicezioneFase(ordFaseId, ordineId) {
   if (!confirm('Confermi la ricezione del materiale? La fase verrà chiusa.')) return;
-  const { data, error } = await sb.rpc('conferma_ricezione_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id });
+  const { data, error } = await sb.rpc('conferma_ricezione_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   toast('Ricezione confermata!', 'ok');
   await renderFaseDetail(ordFaseId, ordineId);
@@ -1426,7 +1429,7 @@ async function confermaRicezioneFase(ordFaseId, ordineId) {
 
 async function segnaSpedizioneFase(ordFaseId, ordineId) {
   if (!confirm('Confermi la spedizione al fornitore? Verrà registrata la data di uscita.')) return;
-  const { data, error } = await sb.rpc('segna_spedizione_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id });
+  const { data, error } = await sb.rpc('segna_spedizione_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   toast('Spedizione registrata!', 'ok');
   await renderFaseDetail(ordFaseId, ordineId);
@@ -1435,7 +1438,7 @@ async function segnaSpedizioneFase(ordFaseId, ordineId) {
 
 async function segnaSpedizioneExtra(faseExtraId, ordineId) {
   if (!confirm('Confermi la spedizione al fornitore? Verrà registrata la data di uscita.')) return;
-  const { data, error } = await sb.rpc('segna_spedizione_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id });
+  const { data, error } = await sb.rpc('segna_spedizione_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   toast('Spedizione registrata!', 'ok');
   await renderFaseExtraDetail(faseExtraId, ordineId);
@@ -1444,7 +1447,7 @@ async function segnaSpedizioneExtra(faseExtraId, ordineId) {
 
 async function confermaRicezioneExtra(faseExtraId, ordineId) {
   if (!confirm('Il pezzo è tornato dal fornitore? Confermi la ricezione?')) return;
-  const { data, error } = await sb.rpc('conferma_ricezione_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id });
+  const { data, error } = await sb.rpc('conferma_ricezione_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   toast('Ricezione confermata!', 'ok');
   await renderFaseExtraDetail(faseExtraId, ordineId);
@@ -1452,7 +1455,7 @@ async function confermaRicezioneExtra(faseExtraId, ordineId) {
 }
 
 async function annullaPresaInCaricoExtra(faseExtraId, ordineId) {
-  const { data, error } = await sb.rpc('annulla_presa_in_carico_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id });
+  const { data, error } = await sb.rpc('annulla_presa_in_carico_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore annullamento', 'err'); return; }
   toast('Presa in carico annullata', 'ok');
   await renderHome();
@@ -1463,7 +1466,7 @@ async function annullaPresaInCaricoExtra(faseExtraId, ordineId) {
 async function completaFaseExtra(faseExtraId, ordineId) {
   const note = document.getElementById('note-op-extra')?.value.trim() || null;
   if (isOnline) {
-    const { data, error } = await sb.rpc('completa_fase_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id, p_note: note });
+    const { data, error } = await sb.rpc('completa_fase_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id, p_note: note, p_session_token: sessionToken });
     if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   } else {
     await queueAction({ type: 'completa_fase_extra', faseExtraId, note });
@@ -1699,7 +1702,7 @@ async function renderFaseDetail(ordFaseId, ordineId) {
 
 async function prendiInCarico(ordFaseId, ordineId) {
   if (isOnline) {
-    const { data } = await sb.rpc('prendi_in_carico_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id });
+    const { data } = await sb.rpc('prendi_in_carico_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
     if (!data?.ok) { toast(data?.errore || 'Errore', 'err'); return; }
     // La junction table è gestita internamente dal RPC prendi_in_carico_fase
   } else {
@@ -1714,7 +1717,7 @@ async function prendiInCarico(ordFaseId, ordineId) {
 
 async function aggiungiCollega(ordFaseId, ordineId, collegaId, collegaNome) {
   if (!confirm(`Aggiungere ${collegaNome} a questa fase?`)) return;
-  const { data, error } = await sb.rpc('aggiungi_collega_fase', { p_ordine_fase_id: ordFaseId, p_collega_id: collegaId, p_richiedente_id: currentUser.id });
+  const { data, error } = await sb.rpc('aggiungi_collega_fase', { p_ordine_fase_id: ordFaseId, p_collega_id: collegaId, p_richiedente_id: currentUser.id, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   await sb.from('archivio_log').insert({
     ordine_id: ordineId, utente_id: currentUser.id,
@@ -1726,7 +1729,7 @@ async function aggiungiCollega(ordFaseId, ordineId, collegaId, collegaNome) {
 
 async function rimuoviCollega(ordFaseId, ordineId, collegaId, collegaNome) {
   if (!confirm(`Rimuovere ${collegaNome} da questa fase?`)) return;
-  const { data, error } = await sb.rpc('rimuovi_collega_fase', { p_ordine_fase_id: ordFaseId, p_collega_id: collegaId, p_richiedente_id: currentUser.id });
+  const { data, error } = await sb.rpc('rimuovi_collega_fase', { p_ordine_fase_id: ordFaseId, p_collega_id: collegaId, p_richiedente_id: currentUser.id, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   await sb.from('archivio_log').insert({
     ordine_id: ordineId, utente_id: currentUser.id,
@@ -1738,7 +1741,7 @@ async function rimuoviCollega(ordFaseId, ordineId, collegaId, collegaNome) {
 
 async function uniscitiAFase(ordFaseId, ordineId) {
   if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
-  const { data, error } = await sb.rpc('aggiungi_collega_fase', { p_ordine_fase_id: ordFaseId, p_collega_id: currentUser.id, p_richiedente_id: currentUser.id });
+  const { data, error } = await sb.rpc('aggiungi_collega_fase', { p_ordine_fase_id: ordFaseId, p_collega_id: currentUser.id, p_richiedente_id: currentUser.id, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   await sb.from('archivio_log').insert({
     ordine_id: ordineId, utente_id: currentUser.id,
@@ -1769,7 +1772,7 @@ async function completaFase(ordFaseId, ordineId) {
       const { error: upErr } = await sb.storage.from('allegati-fasi').upload(path, file, { upsert: true });
       if (upErr) { console.error('Upload foto:', upErr); toast(`Foto ${caricate + 1}: errore upload`, 'err'); }
       else {
-        const { data: insData } = await sb.rpc('salva_allegato', { p_ordine_fase_id: ordFaseId, p_url_file: path, p_operatore_id: currentUser.id });
+        const { data: insData } = await sb.rpc('salva_allegato', { p_ordine_fase_id: ordFaseId, p_url_file: path, p_operatore_id: currentUser.id, p_session_token: sessionToken });
         if (!insData?.ok) console.error('Insert allegato: non autorizzato o errore');
         else caricate++;
       }
@@ -1781,7 +1784,7 @@ async function completaFase(ordFaseId, ordineId) {
 
   if (isOnline) {
     // Prova prima col RPC (operatore primario); se fallisce per permessi usa UPDATE diretto (operatore aggiunto via junction)
-    const { data } = await sb.rpc('completa_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_note_operatore: note });
+    const { data } = await sb.rpc('completa_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_note_operatore: note, p_session_token: sessionToken });
     if (!data?.ok) {
       // Fallback: aggiorna direttamente (utente nella junction table)
       // Leggi iniziata_il per calcolare durata da sommare all'accumulato
@@ -1814,7 +1817,8 @@ async function annullaPresaInCarico(ordFaseId, ordineId) {
 
   const { data, error } = await sb.rpc('annulla_presa_in_carico', {
     p_ordine_fase_id: ordFaseId,
-    p_operatore_id: currentUser.id
+    p_operatore_id: currentUser.id,
+    p_session_token: sessionToken
   });
   if (error) { toast('Errore: ' + error.message, 'err'); return; }
 
@@ -1826,7 +1830,7 @@ async function annullaPresaInCarico(ordFaseId, ordineId) {
 
 async function mettiInAttesa(ordFaseId, ordineId) {
   if (isOnline) {
-    const { data } = await sb.rpc('metti_in_attesa', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id });
+    const { data } = await sb.rpc('metti_in_attesa', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
     if (!data?.ok) { toast(data?.errore || 'Errore', 'err'); return; }
   } else {
     toast('Non disponibile offline', 'err'); return;
@@ -1848,7 +1852,8 @@ async function riprendi(ordFaseId, ordineId, forza) {
   const { data } = await sb.rpc('riprendi_fase', {
     p_ordine_fase_id: ordFaseId,
     p_operatore_id: currentUser.id,
-    p_forza: forza
+    p_forza: forza,
+    p_session_token: sessionToken
   });
   if (!data?.ok) { toast(data?.errore || 'Errore', 'err'); return; }
   toast('Fase ripresa!', 'ok');
@@ -1862,9 +1867,9 @@ async function completaTutteFasiUguali(chiave, isExtra) {
   if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
   let data, error;
   if (isExtra) {
-    ({ data, error } = await sb.rpc('completa_fasi_extra_batch', { p_nome: chiave, p_operatore_id: currentUser.id }));
+    ({ data, error } = await sb.rpc('completa_fasi_extra_batch', { p_nome: chiave, p_operatore_id: currentUser.id, p_session_token: sessionToken }));
   } else {
-    ({ data, error } = await sb.rpc('completa_fasi_batch', { p_fase_id: parseInt(chiave), p_operatore_id: currentUser.id }));
+    ({ data, error } = await sb.rpc('completa_fasi_batch', { p_fase_id: parseInt(chiave), p_operatore_id: currentUser.id, p_session_token: sessionToken }));
   }
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || ''), 'err'); return; }
   toast(`${data.completate} fasi completate!`, 'ok');
@@ -1874,7 +1879,7 @@ async function completaTutteFasiUguali(chiave, isExtra) {
 
 async function pausaTutteFasi() {
   if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
-  const { data, error } = await sb.rpc('pausa_tutte_fasi', { p_operatore_id: currentUser.id });
+  const { data, error } = await sb.rpc('pausa_tutte_fasi', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore', 'err'); return; }
   toast('Tutte le fasi messe in pausa', 'ok');
   await renderHome();
@@ -1882,7 +1887,7 @@ async function pausaTutteFasi() {
 
 async function riprendiTutteFasi() {
   if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
-  const { data, error } = await sb.rpc('riprendi_tutte_fasi', { p_operatore_id: currentUser.id });
+  const { data, error } = await sb.rpc('riprendi_tutte_fasi', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore', 'err'); return; }
   toast('Tutte le fasi riprese', 'ok');
   await renderHome();
@@ -1976,7 +1981,7 @@ async function inviaNotificaPush(destinatarioId, titolo, messaggio) {
 async function segnaSpedito(ordineId) {
   if (!confirm('Segnare questo ordine come spedito?')) return;
   if (isOnline) {
-    const { data } = await sb.rpc('segna_spedito', { p_ordine_id: ordineId, p_utente_id: currentUser.id });
+    const { data } = await sb.rpc('segna_spedito', { p_ordine_id: ordineId, p_utente_id: currentUser.id, p_session_token: sessionToken });
     if (!data?.ok) { toast(data?.errore || 'Errore', 'err'); return; }
     toast('Ordine spedito!', 'ok');
     await loadOrdini();
@@ -2066,7 +2071,8 @@ async function eliminaFotoSelezionate() {
   const ids = Array.from(_fotoSelezionate);
   const { data, error } = await sb.rpc('elimina_allegati', {
     p_allegato_ids: ids,
-    p_operatore_id: currentUser.id
+    p_operatore_id: currentUser.id,
+    p_session_token: sessionToken
   });
   if (error) { toast('Errore: ' + error.message, 'err'); return; }
 
