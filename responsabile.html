@@ -1658,7 +1658,7 @@ async function loadNc() {
 
 async function loadOperatori() {
   const { data } = await sb.from('users')
-    .select('*')
+    .select('id, nome, cognome, ruolo, attivo')
     .in('ruolo', ['operatore', 'sola_lettura'])
     .neq('eliminato', true)
     .order('cognome');
