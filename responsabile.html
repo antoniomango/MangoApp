@@ -4625,7 +4625,7 @@ async function loadKpi() {
         const isOggi = o.giorni_scadenza === 0;
         const rowStyle = o.a_rischio ? 'background:#FEF2F2' : '';
         const rapportoStr = o.rapporto_critico >= 9990 ? (isRitardo ? '⚠ IN RITARDO' : '⚠ OGGI') : o.rapporto_critico.toFixed(2);
-        const rapportoColor = o.rapporto_critico >= 9990 ? 'var(--alert)' : o.rapporto_critico > 0.5 ? 'var(--alert)' : o.rapporto_critico > 0.2 ? 'var(--warn)' : 'var(--ink)';
+        const rapportoColor = o.rapporto_critico >= 9990 ? 'var(--alert)' : o.rapporto_critico > 1 ? 'var(--alert)' : o.rapporto_critico > 0.8 ? 'var(--warn)' : 'var(--ink)';
         const ggStr = isRitardo ? `<span style="color:var(--alert)">-${Math.abs(o.giorni_scadenza)}gg</span>` :
           isOggi ? `<span style="color:var(--alert)">oggi</span>` :
           `+${o.giorni_scadenza}gg`;
@@ -4686,12 +4686,7 @@ async function loadKpi() {
 // SCHEDE DI RIFERIMENTO
 // ═══════════════════════════════════════════════
 
-let _schedeFiltriPronti = false;
-
 async function inizializzaFiltriSchede() {
-  if (_schedeFiltriPronti) return; // popola i select solo la prima volta
-  _schedeFiltriPronti = true;
-
   // Struttura: da attributi_prodotto_config, chiave='struttura', ordinate per posizione opzione
   const cfgStruttura = attributiConfig.find(a => a.chiave === 'struttura');
   const strutture = cfgStruttura
@@ -4705,20 +4700,32 @@ async function inizializzaFiltriSchede() {
     : [];
 
   const elStruttura = document.getElementById('sch-struttura');
-  if (elStruttura) elStruttura.innerHTML = strutture.map(o =>
-    `<option value="${escapeHtml(o.valore)}">${escapeHtml(o.etichetta)}</option>`
-  ).join('');
+  if (elStruttura) {
+    const selStruttura = Array.from(elStruttura.selectedOptions).map(o => o.value);
+    elStruttura.innerHTML = strutture.map(o =>
+      `<option value="${escapeHtml(o.valore)}">${escapeHtml(o.etichetta)}</option>`
+    ).join('');
+    selStruttura.forEach(v => { const opt = elStruttura.querySelector(`option[value="${v}"]`); if (opt) opt.selected = true; });
+  }
 
   const elMateriale = document.getElementById('sch-materiale');
-  if (elMateriale) elMateriale.innerHTML = materiali.map(o =>
-    `<option value="${escapeHtml(o.valore)}">${escapeHtml(o.etichetta)}</option>`
-  ).join('');
+  if (elMateriale) {
+    const selMateriale = Array.from(elMateriale.selectedOptions).map(o => o.value);
+    elMateriale.innerHTML = materiali.map(o =>
+      `<option value="${escapeHtml(o.valore)}">${escapeHtml(o.etichetta)}</option>`
+    ).join('');
+    selMateriale.forEach(v => { const opt = elMateriale.querySelector(`option[value="${v}"]`); if (opt) opt.selected = true; });
+  }
 
   // Tipo prodotto: da tipiProdotto (già caricato al startup, ordinato per posizione)
   const elTipo = document.getElementById('sch-tipo');
-  if (elTipo) elTipo.innerHTML = tipiProdotto.map(t =>
-    `<option value="${escapeHtml(t.id)}">${escapeHtml(t.label)}</option>`
-  ).join('');
+  if (elTipo) {
+    const selTipo = Array.from(elTipo.selectedOptions).map(o => o.value);
+    elTipo.innerHTML = tipiProdotto.map(t =>
+      `<option value="${escapeHtml(t.id)}">${escapeHtml(t.label)}</option>`
+    ).join('');
+    selTipo.forEach(v => { const opt = elTipo.querySelector(`option[value="${v}"]`); if (opt) opt.selected = true; });
+  }
 
   // Fasi opzionali dal catalogo
   const { data: fasiOpz } = await sb.from('fasi').select('id, nome').eq('opzionale', true).order('posizione');
