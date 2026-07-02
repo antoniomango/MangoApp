@@ -1441,6 +1441,7 @@ let fasi = []; // [{id, nome, descrizione, posizione, trigger_tipo_prodotto}]
 let tipiProdotto = []; // [{id, label, posizione}]
 let ordiniCache = [];
 let ordiniSpeditiCache = [];
+let _spediti30Count = 0; // contatore spediti 30gg inclusi archiviati
 let ncCache = [];
 let operatoriCache = [];
 let notificheCache = [];
@@ -1650,12 +1651,13 @@ async function loadOrdini() {
     return new Date(b.creato_il) - new Date(a.creato_il);
   });
 
-  const { data: spediti } = await sb.from('ordini')
-    .select('*')
-    .eq('stato', 'spedito')
-    .neq('eliminato', true)
-    .order('spedito_il', { ascending: false });
+  const trenta30 = new Date(); trenta30.setDate(trenta30.getDate() - 30);
+  const [{ data: spediti }, { count: cnt30 }] = await Promise.all([
+    sb.from('ordini').select('*').eq('stato', 'spedito').neq('eliminato', true).order('spedito_il', { ascending: false }),
+    sb.from('ordini').select('id', { count: 'exact', head: true }).eq('stato', 'spedito').gte('spedito_il', trenta30.toISOString()),
+  ]);
   ordiniSpeditiCache = spediti || [];
+  _spediti30Count = cnt30 ?? 0;
 }
 
 async function loadNc() {
@@ -1892,8 +1894,7 @@ function renderDashboard() {
   const ritardo = ordiniCache.filter(o => o.stato === 'aperto' && o.scadenza && o.scadenza < oggi).length;
   const ncAperte = ncCache.filter(n => n.stato === 'aperta').length;
   const attesa = ordiniCache.filter(o => o.stato === 'attesa_spedizione').length;
-  const trenta = new Date(); trenta.setDate(trenta.getDate() - 30);
-  const spediti30 = ordiniSpeditiCache.filter(o => new Date(o.spedito_il) >= trenta).length;
+  const spediti30 = _spediti30Count;
 
   document.getElementById('kpi-aperti').textContent = aperti;
   document.getElementById('kpi-ritardo').textContent = ritardo;
@@ -4375,7 +4376,8 @@ async function loadKpi() {
     { data: ordFasi },
     { data: ordini },
     { data: nc },
-    { data: fasiCfg }
+    { data: fasiCfg },
+    { count: speditiPeriodoCount }
   ] = await Promise.all([
     sb.from('ordine_fasi')
       .select('id, ordine_id, fase_id, operatore_id, iniziata_il, completata_il, tempo_accumulato_minuti, n_ordini_batch, ordini(codice, cliente, struttura, tipo_prodotto, priorita, scadenza, creato_il, spedito_il, completato_il, eliminato, quantita)')
@@ -4387,7 +4389,9 @@ async function loadKpi() {
     sb.from('non_conformita')
       .select('id, stato, fase_id, segnalata_il, ordine_id')
       .gte('segnalata_il', dal || '2000-01-01'),
-    sb.from('fasi').select('id, nome').order('posizione').order('id')
+    sb.from('fasi').select('id, nome').order('posizione').order('id'),
+    // query dedicata: conta spediti nel periodo inclusi gli archiviati (eliminato=true)
+    (() => { let q = sb.from('ordini').select('id', { count: 'exact', head: true }).eq('stato', 'spedito'); if (dal) q = q.gte('spedito_il', dal); return q; })(),
   ]);
 
   const ordFasiArr = ordFasi || [];
@@ -4417,7 +4421,7 @@ async function loadKpi() {
   // ── CARDS ──
   const aperti = tuttiOrdini.filter(o => o.stato === 'aperto').length;
   const attesaCorr = tuttiOrdini.filter(o => o.stato === 'attesa_spedizione').length;
-  const speditiPeriodo = tuttiOrdini.filter(o => o.stato === 'spedito' && (!dal || (o.spedito_il && o.spedito_il >= dal))).length;
+  const speditiPeriodo = speditiPeriodoCount ?? 0;
   const inRitardo = tuttiOrdini.filter(o => o.stato === 'aperto' && o.scadenza && o.scadenza < oggi).length;
   const ncAperte = tutteNc.filter(n => n.stato === 'aperta').length;
 
