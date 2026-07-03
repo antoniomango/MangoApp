@@ -81,7 +81,7 @@ header {
 .header-right .esci-link:hover { color: #F2EDE6; }
 
 /* ── MAIN ── */
-#lista-view, #detail-view { max-width: 720px; margin: 0 auto; padding: 20px 16px 40px; }
+#lista-view { max-width: 720px; margin: 0 auto; padding: 20px 16px 40px; }
 
 /* ── SEARCH ── */
 .search-wrap { margin-bottom: 18px; }
@@ -134,8 +134,30 @@ header {
 .empty { text-align: center; color: var(--muted); padding: 56px 0; font-size: 14px; }
 .refresh-info { text-align: center; font-size: 11px; color: var(--muted); padding: 8px 0 20px; }
 
+/* ── TABS VISTA ── */
+.view-tabs { display: flex; gap: 4px; margin-bottom: 18px; }
+.view-tab {
+  padding: 7px 16px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--muted); font-family: 'Inter', sans-serif;
+  font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s;
+}
+.view-tab:hover { color: var(--ink); border-color: var(--wood-lt); }
+.view-tab.active { background: var(--wood); color: #fff; border-color: var(--wood); cursor: default; }
+
+/* ── STORICO ── */
+#storico-view { display: none; max-width: 720px; margin: 0 auto; padding: 20px 16px 40px; }
+.stor-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 16px 20px; margin-bottom: 12px; cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.stor-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-color: var(--wood-lt); }
+.stor-hdr { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; gap: 12px; }
+.stor-data { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); text-align: right; flex-shrink: 0; white-space: nowrap; }
+.badge-spedito { background: #D1FAE5; color: #065F46; }
+
 /* ── DETTAGLIO ── */
-#detail-view { display: none; }
+#detail-view { display: none; max-width: 720px; margin: 0 auto; padding: 20px 16px 40px; }
 .detail-back {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 13px; font-weight: 500; color: var(--wood); cursor: pointer;
@@ -206,8 +228,12 @@ header {
     </div>
   </header>
 
-  <!-- Lista ordini -->
+  <!-- Lista ordini attivi -->
   <div id="lista-view">
+    <div class="view-tabs">
+      <button class="view-tab active">Produzione</button>
+      <button class="view-tab" onclick="mostraStorico()">📦 Storico</button>
+    </div>
     <div class="search-wrap">
       <input type="text" id="ufficio-search" placeholder="Cerca cliente o codice…" oninput="applicaFiltro()" autocomplete="off">
     </div>
@@ -215,9 +241,21 @@ header {
     <div class="refresh-info" id="refresh-info"></div>
   </div>
 
-  <!-- Dettaglio ordine -->
+  <!-- Storico spedizioni -->
+  <div id="storico-view">
+    <div class="view-tabs">
+      <button class="view-tab" onclick="tornaListaDaStorico()">Produzione</button>
+      <button class="view-tab active">📦 Storico</button>
+    </div>
+    <div class="search-wrap">
+      <input type="text" id="storico-search" placeholder="Cerca cliente o codice…" oninput="applicaFiltroStorico()" autocomplete="off">
+    </div>
+    <div id="storico-content"><div class="empty">Caricamento…</div></div>
+  </div>
+
+  <!-- Dettaglio ordine (sola lettura) -->
   <div id="detail-view">
-    <div class="detail-back" onclick="tornaLista()">← Torna alla lista</div>
+    <div class="detail-back" onclick="tornaVista()">← Torna alla lista</div>
     <div id="detail-content"></div>
   </div>
 </div>
@@ -228,14 +266,17 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 
-let currentUser  = null;
-let macroFasi    = [];
-let fasiNomi     = {};  // fase_id → {nome, posizione, macro_fase_id}
-let allOrdini    = [];
-let allOrdFasi   = [];
-let allFasiExtra = [];
-let searchQuery  = '';
-let refreshTimer = null;
+let currentUser       = null;
+let macroFasi         = [];
+let fasiNomi          = {};   // fase_id → {nome, posizione, macro_fase_id}
+let allOrdini         = [];
+let allOrdFasi        = [];
+let allFasiExtra      = [];
+let allStorico        = [];
+let searchQuery       = '';
+let storicoQuery      = '';
+let dettaglioSorgente = 'lista'; // 'lista' | 'storico'
+let refreshTimer      = null;
 
 // ── LOGIN ──
 async function init() {
@@ -365,7 +406,10 @@ function renderLista() {
 
   const oggi = new Date().toISOString().split('T')[0];
   const oggiLabel = new Date().toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
-  const intestazione = `<div class="data-oggi">📅 <strong>${esc(oggiLabel.charAt(0).toUpperCase()+oggiLabel.slice(1))}</strong><span>— ${filtrati.length} ordine${filtrati.length!==1?'i':''} ${searchQuery ? 'trovati' : 'attivi'}</span></div>`;
+  const labelQ = filtrati.length !== 1
+    ? (searchQuery ? 'ordini trovati' : 'ordini attivi')
+    : (searchQuery ? 'ordine trovato' : 'ordine attivo');
+  const intestazione = `<div class="data-oggi">📅 <strong>${esc(oggiLabel.charAt(0).toUpperCase()+oggiLabel.slice(1))}</strong> <span>— ${filtrati.length} ${labelQ}</span></div>`;
 
   el.innerHTML = intestazione + filtrati.map(o => cardHtml(o, fasiMap, fasiExtraMap, oggi)).join('');
 }
@@ -432,33 +476,136 @@ function cardHtml(o, fasiMap, fasiExtraMap, oggi) {
   </div>`;
 }
 
+// ── STORICO SPEDIZIONI ──
+async function mostraStorico() {
+  document.getElementById('lista-view').style.display   = 'none';
+  document.getElementById('storico-view').style.display = 'block';
+  window.scrollTo(0, 0);
+  if (!allStorico.length) await caricaStorico();
+}
+
+function tornaListaDaStorico() {
+  document.getElementById('storico-view').style.display = 'none';
+  document.getElementById('lista-view').style.display   = 'block';
+  window.scrollTo(0, 0);
+}
+
+async function caricaStorico() {
+  const anno   = new Date().getFullYear();
+  const dal    = `${anno}-01-01`;
+  const alNext = `${anno + 1}-01-01`;
+
+  // Includi tutti gli ordini (anche eliminato=true) con spedito_il o completato_il nell'anno corrente
+  const { data } = await sb.from('ordini')
+    .select('id, codice, cliente, spedito_il, completato_il, tipo_prodotto, struttura, materiale, tipo, stato, quantita, scadenza, priorita')
+    .or(
+      `and(spedito_il.gte.${dal},spedito_il.lt.${alNext}),` +
+      `and(spedito_il.is.null,completato_il.gte.${dal},completato_il.lt.${alNext})`
+    )
+    .order('spedito_il', { ascending: false, nullsFirst: false })
+    .order('completato_il', { ascending: false, nullsFirst: false });
+
+  allStorico = data || [];
+  renderStorico();
+}
+
+function applicaFiltroStorico() {
+  storicoQuery = document.getElementById('storico-search').value.toLowerCase().trim();
+  renderStorico();
+}
+
+function renderStorico() {
+  const el = document.getElementById('storico-content');
+  const anno = new Date().getFullYear();
+
+  const filtrati = storicoQuery
+    ? allStorico.filter(o =>
+        (o.cliente || '').toLowerCase().includes(storicoQuery) ||
+        (o.codice  || '').toLowerCase().includes(storicoQuery))
+    : allStorico;
+
+  if (!filtrati.length) {
+    el.innerHTML = storicoQuery
+      ? `<div class="empty">Nessun ordine trovato per "<strong>${esc(storicoQuery)}</strong>"</div>`
+      : `<div class="empty">Nessun ordine spedito nel ${anno}</div>`;
+    return;
+  }
+
+  const intestazione = `<div class="data-oggi">📦 <strong>${filtrati.length} ${filtrati.length !== 1 ? 'ordini' : 'ordine'} spediti nel ${anno}</strong>${storicoQuery ? ` <span>— filtro: "${esc(storicoQuery)}"</span>` : ''}</div>`;
+  el.innerHTML = intestazione + filtrati.map(o => storCardHtml(o)).join('');
+}
+
+function storCardHtml(o) {
+  const dataSpedizione = o.spedito_il || o.completato_il;
+  const isExtra = o.tipo === 'extra';
+  const dettagli = [o.tipo_prodotto, o.struttura ? o.struttura.replace(/_/g,' ') : null, o.materiale]
+    .filter(Boolean).join(' · ');
+  return `<div class="stor-card" onclick="apriDettaglioStorico('${esc(o.id)}')">
+    <div class="stor-hdr">
+      <div>
+        <div class="ord-cliente">${esc(o.cliente)}</div>
+        <div class="ord-codice">${esc(o.codice || '—')}</div>
+      </div>
+      <div class="stor-data">${formatDataCompleta(dataSpedizione)}</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <span class="badge badge-spedito">✓ Spedito</span>
+      ${isExtra ? '<span class="badge badge-extra">Extra</span>' : ''}
+      ${dettagli ? `<span style="font-size:11px;color:var(--muted)">${esc(dettagli)}</span>` : ''}
+    </div>
+  </div>`;
+}
+
 // ── DETTAGLIO ──
 function apriDettaglio(ordineId) {
   const o = allOrdini.find(x => x.id === ordineId);
   if (!o) return;
+  dettaglioSorgente = 'lista';
+  const ordFasiPerOrdine   = allOrdFasi.filter(f => f.ordine_id === ordineId);
+  const fasiExtraPerOrdine = allFasiExtra.filter(f => f.ordine_id === ordineId);
+  renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine);
+}
 
+async function apriDettaglioStorico(ordineId) {
+  const o = allStorico.find(x => x.id === ordineId);
+  if (!o) return;
+  dettaglioSorgente = 'storico';
+
+  const [{ data: ordFasi }, { data: fasiExtra }] = await Promise.all([
+    sb.from('ordine_fasi').select('ordine_id, fase_id, stato').eq('ordine_id', ordineId),
+    o.tipo === 'extra'
+      ? sb.from('fasi_ordine_extra').select('ordine_id, nome, stato, numero').eq('ordine_id', ordineId).order('numero')
+      : Promise.resolve({ data: [] })
+  ]);
+
+  renderDettaglio(o, ordFasi || [], fasiExtra || []);
+}
+
+function renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine) {
   const isExtra   = o.tipo === 'extra';
   const isAttesa  = o.stato === 'attesa_spedizione';
+  const isSpedito = o.stato === 'spedito';
   const isSosp    = o.stato === 'sospeso';
   const oggi      = new Date().toISOString().split('T')[0];
-  const inRitardo = o.scadenza && o.scadenza < oggi && !isAttesa;
+  const inRitardo = o.scadenza && o.scadenza < oggi && !isAttesa && !isSpedito;
 
-  // Badge stato principale
-  const statoBadge = isAttesa
-    ? `<span class="badge badge-attesa">✓ Pronto per spedizione</span>`
-    : isSosp  ? `<span class="badge badge-sospeso">⏸ Sospeso</span>`
+  const statoBadge = isSpedito
+    ? `<span class="badge badge-spedito">✓ Spedito</span>`
+    : isAttesa  ? `<span class="badge badge-attesa">✓ Pronto per spedizione</span>`
+    : isSosp    ? `<span class="badge badge-sospeso">⏸ Sospeso</span>`
     : inRitardo ? `<span class="badge badge-ritardo">⚠ In ritardo</span>`
     : `<span class="badge badge-aperto">In produzione</span>`;
   const extraBadge = isExtra ? ` <span class="badge badge-extra">Ordine Extra</span>` : '';
 
-  // Meta info
   const metaItems = [];
   if (o.tipo_prodotto) metaItems.push(['Tipo prodotto', o.tipo_prodotto]);
   if (o.struttura)     metaItems.push(['Struttura', o.struttura.replace(/_/g, ' ')]);
   if (o.materiale)     metaItems.push(['Materiale', o.materiale]);
   if (o.priorita)      metaItems.push(['Priorità', o.priorita.replace(/_/g, ' ')]);
   if (o.quantita > 1)  metaItems.push(['Quantità', String(o.quantita)]);
-  metaItems.push(['Scadenza', o.scadenza ? formatData(o.scadenza) : 'Non impostata']);
+  const dataSpedizione = o.spedito_il || o.completato_il;
+  if (dataSpedizione)  metaItems.push(['Spedito il', formatDataCompleta(dataSpedizione)]);
+  else if (o.scadenza) metaItems.push(['Scadenza', formatData(o.scadenza)]);
 
   const metaHtml = metaItems.map(([lbl, val]) => `
     <div class="detail-meta-item">
@@ -466,33 +613,24 @@ function apriDettaglio(ordineId) {
       <span class="detail-meta-value">${esc(val)}</span>
     </div>`).join('');
 
-  // Fasi
   let fasiHtml = '';
   if (isExtra) {
-    const fe = allFasiExtra.filter(f => f.ordine_id === ordineId);
-    if (fe.length) {
+    if (fasiExtraPerOrdine.length) {
       fasiHtml = `<div class="detail-card">
         <div class="detail-section-title">Fasi ordine</div>
-        ${fe.map(f => fasextraRowHtml(f)).join('')}
+        ${fasiExtraPerOrdine.map(f => fasextraRowHtml(f)).join('')}
       </div>`;
     }
   } else {
-    const ordFasiPerOrdine = allOrdFasi.filter(f => f.ordine_id === ordineId);
-
-    // Raggruppa per macro-fase
     if (macroFasi.length) {
       fasiHtml = macroFasi.map(m => {
         const mFasi = ordFasiPerOrdine
           .filter(f => f.fase_id && m.fasi.has(f.fase_id))
-          .sort((a, b) => {
-            const pa = fasiNomi[a.fase_id]?.posizione ?? 999;
-            const pb = fasiNomi[b.fase_id]?.posizione ?? 999;
-            return pa - pb;
-          });
+          .sort((a, b) => (fasiNomi[a.fase_id]?.posizione ?? 999) - (fasiNomi[b.fase_id]?.posizione ?? 999));
         if (!mFasi.length) return '';
-        const appl  = mFasi.filter(f => f.stato !== 'non_applicabile');
-        const comp  = appl.filter(f => f.stato === 'completata').length;
-        const mPct  = appl.length ? Math.round(comp / appl.length * 100) : 0;
+        const appl = mFasi.filter(f => f.stato !== 'non_applicabile');
+        const comp = appl.filter(f => f.stato === 'completata').length;
+        const mPct = appl.length ? Math.round(comp / appl.length * 100) : 0;
         return `<div class="detail-card">
           <div class="detail-section-title" style="color:${esc(m.colore)}">${esc(m.nome)} — ${comp}/${appl.length} (${mPct}%)</div>
           <div class="macro-row" style="margin-bottom:14px">
@@ -502,7 +640,6 @@ function apriDettaglio(ordineId) {
         </div>`;
       }).join('');
     } else {
-      // Fallback senza macro
       const sorted = [...ordFasiPerOrdine].sort((a,b) =>
         (fasiNomi[a.fase_id]?.posizione ?? 999) - (fasiNomi[b.fase_id]?.posizione ?? 999));
       fasiHtml = `<div class="detail-card">
@@ -510,11 +647,9 @@ function apriDettaglio(ordineId) {
         ${sorted.map(f => faseRowHtml(f)).join('')}
       </div>`;
     }
-
-    // Barra totale
-    const appl    = ordFasiPerOrdine.filter(f => f.stato !== 'non_applicabile');
-    const comp    = appl.filter(f => f.stato === 'completata').length;
-    const totPct  = appl.length ? Math.round(comp / appl.length * 100) : 0;
+    const appl   = ordFasiPerOrdine.filter(f => f.stato !== 'non_applicabile');
+    const comp   = appl.filter(f => f.stato === 'completata').length;
+    const totPct = appl.length ? Math.round(comp / appl.length * 100) : 0;
     fasiHtml += `<div style="padding:0 4px 8px">
       <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px">
         <span>Avanzamento totale</span><span>${comp}/${appl.length} fasi — ${totPct}%</span>
@@ -533,8 +668,9 @@ function apriDettaglio(ordineId) {
     ${fasiHtml}
   `;
 
-  document.getElementById('lista-view').style.display  = 'none';
-  document.getElementById('detail-view').style.display = 'block';
+  document.getElementById('lista-view').style.display   = 'none';
+  document.getElementById('storico-view').style.display = 'none';
+  document.getElementById('detail-view').style.display  = 'block';
   window.scrollTo(0, 0);
 }
 
@@ -565,9 +701,13 @@ function fasextraRowHtml(f) {
   </div>`;
 }
 
-function tornaLista() {
+function tornaVista() {
   document.getElementById('detail-view').style.display = 'none';
-  document.getElementById('lista-view').style.display  = 'block';
+  if (dettaglioSorgente === 'storico') {
+    document.getElementById('storico-view').style.display = 'block';
+  } else {
+    document.getElementById('lista-view').style.display = 'block';
+  }
   window.scrollTo(0, 0);
 }
 
@@ -576,6 +716,10 @@ function formatData(d) {
   if (!d) return '';
   const [y,m,g] = d.split('-');
   return `${g}/${m}/${y.slice(2)}`;
+}
+function formatDataCompleta(ts) {
+  if (!ts) return '';
+  return new Date(ts).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
