@@ -1546,15 +1546,17 @@ async function caricaNomiFasiExtraStoria() {
 }
 
 async function loadFasi() {
-  const [{ data: fasiData }, { data: tipiCriteri }, { data: materCriteri }] = await Promise.all([
+  const [{ data: fasiData }, { data: tipiCriteri }, { data: materCriteri }, { data: strutCriteri }] = await Promise.all([
     sb.from('fasi').select('*, tipo_gestione').order('posizione').order('id'),
     sb.from('fase_tipi_prodotto').select('fase_id, tipo_prodotto_id'),
     sb.from('fase_materiali').select('fase_id, materiale_valore'),
+    sb.from('fase_strutture').select('fase_id, struttura_valore'),
   ]);
   fasi = (fasiData || []).map(f => ({
     ...f,
     criteri_tipi:      (tipiCriteri  || []).filter(r => r.fase_id === f.id).map(r => r.tipo_prodotto_id),
     criteri_materiali: (materCriteri || []).filter(r => r.fase_id === f.id).map(r => r.materiale_valore),
+    criteri_strutture: (strutCriteri || []).filter(r => r.fase_id === f.id).map(r => r.struttura_valore),
   }));
   renderFasiOpzionaliForm();
 }
@@ -3610,19 +3612,22 @@ async function salvaNotaFaseExtra(faseExtraId, ordineId) {
 function renderFasiConfig() {
   const el = document.getElementById('fasi-config-list');
   const n = fasi.length;
-  const matOpz = attributiConfig.find(a => a.chiave === 'materiale')?.opzioni || [];
+  const matOpz  = attributiConfig.find(a => a.chiave === 'materiale')?.opzioni  || [];
+  const struOpz = attributiConfig.find(a => a.chiave === 'struttura')?.opzioni  || [];
   el.innerHTML = fasi.map((f, i) => {
-    const hasTipi = (f.criteri_tipi || []).length > 0;
-    const hasMat  = (f.criteri_materiali || []).length > 0;
+    const hasTipi = (f.criteri_tipi      || []).length > 0;
+    const hasMat  = (f.criteri_materiali  || []).length > 0;
+    const hasStru = (f.criteri_strutture  || []).length > 0;
 
-    // Badge riepilogativo accanto al nome
+    // Badge riepilogativo
     let badgeHtml;
-    if (!hasTipi && !hasMat) {
+    if (!hasTipi && !hasMat && !hasStru) {
       badgeHtml = `<span style="font-size:11px;color:var(--muted)">Tutti</span>`;
     } else {
       const parts = [];
       if (hasTipi) parts.push(f.criteri_tipi.map(id => tipoProdLabel(id)).join(', '));
       if (hasMat)  parts.push(f.criteri_materiali.map(v => matOpz.find(o => o.valore === v)?.etichetta || v).join(', '));
+      if (hasStru) parts.push(f.criteri_strutture.map(v => struOpz.find(o => o.valore === v)?.etichetta || v).join(', '));
       badgeHtml = `<span style="font-size:11px;font-weight:600;background:#EEF2FF;color:#4338CA;padding:2px 7px;border-radius:4px;white-space:nowrap">Solo: ${parts.join(' + ')}</span>`;
     }
 
@@ -3638,6 +3643,15 @@ function renderFasiConfig() {
         ${escapeHtml(m.etichetta)}
       </label>`).join('');
 
+    const struCheckboxes = struOpz.map(s =>
+      `<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap">
+        <input type="checkbox" data-fase="${f.id}" data-stru="${escapeHtml(s.valore)}" ${(f.criteri_strutture||[]).includes(s.valore) ? 'checked' : ''}>
+        ${escapeHtml(s.etichetta)}
+      </label>`).join('');
+
+    // Stato iniziale checkbox attesa esterna (vincolato se tipo_gestione non standard)
+    const tgVincolato = f.tipo_gestione === 'conferma_ricezione' || f.tipo_gestione === 'spedizione_esterna';
+
     return `
     <div class="fase-config-item" id="fase-cfg-row-${f.id}">
       <div class="fase-move-btns">
@@ -3651,7 +3665,7 @@ function renderFasiConfig() {
           ${badgeHtml}
         </div>
         <input type="text" id="fase-desc-${f.id}" value="${escapeHtml(f.descrizione || '')}" placeholder="Descrizione (opzionale)">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;padding:8px;background:#F9FAFB;border-radius:6px;border:1px solid var(--border)">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:6px;padding:8px;background:#F9FAFB;border-radius:6px;border:1px solid var(--border)">
           <div>
             <div style="font-size:11px;font-weight:500;color:var(--muted);margin-bottom:4px">Tipi prodotto <em style="font-weight:400">(vuoto = tutti)</em></div>
             <div style="display:flex;flex-wrap:wrap;gap:6px">${tipiCheckboxes || '<span style="font-size:11px;color:var(--muted)">—</span>'}</div>
@@ -3662,20 +3676,28 @@ function renderFasiConfig() {
             <div style="display:flex;flex-wrap:wrap;gap:6px">${matCheckboxes || '<span style="font-size:11px;color:var(--muted)">—</span>'}</div>
             ${!hasMat ? `<div style="font-size:11px;color:#16a34a;margin-top:3px">✓ tutti i materiali</div>` : ''}
           </div>
+          <div>
+            <div style="font-size:11px;font-weight:500;color:var(--muted);margin-bottom:4px">Strutture <em style="font-weight:400">(vuoto = tutti)</em></div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">${struCheckboxes || '<span style="font-size:11px;color:var(--muted)">—</span>'}</div>
+            ${!hasStru ? `<div style="font-size:11px;color:#16a34a;margin-top:3px">✓ tutte le strutture</div>` : ''}
+          </div>
         </div>
         <div style="display:flex;align-items:center;gap:16px;margin-top:6px;flex-wrap:wrap">
           <div style="display:flex;align-items:center;gap:8px">
             <span style="font-size:11px;color:var(--muted)">Gestione:</span>
-            <select id="fase-tg-${f.id}" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface)">
+            <select id="fase-tg-${f.id}" onchange="aggiornaAttesaEsterna(${f.id})" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface)">
               <option value="standard" ${(f.tipo_gestione||'standard')==='standard' ? 'selected' : ''}>Standard</option>
               <option value="conferma_ricezione" ${f.tipo_gestione==='conferma_ricezione' ? 'selected' : ''}>Conferma ricezione</option>
               <option value="spedizione_esterna" ${f.tipo_gestione==='spedizione_esterna' ? 'selected' : ''}>Spedizione esterna</option>
             </select>
           </div>
-          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--muted);white-space:nowrap">
-            <input type="checkbox" id="fase-esterna-${f.id}" ${f.e_attesa_esterna ? 'checked' : ''} style="width:14px;height:14px;cursor:pointer">
-            Attesa esterna (escludi da stime)
-          </label>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;${tgVincolato ? 'opacity:0.65' : 'cursor:pointer'}">
+              <input type="checkbox" id="fase-esterna-${f.id}" ${f.e_attesa_esterna ? 'checked' : ''} ${tgVincolato ? 'disabled' : ''} style="width:14px;height:14px;${tgVincolato ? '' : 'cursor:pointer'}">
+              Attesa esterna (escludi da stime ore interne)
+            </label>
+            <span id="fase-esterna-nota-${f.id}" style="font-size:10px;color:#6366F1;font-style:italic;${tgVincolato ? '' : 'display:none'}">Impostata automaticamente da Tipo gestione</span>
+          </div>
         </div>
       </div>
       <button class="fase-del-btn" title="Elimina fase" onclick="eliminaFase(${f.id})">✕</button>
@@ -3800,12 +3822,13 @@ async function saveFasiConfig(silent = false) {
     descrizione: document.getElementById(`fase-desc-${f.id}`)?.value.trim() || null,
     e_attesa_esterna: document.getElementById(`fase-esterna-${f.id}`)?.checked ?? f.e_attesa_esterna,
     tipo_gestione: document.getElementById(`fase-tg-${f.id}`)?.value || 'standard',
-    tipi: Array.from(document.querySelectorAll(`input[data-fase="${f.id}"][data-tipo]:checked`)).map(el => el.dataset.tipo),
-    mats: Array.from(document.querySelectorAll(`input[data-fase="${f.id}"][data-mat]:checked`)).map(el => el.dataset.mat),
+    tipi:   Array.from(document.querySelectorAll(`input[data-fase="${f.id}"][data-tipo]:checked`)).map(el => el.dataset.tipo),
+    mats:   Array.from(document.querySelectorAll(`input[data-fase="${f.id}"][data-mat]:checked`)).map(el => el.dataset.mat),
+    struts: Array.from(document.querySelectorAll(`input[data-fase="${f.id}"][data-stru]:checked`)).map(el => el.dataset.stru),
   }));
   await Promise.all(updates.map(u => Promise.all([
     sb.from('fasi').update({ nome: u.nome, descrizione: u.descrizione, e_attesa_esterna: u.e_attesa_esterna, tipo_gestione: u.tipo_gestione }).eq('id', u.id),
-    sb.rpc('aggiorna_criteri_fase', { p_fase_id: u.id, p_tipi_prodotto: u.tipi, p_materiali: u.mats, p_responsabile_id: currentUserRow.id }),
+    sb.rpc('aggiorna_criteri_fase', { p_fase_id: u.id, p_tipi_prodotto: u.tipi, p_materiali: u.mats, p_strutture: u.struts, p_responsabile_id: currentUserRow.id }),
   ])));
   await loadFasi();
   if (!silent) toast('Configurazione fasi salvata', 'ok');
@@ -5103,23 +5126,25 @@ async function ricalcolaFasiNA(ordineId, tipoProd, struttura, materiale) {
     .eq('ordine_id', ordineId);
   if (!fasiOrdine) return;
 
-  // Regole struttura/materiale: rimangono hardcoded (non legate a tipo_prodotto)
   const isBarraOComp = struttura === 'barra_l' || struttura === 'complanare';
   const isMdf        = (materiale || '').toLowerCase().includes('hdf');
 
   for (const f of fasiOrdine) {
     let dovrebbeEssereNA = false;
 
-    // Regole hardcoded struttura/materiale
+    // Regole hardcoded struttura/materiale (invariate)
     if (f.fase_id === 8 && isMdf) dovrebbeEssereNA = true;
     if ((f.fase_id === 9 || f.fase_id === 11) && isBarraOComp) dovrebbeEssereNA = true;
 
-    // Criteri tipo prodotto e materiale dalle tabelle di collegamento
+    // Criteri configurabili dalle tabelle di collegamento
     const faseDef = fasi.find(x => x.id === f.fase_id);
     if (faseDef?.criteri_tipi?.length && !faseDef.criteri_tipi.includes(tipoProd)) {
       dovrebbeEssereNA = true;
     }
     if (faseDef?.criteri_materiali?.length && !faseDef.criteri_materiali.includes(materiale)) {
+      dovrebbeEssereNA = true;
+    }
+    if (faseDef?.criteri_strutture?.length && !faseDef.criteri_strutture.includes(struttura)) {
       dovrebbeEssereNA = true;
     }
 
@@ -5130,6 +5155,20 @@ async function ricalcolaFasiNA(ordineId, tipoProd, struttura, materiale) {
       await sb.from('ordine_fasi').update({ stato: 'disponibile' }).eq('id', f.id);
     }
   }
+}
+
+function aggiornaAttesaEsterna(faseId) {
+  const tg = document.getElementById(`fase-tg-${faseId}`)?.value;
+  const cb = document.getElementById(`fase-esterna-${faseId}`);
+  const nota = document.getElementById(`fase-esterna-nota-${faseId}`);
+  if (!cb) return;
+  const vincolato = tg === 'conferma_ricezione' || tg === 'spedizione_esterna';
+  cb.disabled = vincolato;
+  cb.closest('label').style.opacity = vincolato ? '0.65' : '';
+  cb.closest('label').style.cursor  = vincolato ? ''      : 'pointer';
+  cb.style.cursor = vincolato ? '' : 'pointer';
+  if (vincolato) { cb.checked = true; }
+  if (nota) nota.style.display = vincolato ? '' : 'none';
 }
 
 init();
