@@ -5105,7 +5105,7 @@ async function ricalcolaFasiNA(ordineId, tipoProd, struttura, materiale) {
 
   // Regole struttura/materiale: rimangono hardcoded (non legate a tipo_prodotto)
   const isBarraOComp = struttura === 'barra_l' || struttura === 'complanare';
-  const isMdf        = (materiale || '').toLowerCase() === 'hdf';
+  const isMdf        = (materiale || '').toLowerCase().includes('hdf');
 
   for (const f of fasiOrdine) {
     let dovrebbeEssereNA = false;
