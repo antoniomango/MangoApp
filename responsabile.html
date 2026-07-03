@@ -688,7 +688,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           <div class="card" style="padding:20px">
             <h3 style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--wood)">🔴 Ordini in ritardo</h3>
             <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Ordini aperti oltre la scadenza</div>
-            <div id="kpi-ritardo"></div>
+            <div id="kpi-ritardo-lista"></div>
           </div>
           <div class="card" style="padding:20px">
             <h3 style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--wood)">⏸ Fasi attualmente in attesa</h3>
@@ -4580,7 +4580,7 @@ async function loadKpi() {
   const ritardoList = tuttiOrdini
     .filter(o => o.stato === 'aperto' && o.scadenza && o.scadenza < oggi)
     .sort((a,b) => a.scadenza.localeCompare(b.scadenza));
-  document.getElementById('kpi-ritardo').innerHTML = ritardoList.length ?
+  document.getElementById('kpi-ritardo-lista').innerHTML = ritardoList.length ?
     `<table class="kpi-table"><thead><tr><th>Cliente</th><th>Codice</th><th>Scadenza</th><th>Ritardo</th></tr></thead><tbody>` +
     ritardoList.map(o => {
       const gg = Math.floor((new Date(oggi) - new Date(o.scadenza)) / 86400000);
