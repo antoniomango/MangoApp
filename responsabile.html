@@ -1332,11 +1332,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         </select>
       </div>
       <div class="form-group">
-        <label>Applicabile solo a tipo prodotto</label>
-        <select id="nf-trigger">
-          <option value="">Tutti i tipi (nessun vincolo)</option>
-        </select>
-        <div style="font-size:11px;color:var(--muted);margin-top:4px">Se scegli un tipo, la fase sarà N/A automaticamente per tutti gli altri tipi di prodotto.</div>
+        <div style="font-size:11px;color:var(--muted)">I criteri di applicabilità (tipo prodotto e materiale) si configurano nella lista "Configurazione Fasi" dopo aver aggiunto la fase.</div>
       </div>
     </div>
     <div class="modal-footer">
@@ -1550,8 +1546,16 @@ async function caricaNomiFasiExtraStoria() {
 }
 
 async function loadFasi() {
-  const { data } = await sb.from('fasi').select('*, tipo_gestione').order('posizione').order('id');
-  fasi = data || [];
+  const [{ data: fasiData }, { data: tipiCriteri }, { data: materCriteri }] = await Promise.all([
+    sb.from('fasi').select('*, tipo_gestione').order('posizione').order('id'),
+    sb.from('fase_tipi_prodotto').select('fase_id, tipo_prodotto_id'),
+    sb.from('fase_materiali').select('fase_id, materiale_valore'),
+  ]);
+  fasi = (fasiData || []).map(f => ({
+    ...f,
+    criteri_tipi:      (tipiCriteri  || []).filter(r => r.fase_id === f.id).map(r => r.tipo_prodotto_id),
+    criteri_materiali: (materCriteri || []).filter(r => r.fase_id === f.id).map(r => r.materiale_valore),
+  }));
   renderFasiOpzionaliForm();
 }
 
@@ -1625,15 +1629,12 @@ async function loadTipiProdotto() {
 function popolaTipiProdottoSelects() {
   const opts = tipiProdotto.map(t => `<option value="${t.id}">${t.label}</option>`).join('');
   const optsConTutti = `<option value="">Tutti i tipi</option>` + opts;
-  const optsConNessuno = `<option value="">Tutti i tipi (nessun vincolo)</option>` + opts;
   const flt = document.getElementById('flt-tipo-prodotto');
   const crea = document.getElementById('ord-tipo-prodotto');
   const mod = document.getElementById('mod-tipo-prodotto');
-  const nfTrigger = document.getElementById('nf-trigger');
   if (flt) flt.innerHTML = optsConTutti;
   if (crea) crea.innerHTML = opts;
   if (mod) mod.innerHTML = opts;
-  if (nfTrigger) nfTrigger.innerHTML = optsConNessuno;
 }
 
 async function loadOrdini() {
@@ -3609,14 +3610,34 @@ async function salvaNotaFaseExtra(faseExtraId, ordineId) {
 function renderFasiConfig() {
   const el = document.getElementById('fasi-config-list');
   const n = fasi.length;
+  const matOpz = attributiConfig.find(a => a.chiave === 'materiale')?.opzioni || [];
   el.innerHTML = fasi.map((f, i) => {
-    const triggerLabel = f.trigger_tipo_prodotto
-      ? `<span style="font-size:11px;font-weight:600;background:#EEF2FF;color:#4338CA;padding:2px 7px;border-radius:4px;white-space:nowrap">Solo: ${tipoProdLabel(f.trigger_tipo_prodotto)}</span>`
-      : `<span style="font-size:11px;color:var(--muted)">Tutti</span>`;
-    const triggerSelect = `<select id="fase-trigger-${f.id}" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface)">
-      <option value="">Tutti i tipi</option>
-      ${tipiProdotto.map(t => `<option value="${t.id}" ${f.trigger_tipo_prodotto === t.id ? 'selected' : ''}>${t.label}</option>`).join('')}
-    </select>`;
+    const hasTipi = (f.criteri_tipi || []).length > 0;
+    const hasMat  = (f.criteri_materiali || []).length > 0;
+
+    // Badge riepilogativo accanto al nome
+    let badgeHtml;
+    if (!hasTipi && !hasMat) {
+      badgeHtml = `<span style="font-size:11px;color:var(--muted)">Tutti</span>`;
+    } else {
+      const parts = [];
+      if (hasTipi) parts.push(f.criteri_tipi.map(id => tipoProdLabel(id)).join(', '));
+      if (hasMat)  parts.push(f.criteri_materiali.map(v => matOpz.find(o => o.valore === v)?.etichetta || v).join(', '));
+      badgeHtml = `<span style="font-size:11px;font-weight:600;background:#EEF2FF;color:#4338CA;padding:2px 7px;border-radius:4px;white-space:nowrap">Solo: ${parts.join(' + ')}</span>`;
+    }
+
+    const tipiCheckboxes = tipiProdotto.map(t =>
+      `<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap">
+        <input type="checkbox" data-fase="${f.id}" data-tipo="${escapeHtml(t.id)}" ${(f.criteri_tipi||[]).includes(t.id) ? 'checked' : ''}>
+        ${escapeHtml(t.label)}
+      </label>`).join('');
+
+    const matCheckboxes = matOpz.map(m =>
+      `<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap">
+        <input type="checkbox" data-fase="${f.id}" data-mat="${escapeHtml(m.valore)}" ${(f.criteri_materiali||[]).includes(m.valore) ? 'checked' : ''}>
+        ${escapeHtml(m.etichetta)}
+      </label>`).join('');
+
     return `
     <div class="fase-config-item" id="fase-cfg-row-${f.id}">
       <div class="fase-move-btns">
@@ -3625,13 +3646,24 @@ function renderFasiConfig() {
       </div>
       <span class="fase-config-num" title="ID interno: ${f.id}">${i + 1}</span>
       <div class="fase-config-inputs">
-        <input type="text" id="fase-nome-${f.id}" value="${escapeHtml(f.nome)}" placeholder="Nome fase">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+          <input type="text" id="fase-nome-${f.id}" value="${escapeHtml(f.nome)}" placeholder="Nome fase" style="flex:1;min-width:140px">
+          ${badgeHtml}
+        </div>
         <input type="text" id="fase-desc-${f.id}" value="${escapeHtml(f.descrizione || '')}" placeholder="Descrizione (opzionale)">
-        <div style="display:flex;align-items:center;gap:16px;margin-top:2px;flex-wrap:wrap">
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:11px;color:var(--muted)">Tipo:</span>
-            ${triggerSelect}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px;padding:8px;background:#F9FAFB;border-radius:6px;border:1px solid var(--border)">
+          <div>
+            <div style="font-size:11px;font-weight:500;color:var(--muted);margin-bottom:4px">Tipi prodotto <em style="font-weight:400">(vuoto = tutti)</em></div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">${tipiCheckboxes || '<span style="font-size:11px;color:var(--muted)">—</span>'}</div>
+            ${!hasTipi ? `<div style="font-size:11px;color:#16a34a;margin-top:3px">✓ tutti i tipi prodotto</div>` : ''}
           </div>
+          <div>
+            <div style="font-size:11px;font-weight:500;color:var(--muted);margin-bottom:4px">Materiali <em style="font-weight:400">(vuoto = tutti)</em></div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">${matCheckboxes || '<span style="font-size:11px;color:var(--muted)">—</span>'}</div>
+            ${!hasMat ? `<div style="font-size:11px;color:#16a34a;margin-top:3px">✓ tutti i materiali</div>` : ''}
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:16px;margin-top:6px;flex-wrap:wrap">
           <div style="display:flex;align-items:center;gap:8px">
             <span style="font-size:11px;color:var(--muted)">Gestione:</span>
             <select id="fase-tg-${f.id}" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface)">
@@ -3641,8 +3673,7 @@ function renderFasiConfig() {
             </select>
           </div>
           <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:var(--muted);white-space:nowrap">
-            <input type="checkbox" id="fase-esterna-${f.id}" ${f.e_attesa_esterna ? 'checked' : ''}
-              style="width:14px;height:14px;cursor:pointer">
+            <input type="checkbox" id="fase-esterna-${f.id}" ${f.e_attesa_esterna ? 'checked' : ''} style="width:14px;height:14px;cursor:pointer">
             Attesa esterna (escludi da stime)
           </label>
         </div>
@@ -3676,12 +3707,6 @@ function aggiungiNuovaFase() {
     sel.innerHTML = '<option value="0">— In cima alla lista</option>' +
       fasi.map((f, i) => `<option value="${i + 1}">${i + 1}. ${f.nome}</option>`).join('');
   }
-  // Popola trigger tipi prodotto
-  const trg = document.getElementById('nf-trigger');
-  if (trg) {
-    trg.innerHTML = '<option value="">Tutti i tipi (nessun vincolo)</option>' +
-      tipiProdotto.map(t => `<option value="${t.id}">${t.label}</option>`).join('');
-  }
   // Reset campi
   ['nf-nome','nf-desc'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
   document.getElementById('modal-nuova-fase').classList.add('open');
@@ -3692,7 +3717,6 @@ async function confermaNuovaFase() {
   if (!nome) { toast('Inserisci il nome della fase', 'err'); return; }
   const desc = document.getElementById('nf-desc')?.value.trim() || null;
   const sceltaIdx = parseInt(document.getElementById('nf-posizione')?.value ?? '0');
-  const triggerTipo = document.getElementById('nf-trigger')?.value || null;
 
   await normalizzaPosizioni();
   await loadFasi();
@@ -3712,7 +3736,6 @@ async function confermaNuovaFase() {
     nome,
     descrizione: desc,
     posizione: nuovaPosizione,
-    trigger_tipo_prodotto: triggerTipo || null
   });
   if (error) { toast('Errore: ' + error.message, 'err'); return; }
 
@@ -3722,17 +3745,15 @@ async function confermaNuovaFase() {
   // Aggiungi la fase agli ordini attivi rispettando il trigger (whitelist)
   const ordiniAttivi = ordiniCache.filter(o => o.stato !== 'spedito' && !o.eliminato);
   if (ordiniAttivi.length) {
-    const righe = ordiniAttivi.map(o => {
-      // Se c'è un trigger, la fase è N/A per ordini che non corrispondono al tipo
-      const statoIniziale = triggerTipo && o.tipo_prodotto !== triggerTipo ? 'non_applicabile' : 'disponibile';
-      return { ordine_id: o.id, fase_id: nextId, stato: statoIniziale };
-    });
+    const righe = ordiniAttivi.map(o => ({
+      ordine_id: o.id, fase_id: nextId, stato: 'disponibile'
+    }));
     const { error: insErr } = await sb.from('ordine_fasi').insert(righe);
     if (insErr) toast(`Fase creata ma errore su ordini: ${insErr.message}`, 'err');
     else {
       const naCount = righe.filter(r => r.stato === 'non_applicabile').length;
       const dispCount = righe.length - naCount;
-      toast(`Fase aggiunta: ${dispCount} disponibile, ${naCount} N/A per tipo prodotto`, 'ok');
+      toast(`Fase aggiunta a ${dispCount} ordini (disponibile)`, 'ok');
     }
   } else {
     toast('Fase aggiunta', 'ok');
@@ -3777,19 +3798,15 @@ async function saveFasiConfig(silent = false) {
     id: f.id,
     nome: document.getElementById(`fase-nome-${f.id}`)?.value.trim() || f.nome,
     descrizione: document.getElementById(`fase-desc-${f.id}`)?.value.trim() || null,
-    trigger_tipo_prodotto: document.getElementById(`fase-trigger-${f.id}`)?.value || null,
     e_attesa_esterna: document.getElementById(`fase-esterna-${f.id}`)?.checked ?? f.e_attesa_esterna,
-    tipo_gestione: document.getElementById(`fase-tg-${f.id}`)?.value || 'standard'
+    tipo_gestione: document.getElementById(`fase-tg-${f.id}`)?.value || 'standard',
+    tipi: Array.from(document.querySelectorAll(`input[data-fase="${f.id}"][data-tipo]:checked`)).map(el => el.dataset.tipo),
+    mats: Array.from(document.querySelectorAll(`input[data-fase="${f.id}"][data-mat]:checked`)).map(el => el.dataset.mat),
   }));
-  for (const u of updates) {
-    await sb.from('fasi').update({
-      nome: u.nome,
-      descrizione: u.descrizione,
-      trigger_tipo_prodotto: u.trigger_tipo_prodotto,
-      e_attesa_esterna: u.e_attesa_esterna,
-      tipo_gestione: u.tipo_gestione
-    }).eq('id', u.id);
-  }
+  await Promise.all(updates.map(u => Promise.all([
+    sb.from('fasi').update({ nome: u.nome, descrizione: u.descrizione, e_attesa_esterna: u.e_attesa_esterna, tipo_gestione: u.tipo_gestione }).eq('id', u.id),
+    sb.rpc('aggiorna_criteri_fase', { p_fase_id: u.id, p_tipi_prodotto: u.tipi, p_materiali: u.mats, p_responsabile_id: currentUserRow.id }),
+  ])));
   await loadFasi();
   if (!silent) toast('Configurazione fasi salvata', 'ok');
 }
@@ -5097,10 +5114,12 @@ async function ricalcolaFasiNA(ordineId, tipoProd, struttura, materiale) {
     if (f.fase_id === 8 && isMdf) dovrebbeEssereNA = true;
     if ((f.fase_id === 9 || f.fase_id === 11) && isBarraOComp) dovrebbeEssereNA = true;
 
-    // Regola config-driven: trigger_tipo_prodotto (whitelist)
-    // Se la fase ha un trigger, è N/A per tutti gli ordini che NON sono quel tipo
+    // Criteri tipo prodotto e materiale dalle tabelle di collegamento
     const faseDef = fasi.find(x => x.id === f.fase_id);
-    if (faseDef?.trigger_tipo_prodotto && tipoProd !== faseDef.trigger_tipo_prodotto) {
+    if (faseDef?.criteri_tipi?.length && !faseDef.criteri_tipi.includes(tipoProd)) {
+      dovrebbeEssereNA = true;
+    }
+    if (faseDef?.criteri_materiali?.length && !faseDef.criteri_materiali.includes(materiale)) {
       dovrebbeEssereNA = true;
     }
 
