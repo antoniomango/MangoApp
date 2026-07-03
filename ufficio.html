@@ -6,113 +6,220 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Mango">
-<meta name="theme-color" content="#111111">
+<meta name="theme-color" content="#1C1714">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Mango — Ufficio</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-  :root {
-    --bg: #FAFAF8; --surface: #FFFFFF; --border: #E8E4DC;
-    --ink: #1C1917; --muted: #78716C; --wood: #C2803C;
-    --ok: #16A34A; --warn: #D97706; --alert: #DC2626;
-    --phase-bg: #F5F3EF;
-  }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background:var(--bg); color:var(--ink); min-height:100vh; }
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap');
 
-  /* LOGIN */
-  #login-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; padding:24px; background:var(--bg); }
-  .login-logo { font-size:32px; font-weight:800; color:var(--wood); margin-bottom:6px; letter-spacing:-1px; }
-  .login-sub { font-size:13px; color:var(--muted); margin-bottom:32px; }
-  .login-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:28px 24px; width:100%; max-width:360px; }
-  .login-card select { width:100%; padding:12px 14px; border:1px solid var(--border); border-radius:10px; font-size:14px; background:var(--bg); color:var(--ink); margin-bottom:18px; }
-  .pin-row { display:flex; gap:10px; justify-content:center; margin-bottom:20px; }
-  .pin-row input { width:54px; height:54px; text-align:center; font-size:22px; font-weight:700; border:2px solid var(--border); border-radius:12px; background:var(--bg); color:var(--ink); }
-  .pin-row input:focus { outline:none; border-color:var(--wood); }
-  .btn-login { width:100%; padding:14px; background:var(--wood); color:#fff; border:none; border-radius:10px; font-size:15px; font-weight:700; cursor:pointer; }
-  .err { color:var(--alert); font-size:13px; text-align:center; margin-top:10px; min-height:20px; }
+:root {
+  --bg:       #F2EDE6;
+  --surface:  #FDFAF6;
+  --border:   #D9CFC4;
+  --wood:     #8B5E3C;
+  --wood-lt:  #C4926A;
+  --ink:      #1C1714;
+  --muted:    #7A6E65;
+  --ok:       #3A7D44;
+  --warn:     #C27B00;
+  --alert:    #B03A2E;
+  --phase-bg: #EDE4D8;
+  --info:     #2563EB;
+}
 
-  /* APP */
-  #app-screen { display:none; }
-  .topbar { background:var(--surface); border-bottom:1px solid var(--border); padding:14px 20px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; }
-  .topbar-title { font-weight:800; font-size:16px; color:var(--wood); }
-  .topbar-sub { font-size:12px; color:var(--muted); margin-top:1px; }
-  .topbar-right { display:flex; gap:10px; align-items:center; }
-  .btn-sm { padding:6px 12px; border:1px solid var(--border); border-radius:8px; font-size:12px; font-weight:600; background:var(--surface); color:var(--ink); cursor:pointer; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink); min-height: 100vh; font-size: 14px; }
 
-  main { padding:16px; max-width:700px; margin:0 auto; }
-  .data-oggi { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:10px 16px; margin-bottom:16px; display:flex; align-items:center; gap:10px; font-size:14px; }
-  .data-oggi strong { font-size:16px; color:var(--ink); }
-  .data-oggi span { color:var(--muted); font-size:12px; }
+/* ── LOGIN ── */
+#login-screen {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: var(--ink);
+}
+.login-card {
+  background: var(--surface); border-radius: 12px; padding: 40px 36px;
+  width: 360px; box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+}
+.login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+.logo-mark { background: var(--wood); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); flex-shrink: 0; }
+.login-logo .logo-mark { width: 36px; height: 36px; }
+.login-logo span { font-family: 'DM Mono', monospace; font-size: 17px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink); }
+.login-card h2 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
+.login-card p { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+.form-group { margin-bottom: 14px; }
+.form-group label { display: block; font-size: 11px; font-weight: 500; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
+.form-group select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--ink); font-family: 'Inter', sans-serif; font-size: 14px; outline: none; }
+.form-group select:focus { border-color: var(--wood); }
+.pin-row { display: flex; gap: 10px; justify-content: center; margin: 18px 0; }
+.pin-row input {
+  width: 56px; height: 56px; text-align: center; font-size: 22px; font-weight: 700;
+  border: 2px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--ink);
+  font-family: 'DM Mono', monospace; outline: none;
+}
+.pin-row input:focus { border-color: var(--wood); }
+.btn-login {
+  width: 100%; padding: 13px; background: var(--wood); color: #fff; border: none;
+  border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;
+  font-family: 'Inter', sans-serif;
+}
+.btn-login:hover { opacity: 0.88; }
+.err { color: var(--alert); font-size: 12px; text-align: center; margin-top: 10px; min-height: 18px; }
 
-  /* ORDINE CARD */
-  .ord-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px 20px; margin-bottom:14px; }
-  .ord-card.attesa { border-color:#10b981; background:#f0fdf4; }
-  .ord-card.ritardo { border-left:4px solid var(--alert); }
-  .ord-hdr { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:14px; }
-  .ord-cliente { font-size:16px; font-weight:700; }
-  .ord-codice { font-size:11px; color:var(--muted); font-family:'Courier New',monospace; margin-top:2px; }
-  .ord-pct { font-size:26px; font-weight:800; font-family:'Courier New',monospace; }
-  .ord-pct.done { color:var(--ok); }
-  .ord-info { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:14px; }
-  .badge { display:inline-block; font-size:11px; font-weight:700; padding:3px 9px; border-radius:99px; }
-  .badge-aperto { background:#DBEAFE; color:#1E40AF; }
-  .badge-attesa { background:#D1FAE5; color:#065F46; }
-  .badge-sospeso { background:#F3F4F6; color:#374151; }
-  .badge-ritardo { background:#FEE2E2; color:#991B1B; }
-  .scad { font-size:12px; color:var(--muted); }
-  .scad.late { color:var(--alert); font-weight:700; }
+/* ── HEADER ── */
+#app-screen { display: none; }
+header {
+  background: var(--ink); color: #F2EDE6;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; height: 52px; position: sticky; top: 0; z-index: 100;
+}
+.logo { font-family: 'DM Mono', monospace; font-size: 14px; letter-spacing: 0.12em; text-transform: uppercase; display: flex; align-items: center; gap: 10px; color: #F2EDE6; }
+.logo .logo-mark { width: 26px; height: 26px; }
+.header-right { display: flex; align-items: center; gap: 16px; font-size: 12px; color: #9E9189; font-family: 'DM Mono', monospace; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); display: inline-block; margin-right: 4px; }
+.header-right .esci-link { cursor: pointer; text-decoration: underline; }
+.header-right .esci-link:hover { color: #F2EDE6; }
 
-  /* BARRE MACRO */
-  .macro-row { margin-bottom:10px; }
-  .macro-lbl { display:flex; justify-content:space-between; font-size:12px; font-weight:600; margin-bottom:4px; }
-  .macro-lbl-pct { color:var(--muted); font-weight:400; }
-  .macro-track { background:var(--phase-bg); border-radius:99px; height:9px; overflow:hidden; }
-  .macro-fill { height:100%; border-radius:99px; transition:width .5s; }
-  .tot-track { background:var(--phase-bg); border-radius:99px; height:13px; overflow:hidden; margin-top:14px; }
-  .tot-fill { height:100%; border-radius:99px; background:var(--wood); transition:width .5s; }
+/* ── MAIN ── */
+#lista-view, #detail-view { max-width: 720px; margin: 0 auto; padding: 20px 16px 40px; }
 
-  .empty { text-align:center; color:var(--muted); padding:48px 0; font-size:14px; }
-  .refresh-info { text-align:center; font-size:11px; color:var(--muted); margin:16px 0; }
+/* ── SEARCH ── */
+.search-wrap { margin-bottom: 18px; }
+.search-wrap input {
+  width: 100%; padding: 10px 14px 10px 38px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--ink); font-family: 'Inter', sans-serif; font-size: 14px;
+  outline: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237A6E65' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: 12px center;
+}
+.search-wrap input:focus { border-color: var(--wood-lt); }
+
+/* ── INTESTAZIONE DATA ── */
+.data-oggi { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.data-oggi strong { font-size: 15px; }
+.data-oggi span { color: var(--muted); font-size: 12px; }
+
+/* ── CARD ORDINE ── */
+.ord-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 18px 20px; margin-bottom: 14px; cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.ord-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); border-color: var(--wood-lt); }
+.ord-card.attesa { border-color: var(--ok); background: #f6fdf7; }
+.ord-card.ritardo { border-left: 4px solid var(--alert); }
+.ord-hdr { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+.ord-cliente { font-size: 16px; font-weight: 600; }
+.ord-codice { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; color: var(--ink); margin-top: 3px; }
+.ord-pct { font-size: 26px; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--muted); flex-shrink: 0; }
+.ord-pct.done { color: var(--ok); }
+.ord-info { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+.badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 99px; }
+.badge-aperto    { background: #DBEAFE; color: #1E40AF; }
+.badge-attesa    { background: #D1FAE5; color: #065F46; }
+.badge-sospeso   { background: #F3F4F6; color: #374151; }
+.badge-ritardo   { background: #FEE2E2; color: #991B1B; }
+.badge-extra     { background: #FED7AA; color: #9A3412; }
+.scad { font-size: 12px; color: var(--muted); margin-bottom: 12px; display: block; }
+.scad.late { color: var(--alert); font-weight: 600; }
+
+/* ── BARRE MACRO ── */
+.macro-row { margin-bottom: 9px; }
+.macro-lbl { display: flex; justify-content: space-between; font-size: 12px; font-weight: 500; margin-bottom: 4px; }
+.macro-lbl-pct { color: var(--muted); font-weight: 400; }
+.macro-track { background: var(--phase-bg); border-radius: 99px; height: 8px; overflow: hidden; }
+.macro-fill  { height: 100%; border-radius: 99px; transition: width .5s; }
+.tot-track { background: var(--phase-bg); border-radius: 99px; height: 12px; overflow: hidden; margin-top: 12px; }
+.tot-fill  { height: 100%; border-radius: 99px; background: var(--wood); transition: width .5s; }
+
+.empty { text-align: center; color: var(--muted); padding: 56px 0; font-size: 14px; }
+.refresh-info { text-align: center; font-size: 11px; color: var(--muted); padding: 8px 0 20px; }
+
+/* ── DETTAGLIO ── */
+#detail-view { display: none; }
+.detail-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 500; color: var(--wood); cursor: pointer;
+  margin-bottom: 20px; padding: 6px 0;
+}
+.detail-back:hover { opacity: 0.75; }
+.detail-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+.detail-cliente { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+.detail-codice  { font-family: 'DM Mono', monospace; font-size: 15px; font-weight: 500; color: var(--ink); margin-bottom: 16px; }
+.detail-meta    { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-bottom: 16px; }
+.detail-meta-item { display: flex; flex-direction: column; gap: 2px; }
+.detail-meta-label { font-size: 10px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.detail-meta-value { font-size: 14px; font-weight: 500; }
+.detail-section-title { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
+
+/* Badges stato fase nel dettaglio */
+.fase-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.fase-row:last-child { border-bottom: none; }
+.fase-nome { font-size: 13px; font-weight: 500; }
+.fase-nome.na { color: var(--muted); font-weight: 400; }
+.badge-fase-completata  { background: #D1FAE5; color: #065F46; }
+.badge-fase-in_corso    { background: #DBEAFE; color: #1E40AF; }
+.badge-fase-disponibile { background: var(--phase-bg); color: var(--muted); }
+.badge-fase-in_attesa   { background: #FEF3C7; color: #92400E; }
+.badge-fase-non_applicabile { background: transparent; color: var(--muted); font-style: italic; font-size: 10px; padding: 2px 0; }
 </style>
-<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 </head>
 <body>
 
-<!-- LOGIN -->
+<!-- ─────────── LOGIN ─────────── -->
 <div id="login-screen">
-  <div class="login-logo">MangoApp</div>
-  <div class="login-sub">Vista Ufficio — Solo lettura</div>
   <div class="login-card">
-    <select id="login-user-select"><option value="">— Seleziona il tuo nome —</option></select>
-    <div class="pin-row">
-      <input type="password" inputmode="numeric" maxlength="1" id="pin0" oninput="pinNext(0)">
-      <input type="password" inputmode="numeric" maxlength="1" id="pin1" oninput="pinNext(1)">
-      <input type="password" inputmode="numeric" maxlength="1" id="pin2" oninput="pinNext(2)">
-      <input type="password" inputmode="numeric" maxlength="1" id="pin3" onkeydown="if(event.key==='Enter')doLogin()">
+    <div class="login-logo">
+      <div class="logo-mark"></div>
+      <span>Mango Srl</span>
+    </div>
+    <h2>Vista Ufficio</h2>
+    <p>Accesso in sola lettura — stato produzione</p>
+    <div class="form-group">
+      <label>Il tuo nome</label>
+      <select id="login-user-select"><option value="">— Seleziona —</option></select>
+    </div>
+    <div class="form-group">
+      <label>PIN (4 cifre)</label>
+      <div class="pin-row">
+        <input type="password" inputmode="numeric" maxlength="1" id="pin0" oninput="pinNext(0)">
+        <input type="password" inputmode="numeric" maxlength="1" id="pin1" oninput="pinNext(1)">
+        <input type="password" inputmode="numeric" maxlength="1" id="pin2" oninput="pinNext(2)">
+        <input type="password" inputmode="numeric" maxlength="1" id="pin3" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
     </div>
     <button class="btn-login" onclick="doLogin()">Accedi</button>
     <div class="err" id="login-err"></div>
   </div>
 </div>
 
-<!-- APP -->
+<!-- ─────────── APP ─────────── -->
 <div id="app-screen">
-  <div class="topbar">
-    <div>
-      <div class="topbar-title">Stato Produzione</div>
-      <div class="topbar-sub" id="topbar-sub">Caricamento...</div>
+  <header>
+    <div class="logo">
+      <div class="logo-mark"></div>
+      Mango Srl
     </div>
-    <div class="topbar-right">
-      <button class="btn-sm" onclick="aggiornaUfficio()">↻ Aggiorna</button>
-      <button class="btn-sm" onclick="doLogout()">Esci</button>
+    <div class="header-right">
+      <span><span class="status-dot"></span>connesso</span>
+      <span id="header-user-nome">—</span>
+      <span class="esci-link" onclick="doLogout()">esci</span>
     </div>
+  </header>
+
+  <!-- Lista ordini -->
+  <div id="lista-view">
+    <div class="search-wrap">
+      <input type="text" id="ufficio-search" placeholder="Cerca cliente o codice…" oninput="applicaFiltro()" autocomplete="off">
+    </div>
+    <div id="main-content"><div class="empty">Caricamento ordini…</div></div>
+    <div class="refresh-info" id="refresh-info"></div>
   </div>
-  <main id="main-content">
-    <div class="empty">Caricamento ordini...</div>
-  </main>
-  <div class="refresh-info" id="refresh-info"></div>
+
+  <!-- Dettaglio ordine -->
+  <div id="detail-view">
+    <div class="detail-back" onclick="tornaLista()">← Torna alla lista</div>
+    <div id="detail-content"></div>
+  </div>
 </div>
 
 <script>
@@ -121,29 +228,33 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 
-let currentUser = null;
-let macroFasi = [];
+let currentUser  = null;
+let macroFasi    = [];
+let fasiNomi     = {};  // fase_id → {nome, posizione, macro_fase_id}
+let allOrdini    = [];
+let allOrdFasi   = [];
+let allFasiExtra = [];
+let searchQuery  = '';
 let refreshTimer = null;
 
 // ── LOGIN ──
 async function init() {
-  // Se arriva da operatore.html già autenticato, salta il login
   const saved = localStorage.getItem('ufficio-user');
   if (saved) {
     try {
       currentUser = JSON.parse(saved);
-      document.getElementById('login-screen').style.display = 'none';
-      document.getElementById('app-screen').style.display = 'block';
-      await caricaMacroFasi();
+      mostraApp();
+      await caricaMeta();
       await aggiornaUfficio();
       refreshTimer = setInterval(aggiornaUfficio, 120000);
       return;
     } catch(e) { localStorage.removeItem('ufficio-user'); }
   }
-  const { data } = await sb.from('users').select('id, nome, cognome').in('ruolo', ['sola_lettura']).eq('attivo', true).order('cognome');
+  const { data } = await sb.from('users').select('id, nome, cognome')
+    .in('ruolo', ['sola_lettura']).eq('attivo', true).order('cognome');
   const sel = document.getElementById('login-user-select');
-  sel.innerHTML = '<option value="">— Seleziona il tuo nome —</option>' +
-    (data || []).map(u => `<option value="${u.id}">${u.cognome} ${u.nome}</option>`).join('');
+  sel.innerHTML = '<option value="">— Seleziona —</option>' +
+    (data || []).map(u => `<option value="${u.id}">${esc(u.cognome)} ${esc(u.nome)}</option>`).join('');
 }
 
 function pinNext(idx) {
@@ -161,12 +272,20 @@ async function doLogin() {
   if (!data?.ok) { showErr(data?.errore || 'PIN errato'); return; }
 
   currentUser = data.user;
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app-screen').style.display = 'block';
-  await caricaMacroFasi();
+  localStorage.setItem('ufficio-user', JSON.stringify(currentUser));
+  mostraApp();
+  await caricaMeta();
   await aggiornaUfficio();
-  // Auto-refresh ogni 2 minuti
   refreshTimer = setInterval(aggiornaUfficio, 120000);
+}
+
+function mostraApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display  = 'block';
+  if (currentUser) {
+    const nome = [currentUser.nome, currentUser.cognome].filter(Boolean).join(' ') || currentUser.email || '—';
+    document.getElementById('header-user-nome').textContent = nome;
+  }
 }
 
 function showErr(msg) { document.getElementById('login-err').textContent = msg; }
@@ -178,128 +297,281 @@ function doLogout() {
   window.location.href = 'operatore.html?logout=1';
 }
 
-// ── DATI ──
-async function caricaMacroFasi() {
-  const [{ data: macro }, { data: fasiConMacro }] = await Promise.all([
+// ── DATI META ──
+async function caricaMeta() {
+  const [{ data: macro }, { data: fasi }] = await Promise.all([
     sb.from('macro_fasi').select('*').order('posizione').order('id'),
-    sb.from('fasi').select('id, macro_fase_id').not('macro_fase_id', 'is', null)
+    sb.from('fasi').select('id, nome, posizione, macro_fase_id').order('posizione').order('id')
   ]);
+
+  fasiNomi = {};
+  (fasi || []).forEach(f => { fasiNomi[f.id] = f; });
+
   macroFasi = (macro || []).map(m => ({
     ...m,
-    fasi: new Set((fasiConMacro || []).filter(f => f.macro_fase_id === m.id).map(f => f.id))
+    fasi: new Set((fasi || []).filter(f => f.macro_fase_id === m.id).map(f => f.id))
   }));
 }
 
+// ── DATI ORDINI ──
 async function aggiornaUfficio() {
   const ora = new Date().toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' });
-  document.getElementById('topbar-sub').textContent = `Aggiornato alle ${ora}`;
-  document.getElementById('refresh-info').textContent = `Aggiornamento automatico ogni 2 minuti`;
+  document.getElementById('refresh-info').textContent = `Aggiornato alle ${ora} · Aggiornamento automatico ogni 2 minuti`;
 
   const [{ data: ordini }, { data: ordFasi }, { data: fasiExtra }] = await Promise.all([
-    sb.from('ordini').select('id, codice, cliente, scadenza, stato, priorita, tipo')
+    sb.from('ordini')
+      .select('id, codice, cliente, scadenza, stato, priorita, tipo, tipo_prodotto, struttura, materiale, quantita')
       .in('stato', ['aperto', 'attesa_spedizione', 'sospeso'])
       .neq('eliminato', true)
       .order('scadenza', { ascending: true, nullsFirst: false }),
     sb.from('ordine_fasi').select('ordine_id, fase_id, stato'),
-    sb.from('fasi_ordine_extra').select('ordine_id, stato')
+    sb.from('fasi_ordine_extra').select('ordine_id, nome, stato, numero').order('numero')
   ]);
 
-  renderUfficio(ordini || [], ordFasi || [], fasiExtra || []);
+  allOrdini    = ordini    || [];
+  allOrdFasi   = ordFasi   || [];
+  allFasiExtra = fasiExtra || [];
+
+  renderLista();
 }
 
-function renderUfficio(ordini, ordFasi, fasiExtra) {
+// ── RICERCA ──
+function applicaFiltro() {
+  searchQuery = document.getElementById('ufficio-search').value.toLowerCase().trim();
+  renderLista();
+}
+
+// ── LISTA ──
+function renderLista() {
   const el = document.getElementById('main-content');
-  if (!ordini.length) {
-    el.innerHTML = '<div class="empty">✓ Nessun ordine attivo in questo momento</div>';
+
+  const filtrati = searchQuery
+    ? allOrdini.filter(o =>
+        (o.cliente || '').toLowerCase().includes(searchQuery) ||
+        (o.codice  || '').toLowerCase().includes(searchQuery))
+    : allOrdini;
+
+  if (!filtrati.length) {
+    el.innerHTML = searchQuery
+      ? `<div class="empty">Nessun ordine trovato per "<strong>${esc(searchQuery)}</strong>"</div>`
+      : '<div class="empty">✓ Nessun ordine attivo in questo momento</div>';
     return;
   }
 
-  const oggi = new Date().toISOString().split('T')[0];
-
-  // Raggruppa fasi per ordine
-  const fasiMap = {};
-  ordFasi.forEach(f => {
-    if (!fasiMap[f.ordine_id]) fasiMap[f.ordine_id] = [];
-    fasiMap[f.ordine_id].push(f);
-  });
+  const fasiMap     = {};
+  allOrdFasi.forEach(f => { if (!fasiMap[f.ordine_id]) fasiMap[f.ordine_id] = []; fasiMap[f.ordine_id].push(f); });
   const fasiExtraMap = {};
-  fasiExtra.forEach(f => {
-    if (!fasiExtraMap[f.ordine_id]) fasiExtraMap[f.ordine_id] = [];
-    fasiExtraMap[f.ordine_id].push(f);
-  });
+  allFasiExtra.forEach(f => { if (!fasiExtraMap[f.ordine_id]) fasiExtraMap[f.ordine_id] = []; fasiExtraMap[f.ordine_id].push(f); });
 
-  // Intestazione con data odierna
+  const oggi = new Date().toISOString().split('T')[0];
   const oggiLabel = new Date().toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
-  const intestazione = `<div class="data-oggi">📅 <strong>${oggiLabel.charAt(0).toUpperCase()+oggiLabel.slice(1)}</strong><span>— ${ordini.length} ordini attivi</span></div>`;
+  const intestazione = `<div class="data-oggi">📅 <strong>${esc(oggiLabel.charAt(0).toUpperCase()+oggiLabel.slice(1))}</strong><span>— ${filtrati.length} ordine${filtrati.length!==1?'i':''} ${searchQuery ? 'trovati' : 'attivi'}</span></div>`;
 
-  el.innerHTML = intestazione + ordini.map(o => {
-    const isExtra = o.tipo === 'extra';
-
-    let pct;
-    let bars;
-    if (isExtra) {
-      const fe = fasiExtraMap[o.id] || [];
-      const comp = fe.filter(f => f.stato === 'completata').length;
-      const tot  = fe.length || 1;
-      pct = Math.round(comp / tot * 100);
-      bars = fe.length
-        ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">${comp}/${fe.length} fasi completate</div>`
-        : '<div style="font-size:12px;color:var(--muted)">Nessuna fase inserita</div>';
-    } else {
-      const fasi = fasiMap[o.id] || [];
-      const appl = fasi.filter(f => f.stato !== 'non_applicabile');
-      const comp = appl.filter(f => f.stato === 'completata').length;
-      const tot  = appl.length || 1;
-      pct = Math.round(comp / tot * 100);
-      bars = macroFasi.length ? macroFasi.map(m => {
-        const mAppl = appl.filter(f => f.fase_id && m.fasi.has(f.fase_id));
-        if (!mAppl.length) return '';
-        const mComp = mAppl.filter(f => f.stato === 'completata').length;
-        const mPct  = Math.round(mComp / mAppl.length * 100);
-        return `
-          <div class="macro-row">
-            <div class="macro-lbl">
-              <span style="color:${m.colore}">${esc(m.nome)}</span>
-              <span class="macro-lbl-pct">${mComp}/${mAppl.length} fasi — ${mPct}%</span>
-            </div>
-            <div class="macro-track"><div class="macro-fill" style="width:${mPct}%;background:${m.colore}"></div></div>
-          </div>`;
-      }).join('') : '<div style="font-size:12px;color:var(--muted)">Nessun gruppo macro configurato</div>';
-    }
-
-    const isAttesa  = o.stato === 'attesa_spedizione';
-    const isSosp    = o.stato === 'sospeso';
-    const inRitardo = o.scadenza && o.scadenza < oggi && !isAttesa;
-
-    const badge = isAttesa
-      ? `<span class="badge badge-attesa">✓ Pronto per spedizione</span>`
-      : isSosp ? `<span class="badge badge-sospeso">⏸ Sospeso</span>`
-      : inRitardo ? `<span class="badge badge-ritardo">⚠ In ritardo</span>`
-      : `<span class="badge badge-aperto">In produzione</span>`;
-
-    const scadHtml = o.scadenza
-      ? `<span class="scad ${inRitardo ? 'late' : ''}">Consegna richiesta: <strong>${formatData(o.scadenza)}</strong>${inRitardo ? ' ⚠ In ritardo' : ''}</span>`
-      : `<span class="scad">Nessuna data di consegna</span>`;
-
-    const extraLabel = isExtra ? `<span style="font-size:11px;color:#F97316;font-weight:600">Ordine Extra</span> ` : '';
-
-    return `
-      <div class="ord-card ${isAttesa ? 'attesa' : inRitardo ? 'ritardo' : ''}">
-        <div class="ord-hdr">
-          <div>
-            <div class="ord-cliente">${esc(o.cliente)}</div>
-            <div class="ord-codice">${extraLabel}${esc(o.codice || '')}</div>
-          </div>
-          <div class="ord-pct ${pct===100 ? 'done' : ''}">${pct}%</div>
-        </div>
-        <div class="ord-info">${badge}</div>
-        <div style="margin-bottom:12px">${scadHtml}</div>
-        ${bars}
-        <div class="tot-track"><div class="tot-fill" style="width:${pct}%"></div></div>
-      </div>`;
-  }).join('');
+  el.innerHTML = intestazione + filtrati.map(o => cardHtml(o, fasiMap, fasiExtraMap, oggi)).join('');
 }
 
+function cardHtml(o, fasiMap, fasiExtraMap, oggi) {
+  const isExtra   = o.tipo === 'extra';
+  const isAttesa  = o.stato === 'attesa_spedizione';
+  const isSosp    = o.stato === 'sospeso';
+  const inRitardo = o.scadenza && o.scadenza < oggi && !isAttesa;
+
+  let pct, bars;
+  if (isExtra) {
+    const fe   = fasiExtraMap[o.id] || [];
+    const comp = fe.filter(f => f.stato === 'completata').length;
+    const tot  = fe.length || 1;
+    pct  = Math.round(comp / tot * 100);
+    bars = fe.length
+      ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">${comp}/${fe.length} fasi completate</div>`
+      : '<div style="font-size:12px;color:var(--muted)">Nessuna fase inserita</div>';
+  } else {
+    const fasi = fasiMap[o.id] || [];
+    const appl = fasi.filter(f => f.stato !== 'non_applicabile');
+    const comp = appl.filter(f => f.stato === 'completata').length;
+    const tot  = appl.length || 1;
+    pct  = Math.round(comp / tot * 100);
+    bars = macroFasi.length ? macroFasi.map(m => {
+      const mAppl = appl.filter(f => f.fase_id && m.fasi.has(f.fase_id));
+      if (!mAppl.length) return '';
+      const mComp = mAppl.filter(f => f.stato === 'completata').length;
+      const mPct  = Math.round(mComp / mAppl.length * 100);
+      return `<div class="macro-row">
+        <div class="macro-lbl">
+          <span style="color:${esc(m.colore)}">${esc(m.nome)}</span>
+          <span class="macro-lbl-pct">${mComp}/${mAppl.length} — ${mPct}%</span>
+        </div>
+        <div class="macro-track"><div class="macro-fill" style="width:${mPct}%;background:${esc(m.colore)}"></div></div>
+      </div>`;
+    }).join('') : '';
+  }
+
+  const badge = isAttesa
+    ? `<span class="badge badge-attesa">✓ Pronto per spedizione</span>`
+    : isSosp  ? `<span class="badge badge-sospeso">⏸ Sospeso</span>`
+    : inRitardo ? `<span class="badge badge-ritardo">⚠ In ritardo</span>`
+    : `<span class="badge badge-aperto">In produzione</span>`;
+  const extraBadge = isExtra ? `<span class="badge badge-extra">Extra</span>` : '';
+
+  const scadHtml = o.scadenza
+    ? `<span class="scad ${inRitardo ? 'late' : ''}">Consegna: <strong>${formatData(o.scadenza)}</strong>${inRitardo ? ' ⚠ In ritardo' : ''}</span>`
+    : `<span class="scad">Nessuna data di consegna</span>`;
+
+  return `<div class="ord-card ${isAttesa ? 'attesa' : inRitardo ? 'ritardo' : ''}" onclick="apriDettaglio('${esc(o.id)}')">
+    <div class="ord-hdr">
+      <div>
+        <div class="ord-cliente">${esc(o.cliente)}</div>
+        <div class="ord-codice">${esc(o.codice || '—')}</div>
+      </div>
+      <div class="ord-pct ${pct===100?'done':''}">${pct}%</div>
+    </div>
+    <div class="ord-info">${badge}${extraBadge}</div>
+    ${scadHtml}
+    ${bars}
+    <div class="tot-track"><div class="tot-fill" style="width:${pct}%"></div></div>
+  </div>`;
+}
+
+// ── DETTAGLIO ──
+function apriDettaglio(ordineId) {
+  const o = allOrdini.find(x => x.id === ordineId);
+  if (!o) return;
+
+  const isExtra   = o.tipo === 'extra';
+  const isAttesa  = o.stato === 'attesa_spedizione';
+  const isSosp    = o.stato === 'sospeso';
+  const oggi      = new Date().toISOString().split('T')[0];
+  const inRitardo = o.scadenza && o.scadenza < oggi && !isAttesa;
+
+  // Badge stato principale
+  const statoBadge = isAttesa
+    ? `<span class="badge badge-attesa">✓ Pronto per spedizione</span>`
+    : isSosp  ? `<span class="badge badge-sospeso">⏸ Sospeso</span>`
+    : inRitardo ? `<span class="badge badge-ritardo">⚠ In ritardo</span>`
+    : `<span class="badge badge-aperto">In produzione</span>`;
+  const extraBadge = isExtra ? ` <span class="badge badge-extra">Ordine Extra</span>` : '';
+
+  // Meta info
+  const metaItems = [];
+  if (o.tipo_prodotto) metaItems.push(['Tipo prodotto', o.tipo_prodotto]);
+  if (o.struttura)     metaItems.push(['Struttura', o.struttura.replace(/_/g, ' ')]);
+  if (o.materiale)     metaItems.push(['Materiale', o.materiale]);
+  if (o.priorita)      metaItems.push(['Priorità', o.priorita.replace(/_/g, ' ')]);
+  if (o.quantita > 1)  metaItems.push(['Quantità', String(o.quantita)]);
+  metaItems.push(['Scadenza', o.scadenza ? formatData(o.scadenza) : 'Non impostata']);
+
+  const metaHtml = metaItems.map(([lbl, val]) => `
+    <div class="detail-meta-item">
+      <span class="detail-meta-label">${esc(lbl)}</span>
+      <span class="detail-meta-value">${esc(val)}</span>
+    </div>`).join('');
+
+  // Fasi
+  let fasiHtml = '';
+  if (isExtra) {
+    const fe = allFasiExtra.filter(f => f.ordine_id === ordineId);
+    if (fe.length) {
+      fasiHtml = `<div class="detail-card">
+        <div class="detail-section-title">Fasi ordine</div>
+        ${fe.map(f => fasextraRowHtml(f)).join('')}
+      </div>`;
+    }
+  } else {
+    const ordFasiPerOrdine = allOrdFasi.filter(f => f.ordine_id === ordineId);
+
+    // Raggruppa per macro-fase
+    if (macroFasi.length) {
+      fasiHtml = macroFasi.map(m => {
+        const mFasi = ordFasiPerOrdine
+          .filter(f => f.fase_id && m.fasi.has(f.fase_id))
+          .sort((a, b) => {
+            const pa = fasiNomi[a.fase_id]?.posizione ?? 999;
+            const pb = fasiNomi[b.fase_id]?.posizione ?? 999;
+            return pa - pb;
+          });
+        if (!mFasi.length) return '';
+        const appl  = mFasi.filter(f => f.stato !== 'non_applicabile');
+        const comp  = appl.filter(f => f.stato === 'completata').length;
+        const mPct  = appl.length ? Math.round(comp / appl.length * 100) : 0;
+        return `<div class="detail-card">
+          <div class="detail-section-title" style="color:${esc(m.colore)}">${esc(m.nome)} — ${comp}/${appl.length} (${mPct}%)</div>
+          <div class="macro-row" style="margin-bottom:14px">
+            <div class="macro-track"><div class="macro-fill" style="width:${mPct}%;background:${esc(m.colore)}"></div></div>
+          </div>
+          ${mFasi.map(f => faseRowHtml(f)).join('')}
+        </div>`;
+      }).join('');
+    } else {
+      // Fallback senza macro
+      const sorted = [...ordFasiPerOrdine].sort((a,b) =>
+        (fasiNomi[a.fase_id]?.posizione ?? 999) - (fasiNomi[b.fase_id]?.posizione ?? 999));
+      fasiHtml = `<div class="detail-card">
+        <div class="detail-section-title">Fasi ordine</div>
+        ${sorted.map(f => faseRowHtml(f)).join('')}
+      </div>`;
+    }
+
+    // Barra totale
+    const appl    = ordFasiPerOrdine.filter(f => f.stato !== 'non_applicabile');
+    const comp    = appl.filter(f => f.stato === 'completata').length;
+    const totPct  = appl.length ? Math.round(comp / appl.length * 100) : 0;
+    fasiHtml += `<div style="padding:0 4px 8px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px">
+        <span>Avanzamento totale</span><span>${comp}/${appl.length} fasi — ${totPct}%</span>
+      </div>
+      <div class="tot-track"><div class="tot-fill" style="width:${totPct}%"></div></div>
+    </div>`;
+  }
+
+  document.getElementById('detail-content').innerHTML = `
+    <div class="detail-card">
+      <div class="detail-cliente">${esc(o.cliente)}</div>
+      <div class="detail-codice">${esc(o.codice || '—')}</div>
+      <div class="ord-info" style="margin-bottom:16px">${statoBadge}${extraBadge}</div>
+      <div class="detail-meta">${metaHtml}</div>
+    </div>
+    ${fasiHtml}
+  `;
+
+  document.getElementById('lista-view').style.display  = 'none';
+  document.getElementById('detail-view').style.display = 'block';
+  window.scrollTo(0, 0);
+}
+
+function faseRowHtml(f) {
+  const info = fasiNomi[f.fase_id];
+  const nome = info?.nome || `Fase ${f.fase_id}`;
+  const isNA = f.stato === 'non_applicabile';
+  const badgeClass = `badge badge-fase-${f.stato}`;
+  const statoLabel = {
+    completata: 'Completata', in_corso: 'In corso', disponibile: 'Disponibile',
+    in_attesa: 'In attesa', non_applicabile: 'N/A'
+  }[f.stato] || f.stato;
+  return `<div class="fase-row">
+    <span class="fase-nome${isNA?' na':''}">${esc(nome)}</span>
+    <span class="${badgeClass}">${statoLabel}</span>
+  </div>`;
+}
+
+function fasextraRowHtml(f) {
+  const badgeClass = `badge badge-fase-${f.stato}`;
+  const statoLabel = {
+    completata: 'Completata', in_corso: 'In corso', disponibile: 'Disponibile',
+    in_attesa: 'In attesa', non_applicabile: 'N/A'
+  }[f.stato] || f.stato;
+  return `<div class="fase-row">
+    <span class="fase-nome">${esc(f.nome || `Fase ${f.numero}`)}</span>
+    <span class="${badgeClass}">${statoLabel}</span>
+  </div>`;
+}
+
+function tornaLista() {
+  document.getElementById('detail-view').style.display = 'none';
+  document.getElementById('lista-view').style.display  = 'block';
+  window.scrollTo(0, 0);
+}
+
+// ── UTILITY ──
 function formatData(d) {
   if (!d) return '';
   const [y,m,g] = d.split('-');
