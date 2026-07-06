@@ -920,6 +920,34 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           </div>
 
         </div>
+
+        <!-- Chiusure aziendali -->
+        <div style="margin-top:28px;max-width:740px">
+          <div style="font-size:13px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+            <span style="font-size:16px">🔒</span> Chiusure aziendali
+            <span style="font-size:11px;font-weight:400;color:var(--muted)">Il piano non viene generato nei giorni di chiusura</span>
+          </div>
+          <div id="or-chiusure-list" style="margin-bottom:14px;font-size:12px;color:var(--muted);font-style:italic">Nessuna chiusura programmata</div>
+          <div class="card" style="padding:14px 16px">
+            <div style="font-size:12px;font-weight:600;margin-bottom:10px">Aggiungi chiusura</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 2fr auto;gap:8px;align-items:end">
+              <div class="form-group" style="margin:0">
+                <label style="font-size:11px">Dal</label>
+                <input type="date" id="or-chiusura-dal" style="font-size:12px">
+              </div>
+              <div class="form-group" style="margin:0">
+                <label style="font-size:11px">Al</label>
+                <input type="date" id="or-chiusura-al" style="font-size:12px">
+              </div>
+              <div class="form-group" style="margin:0">
+                <label style="font-size:11px">Descrizione</label>
+                <input type="text" id="or-chiusura-desc" placeholder="es. Ferragosto" style="font-size:12px">
+              </div>
+              <button class="btn btn-secondary" style="font-size:12px;padding:7px 12px;white-space:nowrap" onclick="aggiungiChiusura()">+ Aggiungi</button>
+            </div>
+          </div>
+        </div>
+
       </section>
 
       <!-- KPI CONFIG -->
@@ -1289,6 +1317,11 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           </select>
         </div>
       </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:4px">
+        <input type="checkbox" id="op-escluso-pianificazione">
+        Escludi dalla pianificazione automatica
+      </label>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px;padding-left:24px">Se attivo, l'operatore non viene mai proposto dal motore ma può prendere in carico manualmente</div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-operatore')">Annulla</button>
@@ -1689,7 +1722,7 @@ async function loadNc() {
 
 async function loadOperatori() {
   const { data } = await sb.from('users')
-    .select('id, nome, cognome, ruolo, attivo, ore_default')
+    .select('id, nome, cognome, ruolo, attivo, ore_default, escluso_pianificazione')
     .in('ruolo', ['operatore', 'sola_lettura'])
     .neq('eliminato', true)
     .order('cognome');
@@ -1934,6 +1967,16 @@ async function renderPianificazione(p_data_override) {
 
   if (error || !piano?.ok) {
     el.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>Errore caricamento piano: ${escapeHtml(error?.message || piano?.errore || 'sconosciuto')}</p></div>`;
+    return;
+  }
+
+  if (piano.chiuso) {
+    const descr = piano.descrizione_chiusura ? ` — ${escapeHtml(piano.descrizione_chiusura)}` : '';
+    el.innerHTML = `<div style="background:#FEF3C7;border:1px solid #FDE68A;border-radius:10px;padding:16px 20px;display:flex;align-items:center;gap:12px">
+      <span style="font-size:24px">🔒</span>
+      <div><div style="font-weight:700;font-size:14px;color:#92400E">Giornata di chiusura aziendale${descr}</div>
+      <div style="font-size:12px;color:#B45309;margin-top:2px">Nessun piano generato per questa data</div></div>
+    </div>`;
     return;
   }
 
@@ -3101,6 +3144,11 @@ function openModalNuovoOperatore() {
   document.getElementById('op-modal-btn').textContent = 'Crea';
   document.getElementById('op-pin-label').textContent = 'PIN (4 cifre) *';
   document.getElementById('op-pin-hint').style.display = 'none';
+  document.getElementById('op-escluso-pianificazione').checked = false;
+  const existingComp2 = document.getElementById('op-competenze-section');
+  if (existingComp2) existingComp2.remove();
+  const existingFerie2 = document.getElementById('op-ferie-section');
+  if (existingFerie2) existingFerie2.remove();
   document.getElementById('modal-operatore').classList.add('open');
 }
 
@@ -3116,6 +3164,7 @@ function openModalModificaOperatore(id) {
   document.getElementById('op-modal-btn').textContent = 'Salva';
   document.getElementById('op-pin-label').textContent = 'Nuovo PIN (4 cifre)';
   document.getElementById('op-pin-hint').style.display = '';
+  document.getElementById('op-escluso-pianificazione').checked = !!op.escluso_pianificazione;
 
   // Sezione competenze in sola lettura
   const fasiConOp = fasi.filter(f => (f.competenze || []).includes(id)).map(f => {
@@ -3142,6 +3191,43 @@ function openModalModificaOperatore(id) {
   compDiv.innerHTML = compHtml;
   document.querySelector('#modal-operatore .modal-body').appendChild(compDiv);
 
+  // Sezione Ferie e permessi
+  const existingFerie = document.getElementById('op-ferie-section');
+  if (existingFerie) existingFerie.remove();
+  const ferieDiv = document.createElement('div');
+  ferieDiv.id = 'op-ferie-section';
+  ferieDiv.innerHTML = `
+    <div style="margin-top:16px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Ferie e Permessi</div>
+      <div id="op-ferie-list" style="font-size:12px;color:var(--muted);font-style:italic">Caricamento...</div>
+      <div style="margin-top:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:8px">Aggiungi periodo</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="form-group" style="margin:0">
+            <label style="font-size:11px">Dal</label>
+            <input type="date" id="op-perm-dal" style="font-size:12px">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label style="font-size:11px">Al</label>
+            <input type="date" id="op-perm-al" style="font-size:12px">
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:80px 1fr;gap:8px;margin-bottom:8px">
+          <div class="form-group" style="margin:0">
+            <label style="font-size:11px">Ore/giorno</label>
+            <input type="number" id="op-perm-ore" min="0" max="24" step="0.5" value="0" style="font-size:12px">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label style="font-size:11px">Motivo (opzionale)</label>
+            <input type="text" id="op-perm-motivo" placeholder="es. Ferie estive" style="font-size:12px">
+          </div>
+        </div>
+        <button class="btn btn-secondary" style="font-size:12px;padding:5px 12px" onclick="aggiungiPermessoPeriodo('${id}')">+ Aggiungi</button>
+      </div>
+    </div>`;
+  document.querySelector('#modal-operatore .modal-body').appendChild(ferieDiv);
+  caricaFerieOperatore(id);
+
   document.getElementById('modal-operatore').classList.add('open');
 }
 
@@ -3157,7 +3243,8 @@ async function salvaOperatore() {
   if (editId) {
     // MODIFICA
     if (pin && !/^\d{4}$/.test(pin)) { toast('Il PIN deve essere 4 cifre numeriche', 'err'); return; }
-    const aggiornamento = { nome, cognome, ruolo };
+    const esclusoPianificazione = document.getElementById('op-escluso-pianificazione').checked;
+    const aggiornamento = { nome, cognome, ruolo, escluso_pianificazione: esclusoPianificazione };
     if (pin) {
       // Aggiorna PIN via RPC (il PIN è hashato nel DB)
       const { data: pinData } = await sb.rpc('aggiorna_pin_operatore', { p_operatore_id: editId, p_nuovo_pin: pin, p_responsabile_id: currentUserRow.id });
@@ -3194,6 +3281,108 @@ async function eliminaOperatore(id, nome) {
   toast('Profilo eliminato', 'ok');
   await loadOperatori();
   renderOperatori();
+}
+
+// ═══════════════════════════════════════════════
+// FERIE E PERMESSI OPERATORE
+// ═══════════════════════════════════════════════
+
+async function caricaFerieOperatore(operatoreId) {
+  const oggi = new Date().toISOString().slice(0, 10);
+  const { data } = await sb.from('disponibilita_giornaliera')
+    .select('id, data, ore, motivo')
+    .eq('operatore_id', operatoreId)
+    .gte('data', oggi)
+    .order('data');
+
+  const el = document.getElementById('op-ferie-list');
+  if (!el) return;
+
+  const op = operatoriCache.find(o => o.id === operatoreId);
+  const oreDefault = op?.ore_default ?? 8;
+
+  const eccezioni = (data || []).filter(r => Number(r.ore) !== oreDefault);
+  if (!eccezioni.length) {
+    el.innerHTML = '<span style="font-size:12px;color:var(--muted);font-style:italic">Nessuna eccezione futura configurata</span>';
+    return;
+  }
+
+  // Raggruppa in intervalli consecutivi con stessi ore+motivo
+  const gruppi = [];
+  let cur = null;
+  for (const r of eccezioni) {
+    if (cur && r.ore === cur.ore && r.motivo === cur.motivo) {
+      const prev = new Date(cur.fine);
+      const curr = new Date(r.data);
+      const diff = (curr - prev) / 86400000;
+      if (diff === 1) { cur.fine = r.data; cur.ids.push(r.id); continue; }
+    }
+    cur = { inizio: r.data, fine: r.data, ore: r.ore, motivo: r.motivo, ids: [r.id] };
+    gruppi.push(cur);
+  }
+
+  el.innerHTML = gruppi.map(g => {
+    const label = Number(g.ore) === 0 ? 'Assente'
+      : Number(g.ore) < oreDefault ? `${g.ore}h (½)`
+      : `${g.ore}h`;
+    const range = g.inizio === g.fine ? formatDate(g.inizio) : `${formatDate(g.inizio)} – ${formatDate(g.fine)}`;
+    const motivoStr = g.motivo ? ` · ${escapeHtml(g.motivo)}` : '';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px">
+      <span style="flex:1">${range}${motivoStr}</span>
+      <span style="color:var(--muted)">${label}</span>
+      <button style="background:none;border:none;cursor:pointer;color:var(--alert);font-size:13px;padding:0 2px" onclick="rimuoviPermessoPeriodo('${operatoreId}', '${g.inizio}', '${g.fine}', ${g.ore})" title="Rimuovi">✕</button>
+    </div>`;
+  }).join('');
+}
+
+async function aggiungiPermessoPeriodo(operatoreId) {
+  const dal = document.getElementById('op-perm-dal').value;
+  const al = document.getElementById('op-perm-al').value;
+  const ore = parseFloat(document.getElementById('op-perm-ore').value);
+  const motivo = document.getElementById('op-perm-motivo').value.trim() || null;
+
+  if (!dal || !al) { toast('Seleziona date inizio e fine', 'err'); return; }
+  if (isNaN(ore) || ore < 0 || ore > 24) { toast('Ore non valide (0–24)', 'err'); return; }
+
+  const { data, error } = await sb.rpc('imposta_permesso_periodo', {
+    p_operatore_id:    operatoreId,
+    p_data_inizio:     dal,
+    p_data_fine:       al,
+    p_ore:             ore,
+    p_motivo:          motivo,
+    p_responsabile_id: currentUserRow.id,
+  });
+
+  if (error || !data?.ok) {
+    const msg = data?.errore === 'periodo_troppo_lungo'
+      ? `Periodo troppo lungo (max 90 giorni, richiesti ${data.richiesti})`
+      : data?.errore || error?.message || 'Errore';
+    toast(msg, 'err'); return;
+  }
+
+  toast(`${data.giorni_aggiornati} giorn${data.giorni_aggiornati === 1 ? 'o' : 'i'} aggiornati`, 'ok');
+  document.getElementById('op-perm-dal').value = '';
+  document.getElementById('op-perm-al').value = '';
+  document.getElementById('op-perm-motivo').value = '';
+  caricaFerieOperatore(operatoreId);
+  caricaDisponibilitaPanel();
+}
+
+async function rimuoviPermessoPeriodo(operatoreId, dal, al, ore) {
+  const op = operatoriCache.find(o => o.id === operatoreId);
+  const oreDefault = op?.ore_default ?? 8;
+  const { data, error } = await sb.rpc('imposta_permesso_periodo', {
+    p_operatore_id:    operatoreId,
+    p_data_inizio:     dal,
+    p_data_fine:       al,
+    p_ore:             oreDefault,
+    p_motivo:          null,
+    p_responsabile_id: currentUserRow.id,
+  });
+  if (error || !data?.ok) { toast(data?.errore || error?.message || 'Errore', 'err'); return; }
+  toast('Periodo rimosso', 'ok');
+  caricaFerieOperatore(operatoreId);
+  caricaDisponibilitaPanel();
 }
 
 // ═══════════════════════════════════════════════
@@ -3310,6 +3499,7 @@ function renderOrarioConfig() {
   document.getElementById('or-ore-straordinario').value = orarioConfig.ore_straordinario || 2;
   document.getElementById('or-straordinario-ore-row').style.display = orarioConfig.straordinario_attivo ? '' : 'none';
   aggiornaRiepilogoOrario();
+  loadChiusureAziendali();
 }
 
 function toggleOrarioPausa(cb) {
@@ -3367,6 +3557,64 @@ async function salvaOrario() {
   if (error) { toast('Errore salvataggio: ' + error.message, 'err'); return; }
   orarioConfig = { ...orarioConfig, ...payload };
   toast('Orario salvato', 'ok');
+}
+
+async function loadChiusureAziendali() {
+  const oggi = new Date().toISOString().slice(0, 10);
+  const { data } = await sb.from('chiusure_aziendali')
+    .select('id, data_inizio, data_fine, descrizione')
+    .gte('data_fine', oggi)
+    .order('data_inizio');
+
+  const el = document.getElementById('or-chiusure-list');
+  if (!el) return;
+
+  const chiusure = data || [];
+  if (!chiusure.length) {
+    el.innerHTML = '<span style="font-size:12px;color:var(--muted);font-style:italic">Nessuna chiusura programmata</span>';
+    return;
+  }
+
+  el.innerHTML = chiusure.map(c => {
+    const range = c.data_inizio === c.data_fine ? formatDate(c.data_inizio) : `${formatDate(c.data_inizio)} – ${formatDate(c.data_fine)}`;
+    const desc = c.descrizione ? ` · ${escapeHtml(c.descrizione)}` : '';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;margin-bottom:6px;font-size:12px">
+      <span style="flex:1;font-weight:600">${range}</span><span style="color:var(--muted)">${desc}</span>
+      <button style="background:none;border:none;cursor:pointer;color:var(--alert);font-size:13px;padding:0 4px" onclick="eliminaChiusura('${c.id}')" title="Elimina">✕</button>
+    </div>`;
+  }).join('');
+}
+
+async function aggiungiChiusura() {
+  const dal = document.getElementById('or-chiusura-dal').value;
+  const al = document.getElementById('or-chiusura-al').value || dal;
+  const desc = document.getElementById('or-chiusura-desc').value.trim() || null;
+
+  if (!dal) { toast('Seleziona la data di inizio', 'err'); return; }
+
+  const { data, error } = await sb.rpc('imposta_chiusura_aziendale', {
+    p_data_inizio:     dal,
+    p_data_fine:       al,
+    p_descrizione:     desc,
+    p_responsabile_id: currentUserRow.id,
+  });
+
+  if (error || !data?.ok) { toast(data?.errore || error?.message || 'Errore', 'err'); return; }
+  toast('Chiusura aggiunta', 'ok');
+  document.getElementById('or-chiusura-dal').value = '';
+  document.getElementById('or-chiusura-al').value = '';
+  document.getElementById('or-chiusura-desc').value = '';
+  loadChiusureAziendali();
+}
+
+async function eliminaChiusura(id) {
+  const { data, error } = await sb.rpc('elimina_chiusura_aziendale', {
+    p_chiusura_id:     id,
+    p_responsabile_id: currentUserRow.id,
+  });
+  if (error || !data?.ok) { toast(data?.errore || error?.message || 'Errore', 'err'); return; }
+  toast('Chiusura eliminata', 'ok');
+  loadChiusureAziendali();
 }
 
 // ═══════════════════════════════════════════════
