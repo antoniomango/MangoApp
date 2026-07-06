@@ -1546,17 +1546,19 @@ async function caricaNomiFasiExtraStoria() {
 }
 
 async function loadFasi() {
-  const [{ data: fasiData }, { data: tipiCriteri }, { data: materCriteri }, { data: strutCriteri }] = await Promise.all([
+  const [{ data: fasiData }, { data: tipiCriteri }, { data: materCriteri }, { data: strutCriteri }, { data: competenzeData }] = await Promise.all([
     sb.from('fasi').select('*, tipo_gestione').order('posizione').order('id'),
     sb.from('fase_tipi_prodotto').select('fase_id, tipo_prodotto_id'),
     sb.from('fase_materiali').select('fase_id, materiale_valore'),
     sb.from('fase_strutture').select('fase_id, struttura_valore'),
+    sb.from('competenze_operatore_fase').select('fase_id, operatore_id, priorita').order('priorita'),
   ]);
   fasi = (fasiData || []).map(f => ({
     ...f,
     criteri_tipi:      (tipiCriteri  || []).filter(r => r.fase_id === f.id).map(r => r.tipo_prodotto_id),
     criteri_materiali: (materCriteri || []).filter(r => r.fase_id === f.id).map(r => r.materiale_valore),
     criteri_strutture: (strutCriteri || []).filter(r => r.fase_id === f.id).map(r => r.struttura_valore),
+    competenze:        (competenzeData || []).filter(r => r.fase_id === f.id).sort((a,b) => a.priorita - b.priorita).map(r => r.operatore_id),
   }));
   renderFasiOpzionaliForm();
 }
@@ -1769,123 +1771,191 @@ function showSection(name) {
 // ═══════════════════════════════════════════════
 // PIANIFICAZIONE
 // ═══════════════════════════════════════════════
+// Stato locale per riassegnazioni manuali (non persistito) nella pianificazione
+const _pianoRiassegnazioni = {};
+
 async function renderPianificazione() {
   const el = document.getElementById('piano-content');
-  el.innerHTML = '<div class="empty-state"><div class="icon">⏳</div><p>Calcolo stime...</p></div>';
+  el.innerHTML = '<div class="empty-state"><div class="icon">⏳</div><p>Calcolo piano giornaliero...</p></div>';
 
-  const attivi = ordiniCache.filter(o => o.stato === 'aperto');
-  if (!attivi.length) {
-    el.innerHTML = '<div class="empty-state"><div class="icon">📅</div><p>Nessun ordine attivo</p></div>';
+  const { data: piano, error } = await sb.rpc('piano_giornaliero_raggruppato', {
+    p_responsabile_id: currentUserRow.id,
+  });
+
+  if (error || !piano?.ok) {
+    el.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>Errore caricamento piano: ${escapeHtml(error?.message || piano?.errore || 'sconosciuto')}</p></div>`;
     return;
   }
 
-  // Carica tutte le fasi degli ordini attivi
-  const ids = attivi.map(o => o.id);
-  const { data: faseDati } = await sb.from('ordine_fasi')
-    .select('ordine_id, stato, fase_id')
-    .in('ordine_id', ids);
+  const clusters = piano.clusters || [];
+  const attese = piano.attese_esterne || [];
+  const conflitti = piano.conflitti || [];
+  const oreOp = piano.ore_per_operatore || {};
 
-  // Carica operatori assegnati alle fasi in corso
-  const { data: opAssegnati } = await sb.from('ordine_fasi')
-    .select('ordine_id, operatore_id, users(nome, cognome)')
-    .in('ordine_id', ids)
-    .eq('stato', 'in_corso')
-    .not('operatore_id', 'is', null);
+  if (!clusters.length && !attese.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">📅</div><p>Nessun ordine attivo da pianificare</p></div>';
+    return;
+  }
 
-  const opPerOrdine = {};
-  (opAssegnati || []).forEach(f => {
-    if (!opPerOrdine[f.ordine_id]) opPerOrdine[f.ordine_id] = new Set();
-    if (f.users) opPerOrdine[f.ordine_id].add(f.users.nome);
-  });
+  let html = '';
 
-  const minutiGiorno = (() => {
-    if (!orarioConfig) return 480;
-    const [hi, mi] = (orarioConfig.ora_inizio || '08:00').split(':').map(Number);
-    const [hf, mf] = (orarioConfig.ora_fine   || '17:00').split(':').map(Number);
-    return (hf * 60 + mf) - (hi * 60 + mi);
-  })();
+  // ── Banner conflitti bloccanti ──
+  if (conflitti.length) {
+    html += `<div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:12px 16px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;color:#B91C1C;margin-bottom:6px">⛔ ${conflitti.length} ordine${conflitti.length > 1 ? 'i' : ''} non assegnabile${conflitti.length > 1 ? 'i' : ''}</div>
+      ${conflitti.map(c => {
+        const opzioniOp = (fasi.find(f => f.id === c.fase_id)?.competenze || [])
+          .map(opId => operatoriCache.find(o => o.id === opId)).filter(Boolean);
+        const selectId = `riass-${c.ordine_id}`;
+        return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:4px 0;border-top:1px solid #FECACA;margin-top:4px">
+          <span style="font-family:'DM Mono',monospace;font-size:12px;font-weight:600">${escapeHtml(c.codice)}</span>
+          <span style="font-size:12px;color:var(--ink)">${escapeHtml(c.cliente)}</span>
+          <span style="font-size:11px;color:#B91C1C;flex:1">${escapeHtml(c.motivazione)}</span>
+          ${opzioniOp.length ? `
+            <select id="${selectId}" style="font-size:12px;padding:2px 6px;border:1px solid var(--border);border-radius:4px">
+              <option value="">— forza operatore —</option>
+              ${opzioniOp.map(o => `<option value="${o.id}">${escapeHtml(o.nome)} ${escapeHtml(o.cognome)}</option>`).join('')}
+            </select>
+            <button onclick="_forzaRiassegna('${c.ordine_id}','${c.fase_id}',document.getElementById('${selectId}').value)" style="border:1px solid #B91C1C;background:#B91C1C;color:#fff;border-radius:4px;padding:2px 10px;font-size:12px;cursor:pointer">Forza</button>
+          ` : ''}
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
 
-  // Costruisce fasiMap e usa buildEtaFromFasi — stesso algoritmo di loadAvanzamenti
-  const fasiMapPiano = {};
-  attivi.forEach(o => {
-    fasiMapPiano[o.id] = (faseDati || []).filter(f => f.ordine_id === o.id);
-  });
-  const etaPiano = buildEtaFromFasi(attivi, fasiMapPiano);
+  // ── Barre capacità operatori ──
+  const opIds = Object.keys(oreOp);
+  if (opIds.length) {
+    html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.04em">Carico operatori oggi</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">
+        ${opIds.map(opId => {
+          const info = oreOp[opId];
+          const op = operatoriCache.find(o => o.id === opId);
+          const nome = op ? `${op.nome} ${op.cognome}` : info.nome || opId;
+          const pct = Math.min(100, info.capacita_ore > 0 ? Math.round(info.assegnate_ore / info.capacita_ore * 100) : 0);
+          const barColor = pct >= 100 ? '#EF4444' : pct >= 80 ? '#F59E0B' : '#16A34A';
+          return `<div>
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+              <span>${escapeHtml(nome)}</span>
+              <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${info.assegnate_ore.toFixed(1)}/${info.capacita_ore.toFixed(1)}h</span>
+            </div>
+            <div style="background:var(--border);border-radius:4px;height:6px">
+              <div style="width:${pct}%;background:${barColor};border-radius:4px;height:100%;transition:width 0.3s"></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
 
-  const stime = attivi.map(o => {
-    const fasi = (faseDati || []).filter(f => f.ordine_id === o.id && f.stato !== 'non_applicabile');
-    const tot = fasi.length;
-    const done = fasi.filter(f => f.stato === 'completata').length;
-    const pct = tot > 0 ? Math.round(done / tot * 100) : 0;
-    const minEta = etaPiano[o.id] || 0;
-    let dataStimata = null;
-    let stimaStr = null;
-    if (minEta > 0) {
-      const giorni = Math.ceil(minEta / minutiGiorno);
-      dataStimata = addGiorniLavorativi(new Date(), giorni);
-      stimaStr = dataStimata.toISOString().split('T')[0];
-    }
-    const oggi = new Date().toISOString().split('T')[0];
-    const isInRitardo = !!(o.scadenza && oggi > o.scadenza);
-    const isRischio = !isInRitardo && !!(stimaStr && o.scadenza && stimaStr > o.scadenza);
-    const operatori = opPerOrdine[o.id] ? [...opPerOrdine[o.id]].join(', ') : '—';
-    return { o, pct, stimaStr, dataStimata, isInRitardo, isRischio, operatori };
-  });
+  // ── Nota da ieri ──
+  if (piano.nota_da_ieri) {
+    html += `<div style="font-size:11px;color:var(--muted);font-style:italic;margin-bottom:12px;padding:6px 10px;background:#FFFBEB;border-radius:4px;border:1px solid #FDE68A">⚠ ${escapeHtml(piano.nota_da_ieri)}</div>`;
+  }
 
-  // Ordina: ritardo → rischio → in tempo con scadenza → senza scadenza
-  stime.sort((a, b) => {
-    const score = x => x.isInRitardo ? 0 : x.isRischio ? 1 : x.o.scadenza ? 2 : 3;
-    const s = score(a) - score(b);
-    if (s !== 0) return s;
-    if (a.o.scadenza && b.o.scadenza) return a.o.scadenza.localeCompare(b.o.scadenza);
-    return 0;
-  });
+  // ── Cluster per fase ──
+  clusters.forEach(cluster => {
+    const opPropNome = (() => {
+      if (!cluster.ordini?.length) return null;
+      const op = cluster.ordini[0]?.operatore_proposto;
+      return op ? `${op.nome}` : null;
+    })();
 
-  const gruppi = [
-    { label: '🔴 In ritardo', color: '#EF4444', bg: '#FEF2F2', items: stime.filter(s => s.isInRitardo) },
-    { label: '🟡 A rischio', color: '#B45309', bg: '#FFFBEB', items: stime.filter(s => !s.isInRitardo && s.isRischio) },
-    { label: '🟢 In tempo', color: '#16A34A', bg: '', items: stime.filter(s => !s.isInRitardo && !s.isRischio && s.o.scadenza) },
-    { label: '⚪ Senza scadenza', color: 'var(--muted)', bg: '', items: stime.filter(s => !s.o.scadenza) },
-  ];
-
-  el.innerHTML = gruppi.filter(g => g.items.length).map(g => `
-    <div style="margin-bottom:24px">
-      <div style="font-size:13px;font-weight:700;color:${g.color};margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em">${g.label} (${g.items.length})</div>
+    html += `<div style="margin-bottom:20px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+      <div style="background:var(--phase-bg);padding:8px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;font-weight:700;color:var(--wood)">${escapeHtml(cluster.fase_nome)}</span>
+        <span style="font-size:11px;color:var(--muted)">(${cluster.ordini?.length || 0} ordini)</span>
+        ${opPropNome ? `<span style="font-size:11px;color:var(--muted);margin-left:auto">→ ${escapeHtml(opPropNome)}</span>` : ''}
+      </div>
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead>
           <tr style="background:var(--surface);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">
             <th style="padding:6px 10px;text-align:left;font-weight:600">Ordine</th>
             <th style="padding:6px 10px;text-align:left;font-weight:600">Cliente</th>
-            <th style="padding:6px 10px;text-align:center;font-weight:600">Avanz.</th>
             <th style="padding:6px 10px;text-align:center;font-weight:600">Scadenza</th>
-            <th style="padding:6px 10px;text-align:center;font-weight:600">Stimata</th>
-            <th style="padding:6px 10px;text-align:left;font-weight:600">Operatori</th>
+            <th style="padding:6px 10px;text-align:left;font-weight:600">Operatore</th>
+            <th style="padding:6px 10px;text-align:right;font-weight:600">Stima</th>
           </tr>
         </thead>
         <tbody>
-          ${g.items.map(({ o, pct, dataStimata, stimaStr, isInRitardo, isRischio, operatori }) => {
-            const stimaFmt = dataStimata ? dataStimata.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit' }) : '—';
-            const stimaColor = isInRitardo ? '#EF4444' : isRischio ? '#B45309' : stimaStr ? '#16A34A' : 'var(--muted)';
-            const scadColor = isInRitardo ? '#EF4444' : 'inherit';
-            return `<tr style="border-bottom:1px solid var(--border);background:${g.bg}" onclick="openDettaglioOrdine('${o.id}')" style="cursor:pointer">
-              <td style="padding:8px 10px;font-weight:600;font-family:'DM Mono',monospace">${escapeHtml(o.codice || '—')}</td>
-              <td style="padding:8px 10px">${escapeHtml(o.cliente)}</td>
-              <td style="padding:8px 10px;text-align:center">
-                <div style="display:flex;align-items:center;gap:6px;justify-content:center">
-                  <div style="width:60px;background:var(--border);border-radius:4px;height:5px">
-                    <div style="width:${pct}%;background:var(--ok);border-radius:4px;height:100%"></div>
-                  </div>
-                  <span style="color:var(--muted);font-size:11px">${pct}%</span>
-                </div>
+          ${(cluster.ordini || []).map(ord => {
+            const hasConflitto = !!ord.conflitto;
+            const bg = hasConflitto ? '#FEF2F2' : '';
+            const riassId = `riass-cl-${ord.ordine_id}`;
+            const opzioniCl = (fasi.find(f => f.id === cluster.fase_id)?.competenze || [])
+              .map(opId => operatoriCache.find(o => o.id === opId)).filter(Boolean);
+            const opNome = _pianoRiassegnazioni[ord.ordine_id]
+              ? (() => { const o = operatoriCache.find(op => op.id === _pianoRiassegnazioni[ord.ordine_id]); return o ? `${o.nome} ${o.cognome}` : '—'; })()
+              : ord.operatore_proposto ? `${ord.operatore_proposto.nome}` : '—';
+            return `<tr style="border-bottom:1px solid var(--border);background:${bg};cursor:pointer" onclick="openDettaglioOrdine('${ord.ordine_id}')">
+              <td style="padding:8px 10px;font-weight:600;font-family:'DM Mono',monospace">
+                ${escapeHtml(ord.codice || '—')}
+                ${ord.da_ieri ? `<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:1px 5px;border-radius:3px;margin-left:4px;vertical-align:middle">DA IERI</span>` : ''}
               </td>
-              <td style="padding:8px 10px;text-align:center;color:${scadColor};font-weight:${isInRitardo ? '700' : '400'}">${o.scadenza ? formatDate(o.scadenza) : '—'}</td>
-              <td style="padding:8px 10px;text-align:center;color:${stimaColor};font-weight:600">${stimaFmt}</td>
-              <td style="padding:8px 10px;color:var(--muted)">${escapeHtml(operatori)}</td>
+              <td style="padding:8px 10px">${escapeHtml(ord.cliente || '')}</td>
+              <td style="padding:8px 10px;text-align:center;color:${ord.scadenza && new Date().toISOString().split('T')[0] > ord.scadenza ? '#EF4444' : 'inherit'}">${ord.scadenza ? formatDate(ord.scadenza) : '—'}</td>
+              <td style="padding:8px 10px" onclick="event.stopPropagation()">
+                ${hasConflitto && opzioniCl.length
+                  ? `<div style="display:flex;gap:4px;align-items:center">
+                      <select id="${riassId}" style="font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:#FEF2F2">
+                        <option value="">— operatore —</option>
+                        ${opzioniCl.map(o => `<option value="${o.id}">${escapeHtml(o.nome)} ${escapeHtml(o.cognome)}</option>`).join('')}
+                      </select>
+                      <button onclick="_forzaRiassegna('${ord.ordine_id}','${cluster.fase_id}',document.getElementById('${riassId}').value)" style="border:1px solid #B91C1C;background:#B91C1C;color:#fff;border-radius:3px;padding:1px 7px;font-size:11px;cursor:pointer">Forza</button>
+                    </div>`
+                  : `<span style="color:${hasConflitto ? '#B91C1C' : 'var(--ink)'}">${escapeHtml(opNome)}</span>`
+                }
+                ${hasConflitto ? `<div style="font-size:10px;color:#B91C1C;margin-top:2px">${escapeHtml(ord.motivazione || '')}</div>` : ''}
+                ${!hasConflitto && ord.motivazione ? `<div style="font-size:10px;color:var(--muted);margin-top:1px">${escapeHtml(ord.motivazione)}</div>` : ''}
+              </td>
+              <td style="padding:8px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)">${ord.stima_min != null ? Math.round(ord.stima_min) + ' min' : '—'}</td>
             </tr>`;
           }).join('')}
         </tbody>
       </table>
-    </div>`).join('');
+    </div>`;
+  });
+
+  // ── Attese esterne ──
+  if (attese.length) {
+    html += `<div style="margin-bottom:20px;border:1px solid #FDE68A;border-radius:8px;overflow:hidden;opacity:0.85">
+      <div style="background:#FFFBEB;padding:8px 14px;border-bottom:1px solid #FDE68A">
+        <span style="font-size:13px;font-weight:700;color:#92400E">⏳ In attesa esterna (${attese.length})</span>
+        <span style="font-size:11px;color:var(--muted);margin-left:8px">escluse dal carico operatori</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:#FFFDE7;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">
+            <th style="padding:6px 10px;text-align:left;font-weight:600">Ordine</th>
+            <th style="padding:6px 10px;text-align:left;font-weight:600">Cliente</th>
+            <th style="padding:6px 10px;text-align:left;font-weight:600">Fase</th>
+            <th style="padding:6px 10px;text-align:center;font-weight:600">Scadenza</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${attese.map(a => `<tr style="border-bottom:1px solid #FDE68A;cursor:pointer" onclick="openDettaglioOrdine('${a.ordine_id}')">
+            <td style="padding:8px 10px;font-weight:600;font-family:'DM Mono',monospace">
+              ${escapeHtml(a.codice || '—')}
+              ${a.da_ieri ? `<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:1px 5px;border-radius:3px;margin-left:4px;vertical-align:middle">DA IERI</span>` : ''}
+            </td>
+            <td style="padding:8px 10px">${escapeHtml(a.cliente || '')}</td>
+            <td style="padding:8px 10px;color:var(--muted)">${escapeHtml(a.fase_nome || '')}</td>
+            <td style="padding:8px 10px;text-align:center">${a.scadenza ? formatDate(a.scadenza) : '—'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+function _forzaRiassegna(ordineId, faseId, opId) {
+  if (!opId) { toast('Seleziona un operatore', 'err'); return; }
+  _pianoRiassegnazioni[ordineId] = opId;
+  toast('Riassegnazione locale applicata (non salvata su DB)', 'ok');
+  renderPianificazione();
 }
 
 // ═══════════════════════════════════════════════
@@ -2895,6 +2965,32 @@ function openModalModificaOperatore(id) {
   document.getElementById('op-modal-btn').textContent = 'Salva';
   document.getElementById('op-pin-label').textContent = 'Nuovo PIN (4 cifre)';
   document.getElementById('op-pin-hint').style.display = '';
+
+  // Sezione competenze in sola lettura
+  const fasiConOp = fasi.filter(f => (f.competenze || []).includes(id)).map(f => {
+    const priorita = (f.competenze || []).indexOf(id) + 1;
+    const etichetta = priorita === 1 ? '1ª scelta' : priorita === 2 ? '2ª scelta' : priorita === 3 ? '3ª scelta' : `${priorita}ª scelta`;
+    return { nome: f.nome, etichetta };
+  });
+  let compHtml = '';
+  if (fasiConOp.length) {
+    compHtml = `<div style="margin-top:12px;padding:8px 10px;background:#F0F9FF;border:1px solid #BAE6FD;border-radius:6px">
+      <div style="font-size:11px;font-weight:600;color:#0369A1;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em">Competenze assegnate</div>
+      ${fasiConOp.map(c => `<div style="font-size:12px;display:flex;gap:8px;padding:2px 0">
+        <span style="flex:1">${escapeHtml(c.nome)}</span>
+        <span style="color:var(--muted);font-size:11px">${escapeHtml(c.etichetta)}</span>
+      </div>`).join('')}
+    </div>`;
+  } else {
+    compHtml = `<div style="margin-top:12px;padding:8px 10px;background:#F9FAFB;border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--muted);font-style:italic">Nessuna competenza assegnata — verrà proposto per qualsiasi fase</div>`;
+  }
+  const existingComp = document.getElementById('op-competenze-section');
+  if (existingComp) existingComp.remove();
+  const compDiv = document.createElement('div');
+  compDiv.id = 'op-competenze-section';
+  compDiv.innerHTML = compHtml;
+  document.querySelector('#modal-operatore .modal-body').appendChild(compDiv);
+
   document.getElementById('modal-operatore').classList.add('open');
 }
 
@@ -3700,6 +3796,36 @@ function renderFasiConfig() {
           </div>
         </div>
       </div>
+        <!-- OPERATORI COMPETENTI -->
+        <div style="margin-top:10px;padding:8px 10px;background:#F0F9FF;border:1px solid #BAE6FD;border-radius:6px">
+          <div style="font-size:11px;font-weight:600;color:#0369A1;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em">Operatori competenti <em style="font-weight:400;text-transform:none;letter-spacing:0">(ordine = priorità assegnazione)</em></div>
+          <div id="comp-list-${f.id}" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px">
+            ${(f.competenze || []).length === 0
+              ? `<span style="font-size:12px;color:var(--muted);font-style:italic">Nessuno — tutti gli operatori verranno proposti in ordine arbitrario</span>`
+              : (f.competenze || []).map((opId, idx) => {
+                  const op = operatoriCache.find(o => o.id === opId);
+                  if (!op) return '';
+                  const nComp = (f.competenze || []).length;
+                  return `<div style="display:flex;align-items:center;gap:6px;font-size:12px">
+                    <span style="min-width:18px;text-align:center;font-family:'DM Mono',monospace;color:var(--muted);font-size:11px">${idx + 1}.</span>
+                    <span style="flex:1">${escapeHtml(op.nome)} ${escapeHtml(op.cognome)}</span>
+                    <button onclick="spostaCompetenza(${f.id},'${opId}',-1)" style="border:none;background:none;cursor:pointer;padding:0 3px;font-size:11px;color:var(--muted)" ${idx === 0 ? 'disabled style="opacity:0.3;cursor:default"' : ''}>▲</button>
+                    <button onclick="spostaCompetenza(${f.id},'${opId}',1)" style="border:none;background:none;cursor:pointer;padding:0 3px;font-size:11px;color:var(--muted)" ${idx === nComp - 1 ? 'disabled style="opacity:0.3;cursor:default"' : ''}>▼</button>
+                    <button onclick="rimuoviCompetenza(${f.id},'${opId}')" style="border:none;background:none;cursor:pointer;padding:0 3px;font-size:12px;color:var(--alert)" title="Rimuovi">✕</button>
+                  </div>`;
+                }).join('')
+            }
+          </div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <select id="comp-add-sel-${f.id}" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);flex:1">
+              <option value="">— aggiungi operatore —</option>
+              ${operatoriCache.filter(op => op.attivo && !(f.competenze || []).includes(op.id)).map(op =>
+                `<option value="${op.id}">${escapeHtml(op.nome)} ${escapeHtml(op.cognome)}</option>`).join('')}
+            </select>
+            <button onclick="aggiungiCompetenza(${f.id})" style="border:1px solid #0369A1;background:#0369A1;color:#fff;border-radius:4px;padding:3px 10px;font-size:12px;cursor:pointer">+</button>
+          </div>
+        </div>
+      </div>
       <button class="fase-del-btn" title="Elimina fase" onclick="eliminaFase(${f.id})">✕</button>
     </div>`;
   }).join('');
@@ -3721,6 +3847,51 @@ async function spostaFase(id, dir) {
   await loadFasi();
   renderFasiConfig();
 }
+
+// ─── competenze operatore per fase ───────────────────────────────────────────
+async function aggiornCompetenzeFase(faseId, newOrder) {
+  const { data, error } = await sb.rpc('imposta_competenze_fase', {
+    p_fase_id: faseId,
+    p_operatori_ordinati: newOrder,
+    p_responsabile_id: currentUserRow.id,
+  });
+  if (error || !data?.ok) { toast(data?.errore || error?.message || 'Errore salvataggio competenze', 'err'); return false; }
+  const f = fasi.find(x => x.id === faseId);
+  if (f) f.competenze = newOrder;
+  return true;
+}
+
+async function spostaCompetenza(faseId, opId, dir) {
+  const f = fasi.find(x => x.id === faseId);
+  if (!f) return;
+  const arr = [...(f.competenze || [])];
+  const idx = arr.indexOf(opId);
+  const swapIdx = idx + dir;
+  if (idx < 0 || swapIdx < 0 || swapIdx >= arr.length) return;
+  [arr[idx], arr[swapIdx]] = [arr[swapIdx], arr[idx]];
+  const ok = await aggiornCompetenzeFase(faseId, arr);
+  if (ok) renderFasiConfig();
+}
+
+async function aggiungiCompetenza(faseId) {
+  const sel = document.getElementById(`comp-add-sel-${faseId}`);
+  const opId = sel?.value;
+  if (!opId) return;
+  const f = fasi.find(x => x.id === faseId);
+  if (!f) return;
+  const arr = [...(f.competenze || []), opId];
+  const ok = await aggiornCompetenzeFase(faseId, arr);
+  if (ok) renderFasiConfig();
+}
+
+async function rimuoviCompetenza(faseId, opId) {
+  const f = fasi.find(x => x.id === faseId);
+  if (!f) return;
+  const arr = (f.competenze || []).filter(id => id !== opId);
+  const ok = await aggiornCompetenzeFase(faseId, arr);
+  if (ok) renderFasiConfig();
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 function aggiungiNuovaFase() {
   // Popola select posizione
@@ -4724,11 +4895,12 @@ async function loadKpi() {
     let lastFase = null;
     opData.forEach(r => {
       const isNewFase = r.fase_nome !== lastFase;
-      const scarso = r.campioni < 3;
+      const scarso = r.campioni < 5 || r.mediana_min == null;
+      const medianaStr = r.mediana_min != null ? `${r.mediana_min} min` : 'dati insuff.';
       html += `<tr>
         <td style="color:${isNewFase ? 'var(--ink)' : 'transparent'};font-weight:${isNewFase ? '600' : '400'}">${isNewFase ? escapeHtml(r.fase_nome) : '↳'}</td>
         <td>${escapeHtml(r.operatore_nome)}</td>
-        <td style="font-family:'DM Mono',monospace">${r.mediana_min} min${scarso ? ' <span title="Dati scarsi — meno di 3 campioni" style="color:var(--warn)">⚠</span>' : ''}</td>
+        <td style="font-family:'DM Mono',monospace;color:${r.mediana_min == null ? 'var(--muted)' : 'inherit'};font-style:${r.mediana_min == null ? 'italic' : 'normal'}">${medianaStr}${scarso && r.mediana_min != null ? ' <span title="Dati scarsi — meno di 5 campioni" style="color:var(--warn)">⚠</span>' : ''}</td>
         <td style="color:var(--muted);font-size:11px">${r.campioni}</td>
       </tr>`;
       lastFase = r.fase_nome;
