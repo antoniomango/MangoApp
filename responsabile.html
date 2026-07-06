@@ -1830,43 +1830,60 @@ async function caricaDisponibilitaPanel() {
   if (panel) {
     panel.innerHTML = operatori.map(op => {
       const oreDefault = op.ore_default ?? 8.0;
-      const oreAtt = oreOggi[op.id] !== undefined ? oreOggi[op.id] : oreDefault;
-      const isEccezione = oreOggi[op.id] !== undefined;
-      const stato = oreAtt === 0 ? 'Assente' : oreAtt < oreDefault ? 'Parziale' : 'Piena';
-      const statoColor = oreAtt === 0 ? '#B91C1C' : oreAtt < oreDefault ? '#92400E' : '#166534';
-      return `<div style="border:1px solid ${isEccezione ? '#BAE6FD' : 'var(--border)'};border-radius:8px;padding:8px 10px;background:${isEccezione ? '#F0F9FF' : 'var(--bg)'}">
-        <div style="font-size:12px;font-weight:600;margin-bottom:4px">${escapeHtml(op.nome)} ${escapeHtml(op.cognome)}</div>
-        <div style="font-size:11px;color:${statoColor};margin-bottom:6px;font-weight:600">${stato} — ${oreAtt}h</div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap">
-          <button onclick="impostaDisponibilita('${op.id}',${oreDefault})" style="font-size:11px;border:1px solid var(--border);border-radius:4px;padding:2px 7px;background:var(--surface);cursor:pointer" title="Giornata piena (${oreDefault}h)">Piena</button>
+      const oreRiga = oreOggi[op.id];
+      // Tratta come "nessuna eccezione" sia l'assenza di riga che una riga con ore = default
+      const isEccezione = oreRiga !== undefined && Number(oreRiga) !== oreDefault;
+      const oreEff = isEccezione ? Number(oreRiga) : oreDefault;
+      const statoLabel = isEccezione
+        ? (oreEff === 0 ? 'Assente (0h)' : `${oreEff}h — eccezione`)
+        : `Giornata piena (${oreDefault}h)`;
+      const statoColor = isEccezione
+        ? (oreEff === 0 ? '#B91C1C' : '#92400E')
+        : '#166534';
+      const borderColor = isEccezione ? '#BAE6FD' : 'var(--border)';
+      const bgColor = isEccezione ? '#F0F9FF' : 'var(--bg)';
+      return `<div style="border:1px solid ${borderColor};border-radius:8px;padding:8px 10px;background:${bgColor}">
+        <div style="font-size:12px;font-weight:600;margin-bottom:3px">${escapeHtml(op.nome)} ${escapeHtml(op.cognome)}</div>
+        <div style="font-size:11px;color:${statoColor};font-weight:600;margin-bottom:6px">${statoLabel}</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+          ${isEccezione
+            ? `<button onclick="impostaDisponibilita('${op.id}',${oreDefault})" style="font-size:11px;border:1px solid #0369A1;border-radius:4px;padding:2px 8px;background:#F0F9FF;color:#0369A1;cursor:pointer;font-weight:600">↩ Giornata piena</button>`
+            : ''
+          }
           <button onclick="impostaDisponibilita('${op.id}',4)" style="font-size:11px;border:1px solid var(--border);border-radius:4px;padding:2px 7px;background:var(--surface);cursor:pointer">½ giornata</button>
           <button onclick="impostaDisponibilita('${op.id}',0)" style="font-size:11px;border:1px solid #FECACA;border-radius:4px;padding:2px 7px;background:#FEF2F2;color:#B91C1C;cursor:pointer">Assente</button>
-          <input type="number" id="ore-custom-${op.id}" min="0" max="24" step="0.5" placeholder="h"
-            style="width:44px;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;text-align:center"
+          <input type="number" id="ore-custom-${op.id}" min="0" max="24" step="0.5" placeholder="ore…"
+            style="width:52px;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;text-align:center"
             onkeydown="if(event.key==='Enter')impostaDisponibilitaCustom('${op.id}')">
         </div>
       </div>`;
     }).join('');
   }
 
-  // Lista eccezioni prossimi 14 giorni
+  // Lista eccezioni prossimi 14 giorni — esclude righe con ore = ore_default (non sono eccezioni reali)
   const oggiStr = new Date().toISOString().split('T')[0];
   const eccezioniList = document.getElementById('piano-eccezioni-list');
   if (eccezioniList) {
-    const future = (eccezioni || []).filter(e => e.data >= oggiStr);
+    const future = (eccezioni || []).filter(e => {
+      if (e.data < oggiStr) return false;
+      const op = operatoriCache.find(o => o.id === e.operatore_id);
+      if (!op) return false;
+      return Number(e.ore) !== (op.ore_default ?? 8.0);
+    });
     if (future.length) {
       eccezioniList.innerHTML = `<div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em">Eccezioni programmati — prossimi 14 giorni</div>
         <div style="display:flex;flex-direction:column;gap:3px">
           ${future.map(e => {
             const op = operatoriCache.find(o => o.id === e.operatore_id);
-            if (!op) return '';
             const oreDefault = op.ore_default ?? 8.0;
-            const label = e.ore === 0 ? 'Assente' : e.ore < oreDefault ? `${e.ore}h (mezza giornata)` : `${e.ore}h (giornata piena)`;
+            const ore = Number(e.ore);
+            const label = ore === 0 ? 'Assente' : `${ore}h`;
+            const color = ore === 0 ? '#B91C1C' : '#92400E';
             return `<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0;border-top:1px solid var(--border)">
               <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);min-width:75px">${formatDate(e.data)}</span>
               <span style="flex:1">${escapeHtml(op.nome)} ${escapeHtml(op.cognome)}</span>
-              <span style="color:${e.ore===0?'#B91C1C':e.ore<oreDefault?'#92400E':'#166534'};font-size:11px">${label}</span>
-              <button onclick="impostaDisponibilita('${e.operatore_id}',${oreDefault},'${e.data}')" title="Rimuovi eccezione" style="border:none;background:none;cursor:pointer;color:var(--alert);font-size:12px;padding:0 2px">✕</button>
+              <span style="color:${color};font-size:11px;font-weight:600">${label}</span>
+              <button onclick="impostaDisponibilita('${e.operatore_id}',${oreDefault},'${e.data}')" title="Rimuovi eccezione — ripristina giornata piena" style="border:none;background:none;cursor:pointer;color:var(--alert);font-size:12px;padding:0 2px">✕</button>
             </div>`;
           }).join('')}
         </div>`;
