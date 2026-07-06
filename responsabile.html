@@ -552,6 +552,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           <div><h1>Operatori</h1></div>
           <button class="btn btn-primary" onclick="openModalNuovoOperatore()">+ Nuovo Operatore</button>
         </div>
+        <div id="ops-ferie-panel" style="margin-bottom:18px"></div>
         <div class="ops-grid" id="ops-grid">
           <div style="color:var(--muted);padding:20px">Caricamento…</div>
         </div>
@@ -1800,7 +1801,7 @@ function showSection(name) {
   if (name === 'dashboard') renderDashboard();
   else if (name === 'ordini') renderOrdiniTable();
   else if (name === 'nc') renderNcTable();
-  else if (name === 'operatori') renderOperatori();
+  else if (name === 'operatori') { renderOperatori(); loadRiepilogoPermessi(); }
   else if (name === 'archivio') renderArchivioTable();
   else if (name === 'notifiche') renderNotifiche();
   else if (name === 'fasi-config') renderFasiConfig();
@@ -1885,8 +1886,10 @@ async function caricaDisponibilitaPanel() {
           }
           <button onclick="impostaDisponibilita('${op.id}',4)" style="font-size:11px;border:1px solid var(--border);border-radius:4px;padding:2px 7px;background:var(--surface);cursor:pointer">½ giornata</button>
           <button onclick="impostaDisponibilita('${op.id}',0)" style="font-size:11px;border:1px solid #FECACA;border-radius:4px;padding:2px 7px;background:#FEF2F2;color:#B91C1C;cursor:pointer">Assente</button>
-          <input type="number" id="ore-custom-${op.id}" min="0" max="24" step="0.5" placeholder="ore…"
-            style="width:52px;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;text-align:center"
+          <span style="font-size:10px;color:var(--muted)">ore disp.:</span>
+          <input type="number" id="ore-custom-${op.id}" min="0" max="24" step="0.5" placeholder="0–24"
+            title="Ore disponibili quel giorno (0 = assente tutto il giorno)"
+            style="width:46px;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;text-align:center"
             onkeydown="if(event.key==='Enter')impostaDisponibilitaCustom('${op.id}')">
         </div>
       </div>`;
@@ -3212,17 +3215,21 @@ function openModalModificaOperatore(id) {
             <input type="date" id="op-perm-al" style="font-size:12px">
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:80px 1fr;gap:8px;margin-bottom:8px">
-          <div class="form-group" style="margin:0">
-            <label style="font-size:11px">Ore/giorno</label>
-            <input type="number" id="op-perm-ore" min="0" max="24" step="0.5" value="0" style="font-size:12px">
-          </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px">
           <div class="form-group" style="margin:0">
             <label style="font-size:11px">Motivo (opzionale)</label>
-            <input type="text" id="op-perm-motivo" placeholder="es. Ferie estive" style="font-size:12px">
+            <input type="text" id="op-perm-motivo" placeholder="es. Ferie estive" style="font-size:12px" oninput="aggiornaCampoOreDaMotivo()">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label style="font-size:11px">Ore disponibili quel giorno</label>
+            <input type="number" id="op-perm-ore" min="0" max="24" step="0.5" value="0" style="font-size:12px">
           </div>
         </div>
-        <button class="btn btn-secondary" style="font-size:12px;padding:5px 12px" onclick="aggiungiPermessoPeriodo('${id}')">+ Aggiungi</button>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">0 = assente tutto il giorno — il campo si aggiorna automaticamente in base al motivo</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button id="op-perm-btn-salva" class="btn btn-secondary" style="font-size:12px;padding:5px 12px" onclick="aggiungiPermessoPeriodo('${id}')">+ Aggiungi</button>
+          <button id="op-perm-btn-annulla" class="btn btn-secondary" style="font-size:12px;padding:5px 12px;display:none" onclick="annullaModificaPermesso()">Annulla</button>
+        </div>
       </div>
     </div>`;
   document.querySelector('#modal-operatore .modal-body').appendChild(ferieDiv);
@@ -3287,6 +3294,64 @@ async function eliminaOperatore(id, nome) {
 // FERIE E PERMESSI OPERATORE
 // ═══════════════════════════════════════════════
 
+// Stato edit mode: { operatoreId, dalOriginale, alOriginale }
+let _editPermesso = null;
+
+function raggruppaInIntervalli(eccezioni) {
+  const gruppi = [];
+  let cur = null;
+  for (const r of eccezioni) {
+    if (cur && String(r.ore) === String(cur.ore) && r.motivo === cur.motivo) {
+      const diff = (new Date(r.data) - new Date(cur.fine)) / 86400000;
+      if (diff === 1) { cur.fine = r.data; cur.ids.push(r.id); continue; }
+    }
+    cur = { inizio: r.data, fine: r.data, ore: r.ore, motivo: r.motivo, ids: [r.id] };
+    gruppi.push(cur);
+  }
+  return gruppi;
+}
+
+function oreLabel(ore, oreDefault) {
+  const n = Number(ore);
+  return n === 0 ? 'Assente' : n < oreDefault ? `${n}h (½ giornata)` : `${n}h`;
+}
+
+function aggiornaCampoOreDaMotivo() {
+  const motivo = (document.getElementById('op-perm-motivo')?.value || '').toLowerCase();
+  const oreField = document.getElementById('op-perm-ore');
+  if (!oreField) return;
+  if (/ferie|malattia|permesso|assente|assenza/.test(motivo)) {
+    oreField.value = 0;
+  } else if (/mezza|mez\.|half|½/.test(motivo)) {
+    oreField.value = 4;
+  }
+}
+
+function annullaModificaPermesso() {
+  _editPermesso = null;
+  document.getElementById('op-perm-dal').value = '';
+  document.getElementById('op-perm-al').value = '';
+  document.getElementById('op-perm-ore').value = 0;
+  document.getElementById('op-perm-motivo').value = '';
+  const btnSalva = document.getElementById('op-perm-btn-salva');
+  const btnAnnulla = document.getElementById('op-perm-btn-annulla');
+  if (btnSalva) { btnSalva.textContent = '+ Aggiungi'; }
+  if (btnAnnulla) btnAnnulla.style.display = 'none';
+}
+
+function avviaModificaPermesso(operatoreId, inizio, fine, ore, motivo) {
+  _editPermesso = { operatoreId, dalOriginale: inizio, alOriginale: fine };
+  document.getElementById('op-perm-dal').value = inizio;
+  document.getElementById('op-perm-al').value = fine;
+  document.getElementById('op-perm-ore').value = ore;
+  document.getElementById('op-perm-motivo').value = motivo || '';
+  const btnSalva = document.getElementById('op-perm-btn-salva');
+  const btnAnnulla = document.getElementById('op-perm-btn-annulla');
+  if (btnSalva) btnSalva.textContent = '✓ Salva modifica';
+  if (btnAnnulla) btnAnnulla.style.display = '';
+  document.getElementById('op-perm-dal').focus();
+}
+
 async function caricaFerieOperatore(operatoreId) {
   const oggi = new Date().toISOString().slice(0, 10);
   const { data } = await sb.from('disponibilita_giornaliera')
@@ -3300,49 +3365,55 @@ async function caricaFerieOperatore(operatoreId) {
 
   const op = operatoriCache.find(o => o.id === operatoreId);
   const oreDefault = op?.ore_default ?? 8;
-
   const eccezioni = (data || []).filter(r => Number(r.ore) !== oreDefault);
+
   if (!eccezioni.length) {
     el.innerHTML = '<span style="font-size:12px;color:var(--muted);font-style:italic">Nessuna eccezione futura configurata</span>';
     return;
   }
 
-  // Raggruppa in intervalli consecutivi con stessi ore+motivo
-  const gruppi = [];
-  let cur = null;
-  for (const r of eccezioni) {
-    if (cur && r.ore === cur.ore && r.motivo === cur.motivo) {
-      const prev = new Date(cur.fine);
-      const curr = new Date(r.data);
-      const diff = (curr - prev) / 86400000;
-      if (diff === 1) { cur.fine = r.data; cur.ids.push(r.id); continue; }
-    }
-    cur = { inizio: r.data, fine: r.data, ore: r.ore, motivo: r.motivo, ids: [r.id] };
-    gruppi.push(cur);
-  }
-
+  const gruppi = raggruppaInIntervalli(eccezioni);
   el.innerHTML = gruppi.map(g => {
-    const label = Number(g.ore) === 0 ? 'Assente'
-      : Number(g.ore) < oreDefault ? `${g.ore}h (½)`
-      : `${g.ore}h`;
+    const label = oreLabel(g.ore, oreDefault);
     const range = g.inizio === g.fine ? formatDate(g.inizio) : `${formatDate(g.inizio)} – ${formatDate(g.fine)}`;
     const motivoStr = g.motivo ? ` · ${escapeHtml(g.motivo)}` : '';
-    return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);font-size:12px">
+    return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
       <span style="flex:1">${range}${motivoStr}</span>
-      <span style="color:var(--muted)">${label}</span>
-      <button style="background:none;border:none;cursor:pointer;color:var(--alert);font-size:13px;padding:0 2px" onclick="rimuoviPermessoPeriodo('${operatoreId}', '${g.inizio}', '${g.fine}', ${g.ore})" title="Rimuovi">✕</button>
+      <span style="color:var(--muted);font-size:11px">${label}</span>
+      <button style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--ink);font-size:11px;padding:1px 7px" onclick="avviaModificaPermesso('${operatoreId}','${g.inizio}','${g.fine}',${g.ore},${JSON.stringify(g.motivo)})" title="Modifica">Modifica</button>
+      <button style="background:none;border:none;cursor:pointer;color:var(--alert);font-size:13px;padding:0 2px" onclick="rimuoviPermessoPeriodo('${operatoreId}','${g.inizio}','${g.fine}')" title="Rimuovi">✕</button>
     </div>`;
   }).join('');
 }
 
 async function aggiungiPermessoPeriodo(operatoreId) {
   const dal = document.getElementById('op-perm-dal').value;
-  const al = document.getElementById('op-perm-al').value;
+  const al = document.getElementById('op-perm-al').value || dal;
   const ore = parseFloat(document.getElementById('op-perm-ore').value);
   const motivo = document.getElementById('op-perm-motivo').value.trim() || null;
 
-  if (!dal || !al) { toast('Seleziona date inizio e fine', 'err'); return; }
+  if (!dal) { toast('Seleziona la data di inizio', 'err'); return; }
   if (isNaN(ore) || ore < 0 || ore > 24) { toast('Ore non valide (0–24)', 'err'); return; }
+
+  const isModifica = !!_editPermesso;
+
+  // In caso di modifica: prima azzera l'intervallo originale se diverso dal nuovo
+  if (isModifica) {
+    const { dalOriginale, alOriginale } = _editPermesso;
+    const op = operatoriCache.find(o => o.id === operatoreId);
+    const oreDefault = op?.ore_default ?? 8;
+    if (dalOriginale !== dal || alOriginale !== al) {
+      const { data: resetRes, error: resetErr } = await sb.rpc('imposta_permesso_periodo', {
+        p_operatore_id:    operatoreId,
+        p_data_inizio:     dalOriginale,
+        p_data_fine:       alOriginale,
+        p_ore:             oreDefault,
+        p_motivo:          null,
+        p_responsabile_id: currentUserRow.id,
+      });
+      if (resetErr || !resetRes?.ok) { toast(resetRes?.errore || resetErr?.message || 'Errore reset periodo originale', 'err'); return; }
+    }
+  }
 
   const { data, error } = await sb.rpc('imposta_permesso_periodo', {
     p_operatore_id:    operatoreId,
@@ -3360,15 +3431,14 @@ async function aggiungiPermessoPeriodo(operatoreId) {
     toast(msg, 'err'); return;
   }
 
-  toast(`${data.giorni_aggiornati} giorn${data.giorni_aggiornati === 1 ? 'o' : 'i'} aggiornati`, 'ok');
-  document.getElementById('op-perm-dal').value = '';
-  document.getElementById('op-perm-al').value = '';
-  document.getElementById('op-perm-motivo').value = '';
+  toast(isModifica ? 'Periodo aggiornato' : `${data.giorni_aggiornati} giorn${data.giorni_aggiornati === 1 ? 'o' : 'i'} aggiunti`, 'ok');
+  annullaModificaPermesso();
   caricaFerieOperatore(operatoreId);
   caricaDisponibilitaPanel();
+  loadRiepilogoPermessi();
 }
 
-async function rimuoviPermessoPeriodo(operatoreId, dal, al, ore) {
+async function rimuoviPermessoPeriodo(operatoreId, dal, al) {
   const op = operatoriCache.find(o => o.id === operatoreId);
   const oreDefault = op?.ore_default ?? 8;
   const { data, error } = await sb.rpc('imposta_permesso_periodo', {
@@ -3383,6 +3453,64 @@ async function rimuoviPermessoPeriodo(operatoreId, dal, al, ore) {
   toast('Periodo rimosso', 'ok');
   caricaFerieOperatore(operatoreId);
   caricaDisponibilitaPanel();
+  loadRiepilogoPermessi();
+}
+
+async function loadRiepilogoPermessi() {
+  const el = document.getElementById('ops-ferie-panel');
+  if (!el) return;
+
+  const oggi = new Date().toISOString().slice(0, 10);
+  const { data } = await sb.from('disponibilita_giornaliera')
+    .select('operatore_id, data, ore, motivo, users(nome, cognome)')
+    .gte('data', oggi)
+    .order('data');
+
+  if (!data?.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--muted);font-style:italic;padding:4px 0 12px">Nessun permesso o ferie in programma</div>';
+    return;
+  }
+
+  // Raggruppa per operatore filtrando le righe che non sono eccezioni reali
+  const perOperatore = {};
+  for (const r of data) {
+    const op = operatoriCache.find(o => o.id === r.operatore_id);
+    if (!op) continue;
+    const oreDefault = op.ore_default ?? 8;
+    if (Number(r.ore) === oreDefault) continue; // non è un'eccezione
+    if (!perOperatore[r.operatore_id]) perOperatore[r.operatore_id] = { op, righe: [] };
+    perOperatore[r.operatore_id].righe.push(r);
+  }
+
+  const voci = Object.values(perOperatore);
+  if (!voci.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--muted);font-style:italic;padding:4px 0 12px">Nessun permesso o ferie in programma</div>';
+    return;
+  }
+
+  const righeHtml = voci.flatMap(({ op, righe }) => {
+    const oreDefault = op.ore_default ?? 8;
+    const gruppi = raggruppaInIntervalli(righe);
+    return gruppi.map(g => {
+      const label = oreLabel(g.ore, oreDefault);
+      const range = g.inizio === g.fine ? formatDate(g.inizio) : `${formatDate(g.inizio)} → ${formatDate(g.fine)}`;
+      const motivoStr = g.motivo ? ` · ${escapeHtml(g.motivo)}` : '';
+      const nomeOp = escapeHtml(`${op.nome} ${op.cognome}`);
+      return `<div style="display:flex;align-items:center;gap:10px;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:12px"
+        onmouseenter="this.style.background='var(--surface)'" onmouseleave="this.style.background=''"
+        onclick="openModalModificaOperatore('${op.id}')" title="Apri scheda operatore">
+        <span style="font-weight:600;min-width:140px">${nomeOp}</span>
+        <span style="color:var(--muted);font-family:'DM Mono',monospace;font-size:11px;min-width:130px">${range}</span>
+        <span style="flex:1;color:var(--muted)">${motivoStr ? motivoStr.slice(3) : '—'}</span>
+        <span style="font-size:11px;font-weight:600;color:${Number(g.ore)===0?'var(--alert)':'#92400E'}">${label}</span>
+      </div>`;
+    });
+  }).join('');
+
+  el.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:4px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Ferie e permessi in programma</div>
+    ${righeHtml}
+  </div>`;
 }
 
 // ═══════════════════════════════════════════════
@@ -4669,6 +4797,7 @@ async function importaFasiDaExcel(input) {
 // ═══════════════════════════════════════════════
 function closeModal(id) {
   document.getElementById(id)?.classList.remove('open');
+  if (id === 'modal-operatore') { annullaModificaPermesso(); loadRiepilogoPermessi(); }
 }
 
 function escapeHtml(str) {
