@@ -930,7 +930,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           </div>
           <div id="or-chiusure-list" style="margin-bottom:14px;font-size:12px;color:var(--muted);font-style:italic">Nessuna chiusura programmata</div>
           <div class="card" style="padding:14px 16px">
-            <div style="font-size:12px;font-weight:600;margin-bottom:10px">Aggiungi chiusura</div>
+            <div id="or-chiusura-form-title" style="font-size:12px;font-weight:600;margin-bottom:10px">Aggiungi chiusura</div>
             <div style="display:grid;grid-template-columns:1fr 1fr 2fr auto;gap:8px;align-items:end">
               <div class="form-group" style="margin:0">
                 <label style="font-size:11px">Dal</label>
@@ -944,7 +944,10 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
                 <label style="font-size:11px">Descrizione</label>
                 <input type="text" id="or-chiusura-desc" placeholder="es. Ferragosto" style="font-size:12px">
               </div>
-              <button class="btn btn-secondary" style="font-size:12px;padding:7px 12px;white-space:nowrap" onclick="aggiungiChiusura()">+ Aggiungi</button>
+              <div style="display:flex;gap:6px">
+                <button id="or-chiusura-btn-salva" class="btn btn-secondary" style="font-size:12px;padding:7px 12px;white-space:nowrap" onclick="aggiungiChiusura()">+ Aggiungi</button>
+                <button id="or-chiusura-btn-annulla" class="btn btn-secondary" style="font-size:12px;padding:7px 12px;white-space:nowrap;display:none" onclick="annullaModificaChiusura()">Annulla</button>
+              </div>
             </div>
           </div>
         </div>
@@ -3365,10 +3368,10 @@ async function caricaFerieOperatore(operatoreId) {
 
   const op = operatoriCache.find(o => o.id === operatoreId);
   const oreDefault = op?.ore_default ?? 8;
-  const eccezioni = (data || []).filter(r => Number(r.ore) !== oreDefault);
+  const eccezioni = (data || []).filter(r => !!r.motivo);
 
   if (!eccezioni.length) {
-    el.innerHTML = '<span style="font-size:12px;color:var(--muted);font-style:italic">Nessuna eccezione futura configurata</span>';
+    el.innerHTML = '<span style="font-size:12px;color:var(--muted);font-style:italic">Nessun permesso o ferie futuro configurato</span>';
     return;
   }
 
@@ -3476,8 +3479,7 @@ async function loadRiepilogoPermessi() {
   for (const r of data) {
     const op = operatoriCache.find(o => o.id === r.operatore_id);
     if (!op) continue;
-    const oreDefault = op.ore_default ?? 8;
-    if (Number(r.ore) === oreDefault) continue; // non è un'eccezione
+    if (!r.motivo) continue; // mostra solo righe con motivo esplicito (permessi/ferie documentati)
     if (!perOperatore[r.operatore_id]) perOperatore[r.operatore_id] = { op, righe: [] };
     perOperatore[r.operatore_id].righe.push(r);
   }
@@ -3687,6 +3689,30 @@ async function salvaOrario() {
   toast('Orario salvato', 'ok');
 }
 
+// Stato edit mode chiusura: { id }
+let _editChiusura = null;
+
+function annullaModificaChiusura() {
+  _editChiusura = null;
+  document.getElementById('or-chiusura-dal').value = '';
+  document.getElementById('or-chiusura-al').value = '';
+  document.getElementById('or-chiusura-desc').value = '';
+  document.getElementById('or-chiusura-form-title').textContent = 'Aggiungi chiusura';
+  document.getElementById('or-chiusura-btn-salva').textContent = '+ Aggiungi';
+  document.getElementById('or-chiusura-btn-annulla').style.display = 'none';
+}
+
+function avviaModificaChiusura(id, dal, al, desc) {
+  _editChiusura = { id };
+  document.getElementById('or-chiusura-dal').value = dal;
+  document.getElementById('or-chiusura-al').value = al;
+  document.getElementById('or-chiusura-desc').value = desc || '';
+  document.getElementById('or-chiusura-form-title').textContent = 'Modifica chiusura';
+  document.getElementById('or-chiusura-btn-salva').textContent = '✓ Salva modifica';
+  document.getElementById('or-chiusura-btn-annulla').style.display = '';
+  document.getElementById('or-chiusura-dal').focus();
+}
+
 async function loadChiusureAziendali() {
   const oggi = new Date().toISOString().slice(0, 10);
   const { data } = await sb.from('chiusure_aziendali')
@@ -3708,6 +3734,7 @@ async function loadChiusureAziendali() {
     const desc = c.descrizione ? ` · ${escapeHtml(c.descrizione)}` : '';
     return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;margin-bottom:6px;font-size:12px">
       <span style="flex:1;font-weight:600">${range}</span><span style="color:var(--muted)">${desc}</span>
+      <button style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--ink);font-size:11px;padding:1px 7px" onclick="avviaModificaChiusura('${c.id}','${c.data_inizio}','${c.data_fine}',${JSON.stringify(c.descrizione || '')})" title="Modifica">Modifica</button>
       <button style="background:none;border:none;cursor:pointer;color:var(--alert);font-size:13px;padding:0 4px" onclick="eliminaChiusura('${c.id}')" title="Elimina">✕</button>
     </div>`;
   }).join('');
@@ -3720,18 +3747,28 @@ async function aggiungiChiusura() {
 
   if (!dal) { toast('Seleziona la data di inizio', 'err'); return; }
 
-  const { data, error } = await sb.rpc('imposta_chiusura_aziendale', {
-    p_data_inizio:     dal,
-    p_data_fine:       al,
-    p_descrizione:     desc,
-    p_responsabile_id: currentUserRow.id,
-  });
+  if (_editChiusura) {
+    const { data, error } = await sb.rpc('modifica_chiusura_aziendale', {
+      p_id:              _editChiusura.id,
+      p_data_inizio:     dal,
+      p_data_fine:       al,
+      p_descrizione:     desc,
+      p_responsabile_id: currentUserRow.id,
+    });
+    if (error || !data?.ok) { toast(data?.errore || error?.message || 'Errore', 'err'); return; }
+    toast('Chiusura aggiornata', 'ok');
+  } else {
+    const { data, error } = await sb.rpc('imposta_chiusura_aziendale', {
+      p_data_inizio:     dal,
+      p_data_fine:       al,
+      p_descrizione:     desc,
+      p_responsabile_id: currentUserRow.id,
+    });
+    if (error || !data?.ok) { toast(data?.errore || error?.message || 'Errore', 'err'); return; }
+    toast('Chiusura aggiunta', 'ok');
+  }
 
-  if (error || !data?.ok) { toast(data?.errore || error?.message || 'Errore', 'err'); return; }
-  toast('Chiusura aggiunta', 'ok');
-  document.getElementById('or-chiusura-dal').value = '';
-  document.getElementById('or-chiusura-al').value = '';
-  document.getElementById('or-chiusura-desc').value = '';
+  annullaModificaChiusura();
   loadChiusureAziendali();
 }
 
@@ -3742,6 +3779,7 @@ async function eliminaChiusura(id) {
   });
   if (error || !data?.ok) { toast(data?.errore || error?.message || 'Errore', 'err'); return; }
   toast('Chiusura eliminata', 'ok');
+  annullaModificaChiusura();
   loadChiusureAziendali();
 }
 
