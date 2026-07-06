@@ -624,15 +624,30 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       <!-- PIANIFICAZIONE -->
       <section class="section" id="sec-pianificazione">
         <div class="page-hdr">
-          <div><h1>Pianificazione</h1><p style="color:var(--muted);margin-top:4px;font-size:13px">Ordini attivi ordinati per urgenza stimata</p></div>
+          <div><h1>Pianificazione</h1><p style="color:var(--muted);margin-top:4px;font-size:13px">Piano giornaliero per operatore</p></div>
           <button class="btn btn-secondary" onclick="renderPianificazione()">↻ Aggiorna</button>
         </div>
-        <div id="piano-legenda" style="display:flex;gap:16px;flex-wrap:wrap;padding:10px 16px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:16px;font-size:12px;color:var(--muted)">
-          <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#EF4444;margin-right:4px"></span>In ritardo</span>
-          <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#F59E0B;margin-right:4px"></span>A rischio (stima supera scadenza)</span>
-          <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#16A34A;margin-right:4px"></span>In tempo</span>
-          <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:#6B7280;margin-right:4px"></span>Senza scadenza</span>
+
+        <!-- Pannello disponibilità operatori -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:16px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+            <div style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em">Disponibilità operatori</div>
+            <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+              <label style="font-size:12px;color:var(--muted)">Data:</label>
+              <input type="date" id="piano-data-sel"
+                style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--bg)"
+                onchange="aggiornaDataPiano()">
+              <button id="piano-anteprima-btn" class="btn btn-secondary"
+                style="display:none;padding:4px 10px;font-size:12px"
+                onclick="anteprimaPianoPer()">Anteprima piano</button>
+            </div>
+          </div>
+          <div id="piano-disp-panel" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
+            <div style="color:var(--muted);font-size:12px;font-style:italic">Caricamento operatori...</div>
+          </div>
+          <div id="piano-eccezioni-list" style="margin-top:10px"></div>
         </div>
+
         <div id="piano-content"><div class="empty-state"><div class="icon">📅</div><p>Caricamento...</p></div></div>
       </section>
 
@@ -1674,7 +1689,7 @@ async function loadNc() {
 
 async function loadOperatori() {
   const { data } = await sb.from('users')
-    .select('id, nome, cognome, ruolo, attivo')
+    .select('id, nome, cognome, ruolo, attivo, ore_default')
     .in('ruolo', ['operatore', 'sola_lettura'])
     .neq('eliminato', true)
     .order('cognome');
@@ -1761,7 +1776,12 @@ function showSection(name) {
   else if (name === 'ufficio') loadUfficio();
   else if (name === 'kpi') loadKpi();
   else if (name === 'kpi-config') loadKpiConfig();
-  else if (name === 'pianificazione') renderPianificazione();
+  else if (name === 'pianificazione') {
+    const sel = document.getElementById('piano-data-sel');
+    if (sel && !sel.value) sel.value = new Date().toISOString().split('T')[0];
+    caricaDisponibilitaPanel();
+    renderPianificazione();
+  }
   else if (name === 'tipi-prodotto-config') renderTipiProdottoConfig();
   else if (name === 'strutture-config') renderAttributoConfig('struttura');
   else if (name === 'materiali-config') renderAttributoConfig('materiale');
@@ -1771,16 +1791,129 @@ function showSection(name) {
 // ═══════════════════════════════════════════════
 // PIANIFICAZIONE
 // ═══════════════════════════════════════════════
+// ═══════════════════════════════════════════════
+// DISPONIBILITÀ OPERATORI
+// ═══════════════════════════════════════════════
+
+// Stato locale: data selezionata nel pannello (null = oggi)
+let _pianoDataSel = null;
+
+function aggiornaDataPiano() {
+  const sel = document.getElementById('piano-data-sel');
+  const val = sel?.value; // yyyy-mm-dd o ''
+  const oggi = new Date().toISOString().split('T')[0];
+  _pianoDataSel = (val && val !== oggi) ? val : null;
+  const btn = document.getElementById('piano-anteprima-btn');
+  if (btn) btn.style.display = _pianoDataSel ? '' : 'none';
+  caricaDisponibilitaPanel();
+}
+
+async function caricaDisponibilitaPanel() {
+  const data = _pianoDataSel || new Date().toISOString().split('T')[0];
+  const operatori = operatoriCache.filter(o => o.ruolo === 'operatore' && o.attivo);
+
+  const { data: eccezioni } = await sb.from('disponibilita_giornaliera')
+    .select('operatore_id, data, ore')
+    .gte('data', new Date().toISOString().split('T')[0])
+    .lte('data', (() => { const d = new Date(); d.setDate(d.getDate()+14); return d.toISOString().split('T')[0]; })())
+    .order('data');
+
+  const eccezioniMap = {};
+  (eccezioni || []).forEach(e => {
+    if (!eccezioniMap[e.data]) eccezioniMap[e.data] = {};
+    eccezioniMap[e.data][e.operatore_id] = e.ore;
+  });
+
+  // Pannello per la data selezionata
+  const oreOggi = eccezioniMap[data] || {};
+  const panel = document.getElementById('piano-disp-panel');
+  if (panel) {
+    panel.innerHTML = operatori.map(op => {
+      const oreDefault = op.ore_default ?? 8.0;
+      const oreAtt = oreOggi[op.id] !== undefined ? oreOggi[op.id] : oreDefault;
+      const isEccezione = oreOggi[op.id] !== undefined;
+      const stato = oreAtt === 0 ? 'Assente' : oreAtt < oreDefault ? 'Parziale' : 'Piena';
+      const statoColor = oreAtt === 0 ? '#B91C1C' : oreAtt < oreDefault ? '#92400E' : '#166534';
+      return `<div style="border:1px solid ${isEccezione ? '#BAE6FD' : 'var(--border)'};border-radius:8px;padding:8px 10px;background:${isEccezione ? '#F0F9FF' : 'var(--bg)'}">
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px">${escapeHtml(op.nome)} ${escapeHtml(op.cognome)}</div>
+        <div style="font-size:11px;color:${statoColor};margin-bottom:6px;font-weight:600">${stato} — ${oreAtt}h</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <button onclick="impostaDisponibilita('${op.id}',${oreDefault})" style="font-size:11px;border:1px solid var(--border);border-radius:4px;padding:2px 7px;background:var(--surface);cursor:pointer" title="Giornata piena (${oreDefault}h)">Piena</button>
+          <button onclick="impostaDisponibilita('${op.id}',4)" style="font-size:11px;border:1px solid var(--border);border-radius:4px;padding:2px 7px;background:var(--surface);cursor:pointer">½ giornata</button>
+          <button onclick="impostaDisponibilita('${op.id}',0)" style="font-size:11px;border:1px solid #FECACA;border-radius:4px;padding:2px 7px;background:#FEF2F2;color:#B91C1C;cursor:pointer">Assente</button>
+          <input type="number" id="ore-custom-${op.id}" min="0" max="24" step="0.5" placeholder="h"
+            style="width:44px;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:2px 4px;text-align:center"
+            onkeydown="if(event.key==='Enter')impostaDisponibilitaCustom('${op.id}')">
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Lista eccezioni prossimi 14 giorni
+  const oggiStr = new Date().toISOString().split('T')[0];
+  const eccezioniList = document.getElementById('piano-eccezioni-list');
+  if (eccezioniList) {
+    const future = (eccezioni || []).filter(e => e.data >= oggiStr);
+    if (future.length) {
+      eccezioniList.innerHTML = `<div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em">Eccezioni programmati — prossimi 14 giorni</div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          ${future.map(e => {
+            const op = operatoriCache.find(o => o.id === e.operatore_id);
+            if (!op) return '';
+            const oreDefault = op.ore_default ?? 8.0;
+            const label = e.ore === 0 ? 'Assente' : e.ore < oreDefault ? `${e.ore}h (mezza giornata)` : `${e.ore}h (giornata piena)`;
+            return `<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0;border-top:1px solid var(--border)">
+              <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);min-width:75px">${formatDate(e.data)}</span>
+              <span style="flex:1">${escapeHtml(op.nome)} ${escapeHtml(op.cognome)}</span>
+              <span style="color:${e.ore===0?'#B91C1C':e.ore<oreDefault?'#92400E':'#166534'};font-size:11px">${label}</span>
+              <button onclick="impostaDisponibilita('${e.operatore_id}',${oreDefault},'${e.data}')" title="Rimuovi eccezione" style="border:none;background:none;cursor:pointer;color:var(--alert);font-size:12px;padding:0 2px">✕</button>
+            </div>`;
+          }).join('')}
+        </div>`;
+    } else {
+      eccezioniList.innerHTML = '';
+    }
+  }
+}
+
+async function impostaDisponibilita(operatoreId, ore, dataOverride) {
+  const data = dataOverride || _pianoDataSel || new Date().toISOString().split('T')[0];
+  const { data: res } = await sb.rpc('imposta_disponibilita_giornaliera', {
+    p_operatore_id:    operatoreId,
+    p_data:            data,
+    p_ore:             ore,
+    p_responsabile_id: currentUserRow.id,
+  });
+  if (!res?.ok) { toast(res?.errore || 'Errore', 'err'); return; }
+  await caricaDisponibilitaPanel();
+  if (!_pianoDataSel) renderPianificazione();
+}
+
+function impostaDisponibilitaCustom(operatoreId) {
+  const inp = document.getElementById(`ore-custom-${operatoreId}`);
+  const ore = parseFloat(inp?.value);
+  if (isNaN(ore) || ore < 0 || ore > 24) { toast('Inserisci un valore tra 0 e 24', 'err'); return; }
+  impostaDisponibilita(operatoreId, ore);
+}
+
+async function anteprimaPianoPer() {
+  if (!_pianoDataSel) return;
+  const el = document.getElementById('piano-content');
+  el.innerHTML = `<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:8px 14px;margin-bottom:12px;font-size:12px;color:#92400E;font-weight:600">Anteprima piano per ${formatDate(_pianoDataSel)} — sola lettura, non sostituisce il piano odierno</div>`;
+  await renderPianificazione(_pianoDataSel);
+}
+
+// ═══════════════════════════════════════════════
 // Stato locale per riassegnazioni manuali (non persistito) nella pianificazione
 const _pianoRiassegnazioni = {};
 
-async function renderPianificazione() {
+async function renderPianificazione(p_data_override) {
   const el = document.getElementById('piano-content');
   el.innerHTML = '<div class="empty-state"><div class="icon">⏳</div><p>Calcolo piano giornaliero...</p></div>';
 
-  const { data: piano, error } = await sb.rpc('piano_giornaliero_raggruppato', {
-    p_responsabile_id: currentUserRow.id,
-  });
+  const rpcParams = { p_responsabile_id: currentUserRow.id };
+  if (p_data_override) rpcParams.p_data = p_data_override;
+  const { data: piano, error } = await sb.rpc('piano_giornaliero_raggruppato', rpcParams);
 
   if (error || !piano?.ok) {
     el.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>Errore caricamento piano: ${escapeHtml(error?.message || piano?.errore || 'sconosciuto')}</p></div>`;
@@ -1833,12 +1966,12 @@ async function renderPianificazione() {
           const info = oreOp[opId];
           const op = operatoriCache.find(o => o.id === opId);
           const nome = op ? `${op.nome} ${op.cognome}` : info.nome || opId;
-          const pct = Math.min(100, info.capacita_ore > 0 ? Math.round(info.assegnate_ore / info.capacita_ore * 100) : 0);
+          const pct = Math.min(100, info.ore_disponibili > 0 ? Math.round(info.ore_assegnate / info.ore_disponibili * 100) : 0);
           const barColor = pct >= 100 ? '#EF4444' : pct >= 80 ? '#F59E0B' : '#16A34A';
           return `<div>
             <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
               <span>${escapeHtml(nome)}</span>
-              <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${info.assegnate_ore.toFixed(1)}/${info.capacita_ore.toFixed(1)}h</span>
+              <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${info.ore_assegnate.toFixed(1)}/${info.ore_disponibili.toFixed(1)}h</span>
             </div>
             <div style="background:var(--border);border-radius:4px;height:6px">
               <div style="width:${pct}%;background:${barColor};border-radius:4px;height:100%;transition:width 0.3s"></div>
@@ -2010,7 +2143,8 @@ async function refreshStime() {
   if (ids.length) await loadAvanzamenti(ids);
   // Se la pianificazione è visibile, ricarica anche quella (ha la sua fetch dei dati aggiornati)
   if (document.getElementById('sec-pianificazione')?.classList.contains('active')) {
-    await renderPianificazione();
+    await caricaDisponibilitaPanel();
+    if (!_pianoDataSel) await renderPianificazione();
   }
 }
 
