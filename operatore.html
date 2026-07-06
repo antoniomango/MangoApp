@@ -712,8 +712,14 @@ async function doLogout() {
 // ═══════════════════════════════════════════════
 async function loadFasi() {
   if (isOnline) {
-    const { data } = await sb.from('fasi').select('*').order('id');
-    fasi = data || [];
+    const [{ data: fasiData }, { data: dipData }] = await Promise.all([
+      sb.from('fasi').select('*').order('id'),
+      sb.from('fase_dipendenze').select('fase_id, dipende_da_fase_id'),
+    ]);
+    fasi = (fasiData || []).map(f => ({
+      ...f,
+      dipendenze: (dipData || []).filter(r => r.fase_id === f.id).map(r => r.dipende_da_fase_id),
+    }));
     await cacheSet('fasi', fasi);
   } else {
     fasi = await cacheGet('fasi') || [];
@@ -1191,17 +1197,34 @@ async function renderOrdineDetail(ordineId) {
       const isNA = f.stato === 'non_applicabile';
       const est = !isCustom && isEsterna(f.fase_id);
       const cnc = !isCustom && isCNC(f.fase_id);
-      const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '▶' : f.stato === 'in_attesa' ? '⏸' : isNA ? '—' : isCustom ? '★' : f.fase_id;
+      // Calcola se fase è bloccata da dipendenze non soddisfatte
+      const faseMaster = !isCustom && fasi.find(fm => fm.id === f.fase_id);
+      const isBloccata = !isNA && f.stato === 'disponibile' && faseMaster &&
+        (faseMaster.dipendenze || []).some(depId => {
+          const depOf = ordFasi.find(of => of.fase_id === depId);
+          return depOf && !['completata', 'non_applicabile'].includes(depOf.stato);
+        });
+      const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '▶' : f.stato === 'in_attesa' ? '⏸' : isNA ? '—' : isBloccata ? '🔒' : isCustom ? '★' : f.fase_id;
       const clickAttr = isNA ? '' : `onclick="openFaseDetail('${f.id}', '${ordineId}')"`;
       const extraBadges = [
         cnc ? '<span style="font-size:9px;font-weight:700;background:#7C3AED;color:#fff;padding:1px 4px;border-radius:3px;margin-left:4px">CNC</span>' : '',
         est ? '<span style="font-size:9px;font-weight:700;background:#0369A1;color:#fff;padding:1px 4px;border-radius:3px;margin-left:4px">EXT</span>' : ''
       ].join('');
+      let subLabel;
+      if (isNA) subLabel = 'Non applicabile';
+      else if (isBloccata) {
+        const blockantiNomi = (faseMaster.dipendenze || [])
+          .filter(depId => { const d = ordFasi.find(of => of.fase_id === depId); return d && !['completata', 'non_applicabile'].includes(d.stato); })
+          .map(depId => { const fm = fasi.find(fm => fm.id === depId); return fm ? fm.nome : depId; });
+        subLabel = 'Attende: ' + blockantiNomi.join(', ');
+      } else if (opNome) subLabel = opNome + (isMia ? ' (tu)' : '');
+      else if (est) subLabel = 'Fase esterna';
+      else subLabel = 'Disponibile';
       return `<div class="fase-row ${f.stato}" ${clickAttr} style="${isNA ? 'opacity:0.5;cursor:default' : ''}">
-        <div class="fase-num-circle">${icon}</div>
+        <div class="fase-num-circle" style="${isBloccata ? 'background:#EDE9FE;color:#7C3AED;font-size:14px' : ''}">${icon}</div>
         <div class="fase-info">
           <div class="fn">${nomeFase}${extraBadges}</div>
-          <div class="fo">${isNA ? 'Non applicabile' : opNome ? opNome + (isMia ? ' (tu)' : '') : est ? 'Fase esterna' : 'Disponibile'}</div>
+          <div class="fo" style="${isBloccata ? 'color:#7C3AED;font-size:11px' : ''}">${subLabel}</div>
         </div>
         <span class="badge badge-${f.stato}" style="font-size:10px">${statoFaseLabel(f.stato)}</span>
         ${isNA ? '' : '<span class="arrow">›</span>'}
@@ -1589,9 +1612,30 @@ async function renderFaseDetail(ordFaseId, ordineId) {
   const sospeso = ordine?.stato === 'sospeso';
   const solaLettura = currentUser.ruolo === 'sola_lettura';
 
+  // Check dipendenze bloccanti
+  let _depBloccanti = [];
+  if (!isCustom && f.stato === 'disponibile' && isOnline) {
+    const _faseMaster = fasi.find(fm => fm.id === f.fase_id);
+    if (_faseMaster && (_faseMaster.dipendenze || []).length > 0) {
+      const _depIds = _faseMaster.dipendenze;
+      const { data: _depFasi } = await sb.from('ordine_fasi')
+        .select('fase_id, stato')
+        .eq('ordine_id', ordineId)
+        .in('fase_id', _depIds);
+      _depBloccanti = (_depFasi || []).filter(df => !['completata', 'non_applicabile'].includes(df.stato))
+        .map(df => { const fm = fasi.find(fm => fm.id === df.fase_id); return fm ? fm.nome : df.fase_id; });
+    }
+  }
+
   // AZIONE BOX
   if (solaLettura) {
     // nessuna azione
+  } else if (f.stato === 'disponibile' && !sospeso && _depBloccanti.length > 0) {
+    bodyHtml += `
+      <div class="azione-box" style="border-color:#E9D5FF;background:#FAF5FF">
+        <h4 style="color:#7C3AED">🔒 Fase bloccata</h4>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:0">Prima devi completare: <strong>${_depBloccanti.map(n => escapeHtml(n)).join(', ')}</strong></p>
+      </div>`;
   } else if (f.stato === 'disponibile' && !sospeso) {
     const tgDisp = f.fasi?.tipo_gestione || 'standard';
     if (tgDisp === 'spedizione_esterna') {
