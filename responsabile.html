@@ -4394,6 +4394,10 @@ function renderFasiConfig() {
               Attesa esterna (escludi da stime ore interne)
             </label>
             <span id="fase-esterna-nota-${f.id}" style="font-size:10px;color:#6366F1;font-style:italic;${tgVincolato ? '' : 'display:none'}">Impostata automaticamente da Tipo gestione</span>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer" title="Se attivo, alla creazione di un ordine questa fase parte automaticamente in attesa, senza presa in carico manuale">
+              <input type="checkbox" id="fase-avvio-auto-${f.id}" ${f.avvio_automatico ? 'checked' : ''} style="width:14px;height:14px;cursor:pointer">
+              Avvio automatico alla creazione ordine
+            </label>
           </div>
         </div>
       </div>
@@ -4515,8 +4519,8 @@ async function salvaDipendenzeFase(faseId) {
   const { data } = await sb.rpc('imposta_dipendenze_fase', {
     p_fase_id: faseId,
     p_dipende_da_ids: checked,
-    p_responsabile_id: currentUser.id,
-    p_session_token: sessionToken,
+    p_responsabile_id: currentUserRow.id,
+    p_session_token: null,
   });
   if (!data?.ok) {
     toast(data?.errore === 'dipendenza_circolare' ? 'Dipendenza circolare — operazione annullata' : (data?.errore || 'Errore'), 'err');
@@ -4627,17 +4631,27 @@ async function saveFasiConfig(silent = false) {
     nome: document.getElementById(`fase-nome-${f.id}`)?.value.trim() || f.nome,
     descrizione: document.getElementById(`fase-desc-${f.id}`)?.value.trim() || null,
     e_attesa_esterna: document.getElementById(`fase-esterna-${f.id}`)?.checked ?? f.e_attesa_esterna,
+    avvio_automatico: document.getElementById(`fase-avvio-auto-${f.id}`)?.checked ?? f.avvio_automatico,
     tipo_gestione: document.getElementById(`fase-tg-${f.id}`)?.value || 'standard',
     tipi:   Array.from(document.querySelectorAll(`input[data-fase="${f.id}"][data-tipo]:checked`)).map(el => el.dataset.tipo),
     mats:   Array.from(document.querySelectorAll(`input[data-fase="${f.id}"][data-mat]:checked`)).map(el => el.dataset.mat),
     struts: Array.from(document.querySelectorAll(`input[data-fase="${f.id}"][data-stru]:checked`)).map(el => el.dataset.stru),
+    deps:   Array.from(document.querySelectorAll(`input[data-fase-dep="${f.id}"]:checked`)).map(el => parseInt(el.dataset.depDi)),
   }));
   const risultati = await Promise.all(updates.map(u => Promise.all([
-    sb.from('fasi').update({ nome: u.nome, descrizione: u.descrizione, e_attesa_esterna: u.e_attesa_esterna, tipo_gestione: u.tipo_gestione }).eq('id', u.id),
+    sb.from('fasi').update({ nome: u.nome, descrizione: u.descrizione, e_attesa_esterna: u.e_attesa_esterna, avvio_automatico: u.avvio_automatico, tipo_gestione: u.tipo_gestione }).eq('id', u.id),
     sb.rpc('aggiorna_criteri_fase', { p_fase_id: u.id, p_tipi_prodotto: u.tipi, p_materiali: u.mats, p_strutture: u.struts, p_responsabile_id: currentUserRow.id }),
+    sb.rpc('imposta_dipendenze_fase', { p_fase_id: u.id, p_dipende_da_ids: u.deps, p_responsabile_id: currentUserRow.id, p_session_token: null }),
   ])));
   await loadFasi();
   if (!silent) {
+    // Controlla errori dipendenze (es. ciclo rilevato)
+    const erroriDep = risultati.flatMap(([, , depRes]) =>
+      depRes?.data?.ok === false ? [depRes.data.errore] : []
+    );
+    if (erroriDep.length) {
+      toast('Dipendenze: ' + (erroriDep.includes('dipendenza_circolare') ? 'dipendenza circolare rilevata — alcune dipendenze non salvate' : erroriDep[0]), 'err');
+    }
     // Aggrega il riepilogo ricalcolo da tutte le fasi modificate
     let attivate = 0, disattivate = 0, saltate = 0;
     risultati.forEach(([, rpcRes]) => {
