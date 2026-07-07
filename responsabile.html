@@ -437,6 +437,9 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       <div class="nav-item" onclick="showSection('kpi-config')" id="nav-kpi-config">
         <span class="icon">⚙️</span> Soglie KPI
       </div>
+      <div class="nav-item" onclick="showSection('macchine-config')" id="nav-macchine-config">
+        <span class="icon">🔧</span> Macchine
+      </div>
     </nav>
 
     <main>
@@ -1043,6 +1046,18 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         </div>
       </section>
 
+      <!-- MACCHINE CONFIG -->
+      <section class="section" id="sec-macchine-config">
+        <div class="page-hdr">
+          <div>
+            <h1>Macchine</h1>
+            <div class="sub">Gestisci le macchine e le loro capacità giornaliere</div>
+          </div>
+          <button class="btn btn-primary" onclick="avviaNuovaMacchina()">+ Nuova macchina</button>
+        </div>
+        <div id="macchine-list">Caricamento…</div>
+      </section>
+
       <!-- PRIORITÀ -->
       <section class="section" id="sec-priorita-config">
         <div class="page-hdr">
@@ -1537,7 +1552,7 @@ async function postLogin() {
   // Load fasi e tipi prodotto (devono precedere il resto)
   await Promise.all([loadFasi(), loadTipiProdotto(), loadPrioritaConfig(), loadAttributiConfig()]);
   // Load data
-  await Promise.all([loadOrdini(), loadNc(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadMacroFasi(), loadFaseMediaMinuti(), loadFaseExtraMediaMinuti(), caricaNomiFasiExtraStoria()]);
+  await Promise.all([loadOrdini(), loadNc(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadMacroFasi(), loadFaseMediaMinuti(), loadFaseExtraMediaMinuti(), caricaNomiFasiExtraStoria(), loadMacchine()]);
   // Check ordini in ritardo (solo responsabile)
   if (currentUserRow?.ruolo === 'responsabile') checkOrdiniInRitardo();
   // Realtime
@@ -1825,6 +1840,7 @@ function showSection(name) {
   else if (name === 'strutture-config') renderAttributoConfig('struttura');
   else if (name === 'materiali-config') renderAttributoConfig('materiale');
   else if (name === 'priorita-config') renderPrioritaConfig();
+  else if (name === 'macchine-config') { loadMacchine().then(renderMacchine); }
 }
 
 // ═══════════════════════════════════════════════
@@ -2110,6 +2126,7 @@ async function renderPianificazione(p_data_override) {
                 }
                 ${hasConflitto ? `<div style="font-size:10px;color:#B91C1C;margin-top:2px">${escapeHtml(ord.motivazione || '')}</div>` : ''}
                 ${!hasConflitto && ord.motivazione ? `<div style="font-size:10px;color:var(--muted);margin-top:1px">${escapeHtml(ord.motivazione)}</div>` : ''}
+                ${ord.macchina_proposta ? `<div style="font-size:10px;color:#6D28D9;margin-top:1px">🔧 ${escapeHtml(ord.macchina_proposta.nome)}</div>` : ''}
               </td>
               <td style="padding:8px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)">${ord.stima_min != null ? Math.round(ord.stima_min) + ' min' : '—'}</td>
             </tr>`;
@@ -6011,6 +6028,302 @@ function aggiornaAttesaEsterna(faseId) {
   cb.style.cursor = vincolato ? '' : 'pointer';
   if (vincolato) { cb.checked = true; }
   if (nota) nota.style.display = vincolato ? '' : 'none';
+}
+
+// ═══════════════════════════════════════════════
+// MACCHINE CONFIG
+// ═══════════════════════════════════════════════
+let macchineList = [];
+
+async function loadMacchine() {
+  const [{ data: macchine }, { data: faseMac }, { data: compMac }, { data: manut }] = await Promise.all([
+    sb.from('macchine').select('*').order('nome'),
+    sb.from('fase_macchine').select('fase_id, macchina_id'),
+    sb.from('competenze_operatore_macchina').select('operatore_id, macchina_id, priorita').order('priorita'),
+    sb.from('manutenzioni_macchina').select('*').order('data_inizio'),
+  ]);
+  macchineList = (macchine || []).map(m => ({
+    ...m,
+    fase_ids:     (faseMac || []).filter(r => r.macchina_id === m.id).map(r => r.fase_id),
+    competenze:   (compMac || []).filter(r => r.macchina_id === m.id).sort((a,b) => a.priorita - b.priorita).map(r => r.operatore_id),
+    manutenzioni: (manut || []).filter(r => r.macchina_id === m.id),
+  }));
+}
+
+function renderMacchine() {
+  const container = document.getElementById('macchine-list');
+  if (!container) return;
+  if (!macchineList.length) {
+    container.innerHTML = '<div class="card" style="padding:20px;color:var(--muted);text-align:center">Nessuna macchina configurata. Clicca "+ Nuova macchina" per aggiungerne una.</div>';
+    return;
+  }
+  const operatori = operatoriCache.filter(o => o.ruolo === 'operatore' && o.attivo);
+  container.innerHTML = macchineList.map(m => {
+    const statoColor = m.stato === 'attiva' ? 'var(--ok)' : m.stato === 'manutenzione' ? '#B08030' : 'var(--alert)';
+    const statoLabel = m.stato === 'attiva' ? 'Attiva' : m.stato === 'manutenzione' ? 'In manutenzione' : 'Fuori uso';
+    return `
+    <div class="card" style="padding:20px;margin-bottom:16px" id="mac-card-${m.id}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <input type="text" value="${escapeHtml(m.nome)}" id="mac-nome-${m.id}"
+            style="font-size:16px;font-weight:600;border:none;background:transparent;color:var(--ink);width:240px;padding:4px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:11px;font-weight:600;color:${statoColor};text-transform:uppercase">${statoLabel}</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" style="font-size:12px" onclick="salvaMacchina('${m.id}')">💾 Salva</button>
+          <button class="btn btn-secondary" style="font-size:12px;color:var(--alert)" onclick="eliminaMacchina('${m.id}', '${escapeHtml(m.nome).replace(/'/g,"\\'")}')">✕ Elimina</button>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">
+        <div class="form-group" style="flex:1;min-width:140px">
+          <label style="font-size:12px;font-weight:600">Stato</label>
+          <select id="mac-stato-${m.id}" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+            <option value="attiva" ${m.stato==='attiva'?'selected':''}>Attiva</option>
+            <option value="manutenzione" ${m.stato==='manutenzione'?'selected':''}>In manutenzione</option>
+            <option value="fuori_uso" ${m.stato==='fuori_uso'?'selected':''}>Fuori uso</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;min-width:140px">
+          <label style="font-size:12px;font-weight:600">Ore/giorno disponibili</label>
+          <input type="number" id="mac-ore-${m.id}" value="${m.ore_default}" min="0.5" max="24" step="0.5"
+            style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
+        </div>
+      </div>
+
+      <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="font-size:12px;font-weight:600;color:#92400E;margin-bottom:10px">Fasi che richiedono questa macchina</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px">
+          ${fasi.map(f => `
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+              <input type="checkbox" data-mac="${m.id}" data-fase-mac="${f.id}"
+                ${m.fase_ids.includes(f.id)?'checked':''}
+                style="accent-color:var(--wood)">
+              ${escapeHtml(f.nome)}
+            </label>
+          `).join('')}
+        </div>
+      </div>
+
+      <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:14px;margin-bottom:14px">
+        <div style="font-size:12px;font-weight:600;color:#166534;margin-bottom:4px">Chi la sa usare</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Nessuna selezione = chiunque può usarla.</div>
+        <div id="mac-comp-list-${m.id}" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+          ${_renderCompMacchina(m, operatori)}
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <select id="mac-add-comp-${m.id}" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px">
+            <option value="">+ Aggiungi operatore…</option>
+            ${operatori.filter(o => !m.competenze.includes(o.id)).map(o =>
+              `<option value="${o.id}">${escapeHtml(o.nome+' '+o.cognome)}</option>`
+            ).join('')}
+          </select>
+          <button class="btn btn-secondary" style="font-size:12px" onclick="aggiungiCompMacchina('${m.id}')">Aggiungi</button>
+          <button class="btn btn-primary" style="font-size:12px" onclick="salvaCompMacchina('${m.id}')">✓ Salva chi la usa</button>
+        </div>
+      </div>
+
+      <div style="background:#F5F3FF;border:1px solid #DDD6FE;border-radius:10px;padding:14px">
+        <div style="font-size:12px;font-weight:600;color:#5B21B6;margin-bottom:10px">Manutenzioni programmate</div>
+        ${m.manutenzioni.length ? `
+        <table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:12px">
+          <thead><tr style="color:var(--muted)">
+            <th style="text-align:left;padding:4px 8px">Dal</th>
+            <th style="text-align:left;padding:4px 8px">Al</th>
+            <th style="text-align:left;padding:4px 8px">Descrizione</th>
+            <th style="padding:4px 8px"></th>
+          </tr></thead>
+          <tbody>
+            ${m.manutenzioni.map(mn => `
+            <tr style="border-top:1px solid #EDE9FE">
+              <td style="padding:6px 8px">${mn.data_inizio}</td>
+              <td style="padding:6px 8px">${mn.data_fine}</td>
+              <td style="padding:6px 8px">${escapeHtml(mn.descrizione || '—')}</td>
+              <td style="padding:6px 8px">
+                <button class="btn btn-secondary" style="font-size:11px;color:var(--alert)"
+                  onclick="eliminaManutenzione('${mn.id}', '${m.id}')">✕</button>
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>` : `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Nessuna manutenzione programmata</div>`}
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:3px">Dal</div>
+            <input type="date" id="mac-mnt-dal-${m.id}" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:3px">Al</div>
+            <input type="date" id="mac-mnt-al-${m.id}" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px">
+          </div>
+          <div style="flex:1;min-width:120px">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:3px">Descrizione</div>
+            <input type="text" id="mac-mnt-desc-${m.id}" placeholder="opzionale"
+              style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px">
+          </div>
+          <button class="btn btn-primary" style="font-size:12px" onclick="aggiungiManutenzione('${m.id}')">+ Aggiungi</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _renderCompMacchina(m, operatori) {
+  const comp = m.competenze.map(opId => operatori.find(o => o.id === opId)).filter(Boolean);
+  if (!comp.length) return '<div style="font-size:12px;color:var(--muted)">Nessuno configurato — chiunque può usarla</div>';
+  return comp.map((o, i) => `
+    <div style="display:flex;align-items:center;gap:8px;background:white;border:1px solid var(--border);border-radius:8px;padding:8px 12px">
+      <span style="color:var(--muted);font-size:12px;min-width:18px">${i+1}</span>
+      <span style="flex:1;font-size:13px">${escapeHtml(o.nome+' '+o.cognome)}</span>
+      <button onclick="rimuoviCompMacchina('${m.id}','${o.id}')"
+        style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;line-height:1">✕</button>
+    </div>`).join('');
+}
+
+function avviaNuovaMacchina() {
+  const container = document.getElementById('macchine-list');
+  const existing = document.getElementById('mac-new-form');
+  if (existing) { existing.remove(); return; }
+  const div = document.createElement('div');
+  div.id = 'mac-new-form';
+  div.className = 'card';
+  div.style.cssText = 'padding:20px;margin-bottom:16px;border:2px dashed var(--wood)';
+  div.innerHTML = `
+    <div style="font-size:14px;font-weight:600;margin-bottom:14px;color:var(--wood)">Nuova macchina</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+      <div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:3px">Nome</div>
+        <input type="text" id="mac-new-nome" placeholder="es. CNC Biesse"
+          style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:220px">
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:3px">Stato</div>
+        <select id="mac-new-stato" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+          <option value="attiva">Attiva</option>
+          <option value="manutenzione">In manutenzione</option>
+          <option value="fuori_uso">Fuori uso</option>
+        </select>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:3px">Ore/giorno</div>
+        <input type="number" id="mac-new-ore" value="8" min="0.5" max="24" step="0.5"
+          style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:90px">
+      </div>
+      <button class="btn btn-primary" onclick="confermaNuovaMacchina()">✓ Crea</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('mac-new-form').remove()">Annulla</button>
+    </div>`;
+  container.insertBefore(div, container.firstChild);
+  document.getElementById('mac-new-nome')?.focus();
+}
+
+async function confermaNuovaMacchina() {
+  const nome  = document.getElementById('mac-new-nome')?.value.trim();
+  const stato = document.getElementById('mac-new-stato')?.value;
+  const ore   = parseFloat(document.getElementById('mac-new-ore')?.value) || 8;
+  if (!nome) { toast('Inserisci un nome', 'err'); return; }
+  const { data } = await sb.rpc('imposta_macchina', {
+    p_nome: nome, p_stato: stato, p_ore_default: ore,
+    p_responsabile_id: currentUserRow.id, p_session_token: null,
+  });
+  if (!data?.ok) { toast(data?.errore || 'Errore creazione macchina', 'err'); return; }
+  document.getElementById('mac-new-form')?.remove();
+  await loadMacchine();
+  renderMacchine();
+  toast('Macchina creata');
+}
+
+async function salvaMacchina(macId) {
+  const nome    = document.getElementById(`mac-nome-${macId}`)?.value.trim();
+  const stato   = document.getElementById(`mac-stato-${macId}`)?.value;
+  const ore     = parseFloat(document.getElementById(`mac-ore-${macId}`)?.value) || 8;
+  const faseIds = Array.from(document.querySelectorAll(`input[data-mac="${macId}"][data-fase-mac]:checked`))
+                       .map(el => parseInt(el.dataset.faseMac));
+  const [r1, r2] = await Promise.all([
+    sb.rpc('imposta_macchina', { p_id: macId, p_nome: nome, p_stato: stato, p_ore_default: ore, p_responsabile_id: currentUserRow.id, p_session_token: null }),
+    sb.rpc('imposta_fasi_macchina', { p_macchina_id: macId, p_fase_ids: faseIds, p_responsabile_id: currentUserRow.id, p_session_token: null }),
+  ]);
+  if (!r1.data?.ok || !r2.data?.ok) { toast(r1.data?.errore || r2.data?.errore || 'Errore salvataggio', 'err'); return; }
+  await loadMacchine();
+  renderMacchine();
+  toast('Macchina salvata');
+}
+
+async function eliminaMacchina(macId, nome) {
+  if (!confirm(`Eliminare la macchina "${nome}"?`)) return;
+  const { data } = await sb.rpc('elimina_macchina', { p_id: macId, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (!data?.ok) {
+    toast(data?.errore === 'macchina_in_uso' ? 'Macchina in uso su ordini attivi — imposta come "fuori uso" invece di eliminarla' : (data?.errore || 'Errore'), 'err');
+    return;
+  }
+  await loadMacchine();
+  renderMacchine();
+  toast('Macchina eliminata');
+}
+
+function aggiungiCompMacchina(macId) {
+  const sel  = document.getElementById(`mac-add-comp-${macId}`);
+  const opId = sel?.value;
+  if (!opId) return;
+  const m = macchineList.find(x => x.id === macId);
+  if (!m || m.competenze.includes(opId)) return;
+  m.competenze.push(opId);
+  const operatori = operatoriCache.filter(o => o.ruolo === 'operatore' && o.attivo);
+  document.getElementById(`mac-comp-list-${macId}`).innerHTML = _renderCompMacchina(m, operatori);
+  sel.innerHTML = '<option value="">+ Aggiungi operatore…</option>' +
+    operatori.filter(o => !m.competenze.includes(o.id)).map(o =>
+      `<option value="${o.id}">${escapeHtml(o.nome+' '+o.cognome)}</option>`).join('');
+}
+
+function rimuoviCompMacchina(macId, opId) {
+  const m = macchineList.find(x => x.id === macId);
+  if (!m) return;
+  m.competenze = m.competenze.filter(id => id !== opId);
+  const operatori = operatoriCache.filter(o => o.ruolo === 'operatore' && o.attivo);
+  document.getElementById(`mac-comp-list-${macId}`).innerHTML = _renderCompMacchina(m, operatori);
+  const sel = document.getElementById(`mac-add-comp-${macId}`);
+  if (sel) sel.innerHTML = '<option value="">+ Aggiungi operatore…</option>' +
+    operatori.filter(o => !m.competenze.includes(o.id)).map(o =>
+      `<option value="${o.id}">${escapeHtml(o.nome+' '+o.cognome)}</option>`).join('');
+}
+
+async function salvaCompMacchina(macId) {
+  const m = macchineList.find(x => x.id === macId);
+  if (!m) return;
+  const { data } = await sb.rpc('imposta_competenze_macchina', {
+    p_macchina_id: macId, p_operatori_ordinati: m.competenze,
+    p_responsabile_id: currentUserRow.id, p_session_token: null,
+  });
+  if (!data?.ok) { toast(data?.errore || 'Errore salvataggio competenze', 'err'); return; }
+  await loadMacchine();
+  renderMacchine();
+  toast('Competenze salvate');
+}
+
+async function aggiungiManutenzione(macId) {
+  const dal  = document.getElementById(`mac-mnt-dal-${macId}`)?.value;
+  const al   = document.getElementById(`mac-mnt-al-${macId}`)?.value;
+  const desc = document.getElementById(`mac-mnt-desc-${macId}`)?.value.trim() || null;
+  if (!dal || !al) { toast('Inserisci le date dal/al', 'err'); return; }
+  const { data } = await sb.rpc('imposta_manutenzione_macchina', {
+    p_macchina_id: macId, p_data_inizio: dal, p_data_fine: al, p_descrizione: desc,
+    p_responsabile_id: currentUserRow.id, p_session_token: null,
+  });
+  if (!data?.ok) {
+    toast(data?.errore === 'data_fine_precedente_inizio' ? 'La data di fine deve essere ≥ data inizio' : (data?.errore || 'Errore'), 'err');
+    return;
+  }
+  await loadMacchine();
+  renderMacchine();
+  toast('Manutenzione aggiunta');
+}
+
+async function eliminaManutenzione(manutId, macId) {
+  const { data } = await sb.rpc('elimina_manutenzione_macchina', {
+    p_id: manutId, p_responsabile_id: currentUserRow.id, p_session_token: null,
+  });
+  if (!data?.ok) { toast(data?.errore || 'Errore', 'err'); return; }
+  await loadMacchine();
+  renderMacchine();
+  toast('Manutenzione eliminata');
 }
 
 init();
