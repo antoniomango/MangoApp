@@ -822,24 +822,17 @@ async function renderHome() {
   let mieFasi = [];
   let mieFasiExtra = [];
   if (isOnline) {
-    const [{ data: primarie }, { data: junction }, { data: extraInCorso }] = await Promise.all([
+    const [{ data: primarie }, { data: extraInCorso }] = await Promise.all([
       sb.from('ordine_fasi')
         .select('*, ordini(codice, cliente, stato), fasi(nome)')
         .eq('operatore_id', currentUser.id)
         .in('stato', ['in_corso', 'in_attesa']),
-      sb.from('ordine_fasi_operatori')
-        .select('ordine_fase_id, ordine_fasi(*, ordini(codice, cliente, stato), fasi(nome))')
-        .eq('operatore_id', currentUser.id),
       sb.from('fasi_ordine_extra')
         .select('*, ordini(codice, cliente, stato)')
         .eq('operatore_id', currentUser.id)
         .in('stato', ['in_corso', 'in_attesa'])
     ]);
-    const ids = new Set((primarie || []).map(f => f.id));
-    const daJunction = (junction || [])
-      .map(j => j.ordine_fasi)
-      .filter(f => f && !ids.has(f.id) && ['in_corso', 'in_attesa'].includes(f.stato));
-    mieFasi = [...(primarie || []), ...daJunction];
+    mieFasi = primarie || [];
     mieFasiExtra = extraInCorso || [];
   }
 
