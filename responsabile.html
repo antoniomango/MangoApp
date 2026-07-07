@@ -6096,8 +6096,9 @@ function renderMacchine() {
         <div style="display:flex;flex-wrap:wrap;gap:10px">
           ${fasi.map(f => `
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-              <input type="checkbox" data-mac="${m.id}" data-fase-mac="${f.id}"
+              <input type="checkbox"
                 ${m.fase_ids.includes(f.id)?'checked':''}
+                onchange="toggleFaseMacchina('${m.id}', ${f.id}, this.checked)"
                 style="accent-color:var(--wood)">
               ${escapeHtml(f.nome)}
             </label>
@@ -6119,7 +6120,6 @@ function renderMacchine() {
             ).join('')}
           </select>
           <button class="btn btn-secondary" style="font-size:12px" onclick="aggiungiCompMacchina('${m.id}')">Aggiungi</button>
-          <button class="btn btn-primary" style="font-size:12px" onclick="salvaCompMacchina('${m.id}')">✓ Salva chi la usa</button>
         </div>
       </div>
 
@@ -6231,17 +6231,30 @@ async function confermaNuovaMacchina() {
   toast('Macchina creata');
 }
 
+function toggleFaseMacchina(macId, faseId, checked) {
+  const m = macchineList.find(x => x.id === macId);
+  if (!m) return;
+  if (checked) {
+    if (!m.fase_ids.includes(faseId)) m.fase_ids.push(faseId);
+  } else {
+    m.fase_ids = m.fase_ids.filter(id => id !== faseId);
+  }
+}
+
 async function salvaMacchina(macId) {
-  const nome    = document.getElementById(`mac-nome-${macId}`)?.value.trim();
-  const stato   = document.getElementById(`mac-stato-${macId}`)?.value;
-  const ore     = parseFloat(document.getElementById(`mac-ore-${macId}`)?.value) || 8;
-  const faseIds = Array.from(document.querySelectorAll(`input[data-mac="${macId}"][data-fase-mac]:checked`))
-                       .map(el => parseInt(el.dataset.faseMac));
-  const [r1, r2] = await Promise.all([
+  const m = macchineList.find(x => x.id === macId);
+  if (!m) return;
+  const nome  = document.getElementById(`mac-nome-${macId}`)?.value?.trim() || m.nome;
+  const stato = document.getElementById(`mac-stato-${macId}`)?.value || m.stato;
+  const ore   = parseFloat(document.getElementById(`mac-ore-${macId}`)?.value) || m.ore_default;
+  const [r1, r2, r3] = await Promise.all([
     sb.rpc('imposta_macchina', { p_id: macId, p_nome: nome, p_stato: stato, p_ore_default: ore, p_responsabile_id: currentUserRow.id, p_session_token: null }),
-    sb.rpc('imposta_fasi_macchina', { p_macchina_id: macId, p_fase_ids: faseIds, p_responsabile_id: currentUserRow.id, p_session_token: null }),
+    sb.rpc('imposta_fasi_macchina', { p_macchina_id: macId, p_fase_ids: m.fase_ids, p_responsabile_id: currentUserRow.id, p_session_token: null }),
+    sb.rpc('imposta_competenze_macchina', { p_macchina_id: macId, p_operatori_ordinati: m.competenze, p_responsabile_id: currentUserRow.id, p_session_token: null }),
   ]);
-  if (!r1.data?.ok || !r2.data?.ok) { toast(r1.data?.errore || r2.data?.errore || 'Errore salvataggio', 'err'); return; }
+  if (!r1.data?.ok) { toast(r1.data?.errore || 'Errore salvataggio', 'err'); return; }
+  if (!r2.data?.ok) { toast(r2.data?.errore || 'Errore salvataggio fasi', 'err'); return; }
+  if (!r3.data?.ok) { toast(r3.data?.errore || 'Errore salvataggio competenze', 'err'); return; }
   await loadMacchine();
   renderMacchine();
   toast('Macchina salvata');
