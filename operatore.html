@@ -822,17 +822,30 @@ async function renderHome() {
   let mieFasi = [];
   let mieFasiExtra = [];
   if (isOnline) {
-    const [{ data: primarie }, { data: extraInCorso }] = await Promise.all([
+    const [{ data: primarie }, { data: comeCollega }, { data: extraInCorso }] = await Promise.all([
       sb.from('ordine_fasi')
         .select('*, ordini(codice, cliente, stato), fasi(nome)')
         .eq('operatore_id', currentUser.id)
         .in('stato', ['in_corso', 'in_attesa']),
+      sb.from('ordine_fasi_operatori')
+        .select('ordine_fase_id, ordine_fasi!inner(*, ordini(codice, cliente, stato), fasi(nome), users!operatore_id(nome, cognome))')
+        .eq('operatore_id', currentUser.id)
+        .eq('ordine_fasi.stato', 'in_corso'),
       sb.from('fasi_ordine_extra')
         .select('*, ordini(codice, cliente, stato)')
         .eq('operatore_id', currentUser.id)
         .in('stato', ['in_corso', 'in_attesa'])
     ]);
-    mieFasi = primarie || [];
+    const ids = new Set((primarie || []).map(f => f.id));
+    const daCollega = (comeCollega || [])
+      .filter(j => j.ordine_fasi?.stato === 'in_corso' && !ids.has(j.ordine_fasi.id))
+      .map(j => ({
+        ...j.ordine_fasi,
+        _collegaNome: j.ordine_fasi.users
+          ? `${j.ordine_fasi.users.nome} ${j.ordine_fasi.users.cognome}`
+          : null,
+      }));
+    mieFasi = [...(primarie || []), ...daCollega];
     mieFasiExtra = extraInCorso || [];
   }
 
@@ -841,12 +854,14 @@ async function renderHome() {
     ...mieFasi.map(f => ({
       id: f.id, ordineId: f.ordine_id, nome: f.nome_custom || f.fasi?.nome || 'Fase',
       faseId: f.fase_id || null,
-      cliente: f.ordini?.cliente || '', codice: f.ordini?.codice || '', stato: f.stato, isExtra: false
+      cliente: f.ordini?.cliente || '', codice: f.ordini?.codice || '', stato: f.stato, isExtra: false,
+      collegaNome: f._collegaNome || null
     })),
     ...mieFasiExtra.map(f => ({
       id: f.id, ordineId: f.ordine_id, nome: f.nome || 'Fase extra',
       faseId: null,
-      cliente: f.ordini?.cliente || '', codice: f.ordini?.codice || '', stato: f.stato, isExtra: true
+      cliente: f.ordini?.cliente || '', codice: f.ordini?.codice || '', stato: f.stato, isExtra: true,
+      collegaNome: null
     }))
   ];
   const batchDiv = document.getElementById('btn-batch-fasi');
@@ -877,7 +892,7 @@ async function renderHome() {
       <div class="card-row" onclick="${f.isExtra ? `openFaseExtraDetail('${f.id}','${f.ordineId}')` : `openFaseDetail('${f.id}','${f.ordineId}')`}">
         <div class="row-main">
           <div class="row-title">${escapeHtml(f.nome)}</div>
-          <div class="row-sub">${escapeHtml(f.cliente)} · ${escapeHtml(f.codice)}${f.isExtra ? ' · <em>Ordine Extra</em>' : ''}</div>
+          <div class="row-sub">${escapeHtml(f.cliente)} · ${escapeHtml(f.codice)}${f.collegaNome ? ` · con ${escapeHtml(f.collegaNome)}` : ''}${f.isExtra ? ' · <em>Ordine Extra</em>' : ''}</div>
         </div>
         <span class="badge badge-${f.stato}">${f.stato === 'in_attesa' ? 'In attesa' : 'In corso'}</span>
         <span class="arrow">›</span>
