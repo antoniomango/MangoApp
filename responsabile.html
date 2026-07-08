@@ -2672,18 +2672,35 @@ async function openFaseDetail(ordFaseId, ordineId, readonly) {
   } else {
     const puoCompletare = ['disponibile','in_corso','in_attesa'].includes(f.stato);
     const puoRiaprire  = f.stato === 'completata';
+    const puoRimuovere = isCustom && f.stato !== 'completata';
     footerEl.innerHTML = `
       <button class="btn btn-secondary" onclick="closeModal('modal-fase')">Annulla</button>
+      ${puoRimuovere ? `<button class="btn btn-alert" onclick="eliminaFaseCustomOrdine('${ordFaseId}','${ordineId}','${nomeFase.replace(/'/g,"\\'")}')">🗑 Rimuovi fase</button>` : ''}
       ${f.stato === 'in_corso' ? `<button class="btn btn-secondary" onclick="openRiassegnaModal('${ordFaseId}')">Riassegna</button>` : ''}
       ${puoCompletare ? `<button class="btn btn-ok" onclick="apriCompletaFase('${ordFaseId}','${ordineId}')">✓ Segna completata</button>` : ''}
       ${puoRiaprire   ? `<button class="btn btn-secondary" onclick="riaprieFaseResp('${ordFaseId}','${ordineId}')">↩ Riapri fase</button>` : ''}
-      <button class="btn btn-primary" onclick="salvaNoteResp('${ordFaseId}', '${ordineId}')">Salva Note</button>
+      ${!puoRimuovere ? `<button class="btn btn-primary" onclick="salvaNoteResp('${ordFaseId}', '${ordineId}')">Salva Note</button>` : ''}
     `;
   }
 
   const modalFase = document.getElementById('modal-fase');
   modalFase.dataset.operatoreId = f.operatore_id || '';
   modalFase.classList.add('open');
+}
+
+async function eliminaFaseCustomOrdine(ordFaseId, ordineId, nomeFase) {
+  if (!confirm(`Rimuovere la fase "${nomeFase}"? Questa azione non può essere annullata.`)) return;
+  const { data, error } = await sb.rpc('elimina_fase_custom_ordine', {
+    p_ordine_fase_id: ordFaseId,
+    p_responsabile_id: currentUserRow.id,
+  });
+  if (error || !data?.ok) {
+    toast('Errore: ' + (data?.errore || error?.message || 'sconosciuto'), 'err');
+    return;
+  }
+  closeModal('modal-fase');
+  toast(`Fase "${nomeFase}" rimossa`, 'ok');
+  await openDettaglioOrdine(ordineId);
 }
 
 async function apriCompletaFase(ordFaseId, ordineId) {
