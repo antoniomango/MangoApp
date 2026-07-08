@@ -731,6 +731,9 @@ async function loadOrdini() {
     const { data } = await sb.from('ordini').select('*').in('stato', ['aperto', 'sospeso', 'attesa_spedizione']).neq('eliminato', true);
     const prioOrd = { 'extra_urgente': 0, 'urgente': 1, 'normale': 2 };
     ordiniCache = (data || []).sort((a, b) => {
+      const as = a.stato === 'attesa_spedizione' ? 0 : 1;
+      const bs = b.stato === 'attesa_spedizione' ? 0 : 1;
+      if (as !== bs) return as - bs;
       const pd = prioOrd[a.priorita] - prioOrd[b.priorita];
       if (pd !== 0) return pd;
       if (a.scadenza && b.scadenza) return new Date(a.scadenza) - new Date(b.scadenza);

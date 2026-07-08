@@ -1717,6 +1717,9 @@ async function loadOrdini() {
     .neq('eliminato', true);
   const prioWeights = Object.fromEntries(prioritaConfig.map(p => [p.id, p.peso]));
   ordiniCache = (data || []).sort((a, b) => {
+    const as = a.stato === 'attesa_spedizione' ? 0 : 1;
+    const bs = b.stato === 'attesa_spedizione' ? 0 : 1;
+    if (as !== bs) return as - bs;
     const pd = (prioWeights[b.priorita] ?? 0) - (prioWeights[a.priorita] ?? 0);
     if (pd !== 0) return pd;
     if (a.scadenza && b.scadenza) return new Date(a.scadenza) - new Date(b.scadenza);
