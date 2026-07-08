@@ -827,10 +827,7 @@ async function renderHome() {
         .select('*, ordini(codice, cliente, stato), fasi(nome)')
         .eq('operatore_id', currentUser.id)
         .in('stato', ['in_corso', 'in_attesa']),
-      sb.from('ordine_fasi_operatori')
-        .select('ordine_fase_id, ordine_fasi!inner(*, ordini(codice, cliente, stato), fasi(nome), users!operatore_id(nome, cognome))')
-        .eq('operatore_id', currentUser.id)
-        .eq('ordine_fasi.stato', 'in_corso'),
+      sb.rpc('fasi_in_corso_come_collega', { p_operatore_id: currentUser.id }),
       sb.from('fasi_ordine_extra')
         .select('*, ordini(codice, cliente, stato)')
         .eq('operatore_id', currentUser.id)
@@ -838,13 +835,8 @@ async function renderHome() {
     ]);
     const ids = new Set((primarie || []).map(f => f.id));
     const daCollega = (comeCollega || [])
-      .filter(j => j.ordine_fasi?.stato === 'in_corso' && !ids.has(j.ordine_fasi.id))
-      .map(j => ({
-        ...j.ordine_fasi,
-        _collegaNome: j.ordine_fasi.users
-          ? `${j.ordine_fasi.users.nome} ${j.ordine_fasi.users.cognome}`
-          : null,
-      }));
+      .filter(j => !ids.has(j.id))
+      .map(j => ({ ...j, _collegaNome: j.collegaNome || null }));
     mieFasi = [...(primarie || []), ...daCollega];
     mieFasiExtra = extraInCorso || [];
   }
