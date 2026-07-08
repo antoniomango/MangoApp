@@ -591,6 +591,20 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
             </tbody>
           </table>
         </div>
+
+        <!-- MEMORIA DATABASE -->
+        <div class="card" style="margin-top:16px;padding:20px" id="db-memoria-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+            <div>
+              <div style="font-size:14px;font-weight:600">🗄 Memoria database</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">Spazio occupato sul piano Supabase Free</div>
+            </div>
+            <button class="btn btn-secondary" style="padding:5px 12px;font-size:12px" onclick="loadDimensioneDatabase()">↻ Aggiorna</button>
+          </div>
+          <div id="db-memoria-content">
+            <div style="color:var(--muted);font-size:13px;font-style:italic">Caricamento…</div>
+          </div>
+        </div>
       </section>
 
       <!-- NOTIFICHE -->
@@ -1825,7 +1839,7 @@ function showSection(name) {
   else if (name === 'ordini') renderOrdiniTable();
   else if (name === 'nc') renderNcTable();
   else if (name === 'operatori') { renderOperatori(); loadRiepilogoPermessi(); }
-  else if (name === 'archivio') renderArchivioTable();
+  else if (name === 'archivio') { renderArchivioTable(); loadDimensioneDatabase(); }
   else if (name === 'notifiche') renderNotifiche();
   else if (name === 'fasi-config') renderFasiConfig();
   else if (name === 'orario-config') renderOrarioConfig();
@@ -4231,6 +4245,105 @@ function exportCSV() {
   a.href = url; a.download = `mango-archivio-${new Date().toISOString().split('T')[0]}.csv`;
   a.click(); URL.revokeObjectURL(url);
   toast('CSV esportato', 'ok');
+}
+
+// ═══════════════════════════════════════════════
+// MEMORIA DATABASE
+
+async function loadDimensioneDatabase() {
+  const el = document.getElementById('db-memoria-content');
+  if (!el) return;
+  el.innerHTML = '<div style="color:var(--muted);font-size:13px;font-style:italic">Caricamento…</div>';
+
+  const [{ data: dimData, error }, { data: cfgRows }] = await Promise.all([
+    sb.rpc('dimensione_database', { p_responsabile_id: currentUserRow.id }),
+    sb.from('config_sistema').select('valore').eq('chiave', 'limite_db_mb')
+  ]);
+
+  if (error) {
+    el.innerHTML = `<div style="color:var(--alert);font-size:13px">Errore: ${escapeHtml(error.message)}</div>`;
+    return;
+  }
+
+  const limiteRaw = cfgRows?.[0]?.valore;
+  const limiteMb = limiteRaw ? parseFloat(limiteRaw) : null;
+  renderDimensioneDatabase(dimData, limiteMb);
+}
+
+function renderDimensioneDatabase(data, limiteMb) {
+  const el = document.getElementById('db-memoria-content');
+  if (!el || !data) return;
+
+  const dbBytes = data.db_bytes;
+  const dbMb = dbBytes / (1024 * 1024);
+  const tabelle = data.tabelle || [];
+  const maxTabBytes = tabelle.length ? tabelle[0].dim_bytes : 1;
+
+  // Barra utilizzo totale
+  let barraHtml = '';
+  if (limiteMb) {
+    const pct = Math.min(100, Math.round(dbMb / limiteMb * 100));
+    const barColor = pct >= 90 ? '#EF4444' : pct >= 70 ? '#F59E0B' : 'var(--wood)';
+    const liberoMb = Math.max(0, limiteMb - dbMb);
+    barraHtml = `
+      <div style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px">
+          <span style="font-weight:600">${data.db_leggibile} usati su ${limiteMb} MB</span>
+          <span style="font-family:'DM Mono',monospace;color:var(--muted)">${pct}% — ${liberoMb.toFixed(0)} MB liberi</span>
+        </div>
+        <div style="background:var(--border);border-radius:4px;height:8px">
+          <div style="width:${pct}%;background:${barColor};border-radius:4px;height:100%;transition:width 0.4s"></div>
+        </div>
+      </div>`;
+  } else {
+    barraHtml = `
+      <div style="margin-bottom:16px">
+        <div style="font-size:22px;font-weight:700;font-family:'DM Mono',monospace">${data.db_leggibile}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">Imposta il limite del piano per vedere la percentuale</div>
+      </div>`;
+  }
+
+  // Breakdown tabelle
+  const righeTabelleHtml = tabelle.map(t => {
+    const pct = Math.round(t.dim_bytes / maxTabBytes * 100);
+    const barColor = t.nome.startsWith('cron.') ? '#F59E0B' : 'var(--wood)';
+    return `<div style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+        <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--ink)">${escapeHtml(t.nome)}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${escapeHtml(t.dim_leggibile)}</span>
+      </div>
+      <div style="background:var(--border);border-radius:4px;height:5px">
+        <div style="width:${pct}%;background:${barColor};border-radius:4px;height:100%;transition:width 0.4s"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Campo limite configurabile
+  const limiteAttualeVal = limiteMb ?? '';
+  const limiteHtml = `
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <label style="font-size:12px;color:var(--muted)">Limite piano (MB):</label>
+      <input type="number" id="db-limite-input" value="${limiteAttualeVal}" placeholder="es. 500"
+        style="width:90px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--ink)">
+      <button class="btn btn-secondary" style="padding:5px 12px;font-size:12px" onclick="salvaLimiteDb()">Salva</button>
+      ${!limiteMb ? '<span style="font-size:11px;color:var(--muted);font-style:italic">Imposta il limite per vedere la barra di utilizzo</span>' : ''}
+    </div>`;
+
+  el.innerHTML = `
+    ${barraHtml}
+    <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">Tabelle più grandi</div>
+    ${righeTabelleHtml}
+    ${limiteHtml}`;
+}
+
+async function salvaLimiteDb() {
+  const val = document.getElementById('db-limite-input')?.value.trim();
+  const n = parseFloat(val);
+  if (!val || isNaN(n) || n <= 0) { toast('Inserisci un valore valido in MB', 'err'); return; }
+  const { error } = await sb.from('config_sistema').update({ valore: String(n) }).eq('chiave', 'limite_db_mb');
+  if (error) { toast('Errore salvataggio: ' + error.message, 'err'); return; }
+  toast('Limite salvato', 'ok');
+  loadDimensioneDatabase();
 }
 
 // ═══════════════════════════════════════════════
