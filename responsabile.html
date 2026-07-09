@@ -4902,11 +4902,13 @@ async function openFaseExtraDetail(faseExtraId, ordineId, readonly) {
   const footer = document.getElementById('modal-fase-footer');
   footer.innerHTML = '';
   if (!readonly) {
-    footer.innerHTML = `<button class="btn btn-secondary" onclick="closeModal('modal-fase')">Chiudi</button>
+    const puoCompletare = ['disponibile', 'in_corso', 'in_attesa'].includes(f.stato);
+    const puoRiaprire   = f.stato === 'completata';
+    footer.innerHTML = `<button class="btn btn-secondary" onclick="closeModal('modal-fase')">Annulla</button>
+      ${f.stato === 'in_corso' && f.operatore_id ? `<button class="btn btn-secondary" onclick="riassegnaFaseExtra('${faseExtraId}','${ordineId}')">Riassegna</button>` : ''}
+      ${puoCompletare ? `<button class="btn btn-ok" onclick="completaFaseExtraResp('${faseExtraId}','${ordineId}')">✓ Segna completata</button>` : ''}
+      ${puoRiaprire   ? `<button class="btn btn-secondary" onclick="riaprieFaseExtraResp('${faseExtraId}','${ordineId}')">↩ Riapri fase</button>` : ''}
       <button class="btn btn-primary" onclick="salvaNotaFaseExtra('${faseExtraId}','${ordineId}')">Salva note</button>`;
-    if (f.stato === 'in_corso' && f.operatore_id) {
-      footer.innerHTML += `<button class="btn btn-secondary" onclick="riassegnaFaseExtra('${faseExtraId}','${ordineId}')">Riassegna</button>`;
-    }
   } else {
     footer.innerHTML = `<button class="btn btn-secondary" onclick="closeModal('modal-fase')">Chiudi</button>`;
   }
@@ -4919,6 +4921,32 @@ async function salvaNotaFaseExtra(faseExtraId, ordineId) {
   if (!data?.ok) { toast('Errore aggiornamento note', 'err'); return; }
   closeModal('modal-fase');
   toast('Note aggiornate', 'ok');
+  renderDettaglioOrdine(ordineId);
+}
+
+async function completaFaseExtraResp(faseExtraId, ordineId) {
+  if (!confirm('Segnare questa fase come completata?')) return;
+  const { data } = await sb.rpc('forza_completa_fase_extra', {
+    p_fase_extra_id: faseExtraId,
+    p_responsabile_id: currentUserRow.id,
+    p_session_token: null
+  });
+  if (!data?.ok) { toast('Errore: ' + (data?.errore || ''), 'err'); return; }
+  closeModal('modal-fase');
+  toast('Fase segnata come completata', 'ok');
+  renderDettaglioOrdine(ordineId);
+}
+
+async function riaprieFaseExtraResp(faseExtraId, ordineId) {
+  if (!confirm('Riaprire questa fase impostandola su "disponibile"?')) return;
+  const { data } = await sb.rpc('riapri_fase_extra_resp', {
+    p_fase_extra_id: faseExtraId,
+    p_responsabile_id: currentUserRow.id,
+    p_session_token: null
+  });
+  if (!data?.ok) { toast('Errore: ' + (data?.errore || ''), 'err'); return; }
+  closeModal('modal-fase');
+  toast('Fase riaperta', 'ok');
   renderDettaglioOrdine(ordineId);
 }
 
