@@ -783,7 +783,7 @@ function showScreen(name) {
   document.getElementById('screen-' + name)?.classList.add('active');
   document.getElementById('tab-' + name)?.classList.add('active');
 
-  if (name === 'home') renderHome();
+  if (name === 'home') { loadOrdini().then(() => renderHome()); }
 
   else if (name === 'attivita') renderAttivita();
   else if (name === 'nc') populateNcSelects();
@@ -1006,8 +1006,9 @@ function filtraOrdini() {
   const fasiPerOrdine = window._fasiPerOrdine || {};
   const stimaPerOrdine = window._stimaPerOrdine || {};
 
-  // Ordina: in ritardo > a rischio stima > scadenza vicina > resto
+  // Ordina: attesa_spedizione prima, poi in ritardo > a rischio stima > scadenza vicina > resto
   const urgenzaScore = (o) => {
+    if (o.stato === 'attesa_spedizione') return -1;
     const s = stimaPerOrdine[o.id];
     if (s?.isInRitardo) return 0;
     if (s?.isRischio) return 1;
@@ -1015,8 +1016,8 @@ function filtraOrdini() {
     if (o.scadenza) return 2 + Math.max(0, Math.floor((new Date(o.scadenza) - oggi) / 86400000));
     return 999;
   };
-  // Ordina per mese di scadenza, poi urgenza dentro lo stesso mese
-  const meseKey = (o) => o.scadenza ? o.scadenza.substring(0, 7) : '9999-99';
+  // attesa_spedizione → gruppo '0000-00' (in cima), poi per mese di scadenza
+  const meseKey = (o) => o.stato === 'attesa_spedizione' ? '0000-00' : (o.scadenza ? o.scadenza.substring(0, 7) : '9999-99');
   const ordinati = [...filtrati].sort((a, b) => {
     const mA = meseKey(a), mB = meseKey(b);
     if (mA !== mB) return mA.localeCompare(mB);
@@ -1029,9 +1030,11 @@ function filtraOrdini() {
     let sep = '';
     if (meseDato !== meseCorrente) {
       meseCorrente = meseDato;
-      const label = meseDato === '9999-99'
-        ? 'Senza scadenza'
-        : new Date(meseDato + '-02').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+      const label = meseDato === '0000-00'
+        ? '📦 In attesa corriere'
+        : meseDato === '9999-99'
+          ? 'Senza scadenza'
+          : new Date(meseDato + '-02').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
       sep = `<div style="padding:5px 4px 3px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:6px;border-bottom:1px solid var(--border)">📅 ${label}</div>`;
     }
     const isAttesa = o.stato === 'attesa_spedizione';
