@@ -2848,16 +2848,19 @@ function renderOrdiniTable() {
     tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="icon">📋</div><p>Nessun ordine trovato</p></div></td></tr>';
     return;
   }
-  const meseKey = (o) => o.scadenza ? o.scadenza.substring(0, 7) : '9999-99';
+  // attesa_spedizione → gruppo '0000-00' (in cima), poi per mese di scadenza
+  const meseKey = (o) => o.stato === 'attesa_spedizione' ? '0000-00' : (o.scadenza ? o.scadenza.substring(0, 7) : '9999-99');
   let meseCorrente = null;
   tbody.innerHTML = filtered.map(o => {
     const meseDato = meseKey(o);
     let sep = '';
     if (meseDato !== meseCorrente) {
       meseCorrente = meseDato;
-      const label = meseDato === '9999-99'
-        ? 'Senza scadenza'
-        : new Date(meseDato + '-02').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+      const label = meseDato === '0000-00'
+        ? '📦 In attesa corriere'
+        : meseDato === '9999-99'
+          ? 'Senza scadenza'
+          : new Date(meseDato + '-02').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
       sep = `<tr><td colspan="8" style="padding:6px 12px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;background:var(--bg,#fafafa);border-top:2px solid var(--border)">📅 ${label}</td></tr>`;
     }
     return sep + ordineRow(o);
