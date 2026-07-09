@@ -3234,7 +3234,10 @@ function setTipoOrdine(tipo) {
   if (tipo === 'extra') {
     extraSec.style.display = 'block';
     if (!document.querySelectorAll('.extra-fase-row').length) {
-      for (let i = 0; i < 3; i++) addFaseExtra();
+      (async () => {
+        if (!catalogoFasiExtra.length) await loadCatalogoFasiExtra();
+        for (let i = 0; i < 3; i++) addFaseExtra();
+      })();
     }
   } else {
     extraSec.style.display = 'none';
@@ -3263,23 +3266,61 @@ function addStdFaseExtra() {
 }
 
 let extraFaseCounter = 0;
-function addFaseExtra() {
+
+function onCatalogoFaseChange(sel) {
+  const row = sel.closest('.extra-fase-row');
+  const catalogoId = sel.value || null;
+  row.dataset.catalogoId = catalogoId || '';
+  const nomeInput = row.querySelector('.extra-fase-nome');
+  const esternaChk = row.querySelector('.extra-fase-esterna');
+  const salvaRow = row.querySelector('.extra-fase-salva-row');
+  if (catalogoId) {
+    const c = catalogoFasiExtra.find(x => x.id === catalogoId);
+    if (c) {
+      nomeInput.value = c.nome;
+      esternaChk.checked = c.e_attesa_esterna || false;
+    }
+    salvaRow.style.display = 'none';
+  } else {
+    salvaRow.style.display = '';
+  }
+}
+
+async function addFaseExtra() {
+  if (!catalogoFasiExtra.length) await loadCatalogoFasiExtra();
   const list = document.getElementById('extra-fasi-list');
   const count = list.querySelectorAll('.extra-fase-row').length;
   if (count >= 20) { toast('Massimo 20 fasi', 'err'); return; }
   extraFaseCounter++;
+  const optsHtml = catalogoFasiExtra.filter(c => c.attiva)
+    .map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
   const row = document.createElement('div');
   row.className = 'extra-fase-row';
-  row.style.cssText = 'display:flex;gap:6px;align-items:center';
+  row.style.cssText = 'display:flex;flex-direction:column;gap:4px';
   row.innerHTML = `
-    <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);min-width:20px;text-align:right">${count + 1}</span>
-    <input type="text" class="extra-fase-nome" placeholder="Nome fase ${count + 1}…" list="nomi-fasi-extra-storia" autocomplete="off"
-      style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-family:'Inter',sans-serif;font-size:13px;background:var(--bg);color:var(--ink);outline:none">
-    <input type="text" class="extra-fase-note" placeholder="Note (opz.)"
-      style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-family:'Inter',sans-serif;font-size:13px;background:var(--bg);color:var(--ink);outline:none">
-    <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer">
-      <input type="checkbox" class="extra-fase-esterna"> Attesa esterna
-    </label>
+    <div style="display:flex;gap:6px;align-items:center">
+      <span class="ef-num" style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);min-width:20px;text-align:right">${count + 1}</span>
+      <select class="extra-fase-catalogo" onchange="onCatalogoFaseChange(this)"
+        style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-family:'Inter',sans-serif;font-size:13px;background:var(--bg);color:var(--ink);outline:none">
+        <option value="">— inserimento libero —</option>
+        ${optsHtml}
+      </select>
+      <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer">
+        <input type="checkbox" class="extra-fase-esterna"> Attesa esterna
+      </label>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;padding-left:26px">
+      <input type="text" class="extra-fase-nome" placeholder="Nome fase ${count + 1}…" list="nomi-fasi-extra-storia" autocomplete="off"
+        style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-family:'Inter',sans-serif;font-size:13px;background:var(--bg);color:var(--ink);outline:none">
+      <input type="text" class="extra-fase-note" placeholder="Note (opz.)"
+        style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-family:'Inter',sans-serif;font-size:13px;background:var(--bg);color:var(--ink);outline:none">
+    </div>
+    <div class="extra-fase-salva-row" style="padding-left:26px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:#3730A3">
+        <input type="checkbox" class="extra-fase-salva-cat" style="accent-color:#4F46E5">
+        Salva questa fase nel catalogo per riusi futuri
+      </label>
+    </div>
   `;
   list.appendChild(row);
   renumberExtraFasi();
@@ -3295,7 +3336,10 @@ function removeFaseExtra() {
 
 function renumberExtraFasi() {
   document.querySelectorAll('.extra-fase-row').forEach((row, i) => {
-    row.querySelector('span').textContent = i + 1;
+    const sp = row.querySelector('.ef-num');
+    if (sp) sp.textContent = i + 1;
+    const nomeInput = row.querySelector('.extra-fase-nome');
+    if (nomeInput && !nomeInput.value) nomeInput.placeholder = `Nome fase ${i + 1}…`;
   });
 }
 
@@ -3334,14 +3378,42 @@ async function creaOrdine() {
   let fasiExtra = [];
   if (tipo === 'extra') {
     const rows = document.querySelectorAll('.extra-fase-row');
-    fasiExtra = Array.from(rows).map((row, i) => ({
-      numero: i + 1,
-      nome: row.querySelector('.extra-fase-nome').value.trim(),
-      note_responsabile: row.querySelector('.extra-fase-note').value.trim() || null,
-      e_attesa_esterna: row.querySelector('.extra-fase-esterna')?.checked ?? false
-    }));
+    fasiExtra = Array.from(rows).map((row, i) => {
+      const eEsterna = row.querySelector('.extra-fase-esterna')?.checked ?? false;
+      const catId = row.dataset.catalogoId || null;
+      const catEntry = catId ? catalogoFasiExtra.find(x => x.id === catId) : null;
+      return {
+        numero: i + 1,
+        nome: row.querySelector('.extra-fase-nome').value.trim(),
+        note_responsabile: row.querySelector('.extra-fase-note').value.trim() || null,
+        e_attesa_esterna: eEsterna,
+        tipo_gestione: catEntry ? catEntry.tipo_gestione : (eEsterna ? 'spedizione_esterna' : 'standard'),
+        catalogo_fase_extra_id: catId || null,
+        _salva_catalogo: !catId && (row.querySelector('.extra-fase-salva-cat')?.checked ?? false)
+      };
+    });
     if (fasiExtra.some(f => !f.nome)) { toast('Inserisci il nome di tutte le fasi', 'err'); return; }
     if (!fasiExtra.length) { toast('Aggiungi almeno una fase', 'err'); return; }
+    // Crea le voci catalogo per le fasi con "salva nel catalogo" spuntato
+    for (const f of fasiExtra) {
+      if (f._salva_catalogo && f.nome) {
+        const { data: nuovaCfe } = await sb.rpc('imposta_catalogo_fase_extra', {
+          p_responsabile_id: currentUserRow.id,
+          p_session_token: null,
+          p_id: null,
+          p_nome: f.nome,
+          p_descrizione: null,
+          p_tipo_gestione: f.tipo_gestione,
+          p_e_attesa_esterna: f.e_attesa_esterna || false,
+          p_attiva: true
+        });
+        if (nuovaCfe?.ok) {
+          f.catalogo_fase_extra_id = nuovaCfe.id || null;
+          catalogoFasiExtra = [];
+        }
+      }
+      delete f._salva_catalogo;
+    }
   }
 
   const insertPayload = {
