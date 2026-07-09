@@ -440,6 +440,9 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       <div class="nav-item" onclick="showSection('macchine-config')" id="nav-macchine-config">
         <span class="icon">🔧</span> Macchine
       </div>
+      <div class="nav-item" onclick="showSection('fasi-extra-config')" id="nav-fasi-extra-config">
+        <span class="icon">✏️</span> Fasi Extra
+      </div>
     </nav>
 
     <main>
@@ -1072,6 +1075,51 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <div id="macchine-list">Caricamento…</div>
       </section>
 
+      <!-- CONFIG FASI EXTRA -->
+      <section class="section" id="sec-fasi-extra-config">
+        <div class="page-hdr">
+          <div>
+            <h1>Catalogo Fasi Extra</h1>
+            <div class="sub">Lavorazioni extra riutilizzabili — macchine e competenze per tipo</div>
+          </div>
+          <button class="btn btn-primary" onclick="apriFormCatalogoFaseExtra(null)">+ Nuova voce</button>
+        </div>
+        <div id="catalogo-fasi-extra-list">Caricamento…</div>
+        <!-- Form inline aggiunta/modifica voce catalogo -->
+        <div id="form-catalogo-fase-extra" style="display:none;margin-top:16px;padding:16px;background:var(--surface-2,#f9f9f7);border-radius:8px;border:1px solid var(--border)">
+          <input type="hidden" id="cfe-id">
+          <div class="form-group" style="margin-bottom:10px">
+            <label>Nome</label>
+            <input type="text" id="cfe-nome" placeholder="es. Verniciatura esterna">
+          </div>
+          <div class="form-group" style="margin-bottom:10px">
+            <label>Descrizione (opzionale)</label>
+            <input type="text" id="cfe-descrizione" placeholder="">
+          </div>
+          <div class="form-row" style="margin-bottom:10px">
+            <div class="form-group">
+              <label>Tipo gestione</label>
+              <select id="cfe-tipo-gestione" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-size:13px">
+                <option value="standard">Standard (prendi in carico → completa)</option>
+                <option value="spedizione_esterna">Spedizione esterna (spedisci → ricevi)</option>
+              </select>
+            </div>
+            <div class="form-group" style="display:flex;align-items:center;gap:10px;padding-top:22px">
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+                <input type="checkbox" id="cfe-attesa-esterna"> Attesa esterna
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+                <input type="checkbox" id="cfe-attiva" checked> Attiva
+              </label>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <button class="btn btn-primary" style="font-size:13px" onclick="salvaCatalogoFaseExtra()">Salva</button>
+            <button class="btn btn-secondary" style="font-size:13px" onclick="document.getElementById('form-catalogo-fase-extra').style.display='none'">Annulla</button>
+          </div>
+        </div>
+      </section>
+
       <!-- PRIORITÀ -->
       <section class="section" id="sec-priorita-config">
         <div class="page-hdr">
@@ -1261,6 +1309,12 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <div id="mod-fasi-extra-list" style="font-size:13px;color:var(--muted)">—</div>
         <!-- Form aggiunta inline -->
         <div id="mod-aggiungi-fase-form" style="display:none;margin-top:12px;padding:12px;background:var(--surface-2,#f9f9f7);border-radius:8px;border:1px solid var(--border)">
+          <div class="form-group" style="margin-bottom:8px">
+            <label style="font-size:12px">Dal catalogo (opzionale)</label>
+            <select id="nef-catalogo" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);font-size:13px" onchange="prefillDaCatalogo(this.value)">
+              <option value="">— inserimento libero —</option>
+            </select>
+          </div>
           <div class="form-group" style="margin-bottom:8px">
             <label style="font-size:12px">Nome fase</label>
             <input type="text" id="nef-nome" placeholder="es. Spazzolatura esterna" list="nomi-fasi-extra-storia" autocomplete="off">
@@ -1528,6 +1582,7 @@ let faseMediaMinutiMap = {}; // fase_id -> avg minuti per pezzo
 let faseEsternaSet = new Set(); // fase_id (int) delle fasi con e_attesa_esterna=true
 let minutiGiornoGlobale = 480; // aggiornato da loadAvanzamenti e calcolaStimaSingoloOrdine
 let faseExtraMediaMinutiMap = {}; // nome_lower -> mediana minuti per unità (fasi_ordine_extra)
+let catalogoFasiExtra = []; // catalogo_fasi_extra in memoria
 let _etaMinutiCache = {}; // ordine_id -> minuti ETA equivalenti (critico interno + calendario esterno scalato)
 let currentFaseId = null; // per riassegna
 let prioritaConfig = []; // [{id, etichetta, peso, posizione, attivo}] da priorita_ordine_config
@@ -1866,6 +1921,104 @@ function showSection(name) {
   else if (name === 'materiali-config') renderAttributoConfig('materiale');
   else if (name === 'priorita-config') renderPrioritaConfig();
   else if (name === 'macchine-config') { loadMacchine().then(renderMacchine); }
+  else if (name === 'fasi-extra-config') { loadCatalogoFasiExtra(); }
+}
+
+// ═══════════════════════════════════════════════
+// CATALOGO FASI EXTRA
+// ═══════════════════════════════════════════════
+async function loadCatalogoFasiExtra() {
+  const [{ data: catalogo }, { data: macchineAssoc }] = await Promise.all([
+    sb.from('catalogo_fasi_extra').select('*').order('nome'),
+    sb.from('catalogo_fase_extra_macchine').select('catalogo_fase_extra_id, macchina_id')
+  ]);
+  catalogoFasiExtra = (catalogo || []).map(c => ({
+    ...c,
+    macchine_ids: (macchineAssoc || []).filter(m => m.catalogo_fase_extra_id === c.id).map(m => m.macchina_id)
+  }));
+  renderCatalogoFasiExtraSection();
+}
+
+function renderCatalogoFasiExtraSection() {
+  const el = document.getElementById('catalogo-fasi-extra-list');
+  if (!el) return;
+  if (!catalogoFasiExtra.length) {
+    el.innerHTML = '<div style="color:var(--muted);padding:16px 0;font-size:13px">Nessuna voce nel catalogo. Aggiungi la prima con il pulsante in alto.</div>';
+    return;
+  }
+  el.innerHTML = `<div class="card" style="padding:4px 0">
+    ${catalogoFasiExtra.map(c => {
+      const macNomi = (macchineList || []).filter(m => c.macchine_ids.includes(m.id)).map(m => m.nome).join(', ');
+      const tipoLabel = c.tipo_gestione === 'spedizione_esterna' ? 'Spedizione esterna' : 'Standard';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);gap:10px">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:14px">${escapeHtml(c.nome)}
+            ${!c.attiva ? '<span style="font-size:10px;background:#E5E7EB;padding:1px 6px;border-radius:4px;margin-left:6px;color:#6B7280">INATTIVA</span>' : ''}
+          </div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${tipoLabel}${c.e_attesa_esterna ? ' · Attesa esterna' : ''}${macNomi ? ' · 🔧 ' + escapeHtml(macNomi) : ''}</div>
+          ${c.descrizione ? `<div style="font-size:12px;color:var(--muted);margin-top:1px">${escapeHtml(c.descrizione)}</div>` : ''}
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="apriFormCatalogoFaseExtra('${c.id}')">Modifica</button>
+          <button class="btn btn-alert" style="padding:5px 10px;font-size:12px" onclick="eliminaCatalogoFaseExtra('${c.id}','${escapeHtml(c.nome)}')">✕</button>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function apriFormCatalogoFaseExtra(id) {
+  const form = document.getElementById('form-catalogo-fase-extra');
+  const c = id ? catalogoFasiExtra.find(x => x.id === id) : null;
+  document.getElementById('cfe-id').value = c?.id || '';
+  document.getElementById('cfe-nome').value = c?.nome || '';
+  document.getElementById('cfe-descrizione').value = c?.descrizione || '';
+  document.getElementById('cfe-tipo-gestione').value = c?.tipo_gestione || 'standard';
+  document.getElementById('cfe-attesa-esterna').checked = c?.e_attesa_esterna || false;
+  document.getElementById('cfe-attiva').checked = c?.attiva !== false;
+  form.style.display = '';
+  document.getElementById('cfe-nome').focus();
+  form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+async function salvaCatalogoFaseExtra() {
+  const id = document.getElementById('cfe-id').value || null;
+  const nome = document.getElementById('cfe-nome').value.trim();
+  const descrizione = document.getElementById('cfe-descrizione').value.trim() || null;
+  const tipoGestione = document.getElementById('cfe-tipo-gestione').value;
+  const eAttesaEsterna = document.getElementById('cfe-attesa-esterna').checked;
+  const attiva = document.getElementById('cfe-attiva').checked;
+  if (!nome) { toast('Il nome è obbligatorio', 'err'); return; }
+  const { data, error } = await sb.rpc('imposta_catalogo_fase_extra', {
+    p_responsabile_id: currentUserRow.id,
+    p_session_token: null,
+    p_id: id,
+    p_nome: nome,
+    p_descrizione: descrizione,
+    p_tipo_gestione: tipoGestione,
+    p_e_attesa_esterna: eAttesaEsterna,
+    p_attiva: attiva
+  });
+  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
+  toast(id ? 'Voce aggiornata' : 'Voce aggiunta', 'ok');
+  document.getElementById('form-catalogo-fase-extra').style.display = 'none';
+  await loadCatalogoFasiExtra();
+}
+
+async function eliminaCatalogoFaseExtra(id, nome) {
+  if (!confirm(`Eliminare "${nome}" dal catalogo? Le fasi ordine collegate non vengono modificate.`)) return;
+  const { error } = await sb.from('catalogo_fasi_extra').delete().eq('id', id);
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  toast('Voce eliminata', 'ok');
+  await loadCatalogoFasiExtra();
+}
+
+function prefillDaCatalogo(catalogoId) {
+  if (!catalogoId) return;
+  const c = catalogoFasiExtra.find(x => x.id === catalogoId);
+  if (!c) return;
+  document.getElementById('nef-nome').value = c.nome;
+  document.getElementById('nef-tipo-gestione').value = c.tipo_gestione;
 }
 
 // ═══════════════════════════════════════════════
@@ -2030,12 +2183,13 @@ async function renderPianificazione(p_data_override) {
   }
 
   const clusters = piano.clusters || [];
+  const clustersExtra = piano.clusters_extra || [];
   const attese = piano.attese_esterne || [];
   const atteseSblocco = piano.attese_sblocco || [];
   const conflitti = piano.conflitti || [];
   const oreOp = piano.ore_per_operatore || {};
 
-  if (!clusters.length && !attese.length && !atteseSblocco.length) {
+  if (!clusters.length && !clustersExtra.length && !attese.length && !atteseSblocco.length) {
     el.innerHTML = '<div class="empty-state"><div class="icon">📅</div><p>Nessun ordine attivo da pianificare</p></div>';
     return;
   }
@@ -2160,6 +2314,60 @@ async function renderPianificazione(p_data_override) {
       </table>
     </div>`;
   });
+
+  // ── Cluster per fasi extra ──
+  if (clustersExtra.length) {
+    html += `<div style="margin-bottom:8px;padding:4px 0">
+      <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">Lavorazioni extra</span>
+    </div>`;
+    clustersExtra.forEach(cluster => {
+      const opPropNome = (() => {
+        if (!cluster.ordini?.length) return null;
+        const op = cluster.ordini[0]?.operatore_proposto;
+        return op ? op.nome : null;
+      })();
+      html += `<div style="margin-bottom:20px;border:1px solid #C7D2FE;border-radius:8px;overflow:hidden">
+        <div style="background:#EEF2FF;padding:8px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #C7D2FE">
+          <span style="font-size:13px;font-weight:700;color:#3730A3">✏️ ${escapeHtml(cluster.fase_nome)}</span>
+          <span style="font-size:11px;color:var(--muted)">(${cluster.ordini?.length || 0} ordini)</span>
+          ${opPropNome ? `<span style="font-size:11px;color:var(--muted);margin-left:auto">→ ${escapeHtml(opPropNome)}</span>` : ''}
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead>
+            <tr style="background:#F0F4FF;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:0.05em">
+              <th style="padding:6px 10px;text-align:left;font-weight:600">Ordine</th>
+              <th style="padding:6px 10px;text-align:left;font-weight:600">Cliente</th>
+              <th style="padding:6px 10px;text-align:center;font-weight:600">Scadenza</th>
+              <th style="padding:6px 10px;text-align:left;font-weight:600">Operatore</th>
+              <th style="padding:6px 10px;text-align:right;font-weight:600">Stima</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${(cluster.ordini || []).map(ord => {
+              const hasConflitto = !!ord.conflitto;
+              const bg = hasConflitto ? '#FEF2F2' : '';
+              const opNome = ord.operatore_proposto ? ord.operatore_proposto.nome : '—';
+              return `<tr style="border-bottom:1px solid #C7D2FE;background:${bg};cursor:pointer" onclick="openDettaglioOrdine('${ord.ordine_id}')">
+                <td style="padding:8px 10px;font-weight:600;font-family:'DM Mono',monospace">
+                  ${escapeHtml(ord.codice || '—')}
+                  ${ord.da_ieri ? `<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:1px 5px;border-radius:3px;margin-left:4px;vertical-align:middle">DA IERI</span>` : ''}
+                </td>
+                <td style="padding:8px 10px">${escapeHtml(ord.cliente || '')}</td>
+                <td style="padding:8px 10px;text-align:center;color:${ord.scadenza && new Date().toISOString().split('T')[0] > ord.scadenza ? '#EF4444' : 'inherit'}">${ord.scadenza ? formatDate(ord.scadenza) : '—'}</td>
+                <td style="padding:8px 10px">
+                  <span style="color:${hasConflitto ? '#B91C1C' : 'var(--ink)'}">${escapeHtml(opNome)}</span>
+                  ${hasConflitto ? `<div style="font-size:10px;color:#B91C1C;margin-top:2px">${escapeHtml(ord.motivazione || '')}</div>` : ''}
+                  ${!hasConflitto && ord.motivazione ? `<div style="font-size:10px;color:var(--muted);margin-top:1px">${escapeHtml(ord.motivazione)}</div>` : ''}
+                  ${ord.macchina_proposta ? `<div style="font-size:10px;color:#6D28D9;margin-top:1px">🔧 ${escapeHtml(ord.macchina_proposta.nome)}</div>` : ''}
+                </td>
+                <td style="padding:8px 10px;text-align:right;font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)">${ord.stima_min != null ? Math.round(ord.stima_min) + ' min' : '—'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+    });
+  }
 
   // ── Attese esterne ──
   if (attese.length) {
@@ -6090,10 +6298,19 @@ async function impostaFaseCatalogo(ordineId, faseId, attiva, chk) {
   await caricaFasiCatalogoModal(ordineId);
 }
 
-function apriAggiungiExtraFase() {
+async function apriAggiungiExtraFase() {
   document.getElementById('nef-nome').value = '';
   document.getElementById('nef-tipo-gestione').value = 'standard';
   document.getElementById('nef-note').value = '';
+  // Popola dropdown catalogo
+  const sel = document.getElementById('nef-catalogo');
+  if (sel) {
+    if (!catalogoFasiExtra.length) await loadCatalogoFasiExtra();
+    const attive = catalogoFasiExtra.filter(c => c.attiva);
+    sel.innerHTML = '<option value="">— inserimento libero —</option>' +
+      attive.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
+    sel.value = '';
+  }
   document.getElementById('mod-aggiungi-fase-form').style.display = '';
   document.getElementById('nef-nome').focus();
 }
@@ -6107,9 +6324,10 @@ async function aggiungiExtraFase() {
   // Determina prossimo numero
   const { data: esistenti } = await sb.from('fasi_ordine_extra').select('numero').eq('ordine_id', ordineId).order('numero', { ascending: false }).limit(1);
   const prossimoNumero = (esistenti?.[0]?.numero || 0) + 1;
+  const catalogoId = document.getElementById('nef-catalogo')?.value || null;
   const { data, error } = await sb.rpc('crea_fasi_extra', {
     p_ordine_id: ordineId,
-    p_fasi: [{ numero: prossimoNumero, nome, note_responsabile: note, tipo_gestione: tipoGestione }],
+    p_fasi: [{ numero: prossimoNumero, nome, note_responsabile: note, tipo_gestione: tipoGestione, catalogo_fase_extra_id: catalogoId || '' }],
     p_responsabile_id: currentUserRow.id
   });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
