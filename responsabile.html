@@ -2179,7 +2179,7 @@ async function salvaMacchineCFE() {
   const { data, error } = await sb.rpc('imposta_macchine_fase_extra', {
     p_responsabile_id: currentUserRow.id,
     p_catalogo_fase_extra_id: cfeId,
-    p_macchine_ids: JSON.stringify(c.macchine_ids || []),
+    p_macchine_ids: c.macchine_ids || [],
     p_session_token: null
   });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
