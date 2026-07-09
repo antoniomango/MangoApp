@@ -1523,6 +1523,7 @@ let ncCache = [];
 let operatoriCache = [];
 let notificheCache = [];
 let currentOrdineId = null;
+let _realtimeChannel = null; // canale Realtime attivo (evita doppia sottoscrizione al ritorno dalla background)
 let faseMediaMinutiMap = {}; // fase_id -> avg minuti per pezzo
 let faseEsternaSet = new Set(); // fase_id (int) delle fasi con e_attesa_esterna=true
 let minutiGiornoGlobale = 480; // aggiornato da loadAvanzamenti e calcolaStimaSingoloOrdine
@@ -1789,7 +1790,14 @@ async function loadNotifiche() {
 // REALTIME
 // ═══════════════════════════════════════════════
 function setupRealtime() {
-  sb.channel('production')
+  // Evita doppia sottoscrizione: quando Supabase ri-spara SIGNED_IN al ritorno
+  // dalla background (visibilityChangedCallback), postLogin() richiama setupRealtime()
+  // su un canale già attivo — .on() su un canale già subscribe()-ato lancia un'eccezione
+  // che interrompe postLogin() e impedisce renderDashboard(). Se il canale esiste già,
+  // Supabase gestisce autonomamente la riconnessione: non serve ricreare niente.
+  if (_realtimeChannel) return;
+
+  _realtimeChannel = sb.channel('production')
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ordini' }, async (payload) => {
       if (payload.new?.stato === 'attesa_spedizione' && payload.old?.stato !== 'attesa_spedizione') {
         await inviaNotificaAResponsabile('ordine_pronto_spedizione',
