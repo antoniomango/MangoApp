@@ -112,6 +112,13 @@ nav { background: var(--surface); border-right: 1px solid var(--border); padding
 .nav-item:hover { background: var(--phase-bg); color: var(--ink); }
 .nav-item.active { background: var(--phase-bg); color: var(--wood); border-left-color: var(--wood); }
 .nav-item .icon { width: 16px; text-align: center; font-size: 15px; }
+/* ── IMPOSTAZIONI ACCORDION ── */
+.nav-section-collapsible { cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center; }
+.nav-section-collapsible:hover { color: var(--ink); }
+.nav-chevron { font-size: 9px; transition: transform 0.2s ease; opacity: 0.6; }
+.nav-section-collapsible.open .nav-chevron { transform: rotate(90deg); }
+.nav-impostazioni-items { overflow: hidden; max-height: 0; transition: max-height 0.25s ease; }
+.nav-impostazioni-items.open { max-height: 600px; }
 
 /* ── MAIN ── */
 main { padding: 28px; overflow-y: auto; max-height: calc(100vh - 52px); }
@@ -412,7 +419,11 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <span class="icon">🔔</span> Notifiche
       </div>
 
-      <div class="nav-section">Impostazioni</div>
+      <div class="nav-section nav-section-collapsible" id="nav-section-impostazioni" onclick="toggleImpostazioni()">
+        <span>Impostazioni</span>
+        <span class="nav-chevron">▶</span>
+      </div>
+      <div class="nav-impostazioni-items" id="impostazioni-items">
       <div class="nav-item" onclick="showSection('fasi-config')" id="nav-fasi-config">
         <span class="icon">⚙️</span> Config. Fasi
       </div>
@@ -443,6 +454,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       <div class="nav-item" onclick="showSection('fasi-extra-config')" id="nav-fasi-extra-config">
         <span class="icon">✏️</span> Fasi Extra
       </div>
+      </div><!-- /nav-impostazioni-items -->
     </nav>
 
     <main>
@@ -1929,11 +1941,23 @@ function setupRealtime() {
 // ═══════════════════════════════════════════════
 // NAVIGAZIONE
 // ═══════════════════════════════════════════════
+const IMPOSTAZIONI_SECTIONS = ['fasi-config','tipi-prodotto-config','strutture-config','materiali-config','priorita-config','macro-config','orario-config','kpi-config','macchine-config','fasi-extra-config'];
+
+function toggleImpostazioni(force) {
+  const el  = document.getElementById('impostazioni-items');
+  const hdr = document.getElementById('nav-section-impostazioni');
+  if (!el || !hdr) return;
+  const open = force !== undefined ? force : !el.classList.contains('open');
+  el.classList.toggle('open', open);
+  hdr.classList.toggle('open', open);
+}
+
 function showSection(name) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('sec-' + name)?.classList.add('active');
   document.getElementById('nav-' + name)?.classList.add('active');
+  if (IMPOSTAZIONI_SECTIONS.includes(name)) toggleImpostazioni(true);
 
   if (name === 'dashboard') renderDashboard();
   else if (name === 'ordini') renderOrdiniTable();
