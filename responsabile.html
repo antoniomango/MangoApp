@@ -474,6 +474,16 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           <div class="kpi-card ok"><div class="label">Attesa Corriere</div><div class="value" id="kpi-attesa">—</div></div>
           <div class="kpi-card ok"><div class="label">Spediti (30gg)</div><div class="value" id="kpi-spediti">—</div></div>
         </div>
+
+        <!-- Pannello Andon: fasi bloccate per NC — visibile solo se ci sono fasi bloccate -->
+        <div id="andon-panel" style="display:none;margin-bottom:20px;border:2px solid #FCA5A5;border-radius:12px;background:#FFF5F5;padding:16px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+            <span style="font-size:20px">🚨</span>
+            <strong style="font-size:15px;color:#991B1B">Fasi bloccate — intervento richiesto</strong>
+          </div>
+          <div id="andon-list"></div>
+        </div>
+
         <div class="filters">
           <input type="text" id="ord-search" placeholder="Cerca cliente o codice…" oninput="renderOrdiniTable()">
           <select id="ord-stato" onchange="renderOrdiniTable()">
@@ -1930,6 +1940,10 @@ function setupRealtime() {
       renderNcTable();
       const kpi = document.getElementById('kpi-nc');
       if (kpi) kpi.textContent = ncCache.filter(n => n.stato === 'aperta').length;
+      renderAndonPanel();
+    })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'ordine_fasi', filter: 'stato=eq.bloccata' }, async () => {
+      renderAndonPanel();
     })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'notifiche' }, async () => {
       await loadNotifiche();
@@ -2668,6 +2682,74 @@ function renderDashboard() {
     `${new Date().toLocaleDateString('it-IT', {weekday:'long', day:'numeric', month:'long', year:'numeric'})}`;
 
   renderOrdiniTable();
+  renderAndonPanel();
+}
+
+async function renderAndonPanel() {
+  const panel = document.getElementById('andon-panel');
+  const list  = document.getElementById('andon-list');
+  if (!panel || !list) return;
+
+  const { data: bloccate } = await sb
+    .from('ordine_fasi')
+    .select('id, ordine_id, fase_id, ordini(codice, cliente), fasi(nome)')
+    .eq('stato', 'bloccata');
+
+  if (!bloccate || !bloccate.length) {
+    panel.style.display = 'none';
+    return;
+  }
+
+  // Per ogni fase bloccata trova la NC aperta associata
+  const ordFaseIds = bloccate.map(f => f.ordine_id);
+  const faseIds    = bloccate.map(f => f.fase_id);
+  const { data: ncBloccate } = await sb
+    .from('non_conformita')
+    .select('id, ordine_id, fase_id, descrizione, segnalata_il, users!segnalata_da(nome, cognome)')
+    .in('stato', ['aperta', 'approvata'])
+    .in('ordine_id', ordFaseIds)
+    .in('fase_id', faseIds);
+
+  list.innerHTML = bloccate.map(f => {
+    const nc = (ncBloccate || []).find(n => n.ordine_id === f.ordine_id && n.fase_id === f.fase_id);
+    const codice   = f.ordini?.codice  || '—';
+    const cliente  = f.ordini?.cliente || '—';
+    const faseNome = f.fasi?.nome      || `Fase ${f.fase_id}`;
+    const ncId     = nc?.id || null;
+    const opNome   = nc ? `${nc.users?.nome || ''} ${nc.users?.cognome || ''}`.trim() : '—';
+    const quando   = nc?.segnalata_il ? new Date(nc.segnalata_il).toLocaleString('it-IT', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+    const desc     = nc?.descrizione ? `<div style="font-size:12px;color:#7F1D1D;margin:4px 0 8px">${escapeHtml(nc.descrizione.substring(0,120))}</div>` : '';
+    const btnRisolvi = ncId
+      ? `<button class="btn btn-ok" style="font-size:12px;padding:6px 14px" onclick="risolviAndon('${ncId}')">✓ Risolvi</button>`
+      : '';
+    return `<div style="background:#fff;border:1px solid #FCA5A5;border-radius:8px;padding:12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:14px">${escapeHtml(cliente)} — <span style="font-family:'DM Mono',monospace;font-size:12px">${escapeHtml(codice)}</span></div>
+        <div style="font-size:13px;color:var(--muted);margin:2px 0">Fase: <strong>${escapeHtml(faseNome)}</strong> · Segnalato da ${escapeHtml(opNome)} alle ${quando}</div>
+        ${desc}
+      </div>
+      <div style="flex-shrink:0">${btnRisolvi}</div>
+    </div>`;
+  }).join('');
+
+  panel.style.display = 'block';
+}
+
+async function risolviAndon(ncId) {
+  const note = prompt('Note di chiusura (obbligatorie):');
+  if (!note || !note.trim()) { toast('Inserisci le note di chiusura', 'err'); return; }
+  const { data, error } = await sb.rpc('risolvi_non_conformita', {
+    p_nc_id: ncId,
+    p_responsabile_id: currentUserRow.id,
+    p_note_chiusura: note.trim()
+  });
+  if (error || !data?.ok) {
+    toast(data?.errore || 'Errore durante la risoluzione', 'err');
+    return;
+  }
+  toast('Problema risolto — fase ripristinata', 'ok');
+  await loadNc();
+  renderDashboard();
 }
 
 function ordineRow(o, mini = false) {
@@ -3675,19 +3757,20 @@ async function approvaNC(id) {
 async function chiudiNC(id) {
   const note = document.getElementById('nc-note-chiusura')?.value.trim();
   if (!note) { toast('Inserisci le note di chiusura', 'err'); return; }
-  const nc = ncCache.find(n => n.id === id);
-  await sb.from('non_conformita').update({
-    stato: 'chiusa', note_chiusura: note,
-    gestita_da: currentUserRow.id, gestita_il: new Date().toISOString()
-  }).eq('id', id);
-  await sb.from('archivio_log').insert({
-    ordine_id: nc?.ordine_id, utente_id: currentUserRow.id,
-    azione: 'nc_chiusa', dettaglio: { nc_id: id, note }
+  const { data, error } = await sb.rpc('risolvi_non_conformita', {
+    p_nc_id: id,
+    p_responsabile_id: currentUserRow.id,
+    p_note_chiusura: note
   });
+  if (error || !data?.ok) {
+    toast(data?.errore || 'Errore durante la chiusura', 'err');
+    return;
+  }
   closeModal('modal-nc');
   toast('NC chiusa', 'ok');
   await loadNc();
   renderNcTable();
+  renderAndonPanel();
 }
 
 // ═══════════════════════════════════════════════

@@ -128,6 +128,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
 .badge-in_corso { background: #DBEAFE; color: #1E40AF; }
 .badge-in_attesa { background: #FFF7ED; color: #C2410C; }
 .badge-completata { background: #D1FAE5; color: #065F46; }
+.badge-bloccata { background: #FEE2E2; color: #991B1B; }
 
 /* ── FASI LISTA ── */
 .fasi-list { }
@@ -829,7 +830,7 @@ async function renderHome() {
       sb.from('ordine_fasi')
         .select('*, ordini(codice, cliente, stato), fasi(nome)')
         .eq('operatore_id', currentUser.id)
-        .in('stato', ['in_corso', 'in_attesa']),
+        .in('stato', ['in_corso', 'in_attesa', 'bloccata']),
       sb.rpc('fasi_in_corso_come_collega', { p_operatore_id: currentUser.id }),
       sb.from('fasi_ordine_extra')
         .select('*, ordini(codice, cliente, stato)')
@@ -889,7 +890,7 @@ async function renderHome() {
           <div class="row-title">${escapeHtml(f.nome)}</div>
           <div class="row-sub">${escapeHtml(f.cliente)} · ${escapeHtml(f.codice)}${f.collegaNome ? ` · con ${escapeHtml(f.collegaNome)}` : ''}${f.isExtra ? ' · <em>Ordine Extra</em>' : ''}</div>
         </div>
-        <span class="badge badge-${f.stato}">${f.stato === 'in_attesa' ? 'In attesa' : 'In corso'}</span>
+        <span class="badge badge-${f.stato}">${f.stato === 'in_attesa' ? 'In attesa' : f.stato === 'bloccata' ? '🚨 Bloccata' : 'In corso'}</span>
         <span class="arrow">›</span>
       </div>`).join('');
   }
@@ -1685,6 +1686,7 @@ async function renderFaseDetail(ordFaseId, ordineId) {
         <button class="btn btn-ok" id="btn-completa-fase" style="margin-top:14px" onclick="completaFase('${ordFaseId}', '${ordineId}')">✓ Segna come completata</button>
         <button class="btn btn-secondary" style="margin-top:10px" onclick="mettiInAttesa('${ordFaseId}', '${ordineId}')">⏸ Metti in attesa</button>
         <button class="btn btn-alert" style="margin-top:10px;font-size:12px;opacity:0.8" onclick="annullaPresaInCarico('${ordFaseId}', '${ordineId}')">✕ Annulla presa in carico</button>
+        <button class="btn btn-alert" style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px;width:100%;text-align:left" onclick="document.getElementById('nc-section').scrollIntoView({behavior:'smooth'})">🚨 Segnala problema</button>
       </div>`;
   } else if (f.stato === 'in_corso' && !isMia && !sospeso) {
     const altriNomi = opMulti.filter(o => o.operatore_id !== currentUser.id)
@@ -1698,6 +1700,12 @@ async function renderFaseDetail(ordFaseId, ordineId) {
         <h4>Unisciti a questa fase</h4>
         <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Puoi affiancare ${escapeHtml(altriNomi || 'il collega')} senza togliergli la fase.</p>
         <button class="btn btn-primary" onclick="uniscitiAFase('${ordFaseId}', '${ordineId}')">+ Unisciti</button>
+      </div>`;
+  } else if (f.stato === 'bloccata') {
+    bodyHtml += `
+      <div class="azione-box" style="border-color:#FCA5A5;background:#FFF5F5">
+        <h4 style="color:#991B1B">🚨 Fase bloccata — problema segnalato</h4>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:0">Un operatore ha segnalato un problema su questa fase. Il responsabile deve intervenire prima che possa riprendere. Controlla la sezione Non Conformità per i dettagli.</p>
       </div>`;
   } else if (f.stato === 'in_attesa' && !sospeso) {
     const tipoGestione = f.fasi?.tipo_gestione || 'standard';
