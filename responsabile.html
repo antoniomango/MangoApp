@@ -118,7 +118,7 @@ nav { background: var(--surface); border-right: 1px solid var(--border); padding
 .nav-chevron { font-size: 9px; transition: transform 0.2s ease; opacity: 0.6; }
 .nav-section-collapsible.open .nav-chevron { transform: rotate(90deg); }
 .nav-impostazioni-items { overflow: hidden; max-height: 0; transition: max-height 0.25s ease; }
-.nav-impostazioni-items.open { max-height: 600px; }
+.nav-impostazioni-items.open { max-height: 660px; }
 
 /* ── MAIN ── */
 main { padding: 28px; overflow-y: auto; max-height: calc(100vh - 52px); }
@@ -453,6 +453,9 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       </div>
       <div class="nav-item" onclick="showSection('fasi-extra-config')" id="nav-fasi-extra-config">
         <span class="icon">✏️</span> Fasi Extra
+      </div>
+      <div class="nav-item" onclick="showSection('notif-config')" id="nav-notif-config">
+        <span class="icon">🔔</span> Destinatari Notifiche
       </div>
       </div><!-- /nav-impostazioni-items -->
     </nav>
@@ -1171,6 +1174,17 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
             <button class="btn btn-secondary" style="font-size:13px" onclick="document.getElementById('form-catalogo-fase-extra').style.display='none'">Annulla</button>
           </div>
         </div>
+      </section>
+
+      <!-- DESTINATARI NOTIFICHE -->
+      <section class="section" id="sec-notif-config">
+        <div class="page-hdr">
+          <div>
+            <h1>Destinatari Notifiche</h1>
+            <div class="sub">Scegli chi riceve ogni tipo di notifica automatica</div>
+          </div>
+        </div>
+        <div id="notif-config-body">Caricamento…</div>
       </section>
 
       <!-- PRIORITÀ -->
@@ -1955,7 +1969,7 @@ function setupRealtime() {
 // ═══════════════════════════════════════════════
 // NAVIGAZIONE
 // ═══════════════════════════════════════════════
-const IMPOSTAZIONI_SECTIONS = ['fasi-config','tipi-prodotto-config','strutture-config','materiali-config','priorita-config','macro-config','orario-config','kpi-config','macchine-config','fasi-extra-config'];
+const IMPOSTAZIONI_SECTIONS = ['fasi-config','tipi-prodotto-config','strutture-config','materiali-config','priorita-config','macro-config','orario-config','kpi-config','macchine-config','fasi-extra-config','notif-config'];
 
 function toggleImpostazioni(force) {
   const el  = document.getElementById('impostazioni-items');
@@ -1997,6 +2011,82 @@ function showSection(name) {
   else if (name === 'priorita-config') renderPrioritaConfig();
   else if (name === 'macchine-config') { loadMacchine().then(renderMacchine); }
   else if (name === 'fasi-extra-config') { loadCatalogoFasiExtra(); }
+  else if (name === 'notif-config') { loadNotifDestinatari(); }
+}
+
+// ═══════════════════════════════════════════════
+// DESTINATARI NOTIFICHE CONFIG
+// ═══════════════════════════════════════════════
+const NOTIF_EVENTI = [
+  { key: 'nc_segnalata',     label: 'Problema segnalato (Andon)',  desc: 'Notifica immediata quando un operatore segnala un problema su una fase' },
+  { key: 'ordine_in_ritardo', label: 'Ordine in ritardo',           desc: 'Alert giornaliero (ore 5:30) per ogni ordine scaduto non ancora spedito' },
+];
+
+let _notifDestCache = [];     // righe da notifiche_destinatari_config
+let _notifUtentiCache = [];   // tutti gli utenti attivi
+
+async function loadNotifDestinatari() {
+  const [{ data: dest }, { data: utenti }] = await Promise.all([
+    sb.from('notifiche_destinatari_config').select('*'),
+    sb.from('users').select('id, nome, cognome, ruolo').eq('attivo', true).order('cognome'),
+  ]);
+  _notifDestCache  = dest    || [];
+  _notifUtentiCache = (utenti || []).filter(u => u.ruolo !== 'sola_lettura' || true); // tutti
+  renderNotifDestinatari();
+}
+
+function renderNotifDestinatari() {
+  const el = document.getElementById('notif-config-body');
+  if (!el) return;
+
+  const roleBadge = r => {
+    const map = { responsabile: '#7C3AED', operatore: '#1D4ED8', sola_lettura: '#6B7280' };
+    return `<span style="font-size:10px;padding:2px 7px;border-radius:10px;background:${map[r]||'#999'};color:#fff;margin-left:6px">${r}</span>`;
+  };
+
+  el.innerHTML = NOTIF_EVENTI.map(ev => {
+    const righe = _notifDestCache.filter(d => d.tipo_evento === ev.key);
+    const idSet = new Map(righe.map(r => [r.utente_id, r]));
+
+    const checkboxes = _notifUtentiCache.map(u => {
+      const riga = idSet.get(u.id);
+      const checked   = riga?.attivo  ? 'checked' : '';
+      const inConfig  = !!riga;
+      return `<label style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer">
+        <input type="checkbox" ${checked}
+          onchange="toggleNotifDest('${ev.key}','${u.id}',this.checked)"
+          style="width:16px;height:16px;accent-color:var(--wood)">
+        <span style="font-size:14px">${escapeHtml(u.nome)} ${escapeHtml(u.cognome)}</span>${roleBadge(u.ruolo)}
+      </label>`;
+    }).join('');
+
+    return `<div class="card" style="margin-bottom:20px">
+      <div style="margin-bottom:4px;font-weight:700;font-size:15px">${escapeHtml(ev.label)}</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">${escapeHtml(ev.desc)}</div>
+      ${checkboxes || '<p style="color:var(--muted);font-size:13px">Nessun utente attivo</p>'}
+    </div>`;
+  }).join('');
+}
+
+async function toggleNotifDest(tipoEvento, utenteId, checked) {
+  const existing = _notifDestCache.find(d => d.tipo_evento === tipoEvento && d.utente_id === utenteId);
+  if (existing) {
+    // Aggiorna attivo
+    const { error } = await sb.from('notifiche_destinatari_config')
+      .update({ attivo: checked })
+      .eq('id', existing.id);
+    if (error) { toast('Errore salvataggio', 'err'); return; }
+    existing.attivo = checked;
+  } else {
+    // Inserisci nuova riga
+    const { data, error } = await sb.from('notifiche_destinatari_config')
+      .insert({ tipo_evento: tipoEvento, utente_id: utenteId, attivo: checked })
+      .select()
+      .single();
+    if (error) { toast('Errore salvataggio', 'err'); return; }
+    _notifDestCache.push(data);
+  }
+  toast(checked ? 'Destinatario aggiunto' : 'Destinatario rimosso', 'ok');
 }
 
 // ═══════════════════════════════════════════════
