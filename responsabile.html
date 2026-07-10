@@ -193,6 +193,32 @@ tr:hover td { background: var(--phase-bg); }
 .badge-approvata { background: #FEF9C3; color: #713F12; }
 .badge-chiusa { background: #E0E7FF; color: #3730A3; }
 
+/* ── GANTT MULTI-GIORNO ── */
+.gantt-wrap { overflow-x: auto; margin-bottom: 8px; }
+.gantt-grid { min-width: 660px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.gantt-row  { display: grid; grid-template-columns: 150px repeat(5, 1fr); }
+.gantt-row:not(.gantt-header) { border-top: 1px solid var(--border); }
+.gantt-header { background: var(--phase-bg); }
+.gantt-col-hdr { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 6px; text-align: center; }
+.gantt-col-hdr:not(:last-child) { border-right: 1px solid var(--border); }
+.gantt-label { padding: 6px 8px; display: flex; flex-direction: column; justify-content: center; min-height: 56px; border-right: 1px solid var(--border); background: var(--surface); }
+.gantt-label-code { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.gantt-label-cli  { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.gantt-scad       { font-size: 9px; background: var(--phase-bg); color: var(--muted); padding: 1px 4px; border-radius: 3px; white-space: nowrap; }
+.gantt-scad-late  { background: #FEE2E2 !important; color: #991B1B !important; }
+.gantt-cell  { padding: 4px; min-height: 56px; }
+.gantt-cell:not(:last-child) { border-right: 1px solid var(--border); }
+.gantt-bar   { background: var(--accent); color: #fff; border-radius: 5px; padding: 5px 7px; cursor: pointer; min-height: 46px; display: flex; flex-direction: column; justify-content: center; transition: opacity .15s; height: 100%; box-sizing: border-box; }
+.gantt-bar:hover { opacity: .82; }
+.gantt-bar-uncertain { background: transparent !important; border: 2px dashed var(--accent); color: var(--text); }
+.gantt-bar-fase { font-size: 10px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gantt-bar-op   { font-size: 9px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.gantt-oltre-hdr { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 20px 0 10px; border-top: 1px solid var(--border); padding-top: 14px; }
+.gantt-oltre-list { display: flex; flex-direction: column; gap: 7px; }
+.gantt-oltre-group { display: flex; flex-wrap: wrap; gap: 5px; align-items: baseline; }
+.gantt-oltre-scad  { font-size: 11px; font-weight: 600; color: var(--muted); min-width: 100px; flex-shrink: 0; }
+.gantt-oltre-pill  { font-size: 11px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 2px 9px; color: var(--text); }
+
 /* ── FILTRI ── */
 .filters { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
 .filters input, .filters select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; outline: none; }
@@ -406,6 +432,9 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       </div>
       <div class="nav-item" onclick="showSection('pianificazione')" id="nav-pianificazione">
         <span class="icon">📅</span> Pianificazione
+      </div>
+      <div class="nav-item" onclick="showSection('gantt')" id="nav-gantt">
+        <span class="icon">📊</span> Gantt 5 giorni
       </div>
 
       <div class="nav-section">Gestione</div>
@@ -695,6 +724,18 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         </div>
 
         <div id="piano-content"><div class="empty-state"><div class="icon">📅</div><p>Caricamento...</p></div></div>
+      </section>
+
+      <!-- GANTT MULTI-GIORNO -->
+      <section class="section" id="sec-gantt">
+        <div class="page-hdr">
+          <div>
+            <h1>Gantt 5 giorni</h1>
+            <div class="sub">Simulazione capacità — sola lettura. Clicca una barra per aprire il piano di quel giorno.</div>
+          </div>
+          <button class="btn btn-secondary" onclick="loadGantt()">↻ Aggiorna</button>
+        </div>
+        <div id="gantt-body"><div class="empty-state"><div class="icon">📊</div><p>Caricamento…</p></div></div>
       </section>
 
       <!-- KPI -->
@@ -2012,6 +2053,136 @@ function showSection(name) {
   else if (name === 'macchine-config') { loadMacchine().then(renderMacchine); }
   else if (name === 'fasi-extra-config') { loadCatalogoFasiExtra(); }
   else if (name === 'notif-config') { loadNotifDestinatari(); }
+  else if (name === 'gantt') { loadGantt(); }
+}
+
+// ═══════════════════════════════════════════════
+// GANTT MULTI-GIORNO
+// ═══════════════════════════════════════════════
+let _ganttCache = null;
+
+async function loadGantt() {
+  const el = document.getElementById('gantt-body');
+  if (el) el.innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>Simulazione in corso…</p></div>';
+  const { data, error } = await sb.rpc('piano_multi_giorno', { p_giorni: 5 });
+  if (error || !data?.ok) {
+    if (el) el.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>Errore: ${error?.message || data?.errore || 'sconosciuto'}</p></div>`;
+    return;
+  }
+  _ganttCache = data;
+  renderGantt();
+}
+
+function renderGantt() {
+  const el = document.getElementById('gantt-body');
+  if (!el) return;
+  if (!_ganttCache) { loadGantt(); return; }
+
+  const { giorni_simulati, oltre } = _ganttCache;
+  const today = new Date().toISOString().split('T')[0];
+
+  if (!giorni_simulati.length && !oltre?.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>Nessuna fase da pianificare</p></div>';
+    return;
+  }
+
+  // Mappa ordini: id → { codice, cliente, scadenza }
+  const orderMap = new Map();
+  giorni_simulati.forEach(g => (g.fasi || []).forEach(f => {
+    if (!orderMap.has(f.ordine_id))
+      orderMap.set(f.ordine_id, { codice: f.codice, cliente: f.cliente, scadenza: f.scadenza });
+  }));
+
+  // assignments[ordine_id][giorno] = fase_info
+  const assignments = new Map();
+  giorni_simulati.forEach(g => (g.fasi || []).forEach(f => {
+    if (!assignments.has(f.ordine_id)) assignments.set(f.ordine_id, {});
+    assignments.get(f.ordine_id)[g.giorno] = { ...f, data: g.data };
+  }));
+
+  // Intestazioni colonne giorni
+  const headers = giorni_simulati.map(g => {
+    const d = new Date(g.data + 'T12:00:00');
+    const lbl = d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
+    return `<div class="gantt-col-hdr">${lbl}</div>`;
+  }).join('');
+
+  // Righe ordini, ordinate per scadenza
+  const rows = [...orderMap.entries()]
+    .sort((a, b) => (a[1].scadenza || '9999') < (b[1].scadenza || '9999') ? -1 : 1)
+    .map(([oid, ord]) => {
+      const scadLate = ord.scadenza && ord.scadenza < today;
+      const scadBadge = ord.scadenza
+        ? `<span class="gantt-scad${scadLate ? ' gantt-scad-late' : ''}">${ord.scadenza}</span>`
+        : '';
+
+      const cells = giorni_simulati.map(g => {
+        const f = assignments.get(oid)?.[g.giorno];
+        if (!f) return `<div class="gantt-cell"></div>`;
+        const inc = f.stima_incerta;
+        const mac = f.mac_nome ? ` · ${f.mac_nome}` : '';
+        const stima = f.stima_min ? ` (${Math.round(f.stima_min)}min)` : '';
+        const ttip = `${f.fase_nome} · ${f.op_nome || '—'}${mac}${stima}`;
+        return `<div class="gantt-cell">
+          <div class="gantt-bar${inc ? ' gantt-bar-uncertain' : ''}"
+               title="${ttip.replace(/"/g, '&quot;')}"
+               onclick="ganttClickGiorno('${g.data}')">
+            <div class="gantt-bar-fase">${f.fase_nome}${inc ? ' ?' : ''}</div>
+            <div class="gantt-bar-op">${f.op_nome || '—'}${mac}</div>
+          </div>
+        </div>`;
+      }).join('');
+
+      return `<div class="gantt-row">
+        <div class="gantt-label">
+          <div class="gantt-label-code">${ord.codice || ''}${scadBadge ? ' ' + scadBadge : ''}</div>
+          <div class="gantt-label-cli">${ord.cliente || ''}</div>
+        </div>
+        ${cells}
+      </div>`;
+    }).join('');
+
+  // Sezione "oltre"
+  let oltrHtml = '';
+  if (oltre?.length) {
+    const byScad = {};
+    oltre.forEach(f => {
+      const k = f.scadenza || '__nessuna';
+      if (!byScad[k]) byScad[k] = [];
+      byScad[k].push(f);
+    });
+    const gruppi = Object.entries(byScad)
+      .sort(([a], [b]) => a < b ? -1 : 1)
+      .map(([scad, fasi]) => {
+        const label = scad === '__nessuna' ? 'Senza scadenza' : `Scad. ${scad}`;
+        const late = scad !== '__nessuna' && scad < today;
+        const pills = fasi.map(f => `<span class="gantt-oltre-pill">${f.codice || ''} · ${f.fase_nome}</span>`).join('');
+        return `<div class="gantt-oltre-group">
+          <div class="gantt-oltre-scad${late ? ' gantt-scad-late' : ''}">${label}</div>
+          ${pills}
+        </div>`;
+      }).join('');
+    oltrHtml = `<div class="gantt-oltre-hdr">Oltre i 5 giorni — ${oltre.length} fasi</div>
+      <div class="gantt-oltre-list">${gruppi}</div>`;
+  }
+
+  el.innerHTML = `
+    <div class="gantt-wrap">
+      <div class="gantt-grid">
+        <div class="gantt-row gantt-header">
+          <div class="gantt-label gantt-col-hdr" style="text-align:left">Ordine</div>
+          ${headers}
+        </div>
+        ${rows}
+      </div>
+    </div>
+    ${oltrHtml}`;
+}
+
+function ganttClickGiorno(data) {
+  const sel = document.getElementById('piano-data-sel');
+  if (sel) sel.value = data;
+  showSection('pianificazione');
 }
 
 // ═══════════════════════════════════════════════
