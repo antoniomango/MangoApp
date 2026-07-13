@@ -3810,6 +3810,11 @@ function openModalNuovoOrdine() {
   if (tipoPEl && tipoPEl.options.length) tipoPEl.selectedIndex = 0;
   if (matEl && matEl.options.length) matEl.selectedIndex = 0;
   setTipoOrdine('standard');
+  // Reset esplicito fasi opzionali — setTipoOrdine le azzera solo quando tipo !== 'standard'
+  fasi.filter(f => f.opzionale).forEach(f => {
+    const el = document.getElementById(`ord-fase-opz-${f.id}`);
+    if (el) el.checked = false;
+  });
   document.getElementById('modal-ordine').classList.add('open');
 }
 
