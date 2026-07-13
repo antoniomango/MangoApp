@@ -3980,7 +3980,7 @@ async function creaOrdine() {
     insertPayload.struttura = document.getElementById('ord-struttura').value;
     insertPayload.tipo_prodotto = document.getElementById('ord-tipo-prodotto').value;
     insertPayload.materiale = document.getElementById('ord-materiale').value;
-    insertPayload.attributi = { struttura: insertPayload.struttura, materiale: insertPayload.materiale };
+
   }
   const { data: newOrdine, error } = await sb.from('ordini').insert(insertPayload).select().single();
 
@@ -7055,7 +7055,7 @@ async function salvaModificaOrdine() {
     payload.tipo_prodotto = nuovoTipo;
     payload.struttura = nuovaStruttura;
     payload.materiale = nuovoMateriale;
-    payload.attributi = { struttura: nuovaStruttura, materiale: nuovoMateriale };
+
   }
 
   const { error } = await sb.from('ordini').update(payload).eq('id', id);
