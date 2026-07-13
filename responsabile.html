@@ -218,6 +218,30 @@ tr:hover td { background: var(--phase-bg); }
 .gantt-oltre-group { display: flex; flex-wrap: wrap; gap: 5px; align-items: baseline; }
 .gantt-oltre-scad  { font-size: 11px; font-weight: 600; color: var(--muted); min-width: 100px; flex-shrink: 0; }
 .gantt-oltre-pill  { font-size: 11px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 2px 9px; color: var(--ink); }
+/* ── GANTT BANNER + SLOT (vista per operatore) ── */
+.gantt-banner { border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; display: flex; gap: 10px; align-items: flex-start; }
+.gantt-banner-ok   { background: #ECFDF5; border: 1px solid #6EE7B7; color: #065F46; }
+.gantt-banner-warn { background: #FFFBEB; border: 1px solid #FCD34D; color: #78350F; }
+.gantt-banner-icon { font-size: 18px; flex-shrink: 0; line-height: 1.4; }
+.gantt-banner-body { flex: 1; min-width: 0; }
+.gantt-banner-title { font-size: 13px; font-weight: 700; }
+.gantt-banner-rows { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
+.gantt-banner-row  { font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; }
+.gantt-banner-scad-late { color: #DC2626; font-weight: 600; }
+.gantt-cell-empty  { height: 100%; min-height: 40px; display: flex; align-items: center; justify-content: center; }
+.gantt-cell-empty-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--border); }
+.gantt-slot        { background: var(--wood); color: #fff; border-radius: 5px; padding: 5px 7px; margin-bottom: 3px; }
+.gantt-slot:last-child { margin-bottom: 0; }
+.gantt-slot-uncertain { background: transparent !important; border: 2px dashed var(--wood); color: var(--ink); }
+.gantt-slot-fase   { font-size: 10px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gantt-slot-ord    { font-size: 9px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.gantt-slot-min    { font-size: 9px; margin-top: 2px; opacity: .9; }
+.gantt-slot-uncertain .gantt-slot-min { font-style: italic; opacity: .65; }
+@media (prefers-color-scheme: dark) {
+  .gantt-banner-ok   { background: #022C22; border-color: #065F46; color: #6EE7B7; }
+  .gantt-banner-warn { background: #1C1400; border-color: #92400E; color: #FCD34D; }
+  .gantt-banner-scad-late { color: #FCA5A5; }
+}
 
 /* ── FILTRI ── */
 .filters { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
@@ -731,7 +755,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <div class="page-hdr">
           <div>
             <h1>Gantt 5 giorni</h1>
-            <div class="sub">Simulazione capacità — sola lettura. Clicca una barra per aprire il piano di quel giorno.</div>
+            <div class="sub">Simulazione capacità — sola lettura. Righe per operatore, colonne per giorno lavorativo.</div>
           </div>
           <button class="btn btn-secondary" onclick="loadGantt()">↻ Aggiorna</button>
         </div>
@@ -2086,97 +2110,112 @@ function renderGantt() {
     return;
   }
 
-  // Mappa ordini: id → { codice, cliente, scadenza }
-  const orderMap = new Map();
-  giorni_simulati.forEach(g => (g.fasi || []).forEach(f => {
-    if (!orderMap.has(f.ordine_id))
-      orderMap.set(f.ordine_id, { codice: f.codice, cliente: f.cliente, scadenza: f.scadenza });
-  }));
+  // ── 1. BANNER ordini a rischio ──────────────────────────────────────────
+  let bannerHtml;
+  if (!oltre?.length) {
+    bannerHtml = `<div class="gantt-banner gantt-banner-ok">
+      <div class="gantt-banner-icon">✅</div>
+      <div class="gantt-banner-body"><div class="gantt-banner-title">Nessun ordine a rischio nei prossimi 5 giorni simulati</div></div>
+    </div>`;
+  } else {
+    const righe = oltre.map(f => {
+      const late = f.scadenza && f.scadenza < today;
+      const scadSpan = f.scadenza
+        ? `<span class="${late ? 'gantt-banner-scad-late' : ''}">scad. ${f.scadenza}</span>`
+        : '<span>senza scadenza</span>';
+      return `<div class="gantt-banner-row">
+        <strong>${escapeHtml(f.codice || '—')}</strong>
+        <span>${escapeHtml(f.cliente || '')}</span>
+        <span>· ${escapeHtml(f.fase_nome)}</span>
+        <span>· ${scadSpan}</span>
+      </div>`;
+    }).join('');
+    bannerHtml = `<div class="gantt-banner gantt-banner-warn">
+      <div class="gantt-banner-icon">⚠️</div>
+      <div class="gantt-banner-body">
+        <div class="gantt-banner-title">${oltre.length} fase${oltre.length !== 1 ? 'i' : ''} non coperta${oltre.length !== 1 ? 'e' : ''} dai 5 giorni simulati</div>
+        <div class="gantt-banner-rows">${righe}</div>
+      </div>
+    </div>`;
+  }
 
-  // assignments[ordine_id][giorno] = fase_info
-  const assignments = new Map();
-  giorni_simulati.forEach(g => (g.fasi || []).forEach(f => {
-    if (!assignments.has(f.ordine_id)) assignments.set(f.ordine_id, {});
-    assignments.get(f.ordine_id)[g.giorno] = { ...f, data: g.data };
-  }));
+  // ── 2. CORSIE PER OPERATORE ─────────────────────────────────────────────
+  // Operatori attivi non esclusi dalla pianificazione, ordinati per cognome
+  const ops = (operatoriCache || [])
+    .filter(o => o.attivo && !o.escluso_pianificazione)
+    .sort((a, b) => (a.cognome || '').localeCompare(b.cognome || '', 'it'));
 
-  // Intestazioni colonne giorni
+  // opDayMap: opId → { [giorno]: [fase,...] }
+  const opDayMap = new Map();
+  ops.forEach(o => opDayMap.set(o.id, {}));
+
+  giorni_simulati.forEach(g => {
+    (g.fasi || []).forEach(f => {
+      const key = f.op_id || '__nessuno';
+      if (!opDayMap.has(key)) opDayMap.set(key, {}); // op non in cache
+      const dm = opDayMap.get(key);
+      if (!dm[g.giorno]) dm[g.giorno] = [];
+      dm[g.giorno].push({ ...f, _data: g.data });
+    });
+  });
+
+  // Colonne: intestazioni giorni con data reale
+  const nGiorni = giorni_simulati.length;
+  const colTpl = `150px repeat(${nGiorni}, 1fr)`;
   const headers = giorni_simulati.map(g => {
     const d = new Date(g.data + 'T12:00:00');
     const lbl = d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
     return `<div class="gantt-col-hdr">${lbl}</div>`;
   }).join('');
 
-  // Righe ordini, ordinate per scadenza
-  const rows = [...orderMap.entries()]
-    .sort((a, b) => (a[1].scadenza || '9999') < (b[1].scadenza || '9999') ? -1 : 1)
-    .map(([oid, ord]) => {
-      const scadLate = ord.scadenza && ord.scadenza < today;
-      const scadBadge = ord.scadenza
-        ? `<span class="gantt-scad${scadLate ? ' gantt-scad-late' : ''}">${ord.scadenza}</span>`
-        : '';
-
-      const cells = giorni_simulati.map(g => {
-        const f = assignments.get(oid)?.[g.giorno];
-        if (!f) return `<div class="gantt-cell"></div>`;
-        const inc = f.stima_incerta;
-        const mac = f.mac_nome ? ` · ${f.mac_nome}` : '';
-        const stima = f.stima_min ? ` (${Math.round(f.stima_min)}min)` : '';
-        const ttip = `${f.fase_nome} · ${f.op_nome || '—'}${mac}${stima}`;
-        return `<div class="gantt-cell">
-          <div class="gantt-bar${inc ? ' gantt-bar-uncertain' : ''}"
-               title="${ttip.replace(/"/g, '&quot;')}"
-               onclick="ganttClickGiorno('${g.data}')">
-            <div class="gantt-bar-fase">${f.fase_nome}${inc ? ' ?' : ''}</div>
-            <div class="gantt-bar-op">${f.op_nome || '—'}${mac}</div>
-          </div>
-        </div>`;
-      }).join('');
-
-      return `<div class="gantt-row">
-        <div class="gantt-label">
-          <div class="gantt-label-code">${ord.codice || ''}${scadBadge ? ' ' + scadBadge : ''}</div>
-          <div class="gantt-label-cli">${ord.cliente || ''}</div>
-        </div>
-        ${cells}
-      </div>`;
-    }).join('');
-
-  // Sezione "oltre"
-  let oltrHtml = '';
-  if (oltre?.length) {
-    const byScad = {};
-    oltre.forEach(f => {
-      const k = f.scadenza || '__nessuna';
-      if (!byScad[k]) byScad[k] = [];
-      byScad[k].push(f);
-    });
-    const gruppi = Object.entries(byScad)
-      .sort(([a], [b]) => a < b ? -1 : 1)
-      .map(([scad, fasi]) => {
-        const label = scad === '__nessuna' ? 'Senza scadenza' : `Scad. ${scad}`;
-        const late = scad !== '__nessuna' && scad < today;
-        const pills = fasi.map(f => `<span class="gantt-oltre-pill">${f.codice || ''} · ${f.fase_nome}</span>`).join('');
-        return `<div class="gantt-oltre-group">
-          <div class="gantt-oltre-scad${late ? ' gantt-scad-late' : ''}">${label}</div>
-          ${pills}
-        </div>`;
-      }).join('');
-    oltrHtml = `<div class="gantt-oltre-hdr">Oltre i 5 giorni — ${oltre.length} fasi</div>
-      <div class="gantt-oltre-list">${gruppi}</div>`;
+  // Helper: singolo slot fase in cella
+  function slotHtml(f) {
+    const inc = f.stima_incerta;
+    const faseTrunc = f.fase_nome.length > 20 ? f.fase_nome.slice(0, 19) + '…' : f.fase_nome;
+    const stimaTxt = f.stima_min ? `${Math.round(f.stima_min)} min${inc ? ' ≈' : ''}` : '';
+    return `<div class="gantt-slot${inc ? ' gantt-slot-uncertain' : ''}">
+      <div class="gantt-slot-fase">${escapeHtml(faseTrunc)}</div>
+      <div class="gantt-slot-ord">${escapeHtml(f.codice || '')} · ${escapeHtml(f.cliente || '')}</div>
+      ${stimaTxt ? `<div class="gantt-slot-min">${stimaTxt}</div>` : ''}
+    </div>`;
   }
 
+  // Righe: ops da cache + eventuali op_id non riconosciuti dai dati
+  const opNameMap = new Map(ops.map(o => [o.id, `${o.nome} ${o.cognome}`]));
+  const rowKeys = ops.map(o => o.id);
+  for (const key of opDayMap.keys()) {
+    if (!rowKeys.includes(key)) rowKeys.push(key);
+  }
+
+  const rows = rowKeys.map(opId => {
+    const dm = opDayMap.get(opId) || {};
+    const opName = opNameMap.get(opId) || (opId === '__nessuno' ? '— Non assegnato' : opId);
+    const cells = giorni_simulati.map(g => {
+      const fasi = dm[g.giorno] || [];
+      if (!fasi.length) {
+        return `<div class="gantt-cell"><div class="gantt-cell-empty"><div class="gantt-cell-empty-dot"></div></div></div>`;
+      }
+      return `<div class="gantt-cell">${fasi.map(slotHtml).join('')}</div>`;
+    }).join('');
+    return `<div class="gantt-row" style="grid-template-columns:${colTpl}">
+      <div class="gantt-label">
+        <div class="gantt-label-code">${escapeHtml(opName)}</div>
+      </div>
+      ${cells}
+    </div>`;
+  }).join('');
+
   el.innerHTML = `
+    ${bannerHtml}
     <div class="gantt-wrap">
       <div class="gantt-grid">
-        <div class="gantt-row gantt-header">
-          <div class="gantt-label gantt-col-hdr" style="text-align:left">Ordine</div>
+        <div class="gantt-row gantt-header" style="grid-template-columns:${colTpl}">
+          <div class="gantt-label gantt-col-hdr" style="text-align:left">Operatore</div>
           ${headers}
         </div>
         ${rows}
       </div>
-    </div>
-    ${oltrHtml}`;
+    </div>`;
 }
 
 function ganttClickGiorno(data) {
