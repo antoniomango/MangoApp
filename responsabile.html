@@ -1076,18 +1076,117 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           </div>
           <button class="btn btn-primary" onclick="salvaKpiConfig()">💾 Salva modifiche</button>
         </div>
-        <div class="card" style="padding:20px;max-width:540px">
-          <div class="form-group" style="margin-bottom:16px">
-            <label style="font-size:13px;font-weight:600">Margine minimo a rischio (giorni)</label>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Un ordine è marcato "a rischio" se la scadenza è entro questo numero di giorni</div>
+        <div class="card" style="padding:20px;max-width:600px;display:flex;flex-direction:column;gap:0">
+          <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:16px">Rischio e storico</div>
+          <div class="form-group" style="margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:13px;font-weight:600">Margine minimo a rischio (giorni)</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Un ordine è "a rischio" se la scadenza è entro questo numero di giorni</div>
+            </div>
             <input type="number" id="kpicfg-soglia" min="0" max="30" step="1" value="1"
-              style="width:100px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+              style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
           </div>
-          <div class="form-group" style="margin-bottom:0">
-            <label style="font-size:13px;font-weight:600">Settimane storico capacità</label>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Quante settimane passate usare per stimare la produttività media settimanale</div>
+          <div class="form-group" style="margin-bottom:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:13px;font-weight:600">Settimane storico capacità</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Quante settimane passate usare per stimare la produttività media settimanale</div>
+            </div>
             <input type="number" id="kpicfg-settimane" min="1" max="52" step="1" value="6"
-              style="width:100px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
+              style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
+          </div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:16px">Pianificatore</div>
+          <div class="form-group" style="margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:13px;font-weight:600">Margine capacità operatori (%)</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Percentuale della capacità giornaliera usata dal pianificatore (es. 90 = 90%)</div>
+            </div>
+            <input type="number" id="kpicfg-margine" min="50" max="100" step="1" value="90"
+              style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
+          </div>
+          <div class="form-group" style="margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:13px;font-weight:600">Stima fallback (minuti)</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Durata prudenziale usata per la fase quando non c'è storico disponibile</div>
+            </div>
+            <input type="number" id="kpicfg-fallback" min="5" max="480" step="5" value="30"
+              style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
+          </div>
+          <div class="form-group" style="margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:13px;font-weight:600">Campioni minimi (operatore)</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Campioni storici minimi per usare la mediana personale dell'operatore</div>
+            </div>
+            <input type="number" id="kpicfg-soglia-op" min="1" max="50" step="1" value="5"
+              style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
+          </div>
+          <div class="form-group" style="margin-bottom:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:13px;font-weight:600">Campioni minimi (generale)</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Campioni storici minimi per usare la mediana generale della fase</div>
+            </div>
+            <input type="number" id="kpicfg-soglia-gen" min="1" max="50" step="1" value="3"
+              style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
+          </div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:16px">Notifiche automatiche</div>
+          <div class="form-group" style="margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:13px;font-weight:600">Anticipo fine turno (minuti)</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Quanti minuti prima della fine turno inviare la notifica di chiusura</div>
+            </div>
+            <input type="number" id="kpicfg-fine-turno" min="1" max="60" step="1" value="5"
+              style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
+          </div>
+          <div class="form-group" style="margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:13px;font-weight:600">Intervallo reminder fasi (minuti)</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Ogni quanti minuti ripetere il reminder per fasi ancora aperte oltre la soglia</div>
+            </div>
+            <input type="number" id="kpicfg-reminder-intervallo" min="5" max="120" step="5" value="15"
+              style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
+          </div>
+          <div class="form-group" style="margin-bottom:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:13px;font-weight:600">Margine avvio reminder (minuti)</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Minuti extra dopo la durata stimata prima di inviare il primo reminder</div>
+            </div>
+            <input type="number" id="kpicfg-reminder-margine" min="0" max="60" step="1" value="5"
+              style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
+          </div>
+
+          <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding-bottom:10px;border-bottom:1px solid var(--border);margin-bottom:16px">Retention dati</div>
+          <div class="form-group" style="margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:13px;font-weight:600">Notifiche lette (giorni)</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Giorni dopo cui le notifiche già lette vengono eliminate automaticamente</div>
+            </div>
+            <input type="number" id="kpicfg-ret-notif-lette" min="1" max="365" step="1" value="30"
+              style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
+          </div>
+          <div class="form-group" style="margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:13px;font-weight:600">Notifiche non lette (giorni)</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Giorni dopo cui le notifiche non lette vengono eliminate automaticamente</div>
+            </div>
+            <input type="number" id="kpicfg-ret-notif-non-lette" min="1" max="365" step="1" value="120"
+              style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
+          </div>
+          <div class="form-group" style="margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:13px;font-weight:600">Tentativi PIN (ore)</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Ore dopo cui i tentativi PIN falliti vengono eliminati automaticamente</div>
+            </div>
+            <input type="number" id="kpicfg-ret-pin" min="1" max="168" step="1" value="24"
+              style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
+          </div>
+          <div class="form-group" style="margin-bottom:0;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:13px;font-weight:600">Log cron (giorni)</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Giorni di storico da mantenere in cron.job_run_details</div>
+            </div>
+            <input type="number" id="kpicfg-ret-log-cron" min="1" max="90" step="1" value="7"
+              style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
           </div>
         </div>
       </section>
@@ -4664,16 +4763,44 @@ async function loadKpiConfig() {
   const s = document.getElementById('kpicfg-soglia');
   const w = document.getElementById('kpicfg-settimane');
   if (s) s.value = map['soglia_rischio_giorni'] ?? 1;
+  const _set = (id, key, def) => { const el = document.getElementById(id); if (el) el.value = map[key] ?? def; };
+  _set('kpicfg-margine',             'margine_capacita',                     90);
+  _set('kpicfg-fallback',            'durata_default_fase_extra_minuti',      30);
+  _set('kpicfg-soglia-op',           'soglia_campioni_op',                    5);
+  _set('kpicfg-soglia-gen',          'soglia_campioni_gen',                   3);
+  _set('kpicfg-fine-turno',          'fine_turno_minuti',                     5);
+  _set('kpicfg-reminder-intervallo', 'reminder_intervallo_minuti',            15);
+  _set('kpicfg-reminder-margine',    'reminder_margine_avvio_minuti',         5);
+  _set('kpicfg-ret-notif-lette',     'retention_notifiche_lette_giorni',      30);
+  _set('kpicfg-ret-notif-non-lette', 'retention_notifiche_non_lette_giorni',  120);
+  _set('kpicfg-ret-pin',             'retention_pin_tentativi_ore',           24);
+  _set('kpicfg-ret-log-cron',        'retention_log_cron_giorni',             7);
+  // margine_capacita is stored as 0.90 but shown as 90
+  const mEl = document.getElementById('kpicfg-margine');
+  if (mEl && map['margine_capacita'] != null) mEl.value = Math.round(parseFloat(map['margine_capacita']) * 100);
   if (w) w.value = map['settimane_storico_capacita'] ?? 6;
 }
 
 async function salvaKpiConfig() {
-  const soglia    = parseFloat(document.getElementById('kpicfg-soglia')?.value) || 1;
-  const settimane = parseInt(document.getElementById('kpicfg-settimane')?.value) || 6;
-  await Promise.all([
-    sb.from('kpi_config').upsert({ chiave: 'soglia_rischio_giorni',      valore: soglia }),
-    sb.from('kpi_config').upsert({ chiave: 'settimane_storico_capacita', valore: settimane })
-  ]);
+  const _int  = (id, def) => parseInt(document.getElementById(id)?.value) || def;
+  const _flt  = (id, def) => parseFloat(document.getElementById(id)?.value) || def;
+  const rows = [
+    { chiave: 'soglia_rischio_giorni',              valore: _int('kpicfg-soglia', 1) },
+    { chiave: 'settimane_storico_capacita',         valore: _int('kpicfg-settimane', 6) },
+    { chiave: 'margine_capacita',                   valore: _flt('kpicfg-margine', 90) / 100 },
+    { chiave: 'durata_default_fase_extra_minuti',   valore: _int('kpicfg-fallback', 30) },
+    { chiave: 'soglia_campioni_op',                 valore: _int('kpicfg-soglia-op', 5) },
+    { chiave: 'soglia_campioni_gen',                valore: _int('kpicfg-soglia-gen', 3) },
+    { chiave: 'fine_turno_minuti',                  valore: _int('kpicfg-fine-turno', 5) },
+    { chiave: 'reminder_intervallo_minuti',         valore: _int('kpicfg-reminder-intervallo', 15) },
+    { chiave: 'reminder_margine_avvio_minuti',      valore: _int('kpicfg-reminder-margine', 5) },
+    { chiave: 'retention_notifiche_lette_giorni',   valore: _int('kpicfg-ret-notif-lette', 30) },
+    { chiave: 'retention_notifiche_non_lette_giorni', valore: _int('kpicfg-ret-notif-non-lette', 120) },
+    { chiave: 'retention_pin_tentativi_ore',        valore: _int('kpicfg-ret-pin', 24) },
+    { chiave: 'retention_log_cron_giorni',          valore: _int('kpicfg-ret-log-cron', 7) },
+  ];
+  const { error } = await sb.from('kpi_config').upsert(rows);
+  if (error) { toast('Errore salvataggio: ' + error.message, 'err'); return; }
   toast('Soglie KPI salvate', 'ok');
 }
 
