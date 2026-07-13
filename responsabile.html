@@ -228,6 +228,9 @@ tr:hover td { background: var(--phase-bg); }
 .gantt-banner-rows { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
 .gantt-banner-row  { font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; }
 .gantt-banner-scad-late { color: #DC2626; font-weight: 600; }
+.gantt-banner-sub  { font-size: 11px; opacity: .75; margin-bottom: 4px; }
+.gantt-oltre-toggle { margin-top: 6px; background: none; border: none; padding: 0; font-size: 12px; font-weight: 600; cursor: pointer; color: inherit; opacity: .8; text-decoration: underline; }
+.gantt-oltre-toggle:hover { opacity: 1; }
 .gantt-cell-empty  { height: 100%; min-height: 40px; display: flex; align-items: center; justify-content: center; }
 .gantt-cell-empty-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--border); }
 .gantt-slot        { background: var(--wood); color: #fff; border-radius: 5px; padding: 5px 7px; margin-bottom: 3px; }
@@ -2118,7 +2121,19 @@ function renderGantt() {
       <div class="gantt-banner-body"><div class="gantt-banner-title">Nessun ordine a rischio nei prossimi 5 giorni simulati</div></div>
     </div>`;
   } else {
-    const righe = oltre.map(f => {
+    const SOGLIA_BANNER = 8;
+    const oltreSorted = [...oltre].sort((a, b) => {
+      if (!a.scadenza && !b.scadenza) return 0;
+      if (!a.scadenza) return 1;
+      if (!b.scadenza) return -1;
+      return a.scadenza < b.scadenza ? -1 : 1;
+    });
+    const nOrdini = new Set(oltre.map(f => f.ordine_id)).size;
+    const trunca = oltreSorted.length > SOGLIA_BANNER;
+    const visibili = trunca ? oltreSorted.slice(0, SOGLIA_BANNER) : oltreSorted;
+    const nascoste = trunca ? oltreSorted.slice(SOGLIA_BANNER) : [];
+
+    const _rigaBanner = f => {
       const late = f.scadenza && f.scadenza < today;
       const scadSpan = f.scadenza
         ? `<span class="${late ? 'gantt-banner-scad-late' : ''}">scad. ${f.scadenza}</span>`
@@ -2129,12 +2144,22 @@ function renderGantt() {
         <span>· ${escapeHtml(f.fase_nome)}</span>
         <span>· ${scadSpan}</span>
       </div>`;
-    }).join('');
+    };
+
+    const extraBlock = trunca ? `
+      <div id="gantt-oltre-extra" style="display:none">${nascoste.map(_rigaBanner).join('')}</div>
+      <button class="gantt-oltre-toggle" onclick="_ganttOltreToggle(this, ${nascoste.length})">▼ Mostra tutte le ${nascoste.length} fasi rimanenti</button>
+    ` : '';
+
     bannerHtml = `<div class="gantt-banner gantt-banner-warn">
       <div class="gantt-banner-icon">⚠️</div>
       <div class="gantt-banner-body">
-        <div class="gantt-banner-title">${oltre.length} fase${oltre.length !== 1 ? 'i' : ''} non coperta${oltre.length !== 1 ? 'e' : ''} dai 5 giorni simulati</div>
-        <div class="gantt-banner-rows">${righe}</div>
+        <div class="gantt-banner-title">${oltreSorted.length} fasi su ${nOrdini} ordini non rientrano nei prossimi 5 giorni simulati</div>
+        <div class="gantt-banner-rows">
+          ${trunca ? `<div class="gantt-banner-sub">Prime ${SOGLIA_BANNER} per urgenza — ${nOrdini} ordini coinvolti</div>` : ''}
+          ${visibili.map(_rigaBanner).join('')}
+          ${extraBlock}
+        </div>
       </div>
     </div>`;
   }
@@ -2222,6 +2247,18 @@ function ganttClickGiorno(data) {
   const sel = document.getElementById('piano-data-sel');
   if (sel) sel.value = data;
   showSection('pianificazione');
+}
+
+function _ganttOltreToggle(btn, nascosteCount) {
+  const ex = document.getElementById('gantt-oltre-extra');
+  if (!ex) return;
+  if (ex.style.display === 'none') {
+    ex.style.display = '';
+    btn.textContent = '▲ Mostra meno';
+  } else {
+    ex.style.display = 'none';
+    btn.textContent = `▼ Mostra tutte le ${nascosteCount} fasi rimanenti`;
+  }
 }
 
 // ═══════════════════════════════════════════════
