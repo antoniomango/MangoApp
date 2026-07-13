@@ -4976,16 +4976,16 @@ async function esportaOrdineZip(ordineId, zipNameBase) {
   const fotoFolder = zip.folder('foto');
   let fotoCont = 0;
   for (const a of (allegati || [])) {
-    const { data: signed } = await sb.storage.from('allegati-fasi').createSignedUrl(a.url_file, 300);
-    if (!signed?.signedUrl) continue;
+    const { data: signed, error: signErr } = await sb.storage.from('allegati-fasi').createSignedUrl(a.url_file, 300);
+    if (!signed?.signedUrl) { console.warn('createSignedUrl fallito per', a.url_file, signErr?.message); continue; }
     try {
       const resp = await fetch(signed.signedUrl);
-      if (!resp.ok) continue;
+      if (!resp.ok) { console.warn('Fetch foto fallita:', resp.status, a.url_file); continue; }
       const blob = await resp.blob();
       const nomeFile = a.url_file.split('/').pop();
       fotoFolder.file(nomeFile, blob);
       fotoCont++;
-    } catch (e) { console.warn('Errore download foto:', e); }
+    } catch (e) { console.warn('Errore download foto:', e, a.url_file); }
   }
 
   const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -5011,11 +5011,15 @@ async function scaricaEliminaFoto(ordineId, codice, cliente) {
     const zipName = `${cliente}_${codice}_${dataOggi}.zip`.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
     _downloadBlob(zipBlob, zipName);
 
+    if (totAllegati > 0 && fotoCont < totAllegati) {
+      toast(`Attenzione: solo ${fotoCont}/${totAllegati} foto scaricate. Controlla la console. Foto NON rimosse dal cloud.`, 'warn');
+      return;
+    }
     // Elimina solo i file fisici dallo Storage (righe allegati conservate come audit trail)
     if (allegatiUrls.length) {
       await sb.storage.from('allegati-fasi').remove(allegatiUrls);
     }
-    toast(`Esportazione completata: ${fotoCont} foto. Rimosse dal cloud. Dati DB conservati.`, 'ok');
+    toast(`Esportazione completata: ${fotoCont} foto incluse. Rimosse dal cloud. Dati DB conservati.`, 'ok');
   } catch (e) {
     console.error('Errore esportazione:', e);
     toast('Errore durante l\'esportazione: ' + e.message, 'err');
@@ -5044,9 +5048,14 @@ async function esportaBulkArchivio() {
     const o = ordini[i];
     toast(`Esportazione ordine ${i + 1}/${totale}: ${o.codice || o.cliente}…`, 'ok');
     try {
-      const { zipBlob, allegatiUrls, totAllegati } = await esportaOrdineZip(o.id, o.codice);
+      const { zipBlob, allegatiUrls, fotoCont, totAllegati } = await esportaOrdineZip(o.id, o.codice);
       const dataOggi = new Date().toISOString().split('T')[0];
       const zipName = `${o.cliente}_${o.codice || o.id}_${dataOggi}.zip`.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+
+      if (totAllegati > 0 && fotoCont < totAllegati) {
+        console.warn(`[export] ${o.codice}: ${fotoCont}/${totAllegati} foto scaricate`);
+        falliti.push(`${o.codice} (foto ${fotoCont}/${totAllegati})`);
+      }
 
       if (dirHandle) {
         const fileHandle = await dirHandle.getFileHandle(zipName, { create: true });
@@ -5057,8 +5066,8 @@ async function esportaBulkArchivio() {
         await new Promise(r => setTimeout(r, 800)); // piccolo delay tra download
       }
 
-      // Elimina file fisici (DB conservato)
-      if (allegatiUrls.length) await sb.storage.from('allegati-fasi').remove(allegatiUrls);
+      // Elimina file fisici solo se tutte le foto sono state scaricate (DB conservato)
+      if (allegatiUrls.length && fotoCont === totAllegati) await sb.storage.from('allegati-fasi').remove(allegatiUrls);
     } catch (e) {
       console.error('Errore export ordine', o.codice, e);
       falliti.push(o.codice || o.id);
@@ -5066,7 +5075,7 @@ async function esportaBulkArchivio() {
   }
 
   if (falliti.length) {
-    alert(`Esportazione completata con ${falliti.length} errori.\nOrdini non esportati (foto NON eliminate):\n${falliti.join(', ')}`);
+    alert(`Esportazione completata con avvisi.\nControllare questi ordini (foto parziali o errori, foto NON eliminate dal cloud):\n${falliti.join('\n')}`);
   } else {
     toast(`Esportazione bulk completata: ${totale} ordini. Foto rimosse dal cloud.`, 'ok');
   }
