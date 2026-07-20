@@ -7264,7 +7264,7 @@ async function ricalcolaFasiNA(ordineId, tipoProd, struttura, materiale) {
     const eNA = f.stato === 'non_applicabile';
     if (dovrebbeEssereNA && !eNA && f.stato === 'disponibile') {
       await sb.from('ordine_fasi').update({ stato: 'non_applicabile' }).eq('id', f.id);
-    } else if (!dovrebbeEssereNA && eNA) {
+    } else if (!dovrebbeEssereNA && eNA && !faseDef?.opzionale) {
       await sb.from('ordine_fasi').update({ stato: 'disponibile' }).eq('id', f.id);
     }
   }
