@@ -5024,11 +5024,30 @@ async function salvaMacroFasi() {
 // ── VISTA UFFICIO ──
 async function loadUfficio() {
   if (!macroFasiCache.length) await loadMacroFasi();
-  const [{ data: ordini }, { data: ordFasi }] = await Promise.all([
-    sb.from('ordini').select('id, codice, cliente, scadenza, stato, priorita').in('stato', ['aperto', 'attesa_spedizione', 'sospeso']).neq('eliminato', true).order('scadenza', { ascending: true, nullsFirst: false }),
-    sb.from('ordine_fasi').select('ordine_id, fase_id, stato').in('stato', ['disponibile','in_corso','in_attesa','completata','non_applicabile'])
-  ]);
-  renderUfficio(ordini || [], ordFasi || []);
+  const { data: ordini } = await sb.from('ordini')
+    .select('id, codice, cliente, scadenza, stato, priorita')
+    .in('stato', ['aperto', 'attesa_spedizione', 'sospeso'])
+    .neq('eliminato', true)
+    .order('scadenza', { ascending: true, nullsFirst: false });
+
+  const ordiniAttivi = ordini || [];
+  const idsAttivi = ordiniAttivi.map(o => o.id);
+  if (!idsAttivi.length) { renderUfficio(ordiniAttivi, []); return; }
+
+  // Come per ufficio.html: mai leggere ordine_fasi senza filtro su ordine_id.
+  // Il filtro .in('stato', [...]) qui sotto copriva di fatto TUTTI gli stati possibili,
+  // quindi equivaleva a leggere l'intera tabella — Supabase/PostgREST tronca in silenzio
+  // oltre il limite "Max Rows" del progetto una volta che la tabella cresce abbastanza.
+  const { data: ordFasi, count: nOrdFasi } = await sb.from('ordine_fasi')
+    .select('ordine_id, fase_id, stato', { count: 'exact' })
+    .in('ordine_id', idsAttivi);
+
+  const risultato = ordFasi || [];
+  if (typeof nOrdFasi === 'number' && nOrdFasi !== risultato.length) {
+    console.error(`[responsabile/ufficio] ordine_fasi troncato: ricevute ${risultato.length} righe su ${nOrdFasi} attese.`);
+  }
+
+  renderUfficio(ordiniAttivi, risultato);
 }
 
 function renderUfficio(ordini, ordFasi) {
@@ -6484,36 +6503,63 @@ function calcolaOreEffettive(startIso, endIso) {
   return totaleMin / 60;
 }
 
+// Legge TUTTE le righe che soddisfano una query, paginando con .range() finché una
+// pagina torna più corta della page size. Da usare per qualunque lettura che debba
+// coprire uno storico intero (KPI, export, ecc.): una select() singola senza .range()
+// viene troncata in silenzio da Supabase/PostgREST oltre il limite "Max Rows" del
+// progetto, e senza un .order() stabile l'ordine restituito non è nemmeno garantito.
+// queryBuilderFn deve restituire una NUOVA query (senza .range()) ad ogni chiamata,
+// e includere sempre un .order() su una colonna univoca (es. 'id') per paginare in modo stabile.
+async function fetchAllRows(queryBuilderFn, pageSize = 1000) {
+  let rows = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await queryBuilderFn().range(from, from + pageSize - 1);
+    if (error) { console.error('[fetchAllRows] errore di paginazione:', error); break; }
+    const pagina = data || [];
+    rows = rows.concat(pagina);
+    if (pagina.length < pageSize) break;
+    from += pageSize;
+  }
+  return rows;
+}
+
 async function loadKpi() {
   const giorni = parseInt(document.getElementById('kpi-periodo').value);
   const dal = giorni > 0 ? new Date(Date.now() - giorni * 86400000).toISOString() : null;
 
+  // NB: qui non possiamo filtrare per ordine_id come nella vista ufficio — questi KPI
+  // aggregano di proposito su TUTTO lo storico (o sull'intero periodo selezionato),
+  // quindi usiamo fetchAllRows() per garantire che nessuna pagina venga persa anche
+  // quando il numero di righe supera il limite di default di una singola risposta.
   const [
-    { data: ordFasi },
-    { data: ordini },
-    { data: nc },
-    { data: fasiCfg },
+    ordFasiArr,
+    tuttiOrdiniArr,
+    tutteNcArr,
+    fasiCfgArr,
     { count: speditiPeriodoCount }
   ] = await Promise.all([
-    sb.from('ordine_fasi')
+    fetchAllRows(() => sb.from('ordine_fasi')
       .select('id, ordine_id, fase_id, operatore_id, iniziata_il, completata_il, tempo_accumulato_minuti, n_ordini_batch, ordini(codice, cliente, struttura, tipo_prodotto, priorita, scadenza, creato_il, spedito_il, completato_il, eliminato, quantita)')
       .not('completata_il', 'is', null)
-      .gte('completata_il', dal || '2000-01-01'),
-    sb.from('ordini')
+      .gte('completata_il', dal || '2000-01-01')
+      .order('id')),
+    fetchAllRows(() => sb.from('ordini')
       .select('id, codice, cliente, stato, priorita, struttura, tipo_prodotto, scadenza, creato_il, spedito_il, completato_il, eliminato')
-      .neq('eliminato', true),
-    sb.from('non_conformita')
+      .neq('eliminato', true)
+      .order('id')),
+    fetchAllRows(() => sb.from('non_conformita')
       .select('id, stato, fase_id, segnalata_il, ordine_id')
-      .gte('segnalata_il', dal || '2000-01-01'),
-    sb.from('fasi').select('id, nome').order('posizione').order('id'),
+      .gte('segnalata_il', dal || '2000-01-01')
+      .order('id')),
+    fetchAllRows(() => sb.from('fasi').select('id, nome').order('posizione').order('id')),
     // query dedicata: conta spediti nel periodo inclusi gli archiviati (eliminato=true)
     (() => { let q = sb.from('ordini').select('id', { count: 'exact', head: true }).eq('stato', 'spedito'); if (dal) q = q.gte('spedito_il', dal); return q; })(),
   ]);
 
-  const ordFasiArr = ordFasi || [];
-  const tuttiOrdini = ordini || [];
-  const tutteNc = nc || [];
-  const fasiNomi = Object.fromEntries((fasiCfg || []).map(f => [f.id, f.nome]));
+  const tuttiOrdini = tuttiOrdiniArr;
+  const tutteNc = tutteNcArr;
+  const fasiNomi = Object.fromEntries(fasiCfgArr.map(f => [f.id, f.nome]));
   const oggi = new Date().toISOString().split('T')[0];
 
   // ── Raggruppa fasi per ordine ──
