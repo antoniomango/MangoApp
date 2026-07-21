@@ -28,6 +28,35 @@ Questo file viene letto automaticamente da Claude Code all'inizio di ogni sessio
 - Convenzione di naming: `loadXxx()` per il fetch dati, `renderXxx()` per il disegno a schermo.
 - **Pattern fragile da evitare**: non leggere lo stato di checkbox/form dal DOM al momento del click (`document.querySelectorAll(...):checked`) — se il DOM si ri-renderizza tra la selezione e il click, il salvataggio fallisce silenziosamente. Tieni sempre lo stato in memoria via `onchange`, aggiornato ad ogni interazione.
 
+## Query Supabase su tabelle che crescono nel tempo — regola non derogabile
+
+Bug reale (luglio 2026, produzione): `ufficio.html` e la "Vista Ufficio" interna di `responsabile.html`
+(`loadUfficio()`) leggevano `sb.from('ordine_fasi').select(...)` senza filtro su `ordine_id` (in un caso
+con un `.in('stato', [...])` che di fatto copriva tutti gli stati possibili, quindi equivaleva a nessun
+filtro). Con `ordine_fasi` cresciuta oltre il limite di default "Max Rows" del progetto (Project Settings
+→ API), Supabase/PostgREST ha troncato la risposta in silenzio, senza errore — e senza un `.order()`
+esplicito il taglio avviene in un punto arbitrario, non alla fine. Risultato visibile: alcuni ordini (es.
+ZANETTI L142) mostravano solo 2 fasi su 25 reali nella vista di sola lettura. `loadKpi()` aveva lo stesso
+problema in forma più subdola: query storiche filtrate solo per data (`gte('completata_il', ...)`), quindi
+a rischio identico ogni volta che il periodo selezionato è ampio ("Ultimo anno"/"Tutto") — con l'aggravante
+che lì il dato troncato è una metrica di business, non un elenco visibile a colpo d'occhio.
+
+Regole permanenti:
+- Mai una `select()` su `ordine_fasi`, `fasi_ordine_extra`, `archivio_log`, `notifiche`, `allegati` (o
+  qualunque tabella che cresce con ogni ordine/evento) senza scoping esplicito (`.eq('ordine_id', ...)`,
+  `.in('ordine_id', ids)`, `.eq('operatore_id', ...)`, ecc.) oppure senza paginazione esplicita.
+- Se una query DEVE leggere uno storico intero per aggregazioni cross-ordine (KPI, export, ecc.), usa
+  `fetchAllRows()` (helper in `responsabile.html`, definito subito prima di `loadKpi()`) che pagina con
+  `.range()` finché una pagina torna più corta della page size — mai una `select()` singola non paginata.
+- Ogni query paginata con `.range()` richiede un `.order()` su una colonna univoca (es. `id`): senza,
+  l'ordine restituito da Postgres non è garantito e la paginazione può saltare o duplicare righe.
+- Prima di dichiarare "fatta" una nuova vista/report che legge una tabella storica, controlla quante righe
+  ha oggi quella tabella (`select count(*)`) e proietta la crescita nei prossimi mesi — "con pochi dati
+  funziona" non è una verifica sufficiente.
+- Come rete di sicurezza aggiuntiva (non sostitutiva dello scoping): quando ha senso, passa
+  `{ count: 'exact' }` alla `select()` e confronta `count` con `data.length` — se differiscono, la risposta
+  è stata troncata e va segnalato (vedi `aggiornaUfficio()` in `ufficio.html` per un esempio).
+
 ## Portabilità self-hosting (non urgente, sempre da rispettare)
 
 - Endpoint e configurazioni sempre da variabili d'ambiente, mai hardcoded.

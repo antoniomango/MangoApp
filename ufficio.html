@@ -359,19 +359,42 @@ async function aggiornaUfficio() {
   const ora = new Date().toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' });
   document.getElementById('refresh-info').textContent = `Aggiornato alle ${ora} · Aggiornamento automatico ogni 2 minuti`;
 
-  const [{ data: ordini }, { data: ordFasi }, { data: fasiExtra }] = await Promise.all([
-    sb.from('ordini')
-      .select('id, codice, cliente, scadenza, stato, priorita, tipo, tipo_prodotto, struttura, materiale, quantita')
-      .in('stato', ['aperto', 'attesa_spedizione', 'sospeso'])
-      .neq('eliminato', true)
-      .order('scadenza', { ascending: true, nullsFirst: false }),
-    sb.from('ordine_fasi').select('ordine_id, fase_id, stato'),
-    sb.from('fasi_ordine_extra').select('ordine_id, nome, stato, numero').order('numero')
+  const { data: ordini } = await sb.from('ordini')
+    .select('id, codice, cliente, scadenza, stato, priorita, tipo, tipo_prodotto, struttura, materiale, quantita')
+    .in('stato', ['aperto', 'attesa_spedizione', 'sospeso'])
+    .neq('eliminato', true)
+    .order('scadenza', { ascending: true, nullsFirst: false });
+
+  allOrdini = ordini || [];
+
+  // IMPORTANTE: non leggere MAI ordine_fasi/fasi_ordine_extra senza filtro su ordine_id.
+  // Sono tabelle storiche che crescono con ogni ordine spedito: una select() non filtrata
+  // viene troncata in silenzio da Supabase/PostgREST oltre il limite "Max Rows" del progetto,
+  // e il taglio avviene in un punto arbitrario (nessun .order() garantito) — non solo alla fine.
+  // Qui ci limitiamo esplicitamente agli ordini attivi appena caricati.
+  const idsAttivi = allOrdini.map(o => o.id);
+
+  if (!idsAttivi.length) {
+    allOrdFasi   = [];
+    allFasiExtra = [];
+    renderLista();
+    return;
+  }
+
+  const [{ data: ordFasi, count: nOrdFasi }, { data: fasiExtra }] = await Promise.all([
+    sb.from('ordine_fasi').select('ordine_id, fase_id, stato', { count: 'exact' }).in('ordine_id', idsAttivi),
+    sb.from('fasi_ordine_extra').select('ordine_id, nome, stato, numero').in('ordine_id', idsAttivi).order('numero')
   ]);
 
-  allOrdini    = ordini    || [];
   allOrdFasi   = ordFasi   || [];
   allFasiExtra = fasiExtra || [];
+
+  // Rete di sicurezza: se il conteggio esatto lato server non coincide con le righe
+  // ricevute, la risposta è stata troncata — meglio saperlo subito che mostrare dati incompleti.
+  if (typeof nOrdFasi === 'number' && nOrdFasi !== allOrdFasi.length) {
+    console.error(`[ufficio] ordine_fasi troncato: ricevute ${allOrdFasi.length} righe su ${nOrdFasi} attese. Aumentare "Max Rows" in Project Settings → API o paginare la query.`);
+    document.getElementById('refresh-info').textContent += ' · ⚠ dati potenzialmente incompleti, contatta l\'amministratore';
+  }
 
   renderLista();
 }
@@ -557,13 +580,22 @@ function storCardHtml(o) {
 }
 
 // ── DETTAGLIO ──
-function apriDettaglio(ordineId) {
+async function apriDettaglio(ordineId) {
   const o = allOrdini.find(x => x.id === ordineId);
   if (!o) return;
   dettaglioSorgente = 'lista';
-  const ordFasiPerOrdine   = allOrdFasi.filter(f => f.ordine_id === ordineId);
-  const fasiExtraPerOrdine = allFasiExtra.filter(f => f.ordine_id === ordineId);
-  renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine);
+
+  // Non ci fidiamo della cache allOrdFasi/allFasiExtra (che in teoria potrebbe ancora
+  // essere incompleta su installazioni molto grandi): per il dettaglio rileggiamo sempre
+  // le fasi filtrando esplicitamente per questo singolo ordine, come fa già lo storico.
+  const [{ data: ordFasi }, { data: fasiExtra }] = await Promise.all([
+    sb.from('ordine_fasi').select('ordine_id, fase_id, stato').eq('ordine_id', ordineId),
+    o.tipo === 'extra'
+      ? sb.from('fasi_ordine_extra').select('ordine_id, nome, stato, numero').eq('ordine_id', ordineId).order('numero')
+      : Promise.resolve({ data: [] })
+  ]);
+
+  renderDettaglio(o, ordFasi || [], fasiExtra || []);
 }
 
 async function apriDettaglioStorico(ordineId) {
