@@ -14,13 +14,18 @@ self.addEventListener('install', e => {
 });
 
 self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
-      .then(() => self.clients.matchAll({ type: 'window' }))
-      .then(clients => clients.forEach(c => c.postMessage({ type: 'SW_UPDATED' })))
-  );
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    // Genuine update only if an old-named cache exists (previous SW version).
+    // First install or post-eviction reinstall: no old cache → no banner.
+    const isUpdate = keys.some(k => k !== CACHE);
+    await Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)));
+    await self.clients.claim();
+    if (isUpdate) {
+      const clients = await self.clients.matchAll({ type: 'window' });
+      clients.forEach(c => c.postMessage({ type: 'SW_UPDATED' }));
+    }
+  })());
 });
 
 self.addEventListener('fetch', e => {
