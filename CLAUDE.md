@@ -84,6 +84,7 @@ I job notturni attivi in produzione (`mtpzfxnyfkzikzlkomwz`) al 2026-07-08:
 | `alert-ordini-ritardo` | `30 5 * * *` | Invia alert ordini in ritardo |
 | `notifica-fine-giornata` | `* * * * *` | Notifica fine turno agli operatori |
 | `notifica-reminder-fasi` | `* * * * *` | Reminder fasi aperte > soglia |
+| `pausa-automatica-fine-turno` | `* * * * *` | Al termine del turno, mette in pausa le fasi in_corso standard (accumula tempo, logga 'fase_pausa_automatica') |
 
 **Regola non derogabile**: ogni nuovo job schedulato che scrive dati ripetutamente (log, storico, notifiche, audit trail) **deve prevedere fin dalla sua creazione una politica di retention esplicita** — un job di pulizia dedicato oppure una colonna `TTL`. Non farlo causa accumulo silenzioso: `cron.job_run_details` è arrivata a 137 MB in 14 giorni prima che venisse aggiunta la pulizia.
 
