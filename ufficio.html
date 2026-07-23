@@ -603,17 +603,26 @@ async function apriDettaglioStorico(ordineId) {
   if (!o) return;
   dettaglioSorgente = 'storico';
 
-  const [{ data: ordFasi }, { data: fasiExtra }] = await Promise.all([
+  const [{ data: ordFasi }, { data: fasiExtra }, { data: statsArr }] = await Promise.all([
     sb.from('ordine_fasi').select('ordine_id, fase_id, stato').eq('ordine_id', ordineId),
     o.tipo === 'extra'
       ? sb.from('fasi_ordine_extra').select('ordine_id, nome, stato, numero').eq('ordine_id', ordineId).order('numero')
-      : Promise.resolve({ data: [] })
+      : Promise.resolve({ data: [] }),
+    sb.rpc('statistiche_lavoro_ordini', { p_ordine_ids: [ordineId] }),
   ]);
 
-  renderDettaglio(o, ordFasi || [], fasiExtra || []);
+  const stats = statsArr?.[0] || null;
+  renderDettaglio(o, ordFasi || [], fasiExtra || [], stats);
 }
 
-function renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine) {
+function _minutiToOreMin(m) {
+  const tot = Math.round(Number(m) || 0);
+  if (tot <= 0) return '0m';
+  const h = Math.floor(tot / 60), min = tot % 60;
+  return h > 0 ? `${h}h${min > 0 ? ' ' + min + 'm' : ''}` : `${min}m`;
+}
+
+function renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine, stats) {
   const isExtra   = o.tipo === 'extra';
   const isAttesa  = o.stato === 'attesa_spedizione';
   const isSpedito = o.stato === 'spedito';
@@ -638,6 +647,13 @@ function renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine) {
   const dataSpedizione = o.spedito_il || o.completato_il;
   if (dataSpedizione)  metaItems.push(['Spedito il', formatDataCompleta(dataSpedizione)]);
   else if (o.scadenza) metaItems.push(['Scadenza', formatData(o.scadenza)]);
+  if (stats) {
+    metaItems.push(['Ore di lavoro', _minutiToOreMin(stats.minuti_lavoro)]);
+    if (Number(stats.minuti_attesa_esterna) > 0)
+      metaItems.push(['⏳ Attesa esterna', _minutiToOreMin(stats.minuti_attesa_esterna)]);
+    if (Number(stats.n_operatori) > 0)
+      metaItems.push(['N. operatori', String(stats.n_operatori)]);
+  }
 
   const metaHtml = metaItems.map(([lbl, val]) => `
     <div class="detail-meta-item">

@@ -668,10 +668,10 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <div class="card">
           <table>
             <thead>
-              <tr><th>Cliente / N° Ordine</th><th>Tipo</th><th>Priorità</th><th>Creato</th><th>Spedito</th><th>Foto</th></tr>
+              <tr><th>Cliente / N° Ordine</th><th>Tipo</th><th>Priorità</th><th>Creato</th><th>Spedito</th><th>Ore lavoro</th><th>Attesa est.</th><th>N. op.</th><th>Foto</th></tr>
             </thead>
             <tbody id="arch-tbody">
-              <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted)">Caricamento…</td></tr>
+              <tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">Caricamento…</td></tr>
             </tbody>
           </table>
         </div>
@@ -1812,6 +1812,7 @@ let fasi = []; // [{id, nome, descrizione, posizione, trigger_tipo_prodotto}]
 let tipiProdotto = []; // [{id, label, posizione}]
 let ordiniCache = [];
 let ordiniSpeditiCache = [];
+let lavoroStatsCache = {}; // ordine_id → {minuti_lavoro, minuti_attesa_esterna, n_operatori}
 let _spediti30Count = 0; // contatore spediti 30gg inclusi archiviati
 let ncCache = [];
 let operatoriCache = [];
@@ -2045,6 +2046,13 @@ async function loadOrdini() {
   ]);
   ordiniSpeditiCache = spediti || [];
   _spediti30Count = cnt30 ?? 0;
+  // Carica statistiche lavoro per tutti gli ordini spediti in batch
+  if (ordiniSpeditiCache.length) {
+    const ids = ordiniSpeditiCache.map(o => o.id);
+    const { data: stats } = await sb.rpc('statistiche_lavoro_ordini', { p_ordine_ids: ids });
+    lavoroStatsCache = {};
+    (stats || []).forEach(s => { lavoroStatsCache[s.ordine_id] = s; });
+  }
 }
 
 async function loadNc() {
@@ -5145,21 +5153,31 @@ function renderArchivioTable() {
 
   const tbody = document.getElementById('arch-tbody');
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="icon">📦</div><p>Nessun ordine archiviato</p></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><div class="icon">📦</div><p>Nessun ordine archiviato</p></div></td></tr>';
     return;
   }
-  tbody.innerHTML = filtered.map(o => `
+  tbody.innerHTML = filtered.map(o => {
+    const st = lavoroStatsCache[o.id];
+    const oreL   = st ? minutiToOreMinuti(st.minuti_lavoro)         : '—';
+    const oreA   = st ? minutiToOreMinuti(st.minuti_attesa_esterna) : '—';
+    const nOp    = st ? (st.n_operatori > 0 ? st.n_operatori : '—') : '—';
+    const attesaStyle = st && Number(st.minuti_attesa_esterna) > 0
+      ? 'color:var(--warn);font-weight:600' : 'color:var(--muted)';
+    return `
     <tr class="clickable" onclick="openDettaglioOrdine('${o.id}')">
       <td><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div></td>
       <td>${o.tipo === 'extra' ? '<span style="color:#F97316;font-weight:600">Ordine Extra</span>' : `${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}`}</td>
       <td><span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span></td>
       <td>${formatDate(o.creato_il)}</td>
       <td>${o.spedito_il ? formatDate(o.spedito_il) : '—'}</td>
+      <td style="font-variant-numeric:tabular-nums">${oreL}</td>
+      <td style="font-variant-numeric:tabular-nums;${attesaStyle}">${oreA}</td>
+      <td style="text-align:center">${nOp}</td>
       <td onclick="event.stopPropagation()">
         <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="scaricaEliminaFoto('${o.id}','${escapeHtml(o.codice||o.id)}','${escapeHtml(o.cliente)}')">📦 Esporta & rimuovi foto</button>
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
 }
 
 // Esporta un singolo ordine: dettagli.json + log.csv + foto/ → zip scaricato
@@ -5309,11 +5327,17 @@ async function esportaBulkArchivio() {
 }
 
 function exportCSV() {
-  const headers = ['Codice', 'Cliente', 'Struttura', 'Tipo Prodotto', 'Materiale', 'Priorità', 'Stato', 'Creato il', 'Spedito il'];
-  const rows = ordiniSpeditiCache.map(o => [
-    o.codice, o.cliente, strutturaLabel(o.struttura), tipoProdLabel(o.tipo_prodotto), o.materiale || '',
-    o.priorita, o.stato, formatDate(o.creato_il), o.spedito_il ? formatDate(o.spedito_il) : ''
-  ]);
+  const headers = ['Codice', 'Cliente', 'Struttura', 'Tipo Prodotto', 'Materiale', 'Priorità', 'Stato', 'Creato il', 'Spedito il', 'Ore lavoro', 'Attesa esterna', 'N. operatori'];
+  const rows = ordiniSpeditiCache.map(o => {
+    const st = lavoroStatsCache[o.id];
+    return [
+      o.codice, o.cliente, strutturaLabel(o.struttura), tipoProdLabel(o.tipo_prodotto), o.materiale || '',
+      o.priorita, o.stato, formatDate(o.creato_il), o.spedito_il ? formatDate(o.spedito_il) : '',
+      st ? minutiToOreMinuti(st.minuti_lavoro) : '',
+      st ? minutiToOreMinuti(st.minuti_attesa_esterna) : '',
+      st ? String(st.n_operatori) : '',
+    ];
+  });
   const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
@@ -6364,6 +6388,14 @@ function scadenzaClass(scadenza) {
 function formatDate(d) {
   if (!d) return '—';
   return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+function minutiToOreMinuti(m) {
+  if (!m && m !== 0) return '—';
+  const tot = Math.round(Number(m));
+  if (tot <= 0) return '0m';
+  const h = Math.floor(tot / 60);
+  const min = tot % 60;
+  return h > 0 ? `${h}h ${min > 0 ? min + 'm' : ''}`.trim() : `${min}m`;
 }
 
 function formatDateTime(d) {
