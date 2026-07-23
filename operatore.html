@@ -1277,6 +1277,8 @@ async function openFaseExtraDetail(faseExtraId, ordineId) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-fase').classList.add('active');
   document.getElementById('fase-back-btn').onclick = () => openOrdineDetail(ordineId);
+  const bodyEl = document.getElementById('fase-det-body');
+  if (bodyEl) bodyEl.innerHTML = '';
   await renderFaseExtraDetail(faseExtraId, ordineId);
 }
 
@@ -1536,6 +1538,10 @@ async function openFaseDetail(ordFaseId, ordineId) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-fase').classList.add('active');
   document.getElementById('fase-back-btn').onclick = () => openOrdineDetail(ordineId);
+  // Svuota subito il body per evitare che pulsanti della fase precedente
+  // rimangano attivi durante il fetch asincrono (race condition L161→L155).
+  const bodyEl = document.getElementById('fase-det-body');
+  if (bodyEl) bodyEl.innerHTML = '';
   await renderFaseDetail(ordFaseId, ordineId);
 }
 
