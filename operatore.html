@@ -451,6 +451,7 @@ let currentOrdineId = null;
 let currentFaseDetId = null; // ordine_fasi.id
 let faseMediaMinutiMap = {};
 let orarioConfig = null;
+let chiusureAziendaliCache = [];
 
 // ═══════════════════════════════════════════════
 // INDEXEDDB — OFFLINE QUEUE
@@ -663,7 +664,7 @@ async function showApp() {
   await loadFasi();
   await loadOrdini();
   await loadNotificheOp();
-  await Promise.all([loadFaseMediaMinuti(), loadOrarioConfigOp()]);
+  await Promise.all([loadFaseMediaMinuti(), loadOrarioConfigOp(), loadChiusureCache()]);
   setupRealtime();
   scheduleEndOfShiftRefreshOp();
   updateQueueBadge();
@@ -2383,8 +2384,14 @@ function scheduleEndOfShiftRefreshOp() {
 
 async function loadOrarioConfigOp() {
   if (!isOnline) return;
-  const { data } = await sb.from('config_orario').select('ora_inizio, ora_fine').single();
+  const { data } = await sb.from('config_orario').select('ora_inizio, ora_fine, sabato_lavorativo').single();
   if (data) orarioConfig = data;
+}
+
+async function loadChiusureCache() {
+  if (!isOnline) return;
+  const { data } = await sb.from('chiusure_aziendali').select('data_inizio, data_fine');
+  chiusureAziendaliCache = data || [];
 }
 
 function getMinutiGiorno() {
@@ -2400,8 +2407,12 @@ function addGiorniLavorativi(dataInizio, giorni) {
   let aggiunti = 0;
   while (aggiunti < giorni) {
     d.setDate(d.getDate() + 1);
-    const g = d.getDay();
-    if (g !== 0 && g !== 6) aggiunti++;
+    const dow = d.getDay();
+    if (dow === 0) continue;
+    if (dow === 6 && !orarioConfig?.sabato_lavorativo) continue;
+    const iso = d.toISOString().split('T')[0];
+    if (chiusureAziendaliCache.some(c => iso >= c.data_inizio && iso <= c.data_fine)) continue;
+    aggiunti++;
   }
   return d;
 }

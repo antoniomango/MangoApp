@@ -1863,7 +1863,7 @@ async function postLogin() {
   // Load fasi e tipi prodotto (devono precedere il resto)
   await Promise.all([loadFasi(), loadTipiProdotto(), loadPrioritaConfig(), loadAttributiConfig()]);
   // Load data
-  await Promise.all([loadOrdini(), loadNc(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadMacroFasi(), loadFaseMediaMinuti(), loadFaseExtraMediaMinuti(), caricaNomiFasiExtraStoria(), loadMacchine()]);
+  await Promise.all([loadOrdini(), loadNc(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadChiusureCache(), loadMacroFasi(), loadFaseMediaMinuti(), loadFaseExtraMediaMinuti(), caricaNomiFasiExtraStoria(), loadMacchine()]);
   // Check ordini in ritardo (solo responsabile)
   if (currentUserRow?.ruolo === 'responsabile') checkOrdiniInRitardo();
   // Realtime
@@ -4634,10 +4634,16 @@ async function loadRiepilogoPermessi() {
 // ORARIO LAVORO
 // ═══════════════════════════════════════════════
 let orarioConfig = null;
+let chiusureAziendaliCache = []; // [{data_inizio, data_fine}] — caricato all'avvio per addGiorniLavorativi
 
 async function loadOrarioConfig() {
   const { data } = await sb.from('config_orario').select('*').single();
   orarioConfig = data;
+}
+
+async function loadChiusureCache() {
+  const { data } = await sb.from('chiusure_aziendali').select('data_inizio, data_fine');
+  chiusureAziendaliCache = data || [];
 }
 
 async function loadFaseMediaMinuti() {
@@ -6268,7 +6274,7 @@ async function checkOrdiniInRitardo() {
   }
 }
 
-function calcolaStimaSingoloOrdine(id) {
+async function calcolaStimaSingoloOrdine(id) {
   const el = document.getElementById('det-stima-consegna');
   if (!el) return;
   const ordine = ordiniCache.find(o => o.id === id);
@@ -6286,8 +6292,16 @@ function calcolaStimaSingoloOrdine(id) {
   minutiGiornoGlobale = minutiGiorno;
 
   const giorni = Math.ceil(minTotale / minutiGiorno);
-  const dataStimata = addGiorniLavorativi(new Date(), giorni);
-  const dataStimataStr = dataStimata.toISOString().split('T')[0];
+
+  // Usa la RPC DB (include chiusure aziendali, sabato_lavorativo) per la data autorevole
+  let dataStimataStr;
+  try {
+    const { data: dataDB } = await sb.rpc('data_consegna_stimata', { p_giorni_lavorativi_necessari: giorni });
+    dataStimataStr = dataDB;
+  } catch (_) {
+    dataStimataStr = addGiorniLavorativi(new Date(), giorni).toISOString().split('T')[0];
+  }
+
   const isRischio = ordine.scadenza && dataStimataStr > ordine.scadenza;
   el.textContent = formatDate(dataStimataStr) + (isRischio ? ' ⚠️' : ' ✓');
   el.style.color = isRischio ? 'var(--alert)' : 'var(--ok)';
@@ -6369,8 +6383,10 @@ function addGiorniLavorativi(dataInizio, giorni) {
   while (aggiunti < giorni) {
     d.setDate(d.getDate() + 1);
     const dow = d.getDay();
-    if (dow === 0) continue; // domenica sempre esclusa
-    if (dow === 6 && !orarioConfig?.sabato_lavorativo) continue; // sabato se non lavorativo
+    if (dow === 0) continue;
+    if (dow === 6 && !orarioConfig?.sabato_lavorativo) continue;
+    const iso = d.toISOString().split('T')[0];
+    if (chiusureAziendaliCache.some(c => iso >= c.data_inizio && iso <= c.data_fine)) continue;
     aggiunti++;
   }
   return d;
