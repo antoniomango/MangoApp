@@ -872,7 +872,7 @@ async function renderHome() {
     if (!gruppi[key]) gruppi[key] = { nome: f.nome, faseId: f.faseId, isExtra: f.isExtra, count: 0 };
     gruppi[key].count++;
   });
-  const batchCompleta = Object.values(gruppi).filter(g => g.count >= 3);
+  const batchCompleta = Object.values(gruppi).filter(g => g.count >= 2);
   const batchCompletaDiv = document.getElementById('btn-batch-completa');
   if (batchCompletaDiv) {
     batchCompletaDiv.style.display = batchCompleta.length ? 'flex' : 'none';
