@@ -13,6 +13,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap');
 
@@ -650,12 +651,14 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <div class="page-hdr">
           <div><h1>Archivio Spediti</h1></div>
           <div style="display:flex;gap:8px">
-            <button class="btn btn-secondary export-btn" onclick="exportCSV()">⬇ Esporta CSV</button>
-            <button class="btn btn-secondary" onclick="esportaBulkArchivio()">📦 Esporta e svuota foto</button>
-            <button class="btn" style="background:var(--alert);color:#fff" onclick="svuotaArchivio()" title="Segna tutti gli ordini come eliminati (soft-delete). Le foto rimangono nel cloud finché non le esporti.)">🗑 Svuota archivio</button>
+            <button class="btn btn-secondary" onclick="esportaArchivio()">📤 Esporta Archivio</button>
           </div>
         </div>
         <div class="filters">
+          <select id="arch-vista" onchange="renderArchivioTable()">
+            <option value="da_esportare">Da esportare</option>
+            <option value="archiviati">Archiviati</option>
+          </select>
           <input type="text" id="arch-search" placeholder="Cliente…" oninput="renderArchivioTable()">
           <select id="arch-tipo" onchange="renderArchivioTable()">
             <option value="">Tutti i tipi</option>
@@ -668,7 +671,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <div class="card">
           <table>
             <thead>
-              <tr><th>Cliente / N° Ordine</th><th>Tipo</th><th>Priorità</th><th>Creato</th><th>Spedito</th><th>Ore lavoro</th><th>Attesa est.</th><th>N. op.</th><th>Foto</th></tr>
+              <tr id="arch-thead-row"><th>Cliente / N° Ordine</th><th>Tipo</th><th>Priorità</th><th>Creato</th><th>Spedito</th><th>Ore lavoro</th><th>Attesa est.</th><th>N. op.</th><th>Foto</th></tr>
             </thead>
             <tbody id="arch-tbody">
               <tr><td colspan="9" style="text-align:center;padding:24px;color:var(--muted)">Caricamento…</td></tr>
@@ -3732,17 +3735,6 @@ async function confermaConclusioneFase() {
   renderDettaglioOrdine(ordineId);
 }
 
-async function svuotaArchivio() {
-  const n = ordiniSpeditiCache.length;
-  if (!n) { toast('Archivio già vuoto', 'ok'); return; }
-  if (!confirm(`Eliminare definitivamente tutti i ${n} ordini spediti dall'archivio?\n\nQuesta azione non può essere annullata.`)) return;
-  const ids = ordiniSpeditiCache.map(o => o.id);
-  const { error } = await sb.from('ordini').update({ eliminato: true }).in('id', ids);
-  if (error) { toast('Errore: ' + error.message, 'err'); return; }
-  toast(`${n} ordini eliminati dall'archivio`, 'ok');
-  await loadOrdini();
-  renderArchivioTable();
-}
 
 async function riaprieFaseResp(ordFaseId, ordineId) {
   if (!confirm('Riaprire questa fase impostandola su "disponibile"?')) return;
@@ -5144,12 +5136,16 @@ function renderUfficio(ordini, ordFasi) {
 // ARCHIVIO
 // ═══════════════════════════════════════════════
 function renderArchivioTable() {
+  const vista = document.getElementById('arch-vista')?.value || 'da_esportare';
   const search = document.getElementById('arch-search')?.value.toLowerCase() || '';
   const tipo = document.getElementById('arch-tipo')?.value || '';
   const dal = document.getElementById('arch-dal')?.value || '';
   const al = document.getElementById('arch-al')?.value || '';
 
+  const isArchiviati = vista === 'archiviati';
+
   let filtered = ordiniSpeditiCache.filter(o => {
+    if (isArchiviati ? !o.archiviato_il : o.archiviato_il) return false;
     if (tipo && o.tipo !== tipo) return false;
     if (search && !(o.cliente || '').toLowerCase().includes(search) && !(o.codice || '').toLowerCase().includes(search)) return false;
     if (dal && o.spedito_il && o.spedito_il.split('T')[0] < dal) return false;
@@ -5157,9 +5153,16 @@ function renderArchivioTable() {
     return true;
   });
 
+  // Aggiorna intestazione colonna finale
+  const theadRow = document.getElementById('arch-thead-row');
+  if (theadRow) {
+    theadRow.cells[8].textContent = isArchiviati ? 'Esportato il' : 'Foto';
+  }
+
   const tbody = document.getElementById('arch-tbody');
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state"><div class="icon">📦</div><p>Nessun ordine archiviato</p></div></td></tr>';
+    const msg = isArchiviati ? 'Nessun ordine archiviato' : 'Nessun ordine da esportare';
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="icon">📦</div><p>${msg}</p></div></td></tr>`;
     return;
   }
   tbody.innerHTML = filtered.map(o => {
@@ -5169,6 +5172,11 @@ function renderArchivioTable() {
     const nOp    = st ? (st.n_operatori > 0 ? st.n_operatori : '—') : '—';
     const attesaStyle = st && Number(st.minuti_attesa_esterna) > 0
       ? 'color:var(--warn);font-weight:600' : 'color:var(--muted)';
+    const ultimaCol = isArchiviati
+      ? `<td style="color:var(--muted);font-size:12px">${o.archiviato_il ? formatDate(o.archiviato_il) : '—'}</td>`
+      : `<td onclick="event.stopPropagation()">
+           <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="scaricaEliminaFoto('${o.id}','${escapeHtml(o.codice||o.id)}','${escapeHtml(o.cliente)}')">📦 Esporta & rimuovi foto</button>
+         </td>`;
     return `
     <tr class="clickable" onclick="openDettaglioOrdine('${o.id}')">
       <td><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div></td>
@@ -5179,9 +5187,7 @@ function renderArchivioTable() {
       <td style="font-variant-numeric:tabular-nums">${oreL}</td>
       <td style="font-variant-numeric:tabular-nums;${attesaStyle}">${oreA}</td>
       <td style="text-align:center">${nOp}</td>
-      <td onclick="event.stopPropagation()">
-        <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="scaricaEliminaFoto('${o.id}','${escapeHtml(o.codice||o.id)}','${escapeHtml(o.cliente)}')">📦 Esporta & rimuovi foto</button>
-      </td>
+      ${ultimaCol}
     </tr>`;
   }).join('');
 }
@@ -5277,80 +5283,330 @@ async function scaricaEliminaFoto(ordineId, codice, cliente) {
   }
 }
 
-async function esportaBulkArchivio() {
-  const ordini = ordiniSpeditiCache.filter(o => !o.eliminato);
-  if (!ordini.length) { toast('Archivio vuoto', 'ok'); return; }
+// ─── Genera PDF scheda ordine con jsPDF ───────────────────────────────────────
+function generaPDFOrdine(ordine, fasiOrd, fasiExtra, nc, logOrd) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 190, L = 10;
+  let y = 15;
+  const lineH = 5.5;
 
-  // Prova File System Access API (Chrome/Edge); fallback a download zip individuali
+  const checkPage = () => { if (y > 272) { doc.addPage(); y = 15; } };
+  const hr = (r = 200, g = 200, b = 200) => { doc.setDrawColor(r, g, b); doc.line(L, y, L + W, y); y += 3; };
+
+  const section = (title) => {
+    checkPage();
+    y += 3; hr(180, 180, 180);
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(40, 40, 40);
+    doc.text(title, L, y); y += 6;
+  };
+
+  const kv = (label, value) => {
+    checkPage();
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
+    doc.text(label + ':', L, y);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+    doc.text(String(value ?? '—'), L + 44, y); y += lineH;
+  };
+
+  const trunc = (s, max) => s && s.length > max ? s.slice(0, max - 1) + '…' : (s || '—');
+  const fmtDate = (d) => d ? new Date(d).toLocaleDateString('it-IT') : '—';
+  const fmtDT = (d) => d ? new Date(d).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+
+  // Header
+  doc.setFillColor(245, 245, 245); doc.rect(L - 2, y - 6, W + 4, 14, 'F');
+  doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.setTextColor(20, 20, 20);
+  doc.text(`Scheda Ordine — ${ordine.codice || ordine.id}`, L, y); y += 7;
+  doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
+  doc.text(`Esportato il ${new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })}`, L, y); y += 9;
+
+  // Dati ordine
+  section('Dati Ordine');
+  kv('Cliente', ordine.cliente);
+  kv('Codice', ordine.codice);
+  kv('Tipo', ordine.tipo === 'extra' ? 'Ordine Extra' : 'Standard');
+  if (ordine.tipo !== 'extra') {
+    kv('Struttura', ordine.struttura);
+    kv('Tipo Prodotto', ordine.tipo_prodotto);
+    kv('Materiale', ordine.materiale);
+  }
+  kv('Quantità', ordine.quantita);
+  kv('Priorità', ordine.priorita);
+  kv('Creato il', fmtDate(ordine.creato_il));
+  kv('Scadenza', fmtDate(ordine.scadenza));
+  kv('Spedito il', fmtDate(ordine.spedito_il));
+  if (ordine.note_generali) {
+    checkPage();
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
+    doc.text('Note:', L, y);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+    const noteLines = doc.splitTextToSize(ordine.note_generali, W - 46);
+    noteLines.forEach((line, i) => { if (i > 0) checkPage(); doc.text(line, L + 44, y); y += lineH; });
+  }
+
+  // Fasi standard
+  if (fasiOrd && fasiOrd.length) {
+    section('Fasi di Produzione');
+    const cols = [L, L + 52, L + 90, L + 113, L + 132, L + 158];
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
+    ['Fase', 'Operatore', 'Tempo (min)', 'Batch', 'Inizio', 'Fine'].forEach((h, i) => doc.text(h, cols[i], y));
+    y += lineH * 0.85; hr(220, 220, 220);
+    for (const f of fasiOrd) {
+      checkPage();
+      const faseName = f.nome_custom || fasi.find(x => x.id === f.fase_id)?.nome || `#${f.fase_id}`;
+      const op = operatoriCache.find(x => x.id === f.operatore_id);
+      const opNome = op ? `${op.nome} ${op.cognome}` : (f.operatore_id ? '?' : '');
+      const tempo = f.tempo_accumulato_minuti != null ? Number(f.tempo_accumulato_minuti).toFixed(1) : '—';
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+      doc.text(trunc(faseName, 20), cols[0], y);
+      doc.text(trunc(opNome, 17), cols[1], y);
+      doc.text(tempo, cols[2], y);
+      doc.text(f.n_ordini_batch ? String(f.n_ordini_batch) : '—', cols[3], y);
+      doc.text(fmtDate(f.iniziata_il), cols[4], y);
+      doc.text(fmtDate(f.completata_il), cols[5], y);
+      y += lineH;
+      if (f.note_operatore) {
+        doc.setFontSize(8); doc.setFont('helvetica', 'italic'); doc.setTextColor(100, 100, 100);
+        doc.splitTextToSize(`Note: ${f.note_operatore}`, W - 12).forEach(line => { checkPage(); doc.text(line, L + 4, y); y += 3.8; });
+      }
+    }
+  }
+
+  // Fasi extra
+  if (fasiExtra && fasiExtra.length) {
+    section('Fasi Extra');
+    const cols2 = [L, L + 60, L + 95, L + 130, L + 158];
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
+    ['Nome', 'Operatore', 'Stato', 'Ore stimate', 'Completata il'].forEach((h, i) => doc.text(h, cols2[i], y));
+    y += lineH * 0.85; hr(220, 220, 220);
+    for (const f of fasiExtra) {
+      checkPage();
+      const op = operatoriCache.find(x => x.id === f.operatore_id);
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+      doc.text(trunc(f.nome, 24), cols2[0], y);
+      doc.text(trunc(op ? `${op.nome} ${op.cognome}` : '—', 17), cols2[1], y);
+      doc.text(f.stato || '—', cols2[2], y);
+      doc.text(f.ore_stimate_manuali != null ? String(f.ore_stimate_manuali) : '—', cols2[3], y);
+      doc.text(fmtDate(f.completata_il), cols2[4], y);
+      y += lineH;
+      if (f.note_operatore) {
+        doc.setFontSize(8); doc.setFont('helvetica', 'italic'); doc.setTextColor(100, 100, 100);
+        doc.splitTextToSize(`Note: ${f.note_operatore}`, W - 12).forEach(line => { checkPage(); doc.text(line, L + 4, y); y += 3.8; });
+      }
+    }
+  }
+
+  // Non conformità
+  if (nc && nc.length) {
+    section('Non Conformità');
+    for (const n of nc) {
+      checkPage();
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(180, 50, 50);
+      doc.text(`NC — ${n.stato || ''}  (${fmtDate(n.segnalata_il)})`, L, y); y += lineH;
+      if (n.descrizione) {
+        doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+        doc.splitTextToSize(n.descrizione, W - 10).forEach(line => { checkPage(); doc.text(line, L + 4, y); y += lineH * 0.9; });
+      }
+      if (n.note_chiusura) {
+        doc.setFontSize(8.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(80, 80, 80);
+        doc.splitTextToSize(`Chiusura: ${n.note_chiusura}`, W - 10).forEach(line => { checkPage(); doc.text(line, L + 4, y); y += lineH * 0.9; });
+      }
+      y += 2;
+    }
+  }
+
+  // Cronologia completa
+  if (logOrd && logOrd.length) {
+    section('Cronologia Completa');
+    for (const l of logOrd) {
+      checkPage();
+      const u = l.users ? `${l.users.nome} ${l.users.cognome}` : '—';
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 80, 120);
+      doc.text(`${fmtDT(l.timestamp)}`, L, y);
+      doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+      doc.text(`${l.azione}`, L + 42, y);
+      doc.setTextColor(100, 100, 100);
+      doc.text(u, L + 110, y);
+      y += lineH * 0.85;
+      if (l.dettaglio && Object.keys(l.dettaglio).length) {
+        doc.setFontSize(7.5); doc.setTextColor(140, 140, 140);
+        const det = JSON.stringify(l.dettaglio);
+        doc.splitTextToSize(det, W - 14).slice(0, 2).forEach(line => { checkPage(); doc.text(line, L + 6, y); y += 3.5; });
+      }
+    }
+  }
+
+  // Footer su ogni pagina
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(160, 160, 160);
+    doc.text(`MangoApp — ${ordine.codice || ordine.id} — Pagina ${p}/${totalPages}`, L, 292);
+  }
+
+  return doc.output('blob');
+}
+
+// ─── Esporta Archivio: cartella per ordine, PDF + foto, poi archivia DB ───────
+async function esportaArchivio() {
+  const daEsportare = ordiniSpeditiCache.filter(o => !o.archiviato_il);
+  if (!daEsportare.length) { toast('Nessun ordine da esportare', 'ok'); return; }
+
   let dirHandle = null;
   const hasFSA = typeof window.showDirectoryPicker === 'function';
   if (hasFSA) {
     try { dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' }); }
-    catch (e) { if (e.name === 'AbortError') return; /* utente ha annullato */ }
+    catch (e) { if (e.name === 'AbortError') return; }
   } else {
     toast('Safari non supporta la selezione cartella — verrà scaricato uno zip per ogni ordine.', 'ok');
     await new Promise(r => setTimeout(r, 1500));
   }
 
-  const totale = ordini.length;
+  const totale = daEsportare.length;
   const falliti = [];
+  const archiviati = [];
 
   for (let i = 0; i < totale; i++) {
-    const o = ordini[i];
-    toast(`Esportazione ordine ${i + 1}/${totale}: ${o.codice || o.cliente}…`, 'ok');
+    const o = daEsportare[i];
+    toast(`Elaborazione ${i + 1}/${totale}: ${o.codice || o.cliente}…`, 'ok');
     try {
-      const { zipBlob, allegatiUrls, fotoCont, totAllegati } = await esportaOrdineZip(o.id, o.codice);
-      const dataOggi = new Date().toISOString().split('T')[0];
-      const zipName = `${o.cliente}_${o.codice || o.id}_${dataOggi}.zip`.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+      const [
+        { data: fasiOrd },
+        { data: logOrd },
+        { data: fasiExtra },
+        { data: nc },
+      ] = await Promise.all([
+        sb.from('ordine_fasi')
+          .select('id, fase_id, nome_custom, stato, operatore_id, tempo_accumulato_minuti, n_ordini_batch, iniziata_il, completata_il, note_operatore')
+          .eq('ordine_id', o.id).order('id'),
+        sb.from('archivio_log')
+          .select('azione, utente_id, timestamp, dettaglio, users!utente_id(nome,cognome)')
+          .eq('ordine_id', o.id).order('timestamp'),
+        sb.from('fasi_ordine_extra')
+          .select('id, nome, stato, operatore_id, ore_stimate_manuali, completata_il, note_operatore, iniziata_il')
+          .eq('ordine_id', o.id).order('creato_il'),
+        sb.from('non_conformita')
+          .select('descrizione, stato, segnalata_il, gestita_il, note_chiusura')
+          .eq('ordine_id', o.id).order('segnalata_il'),
+      ]);
 
-      if (totAllegati > 0 && fotoCont < totAllegati) {
-        console.warn(`[export] ${o.codice}: ${fotoCont}/${totAllegati} foto scaricate`);
-        falliti.push(`${o.codice} (foto ${fotoCont}/${totAllegati})`);
-      }
+      const fasiIds = (fasiOrd || []).map(f => f.id);
+      const { data: allegati } = fasiIds.length
+        ? await sb.from('allegati').select('id, url_file, ordine_fase_id').in('ordine_fase_id', fasiIds)
+        : { data: [] };
+
+      const speditoDate = o.spedito_il ? o.spedito_il.split('T')[0] : 'no-data';
+      const folderName = `${o.cliente || 'cliente'}_${o.codice || o.id}_${speditoDate}`
+        .replace(/[^a-zA-Z0-9_\-]/g, '_').replace(/_+/g, '_').slice(0, 80);
 
       if (dirHandle) {
-        const fileHandle = await dirHandle.getFileHandle(zipName, { create: true });
-        const writable = await fileHandle.createWritable();
-        await writable.write(zipBlob); await writable.close();
+        // Sottocartella dedicata — SEMPRE, mai file di ordini diversi mescolati
+        const subDir = await dirHandle.getDirectoryHandle(folderName, { create: true });
+
+        // Foto — scarica come file singoli nella sottocartella
+        const fotoTotali = (allegati || []).length;
+        let fotoScritte = 0;
+        const urlScritti = [];
+        for (const a of (allegati || [])) {
+          const { data: signed } = await sb.storage.from('allegati-fasi').createSignedUrl(a.url_file, 300);
+          if (!signed?.signedUrl) { console.warn('signed URL fallito:', a.url_file); continue; }
+          try {
+            const resp = await fetch(signed.signedUrl);
+            if (!resp.ok) { console.warn('fetch foto:', resp.status, a.url_file); continue; }
+            const blob = await resp.blob();
+            const fh = await subDir.getFileHandle(a.url_file.split('/').pop(), { create: true });
+            const wr = await fh.createWritable(); await wr.write(blob); await wr.close();
+            fotoScritte++; urlScritti.push(a.url_file);
+          } catch (e) { console.warn('errore foto:', e.message, a.url_file); }
+        }
+
+        if (fotoTotali > 0 && fotoScritte < fotoTotali) {
+          falliti.push(`${o.codice || o.cliente} (foto ${fotoScritte}/${fotoTotali} — ordine non archiviato)`);
+          continue;
+        }
+
+        // PDF scheda ordine
+        const pdfBlob = generaPDFOrdine(o, fasiOrd, fasiExtra, nc, logOrd);
+        const pdfFh = await subDir.getFileHandle('scheda-ordine.pdf', { create: true });
+        const pdfWr = await pdfFh.createWritable(); await pdfWr.write(pdfBlob); await pdfWr.close();
+
+        // Tutto scritto → rimuovi storage e archivia DB
+        if (urlScritti.length) await sb.storage.from('allegati-fasi').remove(urlScritti);
+        const { error: rpcErr } = await sb.rpc('archivia_ordine', { p_ordine_id: o.id, p_responsabile_id: currentUserRow.id });
+        if (rpcErr) throw new Error(rpcErr.message);
+        archiviati.push(o);
+
       } else {
-        _downloadBlob(zipBlob, zipName);
-        await new Promise(r => setTimeout(r, 800)); // piccolo delay tra download
+        // Fallback Safari: un zip per ordine (un contenitore separato per ordine)
+        const zip = new JSZip();
+        const fotoTotali = (allegati || []).length;
+        let fotoScritte = 0;
+        const urlScritti = [];
+        for (const a of (allegati || [])) {
+          const { data: signed } = await sb.storage.from('allegati-fasi').createSignedUrl(a.url_file, 300);
+          if (!signed?.signedUrl) continue;
+          try {
+            const resp = await fetch(signed.signedUrl); if (!resp.ok) continue;
+            const blob = await resp.blob();
+            zip.file(a.url_file.split('/').pop(), blob);
+            fotoScritte++; urlScritti.push(a.url_file);
+          } catch (e) { console.warn(e); }
+        }
+        if (fotoTotali > 0 && fotoScritte < fotoTotali) {
+          falliti.push(`${o.codice || o.cliente} (foto ${fotoScritte}/${fotoTotali})`);
+          continue;
+        }
+        zip.file('scheda-ordine.pdf', generaPDFOrdine(o, fasiOrd, fasiExtra, nc, logOrd));
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        _downloadBlob(zipBlob, `${folderName}.zip`);
+        await new Promise(r => setTimeout(r, 800));
+        if (urlScritti.length) await sb.storage.from('allegati-fasi').remove(urlScritti);
+        const { error: rpcErr } = await sb.rpc('archivia_ordine', { p_ordine_id: o.id, p_responsabile_id: currentUserRow.id });
+        if (rpcErr) throw new Error(rpcErr.message);
+        archiviati.push(o);
       }
 
-      // Elimina file fisici solo se tutte le foto sono state scaricate (DB conservato)
-      if (allegatiUrls.length && fotoCont === totAllegati) await sb.storage.from('allegati-fasi').remove(allegatiUrls);
     } catch (e) {
-      console.error('Errore export ordine', o.codice, e);
-      falliti.push(o.codice || o.id);
+      console.error('Errore esportazione ordine', o.codice, e);
+      falliti.push(`${o.codice || o.id} (${e.message})`);
     }
   }
 
-  if (falliti.length) {
-    alert(`Esportazione completata con avvisi.\nControllare questi ordini (foto parziali o errori, foto NON eliminate dal cloud):\n${falliti.join('\n')}`);
-  } else {
-    toast(`Esportazione bulk completata: ${totale} ordini. Foto rimosse dal cloud.`, 'ok');
+  // CSV riepilogo alla radice della cartella scelta
+  if (archiviati.length) {
+    const headers = ['Codice', 'Cliente', 'Struttura', 'Tipo Prodotto', 'Materiale', 'Priorità', 'Stato', 'Creato il', 'Scadenza', 'Spedito il', 'Ore lavoro', 'Attesa esterna', 'N. operatori'];
+    const rows = archiviati.map(o => {
+      const st = lavoroStatsCache[o.id];
+      return [
+        o.codice, o.cliente, strutturaLabel(o.struttura), tipoProdLabel(o.tipo_prodotto), o.materiale || '',
+        o.priorita, o.stato,
+        formatDate(o.creato_il),
+        o.scadenza ? o.scadenza.split('T')[0] : '',
+        o.spedito_il ? formatDate(o.spedito_il) : '',
+        st ? minutiToOreMinuti(st.minuti_lavoro) : '',
+        st ? minutiToOreMinuti(st.minuti_attesa_esterna) : '',
+        st ? String(st.n_operatori) : '',
+      ];
+    });
+    const csv = [headers, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    const csvBlob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const csvName = `riepilogo-archivio-${new Date().toISOString().split('T')[0]}.csv`;
+    if (dirHandle) {
+      const csvFh = await dirHandle.getFileHandle(csvName, { create: true });
+      const csvWr = await csvFh.createWritable(); await csvWr.write(csvBlob); await csvWr.close();
+    } else {
+      _downloadBlob(csvBlob, csvName);
+    }
   }
-}
 
-function exportCSV() {
-  const headers = ['Codice', 'Cliente', 'Struttura', 'Tipo Prodotto', 'Materiale', 'Priorità', 'Stato', 'Creato il', 'Spedito il', 'Ore lavoro', 'Attesa esterna', 'N. operatori'];
-  const rows = ordiniSpeditiCache.map(o => {
-    const st = lavoroStatsCache[o.id];
-    return [
-      o.codice, o.cliente, strutturaLabel(o.struttura), tipoProdLabel(o.tipo_prodotto), o.materiale || '',
-      o.priorita, o.stato, formatDate(o.creato_il), o.spedito_il ? formatDate(o.spedito_il) : '',
-      st ? minutiToOreMinuti(st.minuti_lavoro) : '',
-      st ? minutiToOreMinuti(st.minuti_attesa_esterna) : '',
-      st ? String(st.n_operatori) : '',
-    ];
-  });
-  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
-  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `mango-archivio-${new Date().toISOString().split('T')[0]}.csv`;
-  a.click(); URL.revokeObjectURL(url);
-  toast('CSV esportato', 'ok');
+  await loadOrdini();
+  renderArchivioTable();
+
+  if (falliti.length) {
+    alert(`Esportazione completata con avvisi.\nI seguenti ordini NON sono stati archiviati:\n${falliti.join('\n')}`);
+  } else {
+    toast(`Esportazione completata: ${archiviati.length} ordini archiviati.`, 'ok');
+  }
 }
 
 // ═══════════════════════════════════════════════
