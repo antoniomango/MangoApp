@@ -5530,10 +5530,11 @@ async function esportaArchivio() {
         const pdfFh = await subDir.getFileHandle('scheda-ordine.pdf', { create: true });
         const pdfWr = await pdfFh.createWritable(); await pdfWr.write(pdfBlob); await pdfWr.close();
 
-        // Tutto scritto → rimuovi storage e archivia DB
-        if (urlScritti.length) await sb.storage.from('allegati-fasi').remove(urlScritti);
+        // Archivia DB prima di rimuovere storage — se la RPC fallisce, foto e log rimangono
+        // intatti e il prossimo tentativo può ripartire pulito
         const { error: rpcErr } = await sb.rpc('archivia_ordine', { p_ordine_id: o.id, p_responsabile_id: currentUserRow.id });
         if (rpcErr) throw new Error(rpcErr.message);
+        if (urlScritti.length) await sb.storage.from('allegati-fasi').remove(urlScritti);
         archiviati.push(o);
 
       } else {
@@ -5560,9 +5561,11 @@ async function esportaArchivio() {
         const zipBlob = await zip.generateAsync({ type: 'blob' });
         _downloadBlob(zipBlob, `${folderName}.zip`);
         await new Promise(r => setTimeout(r, 800));
-        if (urlScritti.length) await sb.storage.from('allegati-fasi').remove(urlScritti);
+        // Archivia DB prima di rimuovere storage — se la RPC fallisce, foto e log rimangono
+        // intatti e il prossimo tentativo può ripartire pulito
         const { error: rpcErr } = await sb.rpc('archivia_ordine', { p_ordine_id: o.id, p_responsabile_id: currentUserRow.id });
         if (rpcErr) throw new Error(rpcErr.message);
+        if (urlScritti.length) await sb.storage.from('allegati-fasi').remove(urlScritti);
         archiviati.push(o);
       }
 
