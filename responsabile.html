@@ -11,7 +11,6 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Mango — Responsabile</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <style>
@@ -1202,18 +1201,11 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
             <div class="sub">Rinomina le fasi standard — le modifiche si riflettono ovunque</div>
           </div>
           <div style="display:flex;gap:8px">
-            <label class="btn btn-secondary" style="cursor:pointer" title="Importa nomi fasi da Excel (.xlsx) — colonna A = numero, colonna B = nome, colonna C = descrizione">
-              📥 Importa da Excel
-              <input type="file" id="excel-import-input" accept=".xlsx,.xls,.xlsm,.csv" style="display:none" onchange="importaFasiDaExcel(this)">
-            </label>
             <button class="btn btn-secondary" onclick="aggiungiNuovaFase()">+ Nuova Fase</button>
             <button class="btn btn-primary" onclick="saveFasiConfig()">Salva modifiche</button>
           </div>
         </div>
         <div class="card" style="padding:4px 20px 16px">
-          <div style="font-size:12px;color:var(--muted);padding:10px 0 12px;border-bottom:1px solid var(--border);margin-bottom:12px">
-            💡 Per importare da Excel: il file deve avere colonna A = numero fase (1-20), colonna B = nome, colonna C = descrizione (opzionale). Le righe intestazione vengono ignorate automaticamente.
-          </div>
           <div id="fasi-config-list">Caricamento…</div>
         </div>
       </section>
@@ -6409,53 +6401,6 @@ async function salvaModalePriorita() {
   renderPrioritaConfig();
 }
 
-async function importaFasiDaExcel(input) {
-  const file = input.files[0];
-  if (!file) return;
-  toast('Lettura file Excel…');
-
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    try {
-      const wb = XLSX.read(e.target.result, { type: 'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-
-      // Cerca righe con numero 1-16 in colonna A (o B se col A è vuota)
-      const parsed = [];
-      for (const row of rows) {
-        const numRaw = row[0];
-        const num = parseInt(numRaw);
-        if (!isNaN(num) && num >= 1 && num <= 20) {
-          const nome = String(row[1] || '').trim();
-          const desc = String(row[2] || '').trim();
-          if (nome) parsed.push({ id: num, nome, descrizione: desc || null });
-        }
-      }
-
-      if (!parsed.length) {
-        toast('Nessuna fase trovata. Assicurati che col. A = numero (1-16), col. B = nome', 'err');
-        input.value = '';
-        return;
-      }
-
-    
-      // Aggiorna i campi visibili nell'UI senza salvare ancora
-      for (const p of parsed) {
-        const nEl = document.getElementById(`fase-nome-${p.id}`);
-        const dEl = document.getElementById(`fase-desc-${p.id}`);
-        if (nEl) nEl.value = p.nome;
-        if (dEl) dEl.value = p.descrizione || '';
-      }
-      toast(`${parsed.length} fasi caricate. Premi "Salva" per confermare.`, 'ok');
-      input.value = '';
-    } catch (err) {
-      toast('Errore lettura file: ' + err.message, 'err');
-      input.value = '';
-    }
-  };
-  reader.readAsArrayBuffer(file);
-}
 
 // ═══════════════════════════════════════════════
 // UTILITY
