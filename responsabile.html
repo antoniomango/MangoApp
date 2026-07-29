@@ -1789,7 +1789,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
 <div class="modal-overlay" id="modal-spediti" onclick="if(event.target===this)closeModal('modal-spediti')">
   <div class="modal" style="max-width:780px">
     <div class="modal-hdr">
-      <h3>📦 Storico Spedizioni &amp; Rispetto Scadenze</h3>
+      <h3>✅ Rispetto Scadenze — Completamento Produzione</h3>
       <button class="modal-close" onclick="closeModal('modal-spediti')">✕</button>
     </div>
     <div class="modal-body" id="modal-spediti-body" style="padding:20px 24px">
@@ -6417,49 +6417,53 @@ async function salvaModalePriorita() {
 // ═══════════════════════════════════════════════
 // UTILITY
 // ═══════════════════════════════════════════════
-// ─── Storico Spedizioni & Rispetto Scadenze ───────────────────────────────────
+// ─── Rispetto Scadenze — Completamento Produzione ────────────────────────────
 function openModalStoricoSpediti(filtroMese) {
-  // filtroMese: 'YYYY-MM' per mostrare solo i fuori-scadenza di quel mese; null = tutti
-  const ordini = ordiniSpeditiCache.slice(); // include archiviati: spedito_il è intatto
+  // Dataset: ordini con completato_il valorizzato da entrambe le cache
+  // - ordiniSpeditiCache: stato='spedito' (include archiviati)
+  // - ordiniCache filtrata per attesa_spedizione: produzione finita ma non ancora ritirata
+  const ordini = [
+    ...ordiniSpeditiCache,
+    ...ordiniCache.filter(o => o.stato === 'attesa_spedizione'),
+  ].filter(o => o.completato_il);
 
-  // Partizione per scadenza
-  const conScadenza = ordini.filter(o => o.spedito_il && o.scadenza);
+  // Partizione per scadenza (base: completato_il vs scadenza)
+  const conScadenza   = ordini.filter(o => o.scadenza);
   const senzaScadenza = ordini.filter(o => !o.scadenza);
 
-  // Classifica in tempo / fuori
-  const inTempo = conScadenza.filter(o => o.spedito_il.split('T')[0] <= o.scadenza);
-  const fuori   = conScadenza.filter(o => o.spedito_il.split('T')[0] >  o.scadenza)
+  const inTempo = conScadenza.filter(o => o.completato_il.split('T')[0] <= o.scadenza);
+  const fuori   = conScadenza.filter(o => o.completato_il.split('T')[0] >  o.scadenza)
     .map(o => {
-      const ritardoMs = new Date(o.spedito_il.split('T')[0]) - new Date(o.scadenza);
+      const ritardoMs = new Date(o.completato_il.split('T')[0]) - new Date(o.scadenza);
       return { ...o, ritardoGiorni: Math.round(ritardoMs / 86400000) };
     })
     .sort((a, b) => b.ritardoGiorni - a.ritardoGiorni);
 
   const totConScad = conScadenza.length;
-  const pctTempo  = totConScad ? Math.round(inTempo.length / totConScad * 100) : null;
-  const pctFuori  = totConScad ? 100 - pctTempo : null;
+  const pctTempo   = totConScad ? Math.round(inTempo.length / totConScad * 100) : null;
+  const pctFuori   = totConScad ? 100 - pctTempo : null;
 
-  // Raggruppa per mese (YYYY-MM) tutti gli ordini spediti
+  // Raggruppa per mese di completato_il
   const mesiMap = {};
   for (const o of ordini) {
-    if (!o.spedito_il) continue;
-    const mese = o.spedito_il.slice(0, 7); // 'YYYY-MM'
-    if (!mesiMap[mese]) mesiMap[mese] = { totale: 0, conScad: 0, inTempo: 0, fuori: [] };
+    const mese = o.completato_il.slice(0, 7); // 'YYYY-MM'
+    if (!mesiMap[mese]) mesiMap[mese] = { totale: 0, spediti: 0, inAttesa: 0, conScad: 0, inTempo: 0, fuori: [] };
     mesiMap[mese].totale++;
+    if (o.stato === 'spedito') mesiMap[mese].spediti++;
+    else                       mesiMap[mese].inAttesa++;
     if (o.scadenza) {
       mesiMap[mese].conScad++;
-      const spDate = o.spedito_il.split('T')[0];
-      if (spDate <= o.scadenza) {
+      const cDate = o.completato_il.split('T')[0];
+      if (cDate <= o.scadenza) {
         mesiMap[mese].inTempo++;
       } else {
-        const ritardoMs = new Date(spDate) - new Date(o.scadenza);
+        const ritardoMs = new Date(cDate) - new Date(o.scadenza);
         mesiMap[mese].fuori.push({ ...o, ritardoGiorni: Math.round(ritardoMs / 86400000) });
       }
     }
   }
   const mesiOrd = Object.keys(mesiMap).sort((a, b) => b.localeCompare(a));
 
-  // Etichetta mese leggibile
   const fmtMese = (ym) => {
     const [y, m] = ym.split('-');
     const nomi = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
@@ -6468,9 +6472,8 @@ function openModalStoricoSpediti(filtroMese) {
 
   // ── Riquadro riepilogo generale ──
   let html = '<div style="margin-bottom:20px">';
+  html += `<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Base: data completamento produzione (non spedizione)</div>`;
   if (pctTempo !== null) {
-    const barOk  = pctTempo;
-    const barKo  = pctFuori;
     html += `
       <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px;flex-wrap:wrap">
         <span style="font-size:22px;font-weight:700;color:var(--ok)">${pctTempo}% nei tempi</span>
@@ -6478,8 +6481,8 @@ function openModalStoricoSpediti(filtroMese) {
         <span style="font-size:13px;color:var(--muted)">(su ${totConScad} ordini con scadenza)</span>
       </div>
       <div style="height:10px;border-radius:5px;overflow:hidden;background:var(--border);margin-bottom:8px">
-        <div style="height:100%;width:${barOk}%;background:var(--ok);display:inline-block;border-radius:5px 0 0 5px"></div>
-        <div style="height:100%;width:${barKo}%;background:var(--alert);display:inline-block;border-radius:${barOk===0?'5px':'0'} 5px 5px ${barOk===0?'5px':'0'}"></div>
+        <div style="height:100%;width:${pctTempo}%;background:var(--ok);display:inline-block;border-radius:5px 0 0 5px"></div>
+        <div style="height:100%;width:${pctFuori}%;background:var(--alert);display:inline-block;border-radius:${pctTempo===0?'5px':'0'} 5px 5px ${pctTempo===0?'5px':'0'}"></div>
       </div>`;
   } else {
     html += `<p style="color:var(--muted);font-style:italic">Nessun ordine con scadenza nel periodo.</p>`;
@@ -6489,7 +6492,7 @@ function openModalStoricoSpediti(filtroMese) {
   }
   html += '</div>';
 
-  // ── Se modalità mese singolo: mostra solo fuori-scadenza di quel mese ──
+  // ── Modalità mese singolo ──
   if (filtroMese) {
     const m = mesiMap[filtroMese];
     const righe = (m?.fuori || []).sort((a, b) => b.ritardoGiorni - a.ritardoGiorni);
@@ -6512,14 +6515,18 @@ function openModalStoricoSpediti(filtroMese) {
     html += `<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">`;
     for (const ym of mesiOrd) {
       const m = mesiMap[ym];
-      const pM = m.conScad ? Math.round(m.inTempo / m.conScad * 100) : null;
+      const pM   = m.conScad ? Math.round(m.inTempo / m.conScad * 100) : null;
       const pMko = pM !== null ? 100 - pM : null;
       const hasFuori = m.fuori.length > 0;
+      // Etichetta spediti vs in attesa
+      const statoLabel = m.inAttesa > 0
+        ? `${m.spediti} spediti, ${m.inAttesa} in attesa corriere`
+        : `${m.spediti} spediti`;
       html += `
         <div style="border:1px solid var(--border);border-radius:8px;padding:12px 14px">
           <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <span style="font-weight:600;min-width:64px">${fmtMese(ym)}</span>
-            <span style="font-size:13px;color:var(--muted)">${m.totale} spediti</span>
+            <span style="font-size:13px;color:var(--muted)">${m.totale} completati — ${statoLabel}</span>
             ${pM !== null
               ? `<span style="font-size:13px;color:var(--ok)">${pM}% nei tempi</span>
                  ${hasFuori ? `<span style="font-size:13px;color:var(--alert)">${m.fuori.length} fuori scadenza</span>` : ''}`
@@ -6537,7 +6544,7 @@ function openModalStoricoSpediti(filtroMese) {
     }
     html += `</div>`;
   } else {
-    html += `<p style="color:var(--muted);font-style:italic">Nessun ordine spedito in archivio.</p>`;
+    html += `<p style="color:var(--muted);font-style:italic">Nessun ordine completato trovato.</p>`;
   }
 
   // ── Elenco globale fuori scadenza ──
@@ -6564,8 +6571,9 @@ function _htmlTabFuori(righe) {
             <th style="text-align:left;padding:6px 8px">Codice</th>
             <th style="text-align:left;padding:6px 8px">Cliente</th>
             <th style="text-align:left;padding:6px 8px">Scadenza</th>
-            <th style="text-align:left;padding:6px 8px">Spedito il</th>
-            <th style="text-align:right;padding:6px 8px;color:var(--alert)">Ritardo</th>
+            <th style="text-align:left;padding:6px 8px">Completato il</th>
+            <th style="text-align:left;padding:6px 8px">Stato</th>
+            <th style="text-align:right;padding:6px 8px;color:var(--alert)">Ritardo prod.</th>
           </tr>
         </thead>
         <tbody>
@@ -6574,7 +6582,12 @@ function _htmlTabFuori(righe) {
               <td style="padding:7px 8px;font-family:'DM Mono',monospace;font-size:12px">${escapeHtml(o.codice || '—')}</td>
               <td style="padding:7px 8px;font-weight:500">${escapeHtml(o.cliente)}</td>
               <td style="padding:7px 8px">${o.scadenza}</td>
-              <td style="padding:7px 8px">${o.spedito_il ? o.spedito_il.split('T')[0] : '—'}</td>
+              <td style="padding:7px 8px">${o.completato_il.split('T')[0]}</td>
+              <td style="padding:7px 8px">
+                ${o.stato === 'spedito'
+                  ? '<span style="color:var(--ok);font-size:12px">✓ Spedito</span>'
+                  : '<span style="color:var(--warn);font-size:12px">⏳ Attesa corriere</span>'}
+              </td>
               <td style="padding:7px 8px;text-align:right;font-weight:700;color:var(--alert)">+${o.ritardoGiorni}gg</td>
             </tr>`).join('')}
         </tbody>
