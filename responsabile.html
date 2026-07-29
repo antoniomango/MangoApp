@@ -531,7 +531,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           <div class="kpi-card warn"><div class="label">In Ritardo</div><div class="value" id="kpi-ritardo">—</div></div>
           <div class="kpi-card alert"><div class="label">NC Aperte</div><div class="value" id="kpi-nc">—</div></div>
           <div class="kpi-card ok"><div class="label">Attesa Corriere</div><div class="value" id="kpi-attesa">—</div></div>
-          <div class="kpi-card ok"><div class="label">Spediti (30gg)</div><div class="value" id="kpi-spediti">—</div></div>
+          <div class="kpi-card ok" style="cursor:pointer" onclick="openModalStoricoSpediti()" title="Vedi storico mensile e rispetto scadenze"><div class="label">Spediti (30gg)</div><div class="value" id="kpi-spediti">—</div></div>
         </div>
 
         <!-- Pannello Andon: fasi bloccate per NC — visibile solo se ci sono fasi bloccate -->
@@ -1781,6 +1781,18 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-riassegna')">Annulla</button>
       <button class="btn btn-primary" onclick="confermRiassegna()">Riassegna</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL STORICO SPEDITI -->
+<div class="modal-overlay" id="modal-spediti" onclick="if(event.target===this)closeModal('modal-spediti')">
+  <div class="modal" style="max-width:780px">
+    <div class="modal-hdr">
+      <h3>📦 Storico Spedizioni &amp; Rispetto Scadenze</h3>
+      <button class="modal-close" onclick="closeModal('modal-spediti')">✕</button>
+    </div>
+    <div class="modal-body" id="modal-spediti-body" style="padding:20px 24px">
     </div>
   </div>
 </div>
@@ -6405,6 +6417,171 @@ async function salvaModalePriorita() {
 // ═══════════════════════════════════════════════
 // UTILITY
 // ═══════════════════════════════════════════════
+// ─── Storico Spedizioni & Rispetto Scadenze ───────────────────────────────────
+function openModalStoricoSpediti(filtroMese) {
+  // filtroMese: 'YYYY-MM' per mostrare solo i fuori-scadenza di quel mese; null = tutti
+  const ordini = ordiniSpeditiCache.slice(); // include archiviati: spedito_il è intatto
+
+  // Partizione per scadenza
+  const conScadenza = ordini.filter(o => o.spedito_il && o.scadenza);
+  const senzaScadenza = ordini.filter(o => !o.scadenza);
+
+  // Classifica in tempo / fuori
+  const inTempo = conScadenza.filter(o => o.spedito_il.split('T')[0] <= o.scadenza);
+  const fuori   = conScadenza.filter(o => o.spedito_il.split('T')[0] >  o.scadenza)
+    .map(o => {
+      const ritardoMs = new Date(o.spedito_il.split('T')[0]) - new Date(o.scadenza);
+      return { ...o, ritardoGiorni: Math.round(ritardoMs / 86400000) };
+    })
+    .sort((a, b) => b.ritardoGiorni - a.ritardoGiorni);
+
+  const totConScad = conScadenza.length;
+  const pctTempo  = totConScad ? Math.round(inTempo.length / totConScad * 100) : null;
+  const pctFuori  = totConScad ? 100 - pctTempo : null;
+
+  // Raggruppa per mese (YYYY-MM) tutti gli ordini spediti
+  const mesiMap = {};
+  for (const o of ordini) {
+    if (!o.spedito_il) continue;
+    const mese = o.spedito_il.slice(0, 7); // 'YYYY-MM'
+    if (!mesiMap[mese]) mesiMap[mese] = { totale: 0, conScad: 0, inTempo: 0, fuori: [] };
+    mesiMap[mese].totale++;
+    if (o.scadenza) {
+      mesiMap[mese].conScad++;
+      const spDate = o.spedito_il.split('T')[0];
+      if (spDate <= o.scadenza) {
+        mesiMap[mese].inTempo++;
+      } else {
+        const ritardoMs = new Date(spDate) - new Date(o.scadenza);
+        mesiMap[mese].fuori.push({ ...o, ritardoGiorni: Math.round(ritardoMs / 86400000) });
+      }
+    }
+  }
+  const mesiOrd = Object.keys(mesiMap).sort((a, b) => b.localeCompare(a));
+
+  // Etichetta mese leggibile
+  const fmtMese = (ym) => {
+    const [y, m] = ym.split('-');
+    const nomi = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+    return `${nomi[parseInt(m) - 1]} ${y}`;
+  };
+
+  // ── Riquadro riepilogo generale ──
+  let html = '<div style="margin-bottom:20px">';
+  if (pctTempo !== null) {
+    const barOk  = pctTempo;
+    const barKo  = pctFuori;
+    html += `
+      <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:10px;flex-wrap:wrap">
+        <span style="font-size:22px;font-weight:700;color:var(--ok)">${pctTempo}% nei tempi</span>
+        <span style="font-size:15px;color:var(--alert);font-weight:600">${pctFuori}% fuori scadenza</span>
+        <span style="font-size:13px;color:var(--muted)">(su ${totConScad} ordini con scadenza)</span>
+      </div>
+      <div style="height:10px;border-radius:5px;overflow:hidden;background:var(--border);margin-bottom:8px">
+        <div style="height:100%;width:${barOk}%;background:var(--ok);display:inline-block;border-radius:5px 0 0 5px"></div>
+        <div style="height:100%;width:${barKo}%;background:var(--alert);display:inline-block;border-radius:${barOk===0?'5px':'0'} 5px 5px ${barOk===0?'5px':'0'}"></div>
+      </div>`;
+  } else {
+    html += `<p style="color:var(--muted);font-style:italic">Nessun ordine con scadenza nel periodo.</p>`;
+  }
+  if (senzaScadenza.length) {
+    html += `<div style="font-size:12px;color:var(--muted);margin-top:4px">${senzaScadenza.length} ordini senza scadenza impostata (esclusi dal calcolo %)</div>`;
+  }
+  html += '</div>';
+
+  // ── Se modalità mese singolo: mostra solo fuori-scadenza di quel mese ──
+  if (filtroMese) {
+    const m = mesiMap[filtroMese];
+    const righe = (m?.fuori || []).sort((a, b) => b.ritardoGiorni - a.ritardoGiorni);
+    html += `<div style="margin-bottom:12px">
+      <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px" onclick="openModalStoricoSpediti(null)">← Tutti i mesi</button>
+      <span style="font-size:14px;font-weight:600;margin-left:10px">Fuori scadenza — ${fmtMese(filtroMese)}</span>
+    </div>`;
+    if (!righe.length) {
+      html += `<p style="color:var(--ok);font-style:italic">Nessun ordine fuori scadenza in questo mese.</p>`;
+    } else {
+      html += _htmlTabFuori(righe);
+    }
+    document.getElementById('modal-spediti-body').innerHTML = html;
+    document.getElementById('modal-spediti').classList.add('open');
+    return;
+  }
+
+  // ── Lista mensile ──
+  if (mesiOrd.length) {
+    html += `<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px">`;
+    for (const ym of mesiOrd) {
+      const m = mesiMap[ym];
+      const pM = m.conScad ? Math.round(m.inTempo / m.conScad * 100) : null;
+      const pMko = pM !== null ? 100 - pM : null;
+      const hasFuori = m.fuori.length > 0;
+      html += `
+        <div style="border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span style="font-weight:600;min-width:64px">${fmtMese(ym)}</span>
+            <span style="font-size:13px;color:var(--muted)">${m.totale} spediti</span>
+            ${pM !== null
+              ? `<span style="font-size:13px;color:var(--ok)">${pM}% nei tempi</span>
+                 ${hasFuori ? `<span style="font-size:13px;color:var(--alert)">${m.fuori.length} fuori scadenza</span>` : ''}`
+              : `<span style="font-size:12px;color:var(--muted);font-style:italic">nessuna scadenza impostata</span>`}
+            ${hasFuori
+              ? `<button class="btn btn-secondary" style="font-size:11px;padding:3px 8px;margin-left:auto" onclick="openModalStoricoSpediti('${ym}')">Dettaglio ritardi</button>`
+              : ''}
+          </div>
+          ${pM !== null ? `
+          <div style="height:6px;border-radius:3px;overflow:hidden;background:var(--border);margin-top:8px">
+            <div style="height:100%;width:${pM}%;background:var(--ok);display:inline-block;border-radius:3px 0 0 3px"></div>
+            <div style="height:100%;width:${pMko}%;background:var(--alert);display:inline-block;border-radius:${pM===0?'3px':'0'} 3px 3px ${pM===0?'3px':'0'}"></div>
+          </div>` : ''}
+        </div>`;
+    }
+    html += `</div>`;
+  } else {
+    html += `<p style="color:var(--muted);font-style:italic">Nessun ordine spedito in archivio.</p>`;
+  }
+
+  // ── Elenco globale fuori scadenza ──
+  if (fuori.length) {
+    html += `
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:4px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--alert)">
+          Tutti gli ordini fuori scadenza (${fuori.length})
+        </div>
+        ${_htmlTabFuori(fuori)}
+      </div>`;
+  }
+
+  document.getElementById('modal-spediti-body').innerHTML = html;
+  document.getElementById('modal-spediti').classList.add('open');
+}
+
+function _htmlTabFuori(righe) {
+  return `
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border);color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em">
+            <th style="text-align:left;padding:6px 8px">Codice</th>
+            <th style="text-align:left;padding:6px 8px">Cliente</th>
+            <th style="text-align:left;padding:6px 8px">Scadenza</th>
+            <th style="text-align:left;padding:6px 8px">Spedito il</th>
+            <th style="text-align:right;padding:6px 8px;color:var(--alert)">Ritardo</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${righe.map(o => `
+            <tr style="border-bottom:1px solid var(--border)" class="clickable" onclick="openDettaglioOrdine('${o.id}');closeModal('modal-spediti')">
+              <td style="padding:7px 8px;font-family:'DM Mono',monospace;font-size:12px">${escapeHtml(o.codice || '—')}</td>
+              <td style="padding:7px 8px;font-weight:500">${escapeHtml(o.cliente)}</td>
+              <td style="padding:7px 8px">${o.scadenza}</td>
+              <td style="padding:7px 8px">${o.spedito_il ? o.spedito_il.split('T')[0] : '—'}</td>
+              <td style="padding:7px 8px;text-align:right;font-weight:700;color:var(--alert)">+${o.ritardoGiorni}gg</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
 function closeModal(id) {
   document.getElementById(id)?.classList.remove('open');
   if (id === 'modal-operatore') { annullaModificaPermesso(); loadRiepilogoPermessi(); }
