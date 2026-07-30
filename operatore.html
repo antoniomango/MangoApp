@@ -1834,14 +1834,27 @@ async function completaFase(ordFaseId, ordineId) {
   if (_fotoAccumulate.length && isOnline) {
     const files = [..._fotoAccumulate];
     let caricate = 0;
+    let idx = 0;
     for (const file of files) {
-      if (btnCompleta) btnCompleta.textContent = `Caricamento foto ${caricate + 1}/${files.length}...`;
+      idx++;
+      if (btnCompleta) btnCompleta.textContent = `Caricamento foto ${idx}/${files.length}...`;
       const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-      const path = `${ordineId}/${ordFaseId}/${Date.now()}_${caricate}.${ext}`;
-      const { error: upErr } = await sb.storage.from('allegati-fasi').upload(path, file, { upsert: true });
-      if (upErr) { console.error('Upload foto:', upErr); toast(`Foto ${caricate + 1}: errore upload`, 'err'); }
+      const { data: firma, error: eFirma } = await sb.functions.invoke('allegato-upload', {
+        body: {
+          p_user_id: currentUser.id,
+          p_session_token: sessionToken,
+          tipo: 'fase',
+          ordine_id: ordineId,
+          ordine_fase_id: ordFaseId,
+          estensione: ext,
+          indice: idx
+        }
+      });
+      if (eFirma || !firma?.ok) { console.error('Firma upload foto:', eFirma || firma?.errore); toast(`Foto ${idx}: errore upload`, 'err'); continue; }
+      const { error: upErr } = await sb.storage.from('allegati-fasi').uploadToSignedUrl(firma.path, firma.token, file);
+      if (upErr) { console.error('Upload foto:', upErr); toast(`Foto ${idx}: errore upload`, 'err'); }
       else {
-        const { data: insData } = await sb.rpc('salva_allegato', { p_ordine_fase_id: ordFaseId, p_url_file: path, p_operatore_id: currentUser.id, p_session_token: sessionToken });
+        const { data: insData } = await sb.rpc('salva_allegato', { p_ordine_fase_id: ordFaseId, p_url_file: firma.path, p_operatore_id: currentUser.id, p_session_token: sessionToken });
         if (!insData?.ok) console.error('Insert allegato: non autorizzato o errore');
         else caricate++;
       }
@@ -2262,9 +2275,25 @@ async function inviaNC() {
   const fotoInput = document.getElementById('nc-foto-input');
   if (fotoInput?.files?.length && isOnline) {
     const file = fotoInput.files[0];
-    const path = `nc/${ordineId}/${Date.now()}_${file.name}`;
-    const { error } = await sb.storage.from('allegati-fasi').upload(path, file);
-    if (!error) fotoUrl = path;
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const { data: firma, error: eFirma } = await sb.functions.invoke('allegato-upload', {
+      body: {
+        p_user_id: currentUser.id,
+        p_session_token: sessionToken,
+        tipo: 'nc',
+        ordine_id: ordineId,
+        estensione: ext,
+        indice: 1
+      }
+    });
+    if (eFirma || !firma?.ok) {
+      console.error('Firma upload foto NC:', eFirma || firma?.errore);
+      toast('Errore upload foto NC', 'err');
+    } else {
+      const { error: upErr } = await sb.storage.from('allegati-fasi').uploadToSignedUrl(firma.path, firma.token, file);
+      if (upErr) { console.error('Upload foto NC:', upErr); toast('Errore upload foto NC', 'err'); }
+      else fotoUrl = firma.path;
+    }
   }
 
   const payload = {
