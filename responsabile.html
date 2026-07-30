@@ -1800,13 +1800,12 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<script src="js/config.js"></script>
 <script>
 // ═══════════════════════════════════════════════
 // CONFIGURAZIONE SUPABASE
 // ═══════════════════════════════════════════════
-const SUPABASE_URL = 'https://mtpzfxnyfkzikzlkomwz.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10cHpmeG55Zmt6aWt6bGtvbXd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2NzczNzEsImV4cCI6MjA5NzI1MzM3MX0.3JxpgQORCSUUdSgawmcizNgaJhpDnmQ_zT_c41WfJbs';
-
+// SUPABASE_URL / SUPABASE_ANON arrivano da js/config.js (ambiente produzione/test)
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 

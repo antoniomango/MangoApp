@@ -430,12 +430,12 @@ textarea:focus { border-color: var(--wood); }
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<script src="js/config.js"></script>
 <script>
 // ═══════════════════════════════════════════════
 // SUPABASE
 // ═══════════════════════════════════════════════
-const SUPABASE_URL = 'https://mtpzfxnyfkzikzlkomwz.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10cHpmeG55Zmt6aWt6bGtvbXd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2NzczNzEsImV4cCI6MjA5NzI1MzM3MX0.3JxpgQORCSUUdSgawmcizNgaJhpDnmQ_zT_c41WfJbs';
+// SUPABASE_URL / SUPABASE_ANON arrivano da js/config.js (ambiente produzione/test)
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 
@@ -2165,20 +2165,24 @@ async function eliminaFotoSelezionate() {
   if (!confirm(`Eliminare ${n} foto selezionat${n === 1 ? 'a' : 'e'}? L'operazione è irreversibile.`)) return;
 
   const ids = Array.from(_fotoSelezionate);
-  const { data, error } = await sb.rpc('elimina_allegati', {
-    p_allegato_ids: ids,
-    p_operatore_id: currentUser.id,
-    p_session_token: sessionToken
+  const { data, error } = await sb.functions.invoke('allegato-elimina', {
+    body: {
+      p_allegato_ids: ids,
+      p_operatore_id: currentUser.id,
+      p_session_token: sessionToken
+    }
   });
-  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
 
-  // Cancella i file fisici nello Storage (solo quelli confermati dal DB)
-  if (data.url_eliminati?.length) {
-    await sb.storage.from('allegati-fasi').remove(data.url_eliminati);
-  }
+  // La cancellazione del file fisico nello Storage è gestita dalla edge function
+  // (service role) — l'operatore anon non ha comunque una policy DELETE su storage.objects.
+  const cancellazioneParziale = (data.storage_eliminati ?? 0) < (data.storage_richiesti ?? 0)
+    || (data.storage_errori?.length ?? 0) > 0;
 
   if (data.rifiutati?.length) {
     toast(`${data.eliminati?.length || 0} eliminate, ${data.rifiutati.length} non autorizzate`, 'err');
+  } else if (cancellazioneParziale) {
+    toast(`Riga eliminata ma file non rimosso dallo storage (${data.storage_eliminati || 0}/${data.storage_richiesti || 0}) — segnalalo al responsabile`, 'err');
   } else {
     toast(`${data.eliminati?.length || 0} foto eliminate`, 'ok');
   }

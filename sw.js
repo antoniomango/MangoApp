@@ -1,11 +1,12 @@
-const CACHE = 'mango-v9';
+const CACHE = 'mango-v10';
 const ASSETS = [
   '/MangoApp/operatore.html',
   '/MangoApp/responsabile.html',
   '/MangoApp/ufficio.html',
   '/MangoApp/manifest.json',
   '/MangoApp/icon-192.png',
-  '/MangoApp/icon-512.png'
+  '/MangoApp/icon-512.png',
+  '/MangoApp/js/config.js'
 ];
 
 self.addEventListener('install', e => {
