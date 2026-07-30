@@ -430,12 +430,12 @@ textarea:focus { border-color: var(--wood); }
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<script src="js/config.js"></script>
 <script>
 // ═══════════════════════════════════════════════
 // SUPABASE
 // ═══════════════════════════════════════════════
-const SUPABASE_URL = 'https://mtpzfxnyfkzikzlkomwz.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10cHpmeG55Zmt6aWt6bGtvbXd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2NzczNzEsImV4cCI6MjA5NzI1MzM3MX0.3JxpgQORCSUUdSgawmcizNgaJhpDnmQ_zT_c41WfJbs';
+// SUPABASE_URL / SUPABASE_ANON arrivano da js/config.js (ambiente produzione/test)
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 
@@ -1834,14 +1834,27 @@ async function completaFase(ordFaseId, ordineId) {
   if (_fotoAccumulate.length && isOnline) {
     const files = [..._fotoAccumulate];
     let caricate = 0;
+    let idx = 0;
     for (const file of files) {
-      if (btnCompleta) btnCompleta.textContent = `Caricamento foto ${caricate + 1}/${files.length}...`;
+      idx++;
+      if (btnCompleta) btnCompleta.textContent = `Caricamento foto ${idx}/${files.length}...`;
       const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-      const path = `${ordineId}/${ordFaseId}/${Date.now()}_${caricate}.${ext}`;
-      const { error: upErr } = await sb.storage.from('allegati-fasi').upload(path, file, { upsert: true });
-      if (upErr) { console.error('Upload foto:', upErr); toast(`Foto ${caricate + 1}: errore upload`, 'err'); }
+      const { data: firma, error: eFirma } = await sb.functions.invoke('allegato-upload', {
+        body: {
+          p_user_id: currentUser.id,
+          p_session_token: sessionToken,
+          tipo: 'fase',
+          ordine_id: ordineId,
+          ordine_fase_id: ordFaseId,
+          estensione: ext,
+          indice: idx
+        }
+      });
+      if (eFirma || !firma?.ok) { console.error('Firma upload foto:', eFirma || firma?.errore); toast(`Foto ${idx}: errore upload`, 'err'); continue; }
+      const { error: upErr } = await sb.storage.from('allegati-fasi').uploadToSignedUrl(firma.path, firma.token, file);
+      if (upErr) { console.error('Upload foto:', upErr); toast(`Foto ${idx}: errore upload`, 'err'); }
       else {
-        const { data: insData } = await sb.rpc('salva_allegato', { p_ordine_fase_id: ordFaseId, p_url_file: path, p_operatore_id: currentUser.id, p_session_token: sessionToken });
+        const { data: insData } = await sb.rpc('salva_allegato', { p_ordine_fase_id: ordFaseId, p_url_file: firma.path, p_operatore_id: currentUser.id, p_session_token: sessionToken });
         if (!insData?.ok) console.error('Insert allegato: non autorizzato o errore');
         else caricate++;
       }
@@ -2152,20 +2165,24 @@ async function eliminaFotoSelezionate() {
   if (!confirm(`Eliminare ${n} foto selezionat${n === 1 ? 'a' : 'e'}? L'operazione è irreversibile.`)) return;
 
   const ids = Array.from(_fotoSelezionate);
-  const { data, error } = await sb.rpc('elimina_allegati', {
-    p_allegato_ids: ids,
-    p_operatore_id: currentUser.id,
-    p_session_token: sessionToken
+  const { data, error } = await sb.functions.invoke('allegato-elimina', {
+    body: {
+      p_allegato_ids: ids,
+      p_operatore_id: currentUser.id,
+      p_session_token: sessionToken
+    }
   });
-  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
 
-  // Cancella i file fisici nello Storage (solo quelli confermati dal DB)
-  if (data.url_eliminati?.length) {
-    await sb.storage.from('allegati-fasi').remove(data.url_eliminati);
-  }
+  // La cancellazione del file fisico nello Storage è gestita dalla edge function
+  // (service role) — l'operatore anon non ha comunque una policy DELETE su storage.objects.
+  const cancellazioneParziale = (data.storage_eliminati ?? 0) < (data.storage_richiesti ?? 0)
+    || (data.storage_errori?.length ?? 0) > 0;
 
   if (data.rifiutati?.length) {
     toast(`${data.eliminati?.length || 0} eliminate, ${data.rifiutati.length} non autorizzate`, 'err');
+  } else if (cancellazioneParziale) {
+    toast(`Riga eliminata ma file non rimosso dallo storage (${data.storage_eliminati || 0}/${data.storage_richiesti || 0}) — segnalalo al responsabile`, 'err');
   } else {
     toast(`${data.eliminati?.length || 0} foto eliminate`, 'ok');
   }
@@ -2262,9 +2279,25 @@ async function inviaNC() {
   const fotoInput = document.getElementById('nc-foto-input');
   if (fotoInput?.files?.length && isOnline) {
     const file = fotoInput.files[0];
-    const path = `nc/${ordineId}/${Date.now()}_${file.name}`;
-    const { error } = await sb.storage.from('allegati-fasi').upload(path, file);
-    if (!error) fotoUrl = path;
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const { data: firma, error: eFirma } = await sb.functions.invoke('allegato-upload', {
+      body: {
+        p_user_id: currentUser.id,
+        p_session_token: sessionToken,
+        tipo: 'nc',
+        ordine_id: ordineId,
+        estensione: ext,
+        indice: 1
+      }
+    });
+    if (eFirma || !firma?.ok) {
+      console.error('Firma upload foto NC:', eFirma || firma?.errore);
+      toast('Errore upload foto NC', 'err');
+    } else {
+      const { error: upErr } = await sb.storage.from('allegati-fasi').uploadToSignedUrl(firma.path, firma.token, file);
+      if (upErr) { console.error('Upload foto NC:', upErr); toast('Errore upload foto NC', 'err'); }
+      else fotoUrl = firma.path;
+    }
   }
 
   const payload = {
