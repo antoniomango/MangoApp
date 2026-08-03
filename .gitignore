@@ -2,6 +2,14 @@
 backups/
 *.sql
 
+# Credenziali — mai committare (vedi incidente 2026-08-03, password DB in chiaro per 6 settimane)
+.env
+.env.*
+*.pgpass
+.mangoapp-db-password
+*password*.txt
+*secret*.txt
+
 # File temporanei di deploy
 c1.txt
 c2.txt
