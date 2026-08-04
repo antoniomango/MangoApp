@@ -792,28 +792,24 @@ function showScreen(name) {
   else if (name === 'notifiche') {
     // Richiedi permesso notifiche push (richiede gesto utente su iOS)
     richiediPermessoNotifiche();
-    // Nascondi badge subito e aggiorna cache locale
+    // Nascondi badge subito e aggiorna cache locale (ottimistico — confermato o corretto sotto)
     if (window._notificheOp) window._notificheOp.forEach(n => n.letta = true);
     const badge = document.getElementById('notif-badge-op');
     if (badge) badge.style.display = 'none';
     renderNotificheOp();
-    // Segna come lette nel DB in modo affidabile
+    // Segna come lette nel DB via RPC (anon non ha policy di scrittura su notifiche)
     if (isOnline && currentUser) {
       (async () => {
-        const { error } = await sb.from('notifiche')
-          .update({ letta: true })
-          .eq('destinatario_id', currentUser.id)
-          .eq('letta', false);
-        if (error) {
-          // Ritenta dopo 3 secondi
-          await new Promise(r => setTimeout(r, 3000));
-          await sb.from('notifiche')
-            .update({ letta: true })
-            .eq('destinatario_id', currentUser.id)
-            .eq('letta', false);
+        const { error } = await sb.rpc('segna_notifiche_lette', {
+          p_utente_id: currentUser.id,
+          p_session_token: sessionToken
+        });
+        if (!error) {
+          // Salva timestamp ultimo letto solo se il DB è stato aggiornato davvero
+          localStorage.setItem('notifiche-lette-il', Date.now().toString());
+        } else {
+          console.warn('segna_notifiche_lette fallita, verrà ritentato al prossimo cambio tab:', error.message);
         }
-        // Salva timestamp ultimo letto in localStorage
-        localStorage.setItem('notifiche-lette-il', Date.now().toString());
       })();
     }
   }
@@ -2513,7 +2509,15 @@ function renderNotificheOp() {
 
 async function segnaNotificheLetteOp() {
   if (!isOnline || !currentUser) return;
-  await sb.from('notifiche').update({ letta: true }).eq('destinatario_id', currentUser.id).eq('letta', false);
+  const { error } = await sb.rpc('segna_notifiche_lette', {
+    p_utente_id: currentUser.id,
+    p_session_token: sessionToken
+  });
+  if (error) {
+    toast('Errore: notifiche non aggiornate, riprova', 'err');
+    return;
+  }
+  localStorage.setItem('notifiche-lette-il', Date.now().toString());
   await loadNotificheOp();
   renderNotificheOp();
   toast('Tutte le notifiche segnate come lette', 'ok');

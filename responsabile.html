@@ -4245,8 +4245,12 @@ function renderOperatori() {
 
 async function forzaLogout(id, nome) {
   if (!confirm(`Vuoi buttare fuori "${nome}" dall'app? Dovrà reinserire il PIN al prossimo accesso.`)) return;
-  const { error } = await sb.from('users').update({ forzato_logout: true }).eq('id', id);
-  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  const { data, error } = await sb.rpc('forza_logout_operatore', {
+    p_operatore_id: id,
+    p_responsabile_id: currentUserRow.id,
+    p_session_token: null,
+  });
+  if (error || !data?.ok) { toast(messaggioErroreOperatore(data?.errore || error?.message), 'err'); return; }
   toast(`${nome} verrà disconnesso alla prossima apertura dell'app`, 'ok');
 }
 
@@ -4351,6 +4355,19 @@ function openModalModificaOperatore(id) {
   document.getElementById('modal-operatore').classList.add('open');
 }
 
+// Messaggi utente per i codici di errore restituiti dalle RPC di gestione operatori
+const MESSAGGI_ERRORE_OPERATORE = {
+  sessione_non_valida: 'Sessione scaduta, effettua di nuovo il login',
+  non_autorizzato: 'Non sei autorizzato a questa operazione',
+  utente_non_trovato: 'Operatore non trovato',
+  auto_cambio_ruolo_non_consentito: 'Non puoi cambiare il tuo stesso ruolo',
+  ultimo_responsabile: 'Impossibile: resteresti senza nessun responsabile nel sistema',
+  auto_operazione_non_consentita: 'Non puoi eseguire questa operazione su te stesso',
+};
+function messaggioErroreOperatore(codice) {
+  return MESSAGGI_ERRORE_OPERATORE[codice] || codice || 'Errore sconosciuto';
+}
+
 async function salvaOperatore() {
   const editId = document.getElementById('op-edit-id').value;
   const nome = document.getElementById('op-nome').value.trim();
@@ -4364,14 +4381,30 @@ async function salvaOperatore() {
     // MODIFICA
     if (pin && !/^\d{4}$/.test(pin)) { toast('Il PIN deve essere 4 cifre numeriche', 'err'); return; }
     const esclusoPianificazione = document.getElementById('op-escluso-pianificazione').checked;
-    const aggiornamento = { nome, cognome, ruolo, escluso_pianificazione: esclusoPianificazione };
+    const opAttuale = operatoriCache.find(o => o.id === editId);
+    const oreDefaultAttuale = opAttuale?.ore_default ?? 8.0;
+
+    if (opAttuale && ruolo !== opAttuale.ruolo) {
+      const conferma = confirm(`Stai cambiando il ruolo di ${nome} ${cognome} da ${opAttuale.ruolo} a ${ruolo}. Confermi?`);
+      if (!conferma) return;
+    }
+
     if (pin) {
       // Aggiorna PIN via RPC (il PIN è hashato nel DB)
       const { data: pinData } = await sb.rpc('aggiorna_pin_operatore', { p_operatore_id: editId, p_nuovo_pin: pin, p_responsabile_id: currentUserRow.id });
       if (!pinData?.ok) { toast(pinData?.errore || 'Errore aggiornamento PIN', 'err'); return; }
     }
-    const { error } = await sb.from('users').update(aggiornamento).eq('id', editId);
-    if (error) { toast('Errore: ' + error.message, 'err'); return; }
+    const { data, error } = await sb.rpc('aggiorna_operatore', {
+      p_operatore_id: editId,
+      p_nome: nome,
+      p_cognome: cognome,
+      p_ruolo: ruolo,
+      p_ore_default: oreDefaultAttuale,
+      p_escluso_pianificazione: esclusoPianificazione,
+      p_responsabile_id: currentUserRow.id,
+      p_session_token: null,
+    });
+    if (error || !data?.ok) { toast(messaggioErroreOperatore(data?.errore || error?.message), 'err'); return; }
     closeModal('modal-operatore');
     toast('Operatore aggiornato', 'ok');
   } else {
@@ -4388,7 +4421,13 @@ async function salvaOperatore() {
 }
 
 async function toggleOperatore(id, attivo) {
-  await sb.from('users').update({ attivo }).eq('id', id);
+  const { data, error } = await sb.rpc('imposta_stato_operatore', {
+    p_operatore_id: id,
+    p_attivo: attivo,
+    p_responsabile_id: currentUserRow.id,
+    p_session_token: null,
+  });
+  if (error || !data?.ok) { toast(messaggioErroreOperatore(data?.errore || error?.message), 'err'); return; }
   toast(attivo ? 'Operatore attivato' : 'Operatore disattivato', 'ok');
   await loadOperatori();
   renderOperatori();
@@ -4396,8 +4435,12 @@ async function toggleOperatore(id, attivo) {
 
 async function eliminaOperatore(id, nome) {
   if (!confirm(`Eliminare il profilo di "${nome}"?\n\nIl profilo verrà disattivato e non potrà più accedere all'app.`)) return;
-  const { error } = await sb.from('users').update({ attivo: false, eliminato: true }).eq('id', id);
-  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  const { data, error } = await sb.rpc('elimina_operatore', {
+    p_operatore_id: id,
+    p_responsabile_id: currentUserRow.id,
+    p_session_token: null,
+  });
+  if (error || !data?.ok) { toast(messaggioErroreOperatore(data?.errore || error?.message), 'err'); return; }
   toast('Profilo eliminato', 'ok');
   await loadOperatori();
   renderOperatori();
@@ -5510,6 +5553,7 @@ async function esportaArchivio() {
         const fotoTotali = (allegati || []).length;
         let fotoScritte = 0;
         const urlScritti = [];
+        const idsScritti = [];
         for (const a of (allegati || [])) {
           const { data: signed } = await sb.storage.from('allegati-fasi').createSignedUrl(a.url_file, 300);
           if (!signed?.signedUrl) { console.warn('signed URL fallito:', a.url_file); continue; }
@@ -5519,7 +5563,7 @@ async function esportaArchivio() {
             const blob = await resp.blob();
             const fh = await subDir.getFileHandle(a.url_file.split('/').pop(), { create: true });
             const wr = await fh.createWritable(); await wr.write(blob); await wr.close();
-            fotoScritte++; urlScritti.push(a.url_file);
+            fotoScritte++; urlScritti.push(a.url_file); idsScritti.push(a.id);
           } catch (e) { console.warn('errore foto:', e.message, a.url_file); }
         }
 
@@ -5537,7 +5581,13 @@ async function esportaArchivio() {
         // intatti e il prossimo tentativo può ripartire pulito
         const { error: rpcErr } = await sb.rpc('archivia_ordine', { p_ordine_id: o.id, p_responsabile_id: currentUserRow.id });
         if (rpcErr) throw new Error(rpcErr.message);
-        if (urlScritti.length) await sb.storage.from('allegati-fasi').remove(urlScritti);
+        // Edge function: rimuove sia il file dallo storage sia la riga allegati (evita orfani)
+        if (idsScritti.length) {
+          const { data: elimData, error: elimErr } = await sb.functions.invoke('allegato-elimina', {
+            body: { p_allegato_ids: idsScritti, p_operatore_id: currentUserRow.id, p_session_token: null }
+          });
+          if (elimErr || !elimData?.ok) console.warn('allegato-elimina fallita per', o.codice, elimErr?.message || elimData?.errore);
+        }
         archiviati.push(o);
 
       } else {
@@ -5546,6 +5596,7 @@ async function esportaArchivio() {
         const fotoTotali = (allegati || []).length;
         let fotoScritte = 0;
         const urlScritti = [];
+        const idsScritti = [];
         for (const a of (allegati || [])) {
           const { data: signed } = await sb.storage.from('allegati-fasi').createSignedUrl(a.url_file, 300);
           if (!signed?.signedUrl) continue;
@@ -5553,7 +5604,7 @@ async function esportaArchivio() {
             const resp = await fetch(signed.signedUrl); if (!resp.ok) continue;
             const blob = await resp.blob();
             zip.file(a.url_file.split('/').pop(), blob);
-            fotoScritte++; urlScritti.push(a.url_file);
+            fotoScritte++; urlScritti.push(a.url_file); idsScritti.push(a.id);
           } catch (e) { console.warn(e); }
         }
         if (fotoTotali > 0 && fotoScritte < fotoTotali) {
@@ -5568,7 +5619,13 @@ async function esportaArchivio() {
         // intatti e il prossimo tentativo può ripartire pulito
         const { error: rpcErr } = await sb.rpc('archivia_ordine', { p_ordine_id: o.id, p_responsabile_id: currentUserRow.id });
         if (rpcErr) throw new Error(rpcErr.message);
-        if (urlScritti.length) await sb.storage.from('allegati-fasi').remove(urlScritti);
+        // Edge function: rimuove sia il file dallo storage sia la riga allegati (evita orfani)
+        if (idsScritti.length) {
+          const { data: elimData, error: elimErr } = await sb.functions.invoke('allegato-elimina', {
+            body: { p_allegato_ids: idsScritti, p_operatore_id: currentUserRow.id, p_session_token: null }
+          });
+          if (elimErr || !elimData?.ok) console.warn('allegato-elimina fallita per', o.codice, elimErr?.message || elimData?.errore);
+        }
         archiviati.push(o);
       }
 
@@ -6611,17 +6668,36 @@ function escapeHtml(str) {
 const ONESIGNAL_APP_ID = 'f1b7b981-355e-46c2-a476-224e3d06d82b';
 // REST key gestita da Supabase Edge Function (non nel codice client)
 
+async function _salvaOnesignalIdResp(subId) {
+  const { data, error } = await sb.rpc('salva_onesignal_id', { p_user_id: currentUserRow.id, p_onesignal_id: subId, p_session_token: null });
+  if (error || !data?.ok) console.warn('salva_onesignal_id fallita:', error?.message || data?.errore);
+}
+
 async function initOneSignalResp() {
   if (!window.OneSignalDeferred) return;
   window.OneSignalDeferred = window.OneSignalDeferred || [];
   window.OneSignalDeferred.push(async function(OneSignal) {
     try {
       await OneSignal.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/sw.js' });
+      // Ascolta il cambio di sottoscrizione — l'id spesso non è ancora pronto subito dopo login()
+      OneSignal.User.PushSubscription.addEventListener('change', async (event) => {
+        const subId = event.current?.id;
+        if (subId && currentUserRow) await _salvaOnesignalIdResp(subId);
+      });
       const permission = await OneSignal.Notifications.permission;
       if (!permission) await OneSignal.Notifications.requestPermission();
       await OneSignal.login(currentUserRow.id);
-      const subId = OneSignal.User.PushSubscription.id;
-      if (subId) await sb.from('users').update({ onesignal_id: subId }).eq('id', currentUserRow.id);
+      // Fallback: se l'evento 'change' non è ancora arrivato, riprova per qualche secondo
+      let subId = OneSignal.User.PushSubscription.id;
+      for (let i = 0; i < 5 && !subId; i++) {
+        await new Promise(r => setTimeout(r, 1000));
+        subId = OneSignal.User.PushSubscription.id;
+      }
+      if (subId) {
+        await _salvaOnesignalIdResp(subId);
+      } else {
+        console.warn('OneSignal: subscription ID non disponibile dopo 5 tentativi — verrà comunque salvato dal listener quando arriva');
+      }
     } catch(e) { console.warn('OneSignal init:', e); }
   });
 }
