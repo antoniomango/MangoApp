@@ -440,6 +440,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       </button>
       <span id="user-label" style="color:#F2EDE6"></span>
       <span id="header-date" style="color:#9E9189;font-family:'DM Mono',monospace;font-size:11px"></span>
+      <span id="app-version-label" title="Versione client" style="color:#6B6259;font-family:'DM Mono',monospace;font-size:10px"></span>
       <a href="#" onclick="doLogout()" style="color:var(--muted);font-size:11px;text-decoration:none">esci</a>
     </div>
   </header>
@@ -1858,6 +1859,54 @@ async function init() {
   });
 }
 
+// ═══════════════════════════════════════════════
+// GUARDIA DI VERSIONE — blocca solo le operazioni distruttive (esportazione/
+// archiviazione) su un client con Service Worker obsoleto in cache. La sola
+// consultazione resta sempre possibile. Se la verifica stessa fallisce (rete
+// assente, chiave mancante), NON blocca — fallisce in modo sicuro, solo un
+// avviso in console. Vedi Checklist-Sicurezza.md e la nota d'incidente nel vault.
+// ═══════════════════════════════════════════════
+let clientObsoleto = false;
+
+function _numeroVersione(v) {
+  const m = /^mango-v(\d+)$/.exec(v || '');
+  return m ? parseInt(m[1], 10) : null;
+}
+
+async function verificaVersioneClient() {
+  const label = document.getElementById('app-version-label');
+  if (label) { label.textContent = APP_VERSION; label.style.color = ''; }
+  try {
+    const { data, error } = await sb.from('config_sistema').select('valore').eq('chiave', 'versione_minima_client').maybeSingle();
+    if (error || !data?.valore) {
+      console.warn('verificaVersioneClient: versione_minima_client non disponibile, nessun blocco applicato', error?.message);
+      clientObsoleto = false;
+      return;
+    }
+    const minima = _numeroVersione(data.valore);
+    const attuale = _numeroVersione(APP_VERSION);
+    if (minima === null || attuale === null) {
+      console.warn('verificaVersioneClient: formato versione non riconosciuto, nessun blocco applicato', data.valore, APP_VERSION);
+      clientObsoleto = false;
+      return;
+    }
+    clientObsoleto = attuale < minima;
+    if (clientObsoleto) {
+      console.warn(`Client obsoleto: ${APP_VERSION} < ${data.valore} richiesta. Esportazione/archiviazione bloccate.`);
+      if (label) label.style.color = 'var(--alert, #B03A2E)';
+    }
+  } catch (e) {
+    console.warn('verificaVersioneClient: verifica fallita, nessun blocco applicato', e.message);
+    clientObsoleto = false;
+  }
+}
+
+function _bloccaSeClientObsoleto() {
+  if (!clientObsoleto) return false;
+  alert('Versione dell\'app non aggiornata. Ricarica la pagina con Ctrl+Shift+R prima di esportare.');
+  return true;
+}
+
 async function postLogin() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-screen').style.display = 'block';
@@ -1866,6 +1915,7 @@ async function postLogin() {
   currentUserRow = data;
   document.getElementById('user-label').textContent = data ? `${data.nome} ${data.cognome}` : currentUser.email;
   document.getElementById('header-date').textContent = new Date().toLocaleDateString('it-IT', { weekday:'short', day:'numeric', month:'short' });
+  verificaVersioneClient(); // non bloccante: le operazioni distruttive controllano clientObsoleto al click
   // Load fasi e tipi prodotto (devono precedere il resto)
   await Promise.all([loadFasi(), loadTipiProdotto(), loadPrioritaConfig(), loadAttributiConfig()]);
   // Load data
@@ -5728,6 +5778,7 @@ async function _esportaOrdiniConVerifica(ordini) {
 
 // ─── Esporta Archivio: tutti gli ordini spediti non ancora archiviati ─────────
 async function esportaArchivio() {
+  if (_bloccaSeClientObsoleto()) return;
   const daEsportare = ordiniSpeditiCache.filter(o => !o.archiviato_il);
   if (!daEsportare.length) { toast('Nessun ordine da esportare', 'ok'); return; }
   await _esportaOrdiniConVerifica(daEsportare);
@@ -5735,6 +5786,7 @@ async function esportaArchivio() {
 
 // ─── Esporta un singolo ordine — stessa funzione, stesso comportamento ────────
 async function scaricaEliminaFoto(ordineId, codice, cliente) {
+  if (_bloccaSeClientObsoleto()) return;
   const ordine = ordiniSpeditiCache.find(o => o.id === ordineId);
   if (!ordine) { toast('Ordine non trovato', 'err'); return; }
   if (!confirm(`Esportare l'ordine ${codice} — ${cliente} (scheda PDF + foto) e archiviarlo?\n\nL'ordine sparirà da "Da esportare" e le foto verranno rimosse dal cloud (righe DB incluse).`)) return;

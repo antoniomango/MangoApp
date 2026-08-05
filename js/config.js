@@ -41,6 +41,11 @@ const SUPABASE_URL  = AMBIENTI[AMBIENTE].url;
 const SUPABASE_ANON = AMBIENTI[AMBIENTE].anon;
 const IS_PRODUZIONE = AMBIENTE === 'produzione';
 
+// Versione del client — da incrementare SEMPRE insieme a CACHE in sw.js (stesso valore,
+// stesso commit). Letta da responsabile.html per la guardia di versione sulle operazioni
+// distruttive (esportazione/archiviazione) — vedi Checklist-Sicurezza.md nel vault.
+const APP_VERSION = 'mango-v13';
+
 // ═══════════════════════════════════════════════
 // INDICATORE VISIVO — banda fissa quando non produzione
 // ═══════════════════════════════════════════════
