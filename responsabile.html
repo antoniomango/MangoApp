@@ -5380,8 +5380,12 @@ function generaPDFOrdine(ordine, fasiOrd, fasiExtra, nc, logOrd, allegati) {
     checkPage();
     doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
     doc.text(label + ':', L, y);
+    // Colonna valore mai fissa a 44mm: per etichette lunghe (sezione Totali) etichetta e
+    // valore si sovrappongono. Si misura l'etichetta e si allarga solo se serve — le
+    // etichette corte (Dati Ordine) restano sui 44mm di sempre.
+    const colValore = Math.max(44, doc.getTextWidth(label + ':') + 6);
     doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-    doc.text(String(value ?? '—'), L + 44, y); y += lineH;
+    doc.text(String(value ?? '—'), L + colValore, y); y += lineH;
   };
 
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('it-IT') : '—';
@@ -5427,13 +5431,24 @@ function generaPDFOrdine(ordine, fasiOrd, fasiExtra, nc, logOrd, allegati) {
 
   // ─── Totali di sintesi ───
   section('Totali di Sintesi');
-  const minutiFasi = fasiOrdinate.reduce((s, f) => s + (Number(f.tempo_accumulato_minuti) || 0), 0);
-  const minutiExtra = (fasiExtra || []).reduce((s, f) => s + (Number(f.ore_stimate_manuali) || 0) * 60, 0);
-  const totMin = Math.round(minutiFasi + minutiExtra);
-  const oreStr = `${Math.floor(totMin / 60)}h ${String(totMin % 60).padStart(2, '0')}m`;
+  // Tempo di lavorazione vs tempo di attesa esterna (es. essiccazione, verniciatura in
+  // conto terzi): il campo che distingue i due è e_attesa_esterna. Su ordine_fasi non
+  // esiste una colonna propria — si risale al catalogo `fasi` via fase_id. Su
+  // fasi_ordine_extra il campo è invece diretto sulla riga.
+  const eAttesaEsterna = (f) => fasi.find(x => x.id === f.fase_id)?.e_attesa_esterna === true;
+  const minutiLavorazioneFasi = fasiOrdinate.reduce((s, f) => s + (eAttesaEsterna(f) ? 0 : (Number(f.tempo_accumulato_minuti) || 0)), 0);
+  const minutiAttesaFasi = fasiOrdinate.reduce((s, f) => s + (eAttesaEsterna(f) ? (Number(f.tempo_accumulato_minuti) || 0) : 0), 0);
+  const minutiLavorazioneExtra = (fasiExtra || []).reduce((s, f) => s + (f.e_attesa_esterna ? 0 : (Number(f.ore_stimate_manuali) || 0) * 60), 0);
+  const minutiAttesaExtra = (fasiExtra || []).reduce((s, f) => s + (f.e_attesa_esterna ? (Number(f.ore_stimate_manuali) || 0) * 60 : 0), 0);
+  const minutiLavorazione = minutiLavorazioneFasi + minutiLavorazioneExtra;
+  const minutiAttesa = minutiAttesaFasi + minutiAttesaExtra;
+  const totMin = Math.round(minutiLavorazione + minutiAttesa);
+  const fmtOre = (min) => `${Math.floor(min / 60)}h ${String(Math.round(min) % 60).padStart(2, '0')}m`;
   const fasiEseguibili = fasiOrdinate.filter(f => f.stato !== 'non_applicabile');
   const fasiCompletate = fasiOrdinate.filter(f => f.stato === 'completata').length;
-  kv('Tempo complessivo (fasi + extra)', oreStr);
+  kv('Tempo di lavorazione', fmtOre(minutiLavorazione));
+  kv('Tempo di attesa esterna', fmtOre(minutiAttesa));
+  kv('Tempo complessivo (lavorazione + attesa)', fmtOre(totMin));
   kv('Fasi eseguite', `${fasiCompletate} su ${fasiEseguibili.length} applicabili (${fasiOrdinate.length} totali)`);
   if (ordine.creato_il && ordine.spedito_il) {
     const giorni = Math.round((new Date(ordine.spedito_il) - new Date(ordine.creato_il)) / 86400000);
@@ -5451,7 +5466,7 @@ function generaPDFOrdine(ordine, fasiOrd, fasiExtra, nc, logOrd, allegati) {
       checkPage();
       const faseName = f.nome_custom || fasi.find(x => x.id === f.fase_id)?.nome || `#${f.fase_id}`;
       const op = operatoriCache.find(x => x.id === f.operatore_id);
-      const opNome = op ? `${op.nome} ${op.cognome}` : (f.operatore_id ? '?' : '');
+      const opNome = op ? `${op.nome} ${op.cognome}` : (f.operatore_id ? '?' : '—');
       const tempo = f.tempo_accumulato_minuti != null ? Number(f.tempo_accumulato_minuti).toFixed(1) : '—';
 
       // Manda a capo il nome fase invece di troncarlo — è il campo più cercato in archivio
@@ -5481,9 +5496,13 @@ function generaPDFOrdine(ordine, fasiOrd, fasiExtra, nc, logOrd, allegati) {
     }
   }
 
-  // Fasi extra
-  if (fasiExtra && fasiExtra.length) {
-    section('Fasi Extra');
+  // Fasi extra — sezione sempre presente: chi legge deve sapere che è stata controllata,
+  // non restare nel dubbio se manchi o non sia stata cercata.
+  section('Fasi Extra');
+  if (!fasiExtra || !fasiExtra.length) {
+    doc.setFontSize(9); doc.setFont('helvetica', 'italic'); doc.setTextColor(140, 140, 140);
+    doc.text('Nessuna', L, y); y += lineH;
+  } else {
     const cols2 = [L, L + 60, L + 95, L + 130, L + 158];
     doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
     ['Nome', 'Operatore', 'Stato', 'Ore stimate', 'Completata il'].forEach((h, i) => doc.text(h, cols2[i], y));
@@ -5506,9 +5525,13 @@ function generaPDFOrdine(ordine, fasiOrd, fasiExtra, nc, logOrd, allegati) {
     }
   }
 
-  // Non conformità — sezione più probabilmente cercata in archivio
-  if (nc && nc.length) {
-    section('Non Conformità');
+  // Non conformità — sezione sempre presente (stesso motivo di Fasi Extra), e comunque
+  // la più probabilmente cercata in archivio
+  section('Non Conformità');
+  if (!nc || !nc.length) {
+    doc.setFontSize(9); doc.setFont('helvetica', 'italic'); doc.setTextColor(140, 140, 140);
+    doc.text('Nessuna', L, y); y += lineH;
+  } else {
     for (const n of nc) {
       checkPage();
       doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(180, 50, 50);
@@ -5548,20 +5571,35 @@ function generaPDFOrdine(ordine, fasiOrd, fasiExtra, nc, logOrd, allegati) {
   if (logOrd && logOrd.length) {
     section('Cronologia Completa');
     for (const l of logOrd) {
-      checkPage();
       const u = l.users ? `${l.users.nome} ${l.users.cognome}` : '—';
       const { titolo, dettagli } = _leggiLogRiga(l.azione, l.dettaglio, fasiOrdinate);
+      // Il titolo può andare a capo (nomi fase lunghi) — misurato PRIMA di disegnare,
+      // altrimenti l'avanzamento verticale fisso di sotto non tiene conto delle righe in
+      // più e la seconda riga del titolo finisce sopra la voce di cronologia successiva.
+      // Il font va fissato esplicitamente PRIMA di ogni splitTextToSize: lo stato lasciato
+      // dall'iterazione precedente (7.5, dettagli) non è quello con cui il titolo verrà
+      // disegnato (8.5) — misurare con la dimensione sbagliata fa calcolare un a-capo più
+      // permissivo di quanto poi la riga occupi davvero, riproducendo la stessa sovrapposizione.
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'normal');
+      const titoloLines = doc.splitTextToSize(titolo, 78);
+      doc.setFontSize(7.5);
+      const dettagliLines = dettagli.flatMap(riga => doc.splitTextToSize(riga, W - 14));
+      const altezzaTitolo = Math.max(titoloLines.length * 3.6, lineH * 0.85);
+      const altezzaBlocco = altezzaTitolo + dettagliLines.length * 3.5;
+      // L'intero blocco (titolo + dettagli) si valuta per il salto pagina in un colpo solo,
+      // non riga per riga: altrimenti una voce può iniziare in fondo a una pagina e
+      // continuare nella successiva, spezzata a metà.
+      if (y + altezzaBlocco > 272) { doc.addPage(); y = 15; }
+
       doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 80, 120);
       doc.text(`${fmtDT(l.timestamp)}`, L, y);
       doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-      doc.splitTextToSize(titolo, 78).forEach((line, i) => doc.text(line, L + 42, y + i * 3.6));
+      titoloLines.forEach((line, i) => doc.text(line, L + 42, y + i * 3.6));
       doc.setTextColor(100, 100, 100);
       doc.text(u, L + 122, y);
-      y += lineH * 0.85;
-      for (const riga of dettagli) {
-        doc.setFontSize(7.5); doc.setTextColor(140, 140, 140);
-        doc.splitTextToSize(riga, W - 14).forEach(line => { checkPage(); doc.text(line, L + 6, y); y += 3.5; });
-      }
+      y += altezzaTitolo;
+      doc.setFontSize(7.5); doc.setTextColor(140, 140, 140);
+      dettagliLines.forEach(line => { doc.text(line, L + 6, y); y += 3.5; });
     }
   }
 
@@ -5643,7 +5681,7 @@ async function _esportaOrdiniConVerifica(ordini) {
           .select('azione, utente_id, timestamp, dettaglio, users!utente_id(nome,cognome)')
           .eq('ordine_id', o.id).order('timestamp'),
         sb.from('fasi_ordine_extra')
-          .select('id, nome, stato, operatore_id, ore_stimate_manuali, completata_il, note_operatore, iniziata_il')
+          .select('id, nome, stato, operatore_id, ore_stimate_manuali, completata_il, note_operatore, iniziata_il, e_attesa_esterna')
           .eq('ordine_id', o.id).order('creato_il'),
         sb.from('non_conformita')
           .select('descrizione, stato, segnalata_da, segnalata_il, gestita_da, gestita_il, note_chiusura')
