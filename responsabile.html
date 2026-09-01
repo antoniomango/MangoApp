@@ -451,10 +451,6 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       <div class="nav-item active" onclick="showSection('dashboard')" id="nav-dashboard">
         <span class="icon">📊</span> Dashboard
       </div>
-      <div class="nav-item" onclick="showSection('nc')" id="nav-nc">
-        <span class="icon">⚠️</span> Non Conformità
-      </div>
-
       <div class="nav-item" onclick="showSection('kpi')" id="nav-kpi">
         <span class="icon">📈</span> KPI & Analisi
       </div>
@@ -527,21 +523,11 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           </div>
           <button class="btn btn-primary" onclick="openModalNuovoOrdine()">+ Nuovo Ordine</button>
         </div>
-        <div class="kpi-grid" style="grid-template-columns:repeat(5,1fr)">
+        <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
           <div class="kpi-card"><div class="label">Ordini Aperti</div><div class="value" id="kpi-aperti">—</div></div>
           <div class="kpi-card warn"><div class="label">In Ritardo</div><div class="value" id="kpi-ritardo">—</div></div>
-          <div class="kpi-card alert"><div class="label">NC Aperte</div><div class="value" id="kpi-nc">—</div></div>
           <div class="kpi-card ok"><div class="label">Attesa Corriere</div><div class="value" id="kpi-attesa">—</div></div>
           <div class="kpi-card ok" style="cursor:pointer" onclick="openModalStoricoSpediti()" title="Vedi storico mensile e rispetto scadenze"><div class="label">Spediti (30gg)</div><div class="value" id="kpi-spediti">—</div></div>
-        </div>
-
-        <!-- Pannello Andon: fasi bloccate per NC — visibile solo se ci sono fasi bloccate -->
-        <div id="andon-panel" style="display:none;margin-bottom:20px;border:2px solid #FCA5A5;border-radius:12px;background:#FFF5F5;padding:16px">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-            <span style="font-size:20px">🚨</span>
-            <strong style="font-size:15px;color:#991B1B">Fasi bloccate — intervento richiesto</strong>
-          </div>
-          <div id="andon-list"></div>
         </div>
 
         <div class="filters">
@@ -606,31 +592,6 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           <div style="padding:16px">
             <ul class="log-list" id="det-log"></ul>
           </div>
-        </div>
-      </section>
-
-      <!-- NC -->
-      <section class="section" id="sec-nc">
-        <div class="page-hdr">
-          <div><h1>Non Conformità</h1></div>
-        </div>
-        <div class="filters">
-          <select id="nc-stato" onchange="renderNcTable()">
-            <option value="">Tutti gli stati</option>
-            <option value="aperta">Aperta</option>
-            <option value="approvata">Approvata</option>
-            <option value="chiusa">Chiusa</option>
-          </select>
-        </div>
-        <div class="card">
-          <table>
-            <thead>
-              <tr><th>Ordine</th><th>Fase</th><th>Descrizione</th><th>Segnalata da</th><th>Data</th><th>Stato</th><th>Azioni</th></tr>
-            </thead>
-            <tbody id="nc-tbody">
-              <tr><td colspan="7" style="text-align:center;padding:24px;color:var(--muted)">Caricamento…</td></tr>
-            </tbody>
-          </table>
         </div>
       </section>
 
@@ -801,17 +762,12 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           </div>
         </div>
 
-        <!-- RIGA 2: Tempo ciclo per tipologia + NC per fase -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <!-- RIGA 2: Tempo ciclo per tipologia -->
+        <div style="display:grid;grid-template-columns:1fr;gap:16px;margin-bottom:16px">
           <div class="card" style="padding:20px">
             <h3 style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--wood)">🏗 Tempo ciclo per tipologia</h3>
             <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Dalla prima fase completata all'ordine pronto — ore lavorative</div>
             <div id="kpi-struttura"></div>
-          </div>
-          <div class="card" style="padding:20px">
-            <h3 style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--wood)">⚠️ Non conformità per fase</h3>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Fasi con più problemi segnalati</div>
-            <div id="kpi-nc-fase"></div>
           </div>
         </div>
 
@@ -1595,17 +1551,6 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
   </div>
 </div>
 
-<!-- MODALE NC CHIUSURA -->
-<div class="modal-overlay" id="modal-nc">
-  <div class="modal">
-    <div class="modal-hdr">
-      <h3 id="modal-nc-title">Non Conformità</h3>
-      <button class="modal-close" onclick="closeModal('modal-nc')">✕</button>
-    </div>
-    <div class="modal-body" id="modal-nc-body"></div>
-    <div class="modal-footer" id="modal-nc-footer"></div>
-  </div>
-</div>
 
 <!-- MODALE NUOVO OPERATORE -->
 <div class="modal-overlay" id="modal-operatore">
@@ -1821,7 +1766,6 @@ let ordiniCache = [];
 let ordiniSpeditiCache = [];
 let lavoroStatsCache = {}; // ordine_id → {minuti_lavoro, minuti_attesa_esterna, n_operatori}
 let _spediti30Count = 0; // contatore spediti 30gg inclusi archiviati
-let ncCache = [];
 let operatoriCache = [];
 let notificheCache = [];
 let currentOrdineId = null;
@@ -1919,7 +1863,7 @@ async function postLogin() {
   // Load fasi e tipi prodotto (devono precedere il resto)
   await Promise.all([loadFasi(), loadTipiProdotto(), loadPrioritaConfig(), loadAttributiConfig()]);
   // Load data
-  await Promise.all([loadOrdini(), loadNc(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadChiusureCache(), loadMacroFasi(), loadFaseMediaMinuti(), loadFaseExtraMediaMinuti(), caricaNomiFasiExtraStoria(), loadMacchine()]);
+  await Promise.all([loadOrdini(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadChiusureCache(), loadMacroFasi(), loadFaseMediaMinuti(), loadFaseExtraMediaMinuti(), caricaNomiFasiExtraStoria(), loadMacchine()]);
   // Check ordini in ritardo (solo responsabile)
   if (currentUserRow?.ruolo === 'responsabile') checkOrdiniInRitardo();
   // Realtime
@@ -2111,13 +2055,6 @@ async function loadOrdini() {
   }
 }
 
-async function loadNc() {
-  const { data } = await sb.from('non_conformita')
-    .select('*, ordini(codice, cliente), fasi(nome), users!segnalata_da(nome, cognome)')
-    .order('segnalata_il', { ascending: false });
-  ncCache = data || [];
-}
-
 async function loadOperatori() {
   const { data } = await sb.from('users')
     .select('id, nome, cognome, ruolo, attivo, ore_default, escluso_pianificazione')
@@ -2187,16 +2124,6 @@ function setupRealtime() {
         renderDettaglioOrdine(currentOrdineId);
       }
     })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'non_conformita' }, async () => {
-      await loadNc();
-      renderNcTable();
-      const kpi = document.getElementById('kpi-nc');
-      if (kpi) kpi.textContent = ncCache.filter(n => n.stato === 'aperta').length;
-      renderAndonPanel();
-    })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'ordine_fasi', filter: 'stato=eq.bloccata' }, async () => {
-      renderAndonPanel();
-    })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'notifiche' }, async () => {
       await loadNotifiche();
       renderNotifiche();
@@ -2227,7 +2154,6 @@ function showSection(name) {
 
   if (name === 'dashboard') renderDashboard();
   else if (name === 'ordini') renderOrdiniTable();
-  else if (name === 'nc') renderNcTable();
   else if (name === 'operatori') { renderOperatori(); loadRiepilogoPermessi(); }
   else if (name === 'archivio') { renderArchivioTable(); loadDimensioneDatabase(); }
   else if (name === 'notifiche') renderNotifiche();
@@ -2435,7 +2361,6 @@ function _ganttOltreToggle(btn, nascosteCount) {
 // DESTINATARI NOTIFICHE CONFIG
 // ═══════════════════════════════════════════════
 const NOTIF_EVENTI = [
-  { key: 'nc_segnalata',     label: 'Problema segnalato (Andon)',  desc: 'Notifica immediata quando un operatore segnala un problema su una fase' },
   { key: 'ordine_in_ritardo', label: 'Ordine in ritardo',           desc: 'Alert giornaliero (ore 5:30) per ogni ordine scaduto non ancora spedito' },
 ];
 
@@ -3176,87 +3101,17 @@ function renderDashboard() {
   const oggi = new Date().toISOString().split('T')[0];
   const aperti = ordiniCache.filter(o => o.stato === 'aperto').length;
   const ritardo = ordiniCache.filter(o => o.stato === 'aperto' && o.scadenza && o.scadenza < oggi).length;
-  const ncAperte = ncCache.filter(n => n.stato === 'aperta').length;
   const attesa = ordiniCache.filter(o => o.stato === 'attesa_spedizione').length;
   const spediti30 = _spediti30Count;
 
   document.getElementById('kpi-aperti').textContent = aperti;
   document.getElementById('kpi-ritardo').textContent = ritardo;
-  document.getElementById('kpi-nc').textContent = ncAperte;
   document.getElementById('kpi-attesa').textContent = attesa;
   document.getElementById('kpi-spediti').textContent = spediti30;
   document.getElementById('dash-subtitle').textContent =
     `${new Date().toLocaleDateString('it-IT', {weekday:'long', day:'numeric', month:'long', year:'numeric'})}`;
 
   renderOrdiniTable();
-  renderAndonPanel();
-}
-
-async function renderAndonPanel() {
-  const panel = document.getElementById('andon-panel');
-  const list  = document.getElementById('andon-list');
-  if (!panel || !list) return;
-
-  const { data: bloccate } = await sb
-    .from('ordine_fasi')
-    .select('id, ordine_id, fase_id, ordini(codice, cliente), fasi(nome)')
-    .eq('stato', 'bloccata');
-
-  if (!bloccate || !bloccate.length) {
-    panel.style.display = 'none';
-    return;
-  }
-
-  // Per ogni fase bloccata trova la NC aperta associata
-  const ordFaseIds = bloccate.map(f => f.ordine_id);
-  const faseIds    = bloccate.map(f => f.fase_id);
-  const { data: ncBloccate } = await sb
-    .from('non_conformita')
-    .select('id, ordine_id, fase_id, descrizione, segnalata_il, users!segnalata_da(nome, cognome)')
-    .in('stato', ['aperta', 'approvata'])
-    .in('ordine_id', ordFaseIds)
-    .in('fase_id', faseIds);
-
-  list.innerHTML = bloccate.map(f => {
-    const nc = (ncBloccate || []).find(n => n.ordine_id === f.ordine_id && n.fase_id === f.fase_id);
-    const codice   = f.ordini?.codice  || '—';
-    const cliente  = f.ordini?.cliente || '—';
-    const faseNome = f.fasi?.nome      || `Fase ${f.fase_id}`;
-    const ncId     = nc?.id || null;
-    const opNome   = nc ? `${nc.users?.nome || ''} ${nc.users?.cognome || ''}`.trim() : '—';
-    const quando   = nc?.segnalata_il ? new Date(nc.segnalata_il).toLocaleString('it-IT', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
-    const desc     = nc?.descrizione ? `<div style="font-size:12px;color:#7F1D1D;margin:4px 0 8px">${escapeHtml(nc.descrizione.substring(0,120))}</div>` : '';
-    const btnRisolvi = ncId
-      ? `<button class="btn btn-ok" style="font-size:12px;padding:6px 14px" onclick="risolviAndon('${ncId}')">✓ Risolvi</button>`
-      : '';
-    return `<div style="background:#fff;border:1px solid #FCA5A5;border-radius:8px;padding:12px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:600;font-size:14px">${escapeHtml(cliente)} — <span style="font-family:'DM Mono',monospace;font-size:12px">${escapeHtml(codice)}</span></div>
-        <div style="font-size:13px;color:var(--muted);margin:2px 0">Fase: <strong>${escapeHtml(faseNome)}</strong> · Segnalato da ${escapeHtml(opNome)} alle ${quando}</div>
-        ${desc}
-      </div>
-      <div style="flex-shrink:0">${btnRisolvi}</div>
-    </div>`;
-  }).join('');
-
-  panel.style.display = 'block';
-}
-
-async function risolviAndon(ncId) {
-  const note = prompt('Note di chiusura (obbligatorie):');
-  if (!note || !note.trim()) { toast('Inserisci le note di chiusura', 'err'); return; }
-  const { data, error } = await sb.rpc('risolvi_non_conformita', {
-    p_nc_id: ncId,
-    p_responsabile_id: currentUserRow.id,
-    p_note_chiusura: note.trim()
-  });
-  if (error || !data?.ok) {
-    toast(data?.errore || 'Errore durante la risoluzione', 'err');
-    return;
-  }
-  toast('Problema risolto — fase ripristinata', 'ok');
-  await loadNc();
-  renderDashboard();
 }
 
 function ordineRow(o, mini = false) {
@@ -4172,108 +4027,6 @@ async function confermRiassegna() {
 // ═══════════════════════════════════════════════
 // NON CONFORMITÀ
 // ═══════════════════════════════════════════════
-function renderNcTable() {
-  const statoFil = document.getElementById('nc-stato')?.value || '';
-  let filtered = ncCache.filter(n => !statoFil || n.stato === statoFil);
-
-  const tbody = document.getElementById('nc-tbody');
-  if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><div class="icon">✅</div><p>Nessuna non conformità</p></div></td></tr>';
-    return;
-  }
-  tbody.innerHTML = filtered.map(n => {
-    const ord = n.ordini ? n.ordini.codice + ' – ' + n.ordini.cliente : '—';
-    const fase = n.fasi ? n.fasi.nome : '—';
-    const segnalata = n.users ? `${n.users.nome} ${n.users.cognome}` : '—';
-    return `<tr>
-      <td>${ord}</td>
-      <td>${fase}</td>
-      <td>${n.descrizione.substring(0, 60)}${n.descrizione.length > 60 ? '…' : ''}</td>
-      <td>${segnalata}</td>
-      <td>${formatDate(n.segnalata_il)}</td>
-      <td><span class="badge badge-${n.stato}">${n.stato}</span></td>
-      <td>
-        ${n.stato !== 'chiusa'
-          ? `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="openNcModal('${n.id}')">Gestisci</button>`
-          : `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="openNcModal('${n.id}')">Dettaglio</button>`
-        }
-      </td>
-    </tr>`;
-  }).join('');
-}
-
-function openNcModal(ncId) {
-  const nc = ncCache.find(n => n.id === ncId);
-  if (!nc) return;
-  const fase = nc.fasi ? nc.fasi.nome : '—';
-  const segnalata = nc.users ? `${nc.users.nome} ${nc.users.cognome}` : '—';
-  const ord = nc.ordini ? `${nc.ordini.codice} – ${nc.ordini.cliente}` : '—';
-
-  document.getElementById('modal-nc-title').textContent = `NC – ${ord}`;
-  document.getElementById('modal-nc-body').innerHTML = `
-    <div style="margin-bottom:16px">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-        <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Ordine</div>${ord}</div>
-        <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Fase</div>${fase}</div>
-        <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Segnalata da</div>${segnalata}</div>
-        <div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Data</div>${formatDateTime(nc.segnalata_il)}</div>
-      </div>
-      <div class="note-box"><strong>Descrizione</strong>${nc.descrizione}</div>
-      ${nc.note_chiusura ? `<div class="note-box"><strong>Note Chiusura</strong>${nc.note_chiusura}</div>` : ''}
-    </div>
-    ${nc.stato !== 'chiusa' ? `
-    <div class="form-group">
-      <label>Note di chiusura *</label>
-      <textarea id="nc-note-chiusura" rows="3" placeholder="Descrivi come è stata gestita la NC…" style="resize:vertical">${nc.note_chiusura || ''}</textarea>
-    </div>` : ''}
-  `;
-
-  const footer = document.getElementById('modal-nc-footer');
-  if (nc.stato === 'chiusa') {
-    footer.innerHTML = `<button class="btn btn-secondary" onclick="closeModal('modal-nc')">Chiudi</button>`;
-  } else {
-    footer.innerHTML = `
-      <button class="btn btn-secondary" onclick="closeModal('modal-nc')">Annulla</button>
-      ${nc.stato === 'aperta' ? `<button class="btn btn-secondary" onclick="approvaNC('${ncId}')">Approva</button>` : ''}
-      <button class="btn btn-ok" onclick="chiudiNC('${ncId}')">Chiudi NC</button>
-    `;
-  }
-  document.getElementById('modal-nc').classList.add('open');
-}
-
-async function approvaNC(id) {
-  await sb.from('non_conformita').update({ stato: 'approvata', gestita_da: currentUserRow.id, gestita_il: new Date().toISOString() }).eq('id', id);
-  await sb.from('archivio_log').insert({
-    ordine_id: ncCache.find(n => n.id === id)?.ordine_id,
-    utente_id: currentUserRow.id,
-    azione: 'nc_chiusa',
-    dettaglio: { nc_id: id, azione: 'approvata' }
-  });
-  closeModal('modal-nc');
-  toast('NC approvata', 'ok');
-  await loadNc();
-  renderNcTable();
-}
-
-async function chiudiNC(id) {
-  const note = document.getElementById('nc-note-chiusura')?.value.trim();
-  if (!note) { toast('Inserisci le note di chiusura', 'err'); return; }
-  const { data, error } = await sb.rpc('risolvi_non_conformita', {
-    p_nc_id: id,
-    p_responsabile_id: currentUserRow.id,
-    p_note_chiusura: note
-  });
-  if (error || !data?.ok) {
-    toast(data?.errore || 'Errore durante la chiusura', 'err');
-    return;
-  }
-  closeModal('modal-nc');
-  toast('NC chiusa', 'ok');
-  await loadNc();
-  renderNcTable();
-  renderAndonPanel();
-}
-
 // ═══════════════════════════════════════════════
 // OPERATORI
 // ═══════════════════════════════════════════════
@@ -5307,7 +5060,6 @@ const _AZIONE_LABELS = {
   ordine_creato: 'Ordine creato',
   ordine_spedito: 'Ordine spedito',
   ordine_sospeso: 'Ordine sospeso',
-  nc_segnalata: 'Non conformità segnalata',
   fase_iniziata: 'Fase iniziata',
   fase_completata: 'Fase completata',
   fase_confermata_ricezione: 'Ricezione confermata',
@@ -5366,7 +5118,7 @@ function _leggiLogRiga(azione, dettaglio, fasiOrd) {
 }
 
 // ─── Genera PDF scheda ordine con jsPDF ───────────────────────────────────────
-function generaPDFOrdine(ordine, fasiOrd, fasiExtra, nc, logOrd, allegati) {
+function generaPDFOrdine(ordine, fasiOrd, fasiExtra, logOrd, allegati) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W = 190, L = 10;
@@ -5532,32 +5284,6 @@ function generaPDFOrdine(ordine, fasiOrd, fasiExtra, nc, logOrd, allegati) {
     }
   }
 
-  // Non conformità — sezione sempre presente (stesso motivo di Fasi Extra), e comunque
-  // la più probabilmente cercata in archivio
-  section('Non Conformità');
-  if (!nc || !nc.length) {
-    doc.setFontSize(9); doc.setFont('helvetica', 'italic'); doc.setTextColor(140, 140, 140);
-    doc.text('Nessuna', L, y); y += lineH;
-  } else {
-    for (const n of nc) {
-      checkPage();
-      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(180, 50, 50);
-      doc.text(`NC — ${n.stato || ''}  (${fmtDate(n.segnalata_il)})`, L, y); y += lineH;
-      doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
-      doc.text(`Segnalata da: ${_nomeOp(n.segnalata_da) || '—'}`, L, y); y += lineH * 0.85;
-      if (n.descrizione) {
-        doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-        doc.splitTextToSize(n.descrizione, W - 10).forEach(line => { checkPage(); doc.text(line, L + 4, y); y += lineH * 0.9; });
-      }
-      if (n.gestita_da || n.note_chiusura) {
-        doc.setFontSize(8.5); doc.setFont('helvetica', 'italic'); doc.setTextColor(80, 80, 80);
-        if (n.gestita_da) { checkPage(); doc.text(`Risolta da: ${_nomeOp(n.gestita_da) || n.gestita_da} (${fmtDate(n.gestita_il)})`, L + 4, y); y += lineH * 0.9; }
-        if (n.note_chiusura) doc.splitTextToSize(`Chiusura: ${n.note_chiusura}`, W - 10).forEach(line => { checkPage(); doc.text(line, L + 4, y); y += lineH * 0.9; });
-      }
-      y += 2;
-    }
-  }
-
   // Elenco foto — nome file + fase di appartenenza (le foto stanno nella cartella accanto al PDF)
   if (allegati && allegati.length) {
     section('Foto Allegate');
@@ -5679,7 +5405,6 @@ async function _esportaOrdiniConVerifica(ordini) {
         { data: fasiOrd },
         { data: logOrd },
         { data: fasiExtra },
-        { data: nc },
       ] = await Promise.all([
         sb.from('ordine_fasi')
           .select('id, fase_id, nome_custom, stato, operatore_id, tempo_accumulato_minuti, n_ordini_batch, iniziata_il, completata_il, note_operatore')
@@ -5690,9 +5415,6 @@ async function _esportaOrdiniConVerifica(ordini) {
         sb.from('fasi_ordine_extra')
           .select('id, nome, stato, operatore_id, ore_stimate_manuali, completata_il, note_operatore, iniziata_il, e_attesa_esterna')
           .eq('ordine_id', o.id).order('creato_il'),
-        sb.from('non_conformita')
-          .select('descrizione, stato, segnalata_da, segnalata_il, gestita_da, gestita_il, note_chiusura')
-          .eq('ordine_id', o.id).order('segnalata_il'),
       ]);
 
       const fasiIds = (fasiOrd || []).map(f => f.id);
@@ -5726,7 +5448,7 @@ async function _esportaOrdiniConVerifica(ordini) {
         }
 
         if (!scritturaFallita) {
-          const pdfBlob = generaPDFOrdine(o, fasiOrd, fasiExtra, nc, logOrd, allegati);
+          const pdfBlob = generaPDFOrdine(o, fasiOrd, fasiExtra, logOrd, allegati);
           const okPdf = await _scriviEVerifica(subDir, 'scheda-ordine.pdf', pdfBlob);
           if (!okPdf) scritturaFallita = 'verifica su disco fallita per scheda-ordine.pdf';
           else scrittiVerificati++;
@@ -5748,7 +5470,7 @@ async function _esportaOrdiniConVerifica(ordini) {
           scrittiVerificati++; idsVerificati.push(a.id);
         }
         if (!scritturaFallita) {
-          const pdfBlob = generaPDFOrdine(o, fasiOrd, fasiExtra, nc, logOrd, allegati);
+          const pdfBlob = generaPDFOrdine(o, fasiOrd, fasiExtra, logOrd, allegati);
           if (!pdfBlob.size) { scritturaFallita = 'PDF generato vuoto'; }
           else {
             zip.file('scheda-ordine.pdf', pdfBlob);
@@ -7068,12 +6790,12 @@ function statoFaseLabel(s) {
 }
 
 function logIcon(a) {
-  const m = { 'fase_iniziata': '▶', 'fase_completata': '✓', 'fase_riassegnata': '↔', 'fase_messa_in_attesa': '⏸', 'fase_ripresa': '↩', 'nc_segnalata': '⚠', 'nc_chiusa': '✓', 'ordine_sospeso': '⏸', 'ordine_riattivato': '▶', 'ordine_spedito': '📦', 'ordine_creato': '✚' };
+  const m = { 'fase_iniziata': '▶', 'fase_completata': '✓', 'fase_riassegnata': '↔', 'fase_messa_in_attesa': '⏸', 'fase_ripresa': '↩', 'ordine_sospeso': '⏸', 'ordine_riattivato': '▶', 'ordine_spedito': '📦', 'ordine_creato': '✚' };
   return m[a] || '●';
 }
 
 function logLabel(a) {
-  const m = { 'fase_iniziata': 'Fase iniziata', 'fase_completata': 'Fase completata', 'fase_riassegnata': 'Fase riassegnata', 'fase_messa_in_attesa': 'Fase messa in attesa', 'fase_ripresa': 'Fase ripresa', 'nc_segnalata': 'NC segnalata', 'nc_chiusa': 'NC chiusa', 'ordine_sospeso': 'Ordine sospeso', 'ordine_riattivato': 'Ordine riattivato', 'ordine_spedito': 'Ordine spedito', 'ordine_creato': 'Ordine creato' };
+  const m = { 'fase_iniziata': 'Fase iniziata', 'fase_completata': 'Fase completata', 'fase_riassegnata': 'Fase riassegnata', 'fase_messa_in_attesa': 'Fase messa in attesa', 'fase_ripresa': 'Fase ripresa', 'ordine_sospeso': 'Ordine sospeso', 'ordine_riattivato': 'Ordine riattivato', 'ordine_spedito': 'Ordine spedito', 'ordine_creato': 'Ordine creato' };
   return m[a] || a;
 }
 
@@ -7218,7 +6940,6 @@ async function loadKpi() {
   const [
     ordFasiArr,
     tuttiOrdiniArr,
-    tutteNcArr,
     fasiCfgArr,
     { count: speditiPeriodoCount }
   ] = await Promise.all([
@@ -7231,17 +6952,12 @@ async function loadKpi() {
       .select('id, codice, cliente, stato, priorita, struttura, tipo_prodotto, scadenza, creato_il, spedito_il, completato_il, eliminato')
       .neq('eliminato', true)
       .order('id')),
-    fetchAllRows(() => sb.from('non_conformita')
-      .select('id, stato, fase_id, segnalata_il, ordine_id')
-      .gte('segnalata_il', dal || '2000-01-01')
-      .order('id')),
     fetchAllRows(() => sb.from('fasi').select('id, nome').order('posizione').order('id')),
     // query dedicata: conta spediti nel periodo inclusi gli archiviati (eliminato=true)
     (() => { let q = sb.from('ordini').select('id', { count: 'exact', head: true }).eq('stato', 'spedito'); if (dal) q = q.gte('spedito_il', dal); return q; })(),
   ]);
 
   const tuttiOrdini = tuttiOrdiniArr;
-  const tutteNc = tutteNcArr;
   const fasiNomi = Object.fromEntries(fasiCfgArr.map(f => [f.id, f.nome]));
   const oggi = new Date().toISOString().split('T')[0];
 
@@ -7268,14 +6984,12 @@ async function loadKpi() {
   const attesaCorr = tuttiOrdini.filter(o => o.stato === 'attesa_spedizione').length;
   const speditiPeriodo = speditiPeriodoCount ?? 0;
   const inRitardo = tuttiOrdini.filter(o => o.stato === 'aperto' && o.scadenza && o.scadenza < oggi).length;
-  const ncAperte = tutteNc.filter(n => n.stato === 'aperta').length;
 
   document.getElementById('kpi-cards').innerHTML = `
     <div class="kpi-card"><div class="kpi-label">In produzione</div><div class="kpi-value">${aperti}</div><div class="kpi-sub">ordini aperti</div></div>
     <div class="kpi-card kpi-ok"><div class="kpi-label">Attesa corriere</div><div class="kpi-value">${attesaCorr}</div><div class="kpi-sub">pronti per spedizione</div></div>
     <div class="kpi-card kpi-ok"><div class="kpi-label">Spediti</div><div class="kpi-value">${speditiPeriodo}</div><div class="kpi-sub">nel periodo selezionato</div></div>
     <div class="kpi-card ${inRitardo > 0 ? 'kpi-alert' : ''}"><div class="kpi-label">In ritardo</div><div class="kpi-value">${inRitardo}</div><div class="kpi-sub">oltre la scadenza</div></div>
-    <div class="kpi-card ${ncAperte > 0 ? 'kpi-warn' : ''}"><div class="kpi-label">NC aperte</div><div class="kpi-value">${ncAperte}</div><div class="kpi-sub">non conformità attive</div></div>
     <div class="kpi-card"><div class="kpi-label">Tempo ciclo medio</div><div class="kpi-value">${tmCiclo ? formatOre(tmCiclo) : '—'}</div><div class="kpi-sub">ore lavorative/ordine</div></div>
   `;
 
@@ -7365,21 +7079,6 @@ async function loadKpi() {
       const badge = i === 0 ? '' : pct > 0 ? `<span style="color:var(--alert);font-size:10px">+${pct}%</span>` : `<span style="color:var(--ok);font-size:10px">${pct}%</span>`;
       return `<tr><td>${strutturaLabel(r.s)}</td><td style="text-align:center">${r.count}</td><td style="font-family:'DM Mono',monospace">${formatOre(r.media)}</td><td>${badge}</td></tr>`;
     }).join('') + `</tbody></table>` : '<div class="kpi-empty">Nessun dato</div>';
-
-  // ── NC PER FASE ──
-  const ncFase = {};
-  tutteNc.forEach(n => { if (n.fase_id) ncFase[n.fase_id] = (ncFase[n.fase_id]||0) + 1; });
-  const ncFaseArr = Object.entries(ncFase)
-    .map(([id, c]) => ({ nome: fasiNomi[parseInt(id)] || `Fase ${id}`, count: c }))
-    .sort((a,b) => b.count - a.count);
-  const maxNc = ncFaseArr[0]?.count || 1;
-  document.getElementById('kpi-nc-fase').innerHTML = ncFaseArr.length ? ncFaseArr.map(f =>
-    `<div class="kpi-bar-row">
-      <div class="kpi-bar-label" title="${escapeHtml(f.nome)}">${escapeHtml(f.nome)}</div>
-      <div class="kpi-bar-track"><div class="kpi-bar-fill" style="width:${Math.round(f.count/maxNc*100)}%;background:var(--alert)"></div></div>
-      <div class="kpi-bar-val">${f.count} NC</div>
-    </div>`
-  ).join('') : '<div class="kpi-empty">Nessuna NC nel periodo</div>';
 
   // ── ORDINI IN RITARDO ──
   const ritardoList = tuttiOrdini
