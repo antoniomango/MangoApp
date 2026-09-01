@@ -652,7 +652,6 @@ async function showApp() {
     }
   }
 
-  localStorage.setItem('app-ultima-apertura', Date.now().toString());
   document.getElementById('login-screen').style.display = 'none';
   const app = document.getElementById('app-screen');
   app.style.display = 'flex';
@@ -1767,13 +1766,24 @@ async function renderFaseDetail(ordFaseId, ordineId) {
 
   document.getElementById('fase-det-body').innerHTML = bodyHtml;
 
-  // Foto allegate: fetch reale da DB ad ogni apertura (qualunque stato, qualunque operatore)
-  if (isOnline) {
-    const { data: allegati } = await sb.from('allegati')
+  // Foto allegate: fetch reale da DB ad ogni apertura (qualunque stato, qualunque operatore).
+  // Tre stati distinti, mai un vuoto muto: offline, errore di query, e "nessuna foto" sono
+  // informazioni diverse e l'operatore deve poterle distinguere — è per questo che prima
+  // non si fidava (vedi nota vault 2026-09-01-foto-tre-stati-distinti).
+  const fotoContainer = document.getElementById('foto-fase-container');
+  if (!isOnline) {
+    if (fotoContainer) fotoContainer.innerHTML = `<div class="note-box" style="border-color:var(--warn)">📵 Foto non consultabili senza connessione — quelle già caricate sono al sicuro.</div>`;
+  } else {
+    const { data: allegati, error: erroreAllegati } = await sb.from('allegati')
       .select('id, url_file, caricato_da')
       .eq('ordine_fase_id', ordFaseId);
-    if (allegati?.length) {
+    if (erroreAllegati) {
+      console.error('Elenco foto:', erroreAllegati);
+      if (fotoContainer) fotoContainer.innerHTML = `<div class="note-box" style="border-color:var(--alert)">⚠ Impossibile caricare l'elenco foto — riprova.</div>`;
+    } else if (allegati?.length) {
       await renderFotoFase(allegati, false);
+    } else if (fotoContainer) {
+      fotoContainer.innerHTML = `<div class="note-box" style="color:var(--muted)">Nessuna foto allegata.</div>`;
     }
   }
 }
@@ -2473,15 +2483,23 @@ async function loadFaseMediaMinuti() {
 // ═══════════════════════════════════════════════
 async function loadNotificheOp() {
   if (!isOnline || !currentUser) return;
-  const { data } = await sb.from('notifiche')
-    .select('*').eq('destinatario_id', currentUser.id)
-    .order('creata_il', { ascending: false }).limit(30);
+  const [{ data }, { count }] = await Promise.all([
+    sb.from('notifiche')
+      .select('*').eq('destinatario_id', currentUser.id)
+      .order('creata_il', { ascending: false }).limit(30),
+    // Conteggio reale delle non lette, non le 30 righe della lista: il vecchio filtro
+    // su "app-ultima-apertura" confrontava creata_il con un timestamp scritto in showApp()
+    // PRIMA di questa chiamata, nella stessa apertura — quindi quasi nessuna notifica
+    // pregressa poteva mai risultare "dopo" quel timestamp e il badge restava a 0
+    // qualunque fosse l'arretrato reale (visto con 343 non lette accumulate di notte).
+    sb.from('notifiche')
+      .select('id', { count: 'exact', head: true })
+      .eq('destinatario_id', currentUser.id).eq('letta', false),
+  ]);
   const notifiche = data || [];
   window._notificheOp = notifiche;
 
-  // Mostra badge solo per notifiche arrivate DOPO l'ultima apertura dell'app
-  const ultimaApertura = parseInt(localStorage.getItem('app-ultima-apertura') || '0');
-  const unread = notifiche.filter(n => !n.letta && new Date(n.creata_il).getTime() > ultimaApertura).length;
+  const unread = count || 0;
   const badge = document.getElementById('notif-badge-op');
   if (badge) {
     badge.textContent = unread;
