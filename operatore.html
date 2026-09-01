@@ -2300,18 +2300,24 @@ function _renderFotoAccumulate() {
 // vecchio comportamento (input file) in ogni caso: chiave assente, valore non 'true', rete
 // assente in fase di lettura, o getUserMedia stesso non disponibile/negato.
 
-// BLOCCANTE — segnalato, non risolto qui: config_sistema.config_sistema_select è una policy
-// RLS `authenticated`-only; il client operatore non passa mai da Supabase Auth (PIN +
-// session_token), quindi gira come `anon` e non può leggere questa tabella (verificato con
-// `SET ROLE anon; SELECT * FROM config_sistema;` -> 0 righe). Finché non si decide come
-// esporre in lettura questa singola chiave (RPC dedicata, consigliato, oppure allargare la
-// policy — sconsigliato, esporrebbe anche le altre chiavi di config_sistema), il flag resta
-// forzato a false: comportamento attuale, come vuole la regola "fallisce verso il vecchio".
+// config_sistema.config_sistema_select è una policy RLS `authenticated`-only; l'operatore
+// (PIN + session_token) gira sempre come `anon` e non può leggere la tabella direttamente
+// (verificato con `SET ROLE anon; SELECT * FROM config_sistema;` -> 0 righe). Risolto con una
+// RPC dedicata a zero argomenti, `fotocamera_interna_attiva()`, SECURITY DEFINER, che legge
+// solo questa chiave e restituisce SEMPRE un boolean non nullo (default false su qualunque
+// imprevisto) — non una funzione generica "leggi qualunque chiave", apposta: non deve poter
+// esporre altro da config_sistema col tempo. Grant espliciti a anon e authenticated, PUBLIC
+// revocato. Vedi nota vault 2026-09-01-fotocamera-interna-blocco-lettura-flag (risolta).
 async function caricaFlagFotocameraInterna() {
-  fotocameraInternaAttiva = false;
-  // Quando la lettura sarà disponibile, sostituire la riga sopra con una lettura reale
-  // (es. `const {data} = await sb.rpc('leggi_config_pubblica', {p_chiave:'fotocamera_interna_attiva'})`)
-  // avvolta in try/catch, fail-safe false su qualunque errore — mai il contrario.
+  fotocameraInternaAttiva = false; // fail-safe: se qualunque riga sotto non viene raggiunta, resta così
+  try {
+    const { data, error } = await sb.rpc('fotocamera_interna_attiva');
+    if (error) { console.warn('Flag fotocamera interna non leggibile, uso il comportamento attuale:', error); return; }
+    fotocameraInternaAttiva = data === true;
+  } catch (e) {
+    console.warn('Flag fotocamera interna: eccezione, uso il comportamento attuale:', e);
+    fotocameraInternaAttiva = false;
+  }
 }
 
 let _camStream = null;
