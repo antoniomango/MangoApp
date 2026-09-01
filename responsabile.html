@@ -2128,14 +2128,21 @@ async function loadOperatori() {
 }
 
 async function loadNotifiche() {
-  const { data } = await sb.from('notifiche')
-    .select('*, ordini(codice)')
-    .eq('destinatario_id', currentUserRow?.id)
-    .order('creata_il', { ascending: false })
-    .limit(50);
+  const [{ data }, { count }] = await Promise.all([
+    sb.from('notifiche')
+      .select('*, ordini(codice)')
+      .eq('destinatario_id', currentUserRow?.id)
+      .order('creata_il', { ascending: false })
+      .limit(50),
+    // Conteggio reale delle non lette — il badge non può derivare da notificheCache,
+    // che è troncata a 50 righe: con più di 50 non lette il badge sottostimerebbe.
+    sb.from('notifiche')
+      .select('id', { count: 'exact', head: true })
+      .eq('destinatario_id', currentUserRow?.id).eq('letta', false),
+  ]);
 
   notificheCache = data || [];
-  const unread = notificheCache.filter(n => !n.letta).length;
+  const unread = count || 0;
   const badge = document.getElementById('notif-badge');
   if (unread > 0) {
     badge.textContent = unread;
