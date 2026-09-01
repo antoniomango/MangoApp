@@ -177,6 +177,23 @@ textarea:focus { border-color: var(--wood); }
 #lightbox img { max-width:94vw; max-height:80vh; border-radius:10px; object-fit:contain; }
 #lb-counter { color:#fff; font-size:13px; margin-top:12px; opacity:.7; }
 #lb-close { position:absolute; top:16px; right:20px; font-size:28px; color:#fff; cursor:pointer; line-height:1; }
+
+/* ── FOTOCAMERA INTERNA (getUserMedia) ── */
+#foto-cam-modal { display:none; position:fixed; inset:0; z-index:10000; background:#000; flex-direction:column; }
+#foto-cam-modal.open { display:flex; }
+#foto-cam-bar { display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#111; flex:0 0 auto; }
+#foto-cam-bar .btn { width:auto; padding:8px 14px; font-size:13px; }
+#foto-cam-count { color:#fff; font-size:13px; }
+#foto-cam-video { width:100%; flex:1 1 auto; min-height:0; object-fit:cover; background:#000; }
+#foto-cam-canvas { display:none; }
+#foto-cam-strip { display:flex; gap:8px; overflow-x:auto; padding:8px 10px; background:#111; min-height:52px; flex:0 0 auto; -webkit-overflow-scrolling:touch; }
+#foto-cam-strip .thumb-wrap { position:relative; flex:0 0 auto; }
+#foto-cam-strip img { width:52px; height:52px; object-fit:cover; border-radius:6px; border:1px solid #444; display:block; }
+#foto-cam-strip .del-btn { position:absolute; top:-6px; right:-6px; background:rgba(0,0,0,.85); color:#fff; border:none; border-radius:50%; width:20px; height:20px; font-size:11px; cursor:pointer; line-height:1; padding:0; }
+#foto-cam-shutter-row { display:flex; justify-content:center; align-items:center; padding:14px; background:#111; flex:0 0 auto; }
+#foto-cam-btn-scatta { width:64px; height:64px; border-radius:50%; background:#fff; border:4px solid #999; cursor:pointer; padding:0; }
+#foto-cam-btn-scatta:active { background:#ccc; }
+#foto-cam-progress { display:none; color:#fff; text-align:center; padding:6px; background:#111; font-size:13px; flex:0 0 auto; }
 #lb-prev, #lb-next { position:absolute; top:50%; transform:translateY(-50%); font-size:36px; color:#fff; cursor:pointer; padding:10px 18px; user-select:none; }
 #lb-prev { left:4px; }
 #lb-next { right:4px; }
@@ -361,8 +378,8 @@ textarea:focus { border-color: var(--wood); }
           </div>
           <div class="form-group">
             <label>Foto (opzionale)</label>
-            <label class="upload-btn" for="nc-foto-input">📷 Allega foto</label>
-            <input type="file" id="nc-foto-input" accept="image/*" style="display:none" onchange="previewNcFoto(this)">
+            <label class="upload-btn" onclick="onClickAllegaFoto('nc')">📷 Allega foto</label>
+            <input type="file" id="nc-foto-input" accept="image/*" multiple style="display:none" onchange="previewNcFoto(this)">
             <div id="nc-foto-preview"></div>
           </div>
           <button class="btn btn-alert" onclick="inviaNC()">⚠️ Invia Segnalazione</button>
@@ -427,6 +444,22 @@ textarea:focus { border-color: var(--wood); }
   <div id="lb-counter"></div>
 </div>
 
+<!-- FOTOCAMERA INTERNA -->
+<div id="foto-cam-modal">
+  <div id="foto-cam-bar">
+    <button type="button" class="btn btn-secondary" onclick="chiudiFotocameraInterna()">✕ Chiudi</button>
+    <span id="foto-cam-count">0 scatti</span>
+    <button type="button" class="btn btn-ok" id="foto-cam-btn-carica" onclick="caricaScattiInterni()" disabled>Carica tutte</button>
+  </div>
+  <video id="foto-cam-video" playsinline muted autoplay></video>
+  <canvas id="foto-cam-canvas"></canvas>
+  <div id="foto-cam-strip"></div>
+  <div id="foto-cam-shutter-row">
+    <button type="button" id="foto-cam-btn-scatta" onclick="scattaFotoInterna()" aria-label="Scatta foto"></button>
+  </div>
+  <div id="foto-cam-progress"></div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -447,6 +480,9 @@ let sessionToken = null; // session_token UUID da verifica_pin
 let fasi = [];
 let ordiniCache = [];
 let isOnline = navigator.onLine;
+// Fotocamera interna (Voce 5, 2026-09-01): fail-safe a false finché la lettura del flag
+// server-side non è risolta — vedi caricaFlagFotocameraInterna() più sotto.
+let fotocameraInternaAttiva = false;
 let currentOrdineId = null;
 let currentFaseDetId = null; // ordine_fasi.id
 let faseMediaMinutiMap = {};
@@ -1680,7 +1716,7 @@ async function renderFaseDetail(ordFaseId, ordineId) {
         </div>
         <div class="form-group">
           <label>Foto (opzionale)</label>
-          <label class="upload-btn" for="fase-foto-input">📷 Scatta/allega foto (anche più di una)</label>
+          <label class="upload-btn" onclick="onClickAllegaFoto('fase','${ordFaseId}','${ordineId}')">📷 Scatta/allega foto (anche più di una)</label>
           <input type="file" id="fase-foto-input" accept="image/*" multiple style="display:none" onchange="previewFaseFoto(this)">
           <div class="foto-preview" id="fase-foto-preview"></div>
         </div>
@@ -2208,12 +2244,16 @@ async function eliminaFotoSelezionate() {
 function previewNcFoto(input) {
   const el = document.getElementById('nc-foto-preview');
   el.innerHTML = '';
+  _ncFotoInternaPath = null; // una nuova selezione da input file sostituisce quella della fotocamera interna
   for (const file of input.files) {
     const img = document.createElement('img');
     img.className = 'foto-thumb';
     img.src = URL.createObjectURL(file);
     el.appendChild(img);
   }
+  // Limitazione dello schema (non di questo fix): non_conformita ha un solo campo foto_url —
+  // anche selezionandone più d'una dalla galleria, inviaNC() allega solo la prima.
+  if (input.files.length > 1) toast('Verrà allegata solo la prima foto: una segnalazione ha un solo campo foto', 'err');
 }
 
 function previewFaseFoto(input) {
@@ -2252,6 +2292,232 @@ function _renderFotoAccumulate() {
   }
 }
 
+// ═══════════════════════════════════════════════
+// FOTOCAMERA INTERNA (getUserMedia) — Voce 5, 2026-09-01
+// ═══════════════════════════════════════════════
+// Requisito: mai l'intent della fotocamera di sistema (riempirebbe la galleria personale
+// degli operatori). Dietro un interruttore server-side (config_sistema), difetto verso il
+// vecchio comportamento (input file) in ogni caso: chiave assente, valore non 'true', rete
+// assente in fase di lettura, o getUserMedia stesso non disponibile/negato.
+
+// BLOCCANTE — segnalato, non risolto qui: config_sistema.config_sistema_select è una policy
+// RLS `authenticated`-only; il client operatore non passa mai da Supabase Auth (PIN +
+// session_token), quindi gira come `anon` e non può leggere questa tabella (verificato con
+// `SET ROLE anon; SELECT * FROM config_sistema;` -> 0 righe). Finché non si decide come
+// esporre in lettura questa singola chiave (RPC dedicata, consigliato, oppure allargare la
+// policy — sconsigliato, esporrebbe anche le altre chiavi di config_sistema), il flag resta
+// forzato a false: comportamento attuale, come vuole la regola "fallisce verso il vecchio".
+async function caricaFlagFotocameraInterna() {
+  fotocameraInternaAttiva = false;
+  // Quando la lettura sarà disponibile, sostituire la riga sopra con una lettura reale
+  // (es. `const {data} = await sb.rpc('leggi_config_pubblica', {p_chiave:'fotocamera_interna_attiva'})`)
+  // avvolta in try/catch, fail-safe false su qualunque errore — mai il contrario.
+}
+
+let _camStream = null;
+let _camScatti = [];       // [{ blob, url, ok: null|true|false }]
+let _camContesto = null;   // { tipo:'fase'|'nc', ordFaseId, ordineId }
+let _ncFotoInternaPath = null; // path storage già caricato per la foto NC (fotocamera interna)
+const FOTO_CAM_MAX_LATO = 1800;
+const FOTO_CAM_QUALITA = 0.8;
+const FOTO_CAM_AVVISO_SCATTI = 20;
+
+function _camStopTracks() {
+  if (_camStream) { _camStream.getTracks().forEach(t => t.stop()); _camStream = null; }
+}
+
+// Ferma la fotocamera se la pagina va in background (spia accesa + consumo batteria altrimenti
+// inosservati fino al reclamo dell'operatore) e alla chiusura/cambio scheda.
+document.addEventListener('visibilitychange', () => { if (document.hidden) _camStopTracks(); });
+window.addEventListener('pagehide', _camStopTracks);
+
+function onClickAllegaFoto(tipo, ordFaseId, ordineId) {
+  if (tipo === 'nc') {
+    // Il form NC è markup statico (non un template per-fase): l'ordine selezionato si legge
+    // dal <select> al momento del tocco, non può arrivare come parametro fisso nell'onclick.
+    ordineId = document.getElementById('nc-ordine-sel')?.value || null;
+    if (!ordineId) { toast('Seleziona prima l\'ordine', 'err'); return; }
+  }
+  if (!fotocameraInternaAttiva) { _apriRipiegoInputFile(tipo); return; }
+  apriFotocameraInterna(tipo, ordFaseId, ordineId);
+}
+
+function _apriRipiegoInputFile(tipo) {
+  document.getElementById(tipo === 'nc' ? 'nc-foto-input' : 'fase-foto-input')?.click();
+}
+
+async function apriFotocameraInterna(tipo, ordFaseId, ordineId) {
+  // getUserMedia deve partire nello STESSO gesto dell'utente (tocco su "Allega foto"): nessun
+  // await prima di questa riga. Su iOS Safari una richiesta scollegata dal gesto viene negata.
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } },
+      audio: false
+    });
+  } catch (e) {
+    console.warn('Fotocamera interna non disponibile:', e);
+    toast('Fotocamera non disponibile: le foto andranno nella galleria del telefono', 'err');
+    _apriRipiegoInputFile(tipo);
+    return;
+  }
+  _camStream = stream;
+  _camScatti = [];
+  _camContesto = { tipo, ordFaseId, ordineId };
+  const video = document.getElementById('foto-cam-video');
+  video.srcObject = stream;
+  document.getElementById('foto-cam-modal').classList.add('open');
+  _renderStripFotocamera();
+}
+
+function scattaFotoInterna() {
+  const video = document.getElementById('foto-cam-video');
+  const canvas = document.getElementById('foto-cam-canvas');
+  if (!video.videoWidth) return; // stream non ancora pronto
+  const scala = Math.min(1, FOTO_CAM_MAX_LATO / Math.max(video.videoWidth, video.videoHeight));
+  canvas.width = Math.round(video.videoWidth * scala);
+  canvas.height = Math.round(video.videoHeight * scala);
+  canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+  canvas.toBlob(blob => {
+    if (!blob) { toast('Scatto non riuscito, riprova', 'err'); return; }
+    _camScatti.push({ blob, url: URL.createObjectURL(blob), ok: null });
+    _renderStripFotocamera();
+    if (_camScatti.length === FOTO_CAM_AVVISO_SCATTI) {
+      toast(`${FOTO_CAM_AVVISO_SCATTI} scatti in memoria — su telefoni con poca memoria può rallentare`, 'err');
+    }
+  }, 'image/jpeg', FOTO_CAM_QUALITA);
+  // Canvas azzerato subito dopo l'estrazione del Blob compresso: nessuna immagine a piena
+  // risoluzione resta in memoria oltre il singolo frame appena catturato (vedi C.4 — iOS
+  // Safari scarica le schede in background in modo aggressivo, un accumulo di canvas a piena
+  // risoluzione rischia di far perdere gli scatti appena presi).
+  canvas.width = 0; canvas.height = 0;
+}
+
+function _renderStripFotocamera() {
+  const strip = document.getElementById('foto-cam-strip');
+  strip.innerHTML = '';
+  _camScatti.forEach((s, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'thumb-wrap';
+    const img = document.createElement('img');
+    img.src = s.url;
+    img.style.outline = s.ok === false ? '2px solid var(--alert)' : s.ok === true ? '2px solid var(--ok)' : 'none';
+    const btn = document.createElement('button');
+    btn.className = 'del-btn';
+    btn.textContent = '✕';
+    btn.onclick = () => { URL.revokeObjectURL(s.url); _camScatti.splice(i, 1); _renderStripFotocamera(); };
+    wrap.appendChild(img); wrap.appendChild(btn);
+    strip.appendChild(wrap);
+  });
+  document.getElementById('foto-cam-count').textContent = `${_camScatti.length} scatt${_camScatti.length === 1 ? 'o' : 'i'}`;
+  document.getElementById('foto-cam-btn-carica').disabled = _camScatti.length === 0 || !isOnline;
+}
+
+function chiudiFotocameraInterna() {
+  _camStopTracks();
+  document.getElementById('foto-cam-modal').classList.remove('open');
+  const tipo = _camContesto?.tipo;
+  const ordFaseId = _camContesto?.ordFaseId, ordineId = _camContesto?.ordineId;
+  _camScatti.forEach(s => URL.revokeObjectURL(s.url));
+  _camScatti = [];
+  _camContesto = null;
+  // Le foto caricate con la fotocamera interna sono già allegate alla fase in questo punto
+  // (caricaScattiInterni le carica subito, non le accoda) — riallinea la sezione "Foto
+  // allegate" già visibile così l'operatore vede la conferma senza dover riaprire la fase.
+  if (tipo === 'fase' && ordFaseId) renderFotoFaseSeAperta(ordFaseId);
+}
+
+async function renderFotoFaseSeAperta(ordFaseId) {
+  const container = document.getElementById('foto-fase-container');
+  if (!container || !isOnline) return;
+  const { data: allegati, error } = await sb.from('allegati').select('id, url_file, caricato_da').eq('ordine_fase_id', ordFaseId);
+  if (!error && allegati?.length) await renderFotoFase(allegati, false);
+}
+
+async function caricaScattiInterni() {
+  if (!_camContesto) return;
+  if (!isOnline) { toast('Non disponibile offline — resta qui, riprova quando torna la connessione. Nessuno scatto è stato perso.', 'err'); return; }
+  const { tipo, ordFaseId, ordineId } = _camContesto;
+
+  let daProcessare = _camScatti.filter(s => s.ok !== true);
+  if (tipo === 'nc' && daProcessare.length > 1) {
+    toast('Verrà allegata solo la prima foto: una segnalazione ha un solo campo foto', 'err');
+    daProcessare = daProcessare.slice(0, 1);
+  }
+  if (!daProcessare.length) return;
+
+  const progress = document.getElementById('foto-cam-progress');
+  progress.style.display = 'block';
+  let fatte = 0, riuscite = 0;
+
+  for (const s of daProcessare) {
+    fatte++;
+    progress.textContent = `Caricamento ${fatte}/${daProcessare.length}...`;
+    const ok = await _caricaScattoInterno(s, tipo, ordFaseId, ordineId);
+    s.ok = ok;
+    if (ok) riuscite++;
+  }
+
+  progress.style.display = 'none';
+  _renderStripFotocamera();
+
+  if (tipo === 'nc' && _ncFotoInternaPath && daProcessare[0].ok) {
+    const el = document.getElementById('nc-foto-preview');
+    if (el) {
+      el.innerHTML = '';
+      const img = document.createElement('img');
+      img.className = 'foto-thumb';
+      // URL indipendente sullo stesso Blob: quello di _camScatti[i].url viene revocato alla
+      // chiusura del modal fotocamera, questo deve sopravvivere nell'anteprima NC.
+      img.src = URL.createObjectURL(daProcessare[0].blob);
+      el.appendChild(img);
+    }
+  }
+
+  if (riuscite < daProcessare.length) {
+    toast(`Caricate ${riuscite}/${daProcessare.length} — le altre restano qui, premi di nuovo "Carica tutte" per ritentare senza riscattare`, 'err');
+  } else {
+    toast(tipo === 'fase' ? `${riuscite} foto caricate` : 'Foto pronta per l\'invio', 'ok');
+    if (tipo === 'nc') chiudiFotocameraInterna(); // una sola foto per NC: fatto, si torna al form
+  }
+}
+
+// Carica un singolo scatto tramite la stessa edge function allegato-upload già usata dal
+// percorso input-file — nessuna nuova autorizzazione, nessuna modifica alla funzione.
+// Per le foto di fase: allegata subito con salva_allegato (non serve attendere il
+// completamento della fase, esattamente come già fa oggi il caricamento da input file dentro
+// completaFase()). Per NC: solo upload su storage, il path viene passato a inviaNC() più
+// tardi — la riga in non_conformita non esiste ancora a questo punto.
+async function _caricaScattoInterno(scatto, tipo, ordFaseId, ordineId) {
+  try {
+    const ext = 'jpg';
+    const { data: firma, error: eFirma } = await sb.functions.invoke('allegato-upload', {
+      body: {
+        p_user_id: currentUser.id,
+        p_session_token: sessionToken,
+        tipo: tipo === 'nc' ? 'nc' : 'fase',
+        ordine_id: ordineId,
+        ordine_fase_id: tipo === 'fase' ? ordFaseId : undefined,
+        estensione: ext,
+        indice: 1
+      }
+    });
+    if (eFirma || !firma?.ok) { console.error('Firma upload scatto interno:', eFirma || firma?.errore); return false; }
+    const { error: upErr } = await sb.storage.from('allegati-fasi').uploadToSignedUrl(firma.path, firma.token, scatto.blob);
+    if (upErr) { console.error('Upload scatto interno:', upErr); return false; }
+    if (tipo === 'fase') {
+      const { data: insData } = await sb.rpc('salva_allegato', { p_ordine_fase_id: ordFaseId, p_url_file: firma.path, p_operatore_id: currentUser.id, p_session_token: sessionToken });
+      if (!insData?.ok) { console.error('salva_allegato scatto interno: non autorizzato o errore'); return false; }
+    } else {
+      _ncFotoInternaPath = firma.path;
+    }
+    return true;
+  } catch (e) {
+    console.error('Caricamento scatto interno:', e);
+    return false;
+  }
+}
+
 // ── LIGHTBOX ──
 let _lbUrls = [], _lbIdx = 0;
 function lbOpen(urls, idx) {
@@ -2282,27 +2548,35 @@ async function inviaNC() {
   if (!desc) { toast('Inserisci la descrizione', 'err'); return; }
 
   let fotoUrl = null;
-  const fotoInput = document.getElementById('nc-foto-input');
-  if (fotoInput?.files?.length && isOnline) {
-    const file = fotoInput.files[0];
-    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-    const { data: firma, error: eFirma } = await sb.functions.invoke('allegato-upload', {
-      body: {
-        p_user_id: currentUser.id,
-        p_session_token: sessionToken,
-        tipo: 'nc',
-        ordine_id: ordineId,
-        estensione: ext,
-        indice: 1
+  if (_ncFotoInternaPath) {
+    // Foto già caricata su storage dalla fotocamera interna (caricaScattiInterni) — non
+    // ricaricare, usa direttamente il path ottenuto allora.
+    fotoUrl = _ncFotoInternaPath;
+  } else {
+    const fotoInput = document.getElementById('nc-foto-input');
+    if (fotoInput?.files?.length && isOnline) {
+      // Nota: anche con "multiple" sull'input, solo il primo file viene caricato — una
+      // segnalazione ha un solo campo foto_url. Limitazione dello schema, non di questo fix.
+      const file = fotoInput.files[0];
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const { data: firma, error: eFirma } = await sb.functions.invoke('allegato-upload', {
+        body: {
+          p_user_id: currentUser.id,
+          p_session_token: sessionToken,
+          tipo: 'nc',
+          ordine_id: ordineId,
+          estensione: ext,
+          indice: 1
+        }
+      });
+      if (eFirma || !firma?.ok) {
+        console.error('Firma upload foto NC:', eFirma || firma?.errore);
+        toast('Errore upload foto NC', 'err');
+      } else {
+        const { error: upErr } = await sb.storage.from('allegati-fasi').uploadToSignedUrl(firma.path, firma.token, file);
+        if (upErr) { console.error('Upload foto NC:', upErr); toast('Errore upload foto NC', 'err'); }
+        else fotoUrl = firma.path;
       }
-    });
-    if (eFirma || !firma?.ok) {
-      console.error('Firma upload foto NC:', eFirma || firma?.errore);
-      toast('Errore upload foto NC', 'err');
-    } else {
-      const { error: upErr } = await sb.storage.from('allegati-fasi').uploadToSignedUrl(firma.path, firma.token, file);
-      if (upErr) { console.error('Upload foto NC:', upErr); toast('Errore upload foto NC', 'err'); }
-      else fotoUrl = firma.path;
     }
   }
 
@@ -2334,6 +2608,7 @@ async function inviaNC() {
   document.getElementById('nc-ordine-sel').value = '';
   document.getElementById('nc-descrizione').value = '';
   document.getElementById('nc-foto-preview').innerHTML = '';
+  _ncFotoInternaPath = null;
   showScreen('home');
 }
 
@@ -2553,6 +2828,7 @@ function toast(msg, type = '') {
 // ═══════════════════════════════════════════════
 async function start() {
   await initDB();
+  await caricaFlagFotocameraInterna();
   if (new URLSearchParams(window.location.search).get('logout') === '1') {
     await cacheSet('current-user', null);
     history.replaceState({}, '', 'operatore.html');
