@@ -198,9 +198,6 @@ textarea:focus { border-color: var(--wood); }
 #lb-prev { left:4px; }
 #lb-next { right:4px; }
 
-/* ── NC FORM ── */
-.nc-form select { margin-bottom: 12px; }
-
 /* ── ATTIVITÀ ── */
 .attivita-item { padding: 14px 16px; border-bottom: 1px solid var(--border); }
 .attivita-item:last-child { border-bottom: none; }
@@ -326,9 +323,6 @@ textarea:focus { border-color: var(--wood); }
           <div class="empty-state"><div class="icon">📋</div><p>Caricamento…</p></div>
         </div>
 
-        <!-- NC rapido -->
-        <div class="section-title">Azioni rapide</div>
-        <button class="btn btn-alert" onclick="showScreen('nc')">⚠️ Segnala Non Conformità</button>
         <div id="queue-info" style="margin-top:12px;text-align:center;display:none">
           <span class="queue-badge" id="queue-count"></span>
           <span style="font-size:12px;color:var(--muted);margin-left:6px">azioni in coda offline</span>
@@ -356,34 +350,6 @@ textarea:focus { border-color: var(--wood); }
         <div class="page-title" id="fase-det-title"></div>
         <span class="badge" id="fase-det-badge"></span>
         <div id="fase-det-body" style="margin-top:16px"></div>
-      </div>
-    </div>
-
-    <!-- SEGNALA NC -->
-    <div class="screen" id="screen-nc">
-      <div style="padding:16px">
-        <div class="page-title">Segnala NC</div>
-        <div class="card" style="padding:16px">
-          <div class="form-group">
-            <label>Ordine *</label>
-            <select id="nc-ordine-sel"></select>
-          </div>
-          <div class="form-group">
-            <label>Fase *</label>
-            <select id="nc-fase-sel"></select>
-          </div>
-          <div class="form-group">
-            <label>Descrizione *</label>
-            <textarea id="nc-descrizione" placeholder="Descrivi il problema riscontrato…"></textarea>
-          </div>
-          <div class="form-group">
-            <label>Foto (opzionale)</label>
-            <label class="upload-btn" onclick="onClickAllegaFoto('nc')">📷 Allega foto</label>
-            <input type="file" id="nc-foto-input" accept="image/*" multiple style="display:none" onchange="previewNcFoto(this)">
-            <div id="nc-foto-preview"></div>
-          </div>
-          <button class="btn btn-alert" onclick="inviaNC()">⚠️ Invia Segnalazione</button>
-        </div>
       </div>
     </div>
 
@@ -418,10 +384,6 @@ textarea:focus { border-color: var(--wood); }
     <div class="nav-tab active" id="tab-home" onclick="showScreen('home')">
       <span class="tab-icon">🏠</span>
       <span class="tab-label">Home</span>
-    </div>
-    <div class="nav-tab" id="tab-nc" onclick="showScreen('nc')">
-      <span class="tab-icon">⚠️</span>
-      <span class="tab-label">NC</span>
     </div>
     <div class="nav-tab" id="tab-attivita" onclick="showScreen('attivita')">
       <span class="tab-icon">📊</span>
@@ -584,16 +546,6 @@ async function syncQueue() {
       } else if (item.type === 'completa_fase_extra') {
         const { data } = await sb.rpc('completa_fase_extra', { p_fase_extra_id: item.faseExtraId, p_operatore_id: currentUser.id, p_note: item.note, p_session_token: sessionToken });
         ok = data?.ok;
-      } else if (item.type === 'nc') {
-        const { data: ncR } = await sb.rpc('segnala_non_conformita', {
-          p_ordine_id: item.payload.ordine_id,
-          p_fase_id: item.payload.fase_id,
-          p_descrizione: item.payload.descrizione,
-          p_foto_url: item.payload.foto_url || null,
-          p_operatore_id: currentUser.id,
-          p_session_token: sessionToken
-        });
-        ok = ncR?.ok;
       }
       if (ok) await deleteQueued(item.id);
     } catch (e) { console.warn('sync error', e); }
@@ -823,7 +775,6 @@ function showScreen(name) {
   if (name === 'home') { loadOrdini().then(() => renderHome()); }
 
   else if (name === 'attivita') renderAttivita();
-  else if (name === 'nc') populateNcSelects();
   else if (name === 'notifiche') {
     // Richiedi permesso notifiche push (richiede gesto utente su iOS)
     richiediPermessoNotifiche();
@@ -1716,7 +1667,7 @@ async function renderFaseDetail(ordFaseId, ordineId) {
         </div>
         <div class="form-group">
           <label>Foto (opzionale)</label>
-          <label class="upload-btn" onclick="onClickAllegaFoto('fase','${ordFaseId}','${ordineId}')">📷 Scatta/allega foto (anche più di una)</label>
+          <label class="upload-btn" onclick="onClickAllegaFoto('${ordFaseId}','${ordineId}')">📷 Scatta/allega foto (anche più di una)</label>
           <input type="file" id="fase-foto-input" accept="image/*" multiple style="display:none" onchange="previewFaseFoto(this)">
           <div class="foto-preview" id="fase-foto-preview"></div>
         </div>
@@ -1724,7 +1675,6 @@ async function renderFaseDetail(ordFaseId, ordineId) {
         <button class="btn btn-ok" id="btn-completa-fase" style="margin-top:14px" onclick="completaFase('${ordFaseId}', '${ordineId}')">✓ Segna come completata</button>
         <button class="btn btn-secondary" style="margin-top:10px" onclick="mettiInAttesa('${ordFaseId}', '${ordineId}')">⏸ Metti in attesa</button>
         <button class="btn btn-alert" style="margin-top:10px;font-size:12px;opacity:0.8" onclick="annullaPresaInCarico('${ordFaseId}', '${ordineId}')">✕ Annulla presa in carico</button>
-        <button class="btn btn-alert" style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px;width:100%;text-align:left" onclick="document.getElementById('nc-section').scrollIntoView({behavior:'smooth'})">🚨 Segnala problema</button>
       </div>`;
   } else if (f.stato === 'in_corso' && !isMia && !sospeso) {
     const altriNomi = opMulti.filter(o => o.operatore_id !== currentUser.id)
@@ -1738,12 +1688,6 @@ async function renderFaseDetail(ordFaseId, ordineId) {
         <h4>Unisciti a questa fase</h4>
         <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Puoi affiancare ${escapeHtml(altriNomi || 'il collega')} senza togliergli la fase.</p>
         <button class="btn btn-primary" onclick="uniscitiAFase('${ordFaseId}', '${ordineId}')">+ Unisciti</button>
-      </div>`;
-  } else if (f.stato === 'bloccata') {
-    bodyHtml += `
-      <div class="azione-box" style="border-color:#FCA5A5;background:#FFF5F5">
-        <h4 style="color:#991B1B">🚨 Fase bloccata — problema segnalato</h4>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:0">Un operatore ha segnalato un problema su questa fase. Il responsabile deve intervenire prima che possa riprendere. Controlla la sezione Non Conformità per i dettagli.</p>
       </div>`;
   } else if (f.stato === 'in_attesa' && !sospeso) {
     const tipoGestione = f.fasi?.tipo_gestione || 'standard';
@@ -2109,20 +2053,8 @@ async function segnaSpedito(ordineId) {
 }
 
 // ═══════════════════════════════════════════════
-// NC
+// GESTIONE FOTO ALLEGATE (selezione + cancellazione selettiva)
 // ═══════════════════════════════════════════════
-async function populateNcSelects() {
-  const ordSel = document.getElementById('nc-ordine-sel');
-  ordSel.innerHTML = '<option value="">— Seleziona ordine —</option>' + ordiniCache.filter(o => o.stato === 'aperto').map(o => `<option value="${o.id}">${o.cliente} – ${o.codice || ''}</option>`).join('');
-  ordSel.onchange = () => {
-    const faseSel = document.getElementById('nc-fase-sel');
-    faseSel.innerHTML = '<option value="">— Seleziona fase —</option>' + fasi.map(f => `<option value="${f.id}">${f.id}. ${f.nome}</option>`).join('');
-  };
-  document.getElementById('nc-descrizione').value = '';
-  document.getElementById('nc-foto-preview').innerHTML = '';
-}
-
-// ── GESTIONE FOTO ALLEGATE (selezione + cancellazione selettiva) ──
 
 let _fotoSelezionate = new Set();
 // Foto accumulate per la fase correntemente aperta (reset su apertura nuova fase)
@@ -2241,21 +2173,6 @@ async function eliminaFotoSelezionate() {
   }
 }
 
-function previewNcFoto(input) {
-  const el = document.getElementById('nc-foto-preview');
-  el.innerHTML = '';
-  _ncFotoInternaPath = null; // una nuova selezione da input file sostituisce quella della fotocamera interna
-  for (const file of input.files) {
-    const img = document.createElement('img');
-    img.className = 'foto-thumb';
-    img.src = URL.createObjectURL(file);
-    el.appendChild(img);
-  }
-  // Limitazione dello schema (non di questo fix): non_conformita ha un solo campo foto_url —
-  // anche selezionandone più d'una dalla galleria, inviaNC() allega solo la prima.
-  if (input.files.length > 1) toast('Verrà allegata solo la prima foto: una segnalazione ha un solo campo foto', 'err');
-}
-
 function previewFaseFoto(input) {
   // Accumula i nuovi file a quelli già selezionati in precedenza
   for (const file of input.files) {
@@ -2322,8 +2239,7 @@ async function caricaFlagFotocameraInterna() {
 
 let _camStream = null;
 let _camScatti = [];       // [{ blob, url, ok: null|true|false }]
-let _camContesto = null;   // { tipo:'fase'|'nc', ordFaseId, ordineId }
-let _ncFotoInternaPath = null; // path storage già caricato per la foto NC (fotocamera interna)
+let _camContesto = null;   // { ordFaseId, ordineId }
 const FOTO_CAM_MAX_LATO = 1800;
 const FOTO_CAM_QUALITA = 0.8;
 const FOTO_CAM_AVVISO_SCATTI = 20;
@@ -2337,22 +2253,19 @@ function _camStopTracks() {
 document.addEventListener('visibilitychange', () => { if (document.hidden) _camStopTracks(); });
 window.addEventListener('pagehide', _camStopTracks);
 
-function onClickAllegaFoto(tipo, ordFaseId, ordineId) {
-  if (tipo === 'nc') {
-    // Il form NC è markup statico (non un template per-fase): l'ordine selezionato si legge
-    // dal <select> al momento del tocco, non può arrivare come parametro fisso nell'onclick.
-    ordineId = document.getElementById('nc-ordine-sel')?.value || null;
-    if (!ordineId) { toast('Seleziona prima l\'ordine', 'err'); return; }
-  }
-  if (!fotocameraInternaAttiva) { _apriRipiegoInputFile(tipo); return; }
-  apriFotocameraInterna(tipo, ordFaseId, ordineId);
+// Componente usato solo per le foto di fase — la segnalazione NC (e con essa il secondo uso
+// di questo componente) è stata rimossa il 2026-09-01, vedi nota vault
+// 2026-09-01-rimozione-non-conformita.
+function onClickAllegaFoto(ordFaseId, ordineId) {
+  if (!fotocameraInternaAttiva) { _apriRipiegoInputFile(); return; }
+  apriFotocameraInterna(ordFaseId, ordineId);
 }
 
-function _apriRipiegoInputFile(tipo) {
-  document.getElementById(tipo === 'nc' ? 'nc-foto-input' : 'fase-foto-input')?.click();
+function _apriRipiegoInputFile() {
+  document.getElementById('fase-foto-input')?.click();
 }
 
-async function apriFotocameraInterna(tipo, ordFaseId, ordineId) {
+async function apriFotocameraInterna(ordFaseId, ordineId) {
   // getUserMedia deve partire nello STESSO gesto dell'utente (tocco su "Allega foto"): nessun
   // await prima di questa riga. Su iOS Safari una richiesta scollegata dal gesto viene negata.
   let stream;
@@ -2364,12 +2277,12 @@ async function apriFotocameraInterna(tipo, ordFaseId, ordineId) {
   } catch (e) {
     console.warn('Fotocamera interna non disponibile:', e);
     toast('Fotocamera non disponibile: le foto andranno nella galleria del telefono', 'err');
-    _apriRipiegoInputFile(tipo);
+    _apriRipiegoInputFile();
     return;
   }
   _camStream = stream;
   _camScatti = [];
-  _camContesto = { tipo, ordFaseId, ordineId };
+  _camContesto = { ordFaseId, ordineId };
   const video = document.getElementById('foto-cam-video');
   video.srcObject = stream;
   document.getElementById('foto-cam-modal').classList.add('open');
@@ -2422,15 +2335,14 @@ function _renderStripFotocamera() {
 function chiudiFotocameraInterna() {
   _camStopTracks();
   document.getElementById('foto-cam-modal').classList.remove('open');
-  const tipo = _camContesto?.tipo;
-  const ordFaseId = _camContesto?.ordFaseId, ordineId = _camContesto?.ordineId;
+  const ordFaseId = _camContesto?.ordFaseId;
   _camScatti.forEach(s => URL.revokeObjectURL(s.url));
   _camScatti = [];
   _camContesto = null;
   // Le foto caricate con la fotocamera interna sono già allegate alla fase in questo punto
   // (caricaScattiInterni le carica subito, non le accoda) — riallinea la sezione "Foto
   // allegate" già visibile così l'operatore vede la conferma senza dover riaprire la fase.
-  if (tipo === 'fase' && ordFaseId) renderFotoFaseSeAperta(ordFaseId);
+  if (ordFaseId) renderFotoFaseSeAperta(ordFaseId);
 }
 
 async function renderFotoFaseSeAperta(ordFaseId) {
@@ -2443,13 +2355,9 @@ async function renderFotoFaseSeAperta(ordFaseId) {
 async function caricaScattiInterni() {
   if (!_camContesto) return;
   if (!isOnline) { toast('Non disponibile offline — resta qui, riprova quando torna la connessione. Nessuno scatto è stato perso.', 'err'); return; }
-  const { tipo, ordFaseId, ordineId } = _camContesto;
+  const { ordFaseId, ordineId } = _camContesto;
 
-  let daProcessare = _camScatti.filter(s => s.ok !== true);
-  if (tipo === 'nc' && daProcessare.length > 1) {
-    toast('Verrà allegata solo la prima foto: una segnalazione ha un solo campo foto', 'err');
-    daProcessare = daProcessare.slice(0, 1);
-  }
+  const daProcessare = _camScatti.filter(s => s.ok !== true);
   if (!daProcessare.length) return;
 
   const progress = document.getElementById('foto-cam-progress');
@@ -2459,7 +2367,7 @@ async function caricaScattiInterni() {
   for (const s of daProcessare) {
     fatte++;
     progress.textContent = `Caricamento ${fatte}/${daProcessare.length}...`;
-    const ok = await _caricaScattoInterno(s, tipo, ordFaseId, ordineId);
+    const ok = await _caricaScattoInterno(s, ordFaseId, ordineId);
     s.ok = ok;
     if (ok) riuscite++;
   }
@@ -2467,56 +2375,35 @@ async function caricaScattiInterni() {
   progress.style.display = 'none';
   _renderStripFotocamera();
 
-  if (tipo === 'nc' && _ncFotoInternaPath && daProcessare[0].ok) {
-    const el = document.getElementById('nc-foto-preview');
-    if (el) {
-      el.innerHTML = '';
-      const img = document.createElement('img');
-      img.className = 'foto-thumb';
-      // URL indipendente sullo stesso Blob: quello di _camScatti[i].url viene revocato alla
-      // chiusura del modal fotocamera, questo deve sopravvivere nell'anteprima NC.
-      img.src = URL.createObjectURL(daProcessare[0].blob);
-      el.appendChild(img);
-    }
-  }
-
   if (riuscite < daProcessare.length) {
     toast(`Caricate ${riuscite}/${daProcessare.length} — le altre restano qui, premi di nuovo "Carica tutte" per ritentare senza riscattare`, 'err');
   } else {
-    toast(tipo === 'fase' ? `${riuscite} foto caricate` : 'Foto pronta per l\'invio', 'ok');
-    if (tipo === 'nc') chiudiFotocameraInterna(); // una sola foto per NC: fatto, si torna al form
+    toast(`${riuscite} foto caricate`, 'ok');
   }
 }
 
 // Carica un singolo scatto tramite la stessa edge function allegato-upload già usata dal
 // percorso input-file — nessuna nuova autorizzazione, nessuna modifica alla funzione.
-// Per le foto di fase: allegata subito con salva_allegato (non serve attendere il
-// completamento della fase, esattamente come già fa oggi il caricamento da input file dentro
-// completaFase()). Per NC: solo upload su storage, il path viene passato a inviaNC() più
-// tardi — la riga in non_conformita non esiste ancora a questo punto.
-async function _caricaScattoInterno(scatto, tipo, ordFaseId, ordineId) {
+// Allegata subito con salva_allegato: non serve attendere il completamento della fase,
+// esattamente come già fa oggi il caricamento da input file dentro completaFase().
+async function _caricaScattoInterno(scatto, ordFaseId, ordineId) {
   try {
-    const ext = 'jpg';
     const { data: firma, error: eFirma } = await sb.functions.invoke('allegato-upload', {
       body: {
         p_user_id: currentUser.id,
         p_session_token: sessionToken,
-        tipo: tipo === 'nc' ? 'nc' : 'fase',
+        tipo: 'fase',
         ordine_id: ordineId,
-        ordine_fase_id: tipo === 'fase' ? ordFaseId : undefined,
-        estensione: ext,
+        ordine_fase_id: ordFaseId,
+        estensione: 'jpg',
         indice: 1
       }
     });
     if (eFirma || !firma?.ok) { console.error('Firma upload scatto interno:', eFirma || firma?.errore); return false; }
     const { error: upErr } = await sb.storage.from('allegati-fasi').uploadToSignedUrl(firma.path, firma.token, scatto.blob);
     if (upErr) { console.error('Upload scatto interno:', upErr); return false; }
-    if (tipo === 'fase') {
-      const { data: insData } = await sb.rpc('salva_allegato', { p_ordine_fase_id: ordFaseId, p_url_file: firma.path, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-      if (!insData?.ok) { console.error('salva_allegato scatto interno: non autorizzato o errore'); return false; }
-    } else {
-      _ncFotoInternaPath = firma.path;
-    }
+    const { data: insData } = await sb.rpc('salva_allegato', { p_ordine_fase_id: ordFaseId, p_url_file: firma.path, p_operatore_id: currentUser.id, p_session_token: sessionToken });
+    if (!insData?.ok) { console.error('salva_allegato scatto interno: non autorizzato o errore'); return false; }
     return true;
   } catch (e) {
     console.error('Caricamento scatto interno:', e);
@@ -2545,78 +2432,6 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowLeft') lbMove(-1);
   if (e.key === 'ArrowRight') lbMove(1);
 });
-
-async function inviaNC() {
-  const ordineId = document.getElementById('nc-ordine-sel').value;
-  const faseId = document.getElementById('nc-fase-sel').value;
-  const desc = document.getElementById('nc-descrizione').value.trim();
-  if (!ordineId || !faseId) { toast('Seleziona ordine e fase', 'err'); return; }
-  if (!desc) { toast('Inserisci la descrizione', 'err'); return; }
-
-  let fotoUrl = null;
-  if (_ncFotoInternaPath) {
-    // Foto già caricata su storage dalla fotocamera interna (caricaScattiInterni) — non
-    // ricaricare, usa direttamente il path ottenuto allora.
-    fotoUrl = _ncFotoInternaPath;
-  } else {
-    const fotoInput = document.getElementById('nc-foto-input');
-    if (fotoInput?.files?.length && isOnline) {
-      // Nota: anche con "multiple" sull'input, solo il primo file viene caricato — una
-      // segnalazione ha un solo campo foto_url. Limitazione dello schema, non di questo fix.
-      const file = fotoInput.files[0];
-      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-      const { data: firma, error: eFirma } = await sb.functions.invoke('allegato-upload', {
-        body: {
-          p_user_id: currentUser.id,
-          p_session_token: sessionToken,
-          tipo: 'nc',
-          ordine_id: ordineId,
-          estensione: ext,
-          indice: 1
-        }
-      });
-      if (eFirma || !firma?.ok) {
-        console.error('Firma upload foto NC:', eFirma || firma?.errore);
-        toast('Errore upload foto NC', 'err');
-      } else {
-        const { error: upErr } = await sb.storage.from('allegati-fasi').uploadToSignedUrl(firma.path, firma.token, file);
-        if (upErr) { console.error('Upload foto NC:', upErr); toast('Errore upload foto NC', 'err'); }
-        else fotoUrl = firma.path;
-      }
-    }
-  }
-
-  const payload = {
-    ordine_id: ordineId,
-    fase_id: parseInt(faseId),
-    descrizione: desc,
-    foto_url: fotoUrl,
-    segnalata_da: currentUser.id,
-    stato: 'aperta'
-  };
-
-  if (isOnline) {
-    const { data: ncData, error } = await sb.rpc('segnala_non_conformita', {
-      p_ordine_id: ordineId,
-      p_fase_id: parseInt(faseId),
-      p_descrizione: desc,
-      p_foto_url: fotoUrl,
-      p_operatore_id: currentUser.id,
-      p_session_token: sessionToken
-    });
-    if (error || !ncData?.ok) { toast('Errore: ' + (error?.message || ncData?.errore || ''), 'err'); return; }
-  } else {
-    await queueAction({ type: 'nc', payload });
-    await updateQueueBadge();
-  }
-
-  toast('NC segnalata', 'ok');
-  document.getElementById('nc-ordine-sel').value = '';
-  document.getElementById('nc-descrizione').value = '';
-  document.getElementById('nc-foto-preview').innerHTML = '';
-  _ncFotoInternaPath = null;
-  showScreen('home');
-}
 
 // ═══════════════════════════════════════════════
 // ATTIVITÀ PERSONALI
@@ -2795,7 +2610,7 @@ function renderNotificheOp() {
     el.innerHTML = '<div class="empty-state"><div class="icon">🔔</div><p>Nessuna notifica</p></div>';
     return;
   }
-  const icone = { ordine_creato: '📋', ordine_sospeso: '⏸', comunicazione: '📢', nc_segnalata: '⚠️', ordine_in_ritardo: '🔴', ordine_pronto_spedizione: '📦', fase_riassegnata: '🔄' };
+  const icone = { ordine_creato: '📋', ordine_sospeso: '⏸', comunicazione: '📢', ordine_in_ritardo: '🔴', ordine_pronto_spedizione: '📦', fase_riassegnata: '🔄' };
   el.innerHTML = notifiche.map(n => `
     <div style="display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);${n.letta ? '' : 'background:#FFFBF0;margin:0 -16px;padding:14px 16px'}">
       <div style="font-size:20px;flex-shrink:0">${icone[n.tipo] || '🔔'}</div>
