@@ -172,11 +172,6 @@ textarea:focus { border-color: var(--wood); }
 .btn-elimina-sel { width:100%; margin-top:10px; padding:11px; background:#EF4444; color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; }
 
 /* ── LIGHTBOX ── */
-#lightbox { display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,.92); flex-direction:column; align-items:center; justify-content:center; }
-#lightbox.open { display:flex; }
-#lightbox img { max-width:94vw; max-height:80vh; border-radius:10px; object-fit:contain; }
-#lb-counter { color:#fff; font-size:13px; margin-top:12px; opacity:.7; }
-#lb-close { position:absolute; top:16px; right:20px; font-size:28px; color:#fff; cursor:pointer; line-height:1; }
 
 /* ── FOTOCAMERA INTERNA (getUserMedia) ── */
 #foto-cam-modal { display:none; position:fixed; inset:0; z-index:10000; background:#000; flex-direction:column; }
@@ -194,9 +189,6 @@ textarea:focus { border-color: var(--wood); }
 #foto-cam-btn-scatta { width:64px; height:64px; border-radius:50%; background:#fff; border:4px solid #999; cursor:pointer; padding:0; }
 #foto-cam-btn-scatta:active { background:#ccc; }
 #foto-cam-progress { display:none; color:#fff; text-align:center; padding:6px; background:#111; font-size:13px; flex:0 0 auto; }
-#lb-prev, #lb-next { position:absolute; top:50%; transform:translateY(-50%); font-size:36px; color:#fff; cursor:pointer; padding:10px 18px; user-select:none; }
-#lb-prev { left:4px; }
-#lb-next { right:4px; }
 
 /* ── ATTIVITÀ ── */
 .attivita-item { padding: 14px 16px; border-bottom: 1px solid var(--border); }
@@ -397,15 +389,6 @@ textarea:focus { border-color: var(--wood); }
   </div>
 </div>
 
-<!-- LIGHTBOX -->
-<div id="lightbox" onclick="lbClose()">
-  <span id="lb-close">✕</span>
-  <span id="lb-prev" onclick="event.stopPropagation();lbMove(-1)">‹</span>
-  <img id="lb-img" src="" onclick="event.stopPropagation()">
-  <span id="lb-next" onclick="event.stopPropagation();lbMove(1)">›</span>
-  <div id="lb-counter"></div>
-</div>
-
 <!-- FOTOCAMERA INTERNA -->
 <div id="foto-cam-modal">
   <div id="foto-cam-bar">
@@ -438,6 +421,11 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // STATE
 // ═══════════════════════════════════════════════
 let currentUser = null; // {id, nome, cognome, ruolo}
+
+// Contratto richiesto dal componente foto condiviso (js/config.js).
+function _identitaCorrente() {
+  return { userId: currentUser?.id || null, sessionToken: sessionToken, soloLettura: currentUser?.ruolo === 'sola_lettura' };
+}
 let sessionToken = null; // session_token UUID da verifica_pin
 let fasi = [];
 let ordiniCache = [];
@@ -1746,26 +1734,13 @@ async function renderFaseDetail(ordFaseId, ordineId) {
 
   document.getElementById('fase-det-body').innerHTML = bodyHtml;
 
-  // Foto allegate: fetch reale da DB ad ogni apertura (qualunque stato, qualunque operatore).
-  // Tre stati distinti, mai un vuoto muto: offline, errore di query, e "nessuna foto" sono
-  // informazioni diverse e l'operatore deve poterle distinguere — è per questo che prima
-  // non si fidava (vedi nota vault 2026-09-01-foto-tre-stati-distinti).
-  const fotoContainer = document.getElementById('foto-fase-container');
-  if (!isOnline) {
-    if (fotoContainer) fotoContainer.innerHTML = `<div class="note-box" style="border-color:var(--warn)">📵 Foto non consultabili senza connessione — quelle già caricate sono al sicuro.</div>`;
-  } else {
-    const { data: allegati, error: erroreAllegati } = await sb.from('allegati')
-      .select('id, url_file, caricato_da')
-      .eq('ordine_fase_id', ordFaseId);
-    if (erroreAllegati) {
-      console.error('Elenco foto:', erroreAllegati);
-      if (fotoContainer) fotoContainer.innerHTML = `<div class="note-box" style="border-color:var(--alert)">⚠ Impossibile caricare l'elenco foto — riprova.</div>`;
-    } else if (allegati?.length) {
-      await renderFotoFase(allegati, false);
-    } else if (fotoContainer) {
-      fotoContainer.innerHTML = `<div class="note-box" style="color:var(--muted)">Nessuna foto allegata.</div>`;
-    }
-  }
+  // Foto allegate: fetch reale ad ogni apertura (qualunque stato, qualunque operatore), tre
+  // stati distinti (offline/errore/nessuna foto) gestiti dentro caricaERenderizzaFoto —
+  // componente condiviso con responsabile.html, vedi js/config.js. Da qui in poi la lettura
+  // passa dall'edge function allegato-url (session-based), non più da storage diretto: come
+  // anon, l'operatore non ha mai avuto una policy SELECT su storage.objects — vedi nota vault
+  // 2026-09-01-foto-lettura-operatori-visualizzatore.
+  await caricaERenderizzaFoto('foto-fase-container', ordFaseId);
 }
 
 async function prendiInCarico(ordFaseId, ordineId) {
@@ -2053,125 +2028,14 @@ async function segnaSpedito(ordineId) {
 }
 
 // ═══════════════════════════════════════════════
-// GESTIONE FOTO ALLEGATE (selezione + cancellazione selettiva)
+// FOTO ALLEGATE — visualizzazione, zoom, selezione ed eliminazione: componente condiviso
+// con responsabile.html, vive in js/config.js (caricaERenderizzaFoto, apriVisualizzatoreFoto
+// e le funzioni di supporto). Qui resta solo l'accumulo delle foto NON ANCORA caricate,
+// specifico del flusso di completamento fase di questa pagina.
 // ═══════════════════════════════════════════════
 
-let _fotoSelezionate = new Set();
 // Foto accumulate per la fase correntemente aperta (reset su apertura nuova fase)
 let _fotoAccumulate = [];
-
-async function renderFotoFase(allegati, modoSelezione) {
-  const container = document.getElementById('foto-fase-container');
-  if (!container) return;
-  window._fotoFaseCache = allegati;
-  if (!modoSelezione) _fotoSelezionate.clear();
-
-  const puoCancellare = currentUser.ruolo === 'responsabile' ||
-    allegati.some(a => a.caricato_da === currentUser.id);
-
-  // URL firmati per bucket privato (scadenza 1h)
-  const signedResults = await Promise.all(
-    allegati.map(a => sb.storage.from('allegati-fasi').createSignedUrl(a.url_file, 3600))
-  );
-  const urls = signedResults.map(r => r.data?.signedUrl || '');
-  const urlsJson = escHtml(JSON.stringify(urls));
-
-  let html = `<div class="note-box" style="margin-bottom:12px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <strong>Foto allegate (${allegati.length})</strong>`;
-
-  if (puoCancellare && allegati.length > 0) {
-    if (modoSelezione) {
-      const tutteSelezionate = allegati.every(a => _fotoSelezionate.has(a.id));
-      html += `<div style="display:flex;gap:6px">
-        <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px"
-          onclick="${tutteSelezionate ? 'toggleSelezionaTutte(false)' : 'toggleSelezionaTutte(true)'}">
-          ${tutteSelezionate ? 'Deseleziona tutte' : 'Seleziona tutte'}
-        </button>
-        <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="renderFotoFase(window._fotoFaseCache,false)">Annulla</button>
-      </div>`;
-    } else {
-      html += `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="renderFotoFase(window._fotoFaseCache,true)">Seleziona</button>`;
-    }
-  }
-  html += `</div><div style="display:flex;flex-wrap:wrap;gap:8px">`;
-
-  allegati.forEach((a, i) => {
-    const pubUrl = urls[i];
-    if (!modoSelezione) {
-      html += `<img src="${pubUrl}" class="foto-thumb" onclick='lbOpen(${urlsJson},${i})'>`;
-    } else {
-      const sel = _fotoSelezionate.has(a.id);
-      html += `<div class="foto-sel-wrapper${sel ? ' selezionata' : ''}" onclick="toggleFotoItem('${a.id}')">
-        <img src="${pubUrl}">
-        <div class="foto-sel-check">${sel ? '✓' : ''}</div>
-      </div>`;
-    }
-  });
-
-  html += `</div>`;
-  if (modoSelezione && _fotoSelezionate.size > 0) {
-    html += `<button class="btn-elimina-sel" onclick="eliminaFotoSelezionate()">
-      🗑 Elimina selezionate (${_fotoSelezionate.size})
-    </button>`;
-  }
-  html += `</div>`;
-  container.innerHTML = html;
-}
-
-function toggleFotoItem(allegatoId) {
-  if (_fotoSelezionate.has(allegatoId)) _fotoSelezionate.delete(allegatoId);
-  else _fotoSelezionate.add(allegatoId);
-  renderFotoFase(window._fotoFaseCache, true);
-}
-
-function toggleSelezionaTutte(seleziona) {
-  (window._fotoFaseCache || []).forEach(a => {
-    if (seleziona) _fotoSelezionate.add(a.id);
-    else _fotoSelezionate.delete(a.id);
-  });
-  renderFotoFase(window._fotoFaseCache, true);
-}
-
-async function eliminaFotoSelezionate() {
-  if (!_fotoSelezionate.size) return;
-  const n = _fotoSelezionate.size;
-  if (!confirm(`Eliminare ${n} foto selezionat${n === 1 ? 'a' : 'e'}? L'operazione è irreversibile.`)) return;
-
-  const ids = Array.from(_fotoSelezionate);
-  const { data, error } = await sb.functions.invoke('allegato-elimina', {
-    body: {
-      p_allegato_ids: ids,
-      p_operatore_id: currentUser.id,
-      p_session_token: sessionToken
-    }
-  });
-  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
-
-  // La cancellazione del file fisico nello Storage è gestita dalla edge function
-  // (service role) — l'operatore anon non ha comunque una policy DELETE su storage.objects.
-  const cancellazioneParziale = (data.storage_eliminati ?? 0) < (data.storage_richiesti ?? 0)
-    || (data.storage_errori?.length ?? 0) > 0;
-
-  if (data.rifiutati?.length) {
-    toast(`${data.eliminati?.length || 0} eliminate, ${data.rifiutati.length} non autorizzate`, 'err');
-  } else if (cancellazioneParziale) {
-    toast(`Riga eliminata ma file non rimosso dallo storage (${data.storage_eliminati || 0}/${data.storage_richiesti || 0}) — segnalalo al responsabile`, 'err');
-  } else {
-    toast(`${data.eliminati?.length || 0} foto eliminate`, 'ok');
-  }
-
-  // Aggiorna cache escludendo le eliminate (non quelle rifiutate)
-  const rifiutatiSet = new Set(data.rifiutati || []);
-  const nuovi = (window._fotoFaseCache || []).filter(a => !ids.includes(a.id) || rifiutatiSet.has(a.id));
-  _fotoSelezionate.clear();
-  if (nuovi.length === 0) {
-    const c = document.getElementById('foto-fase-container');
-    if (c) c.innerHTML = '';
-  } else {
-    renderFotoFase(nuovi, false);
-  }
-}
 
 function previewFaseFoto(input) {
   // Accumula i nuovi file a quelli già selezionati in precedenza
@@ -2240,8 +2104,15 @@ async function caricaFlagFotocameraInterna() {
 let _camStream = null;
 let _camScatti = [];       // [{ blob, url, ok: null|true|false }]
 let _camContesto = null;   // { ordFaseId, ordineId }
-const FOTO_CAM_MAX_LATO = 1800;
-const FOTO_CAM_QUALITA = 0.8;
+// Compromesso qualità/peso (2026-09-01, Parte B): serve poter zoomare per ispezionare un
+// danno o un difetto — questo richiede PIXEL (risoluzione), non solo qualità di compressione
+// JPEG. 1800px/0,8 (valori precedenti) producevano scatti da 27-74 KB: troppo aggressivo per
+// ispezionare qualcosa da vicino. 2560px/0,9 restano comunque 3-8 volte più leggeri dei 3,5 MB
+// degli scatti nativi non compressi — il guadagno sul caricamento in officina si conserva
+// quasi per intero. NON in config_sistema: quella tabella non è leggibile dal client
+// operatore (anon) — vedi nota vault 2026-09-01-fotocamera-interna-blocco-lettura-flag.
+const FOTO_CAM_MAX_LATO = 2560;
+const FOTO_CAM_QUALITA = 0.9;
 const FOTO_CAM_AVVISO_SCATTI = 20;
 
 function _camStopTracks() {
@@ -2346,10 +2217,8 @@ function chiudiFotocameraInterna() {
 }
 
 async function renderFotoFaseSeAperta(ordFaseId) {
-  const container = document.getElementById('foto-fase-container');
-  if (!container || !isOnline) return;
-  const { data: allegati, error } = await sb.from('allegati').select('id, url_file, caricato_da').eq('ordine_fase_id', ordFaseId);
-  if (!error && allegati?.length) await renderFotoFase(allegati, false);
+  if (!document.getElementById('foto-fase-container') || !isOnline) return;
+  await caricaERenderizzaFoto('foto-fase-container', ordFaseId);
 }
 
 async function caricaScattiInterni() {
@@ -2411,27 +2280,9 @@ async function _caricaScattoInterno(scatto, ordFaseId, ordineId) {
   }
 }
 
-// ── LIGHTBOX ──
-let _lbUrls = [], _lbIdx = 0;
-function lbOpen(urls, idx) {
-  _lbUrls = urls; _lbIdx = idx;
-  lbShow();
-  document.getElementById('lightbox').classList.add('open');
-}
-function lbClose() { document.getElementById('lightbox').classList.remove('open'); }
-function lbMove(dir) { _lbIdx = (_lbIdx + dir + _lbUrls.length) % _lbUrls.length; lbShow(); }
-function lbShow() {
-  document.getElementById('lb-img').src = _lbUrls[_lbIdx];
-  document.getElementById('lb-counter').textContent = _lbUrls.length > 1 ? `${_lbIdx+1} / ${_lbUrls.length}` : '';
-  document.getElementById('lb-prev').style.display = _lbUrls.length > 1 ? '' : 'none';
-  document.getElementById('lb-next').style.display = _lbUrls.length > 1 ? '' : 'none';
-}
-document.addEventListener('keydown', e => {
-  if (!document.getElementById('lightbox').classList.contains('open')) return;
-  if (e.key === 'Escape') lbClose();
-  if (e.key === 'ArrowLeft') lbMove(-1);
-  if (e.key === 'ArrowRight') lbMove(1);
-});
+// Il vecchio lightbox (lbOpen/lbClose/lbMove) è stato sostituito dal visualizzatore
+// condiviso con zoom in js/config.js (apriVisualizzatoreFoto) — vedi nota vault
+// 2026-09-01-foto-lettura-operatori-visualizzatore.
 
 // ═══════════════════════════════════════════════
 // ATTIVITÀ PERSONALI

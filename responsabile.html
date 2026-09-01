@@ -1760,6 +1760,12 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // ═══════════════════════════════════════════════
 let currentUser = null;
 let currentUserRow = null;
+
+// Contratto richiesto dal componente foto condiviso (js/config.js): session_token è sempre
+// null qui — il responsabile è autenticato via Supabase Auth (auth.uid()), non PIN/session_token.
+function _identitaCorrente() {
+  return { userId: currentUserRow?.id || null, sessionToken: null, soloLettura: false };
+}
 let fasi = []; // [{id, nome, descrizione, posizione, trigger_tipo_prodotto}]
 let tipiProdotto = []; // [{id, label, posizione}]
 let ordiniCache = [];
@@ -3449,18 +3455,21 @@ async function renderDettaglioOrdine(id) {
     const ids4foto = (fasiIds || []).map(f => f.id);
     let hasFoto = false;
     if (ids4foto.length) {
-      const { data: tutteAllegati } = await sb.from('allegati').select('id, url_file, ordine_fase_id').in('ordine_fase_id', ids4foto);
+      const { data: tutteAllegati } = await sb.from('allegati').select('id, url_file, ordine_fase_id, caricato_da').in('ordine_fase_id', ids4foto);
       if (tutteAllegati?.length) {
         const signedResults = await Promise.all(
           tutteAllegati.map(a => sb.storage.from('allegati-fasi').createSignedUrl(a.url_file, 3600))
         );
-        const items = tutteAllegati.map((a, i) => ({ a, url: signedResults[i]?.data?.signedUrl })).filter(x => x.url);
+        const items = tutteAllegati.map((a, i) => ({ id: a.id, caricato_da: a.caricato_da, nomeFile: a.url_file, signedUrl: signedResults[i]?.data?.signedUrl })).filter(x => x.signedUrl);
         if (items.length) {
           hasFoto = true;
-          const allUrlsJson = JSON.stringify(items.map(x => x.url)).replace(/'/g, '&#39;');
+          // Vista aggregata: stesso visualizzatore condiviso (zoom, navigazione, eliminazione),
+          // senza ricaricamento automatico della griglia dopo un'eliminazione da qui — riapri
+          // il dettaglio ordine per vedere l'elenco aggiornato (vedi apriVisualizzatoreDaLista).
+          window._fotoAggregateOrdine = items;
           fotoGalleriaEl.innerHTML = `<div class="foto-grid">${items.map((x, i) =>
-            `<img src="${x.url}" class="foto-thumb" onerror="this.style.display='none'"
-              onclick='lbOpen(${allUrlsJson},${i})' title="${escapeHtml(x.a.url_file.split('/').pop())}">`
+            `<img src="${x.signedUrl}" class="foto-thumb" onerror="this.style.display='none'"
+              onclick="apriVisualizzatoreDaLista(window._fotoAggregateOrdine, ${i})" title="${escapeHtml(x.nomeFile.split('/').pop())}">`
           ).join('')}</div>`;
         }
       }
@@ -3495,10 +3504,9 @@ async function renderDettaglioOrdine(id) {
 }
 
 async function openFaseDetail(ordFaseId, ordineId, readonly) {
-  const [{ data: f }, { data: opMulti }, { data: allegati }] = await Promise.all([
+  const [{ data: f }, { data: opMulti }] = await Promise.all([
     sb.from('ordine_fasi').select('*, users!operatore_id(nome, cognome)').eq('id', ordFaseId).single(),
     sb.from('ordine_fasi_operatori').select('operatore_id, users(nome, cognome)').eq('ordine_fase_id', ordFaseId),
-    sb.from('allegati').select('*').eq('ordine_fase_id', ordFaseId),
   ]);
   if (!f) return;
   if (f.stato === 'non_applicabile') return; // N/A — non aprire modal
@@ -3515,20 +3523,6 @@ async function openFaseDetail(ordFaseId, ordineId, readonly) {
     ? opList.map(o => `<span style="display:inline-block;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:12px;margin:2px">${escapeHtml(o.users?.nome || '')} ${escapeHtml(o.users?.cognome || '')}</span>`).join('')
     : (f['users'] ? `<span>${f['users'].nome} ${f['users'].cognome}</span>` : '<span style="color:var(--muted)">—</span>');
 
-  let fotoHtml = '';
-  if ((allegati || []).length) {
-    const signedResults = await Promise.all(
-      allegati.map(a => sb.storage.from('allegati-fasi').createSignedUrl(a.url_file, 3600))
-    );
-    const signedUrls = signedResults.map(r => r.data?.signedUrl).filter(Boolean);
-    if (signedUrls.length) {
-      const urlsJson = JSON.stringify(signedUrls).replace(/'/g, '&#39;');
-      fotoHtml = `<div class="foto-grid">${signedUrls.map((u, i) =>
-        `<img src="${u}" class="foto-thumb" onerror="this.style.display='none'" onclick='lbOpen(${urlsJson},${i})'>`
-      ).join('')}</div>`;
-    }
-  }
-
   document.getElementById('modal-fase-body').innerHTML = `
     <div class="fase-detail">
       <span class="badge badge-${f.stato}">${statoFaseLabel(f.stato)}</span>
@@ -3542,7 +3536,7 @@ async function openFaseDetail(ordFaseId, ordineId, readonly) {
         ${f.iniziata_il ? `<div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Iniziata</div><div>${formatDateTime(f.iniziata_il)}</div></div>` : ''}
         ${f.completata_il ? `<div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Completata</div><div>${formatDateTime(f.completata_il)}</div></div>` : ''}
       </div>
-      ${fotoHtml}
+      <div id="resp-foto-fase-container"></div>
       ${!readonly ? `
       <div class="form-group" style="margin-top:16px">
         <label>Note Responsabile (modifica)</label>
@@ -3550,6 +3544,9 @@ async function openFaseDetail(ordFaseId, ordineId, readonly) {
       </div>` : ''}
     </div>
   `;
+  // Componente condiviso con operatore.html (js/config.js) — legge via edge function
+  // allegato-url, non più storage.createSignedUrl diretto (vedi nota vault sul perché).
+  caricaERenderizzaFoto('resp-foto-fase-container', ordFaseId);
 
   const footerEl = document.getElementById('modal-fase-footer');
   if (readonly) {
