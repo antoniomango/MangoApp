@@ -44,7 +44,7 @@ const IS_PRODUZIONE = AMBIENTE === 'produzione';
 // Versione del client — da incrementare SEMPRE insieme a CACHE in sw.js (stesso valore,
 // stesso commit). Letta da responsabile.html per la guardia di versione sulle operazioni
 // distruttive (esportazione/archiviazione) — vedi Checklist-Sicurezza.md nel vault.
-const APP_VERSION = 'mango-v18';
+const APP_VERSION = 'mango-v19';
 
 // ═══════════════════════════════════════════════
 // INDICATORE VISIVO — banda fissa quando non produzione
@@ -94,6 +94,27 @@ if (document.readyState === 'loading') {
 
 let _fotoViewerState = { items: [], idx: 0, ordineFaseId: null, containerId: null, selezione: new Set(), modoSelezione: false };
 
+// Le edge function allegato-* girano internamente con la service role per operare sullo
+// storage, ma quando devono decidere CHI sta chiamando (valida_sessione, elimina_allegati,
+// salva_allegato) hanno bisogno del JWT vero del chiamante — la service role non ne ha uno,
+// quindi auth.uid() risulterebbe sempre NULL e il ramo "responsabile" di valida_sessione
+// (che confronta auth.uid() = p_user_id) fallirebbe sempre, anche per un responsabile
+// autenticato. sb.functions.invoke() NON inoltra automaticamente il JWT della sessione Auth
+// corrente (stesso motivo per cui inviaNotificaPush() in responsabile.html usa già un fetch
+// manuale con Authorization esplicito per send-push, invece di functions.invoke()) — va
+// allegato qui esplicitamente. Per un operatore (anon, PIN, nessuna sessione Supabase Auth)
+// non c'è nulla da inoltrare: il fallback è la stessa anon key già usata implicitamente oggi,
+// comportamento identico a prima.
+async function _headerAutorizzazione() {
+  try {
+    const { data } = await sb.auth.getSession();
+    const token = data?.session?.access_token || sb.supabaseKey;
+    return { Authorization: `Bearer ${token}` };
+  } catch (e) {
+    return { Authorization: `Bearer ${sb.supabaseKey}` };
+  }
+}
+
 async function caricaERenderizzaFoto(containerId, ordineFaseId) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -107,6 +128,7 @@ async function caricaERenderizzaFoto(containerId, ordineFaseId) {
   let risposta;
   try {
     const r = await sb.functions.invoke('allegato-url', {
+      headers: await _headerAutorizzazione(),
       body: { p_user_id: identita.userId, p_session_token: identita.sessionToken, p_ordine_fase_id: ordineFaseId }
     });
     risposta = r.data;
@@ -186,6 +208,7 @@ async function _eliminaAllegatiConConferma(ids) {
   if (!confirm(`Eliminare ${n} foto? L'operazione è irreversibile.`)) return false;
   const identita = _identitaCorrente();
   const { data, error } = await sb.functions.invoke('allegato-elimina', {
+    headers: await _headerAutorizzazione(),
     body: { p_allegato_ids: ids, p_operatore_id: identita.userId, p_session_token: identita.sessionToken }
   });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return false; }
