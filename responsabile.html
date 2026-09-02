@@ -306,6 +306,8 @@ tr:hover td { background: var(--phase-bg); }
 .note-box strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); display: block; margin-bottom: 6px; }
 .foto-grid { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .foto-thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); cursor: pointer; }
+.foto-thumb-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 76px; }
+.foto-thumb-fase { font-size: 10px; color: var(--muted); text-align: center; line-height: 1.2; max-width: 76px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── OPERATORI ── */
 .ops-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
@@ -577,15 +579,15 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <div class="card" style="padding:20px">
           <div class="detail-grid" id="det-info"></div>
         </div>
+        <div class="card" id="det-foto-card">
+          <div class="card-hdr"><h3>Foto allegate</h3></div>
+          <div style="padding:16px" id="det-foto-galleria"></div>
+        </div>
         <div class="card">
           <div class="card-hdr"><h3>Fasi di Produzione</h3></div>
           <div style="padding:16px">
             <div class="fasi-grid" id="det-fasi"></div>
           </div>
-        </div>
-        <div class="card" id="det-foto-card" style="display:none">
-          <div class="card-hdr"><h3>Foto allegate</h3></div>
-          <div style="padding:16px" id="det-foto-galleria"></div>
         </div>
         <div class="card">
           <div class="card-hdr"><h3>Log Attività</h3></div>
@@ -3404,12 +3406,18 @@ async function renderDettaglioOrdine(id) {
   // Fasi — standard o extra
   const fasiEl = document.getElementById('det-fasi');
   const readonly = ordine.stato === 'sospeso' || ordine.stato === 'spedito';
+  // Nome fase per ordine_fase_id, per etichettare le miniature della galleria aggregata sotto —
+  // senza questa mappa una striscia di foto senza contesto non direbbe dove si è verificato un
+  // problema. Popolata da entrambi i rami (standard/extra), anche se oggi solo il primo ha foto
+  // aggregabili (vedi nota nella galleria).
+  const mappaNomiFasi = new Map();
 
   if (ordine.tipo === 'extra') {
     const { data: fasiExt } = await sb.from('fasi_ordine_extra')
       .select('*, users!operatore_id(nome, cognome)')
       .eq('ordine_id', id)
       .order('numero');
+    (fasiExt || []).forEach(f => mappaNomiFasi.set(f.id, f.nome));
     fasiEl.innerHTML = (fasiExt || []).map(f => {
       const opNome = f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '';
       return `<div class="fase-card ${f.stato}" onclick="openFaseExtraDetail('${f.id}', '${id}', ${readonly})">
@@ -3431,6 +3439,7 @@ async function renderDettaglioOrdine(id) {
     fasiEl.innerHTML = (ordFasi || []).map(f => {
       const isCustom = !f.fase_id;
       const nomeFase = isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id);
+      mappaNomiFasi.set(f.id, nomeFase);
       const opNome = f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '';
       const isNA = f.stato === 'non_applicabile';
       const cnc = !isCustom && isCNC(f.fase_id);
@@ -3447,36 +3456,11 @@ async function renderDettaglioOrdine(id) {
     }).join('');
   }
 
-  // Galleria foto aggregate di tutte le fasi dell'ordine
-  const fotoGalleriaEl = document.getElementById('det-foto-galleria');
-  const fotoCard = document.getElementById('det-foto-card');
-  if (fotoGalleriaEl) {
-    const { data: fasiIds } = await sb.from('ordine_fasi').select('id').eq('ordine_id', id);
-    const ids4foto = (fasiIds || []).map(f => f.id);
-    let hasFoto = false;
-    if (ids4foto.length) {
-      const { data: tutteAllegati } = await sb.from('allegati').select('id, url_file, ordine_fase_id, caricato_da').in('ordine_fase_id', ids4foto);
-      if (tutteAllegati?.length) {
-        const signedResults = await Promise.all(
-          tutteAllegati.map(a => sb.storage.from('allegati-fasi').createSignedUrl(a.url_file, 3600))
-        );
-        const items = tutteAllegati.map((a, i) => ({ id: a.id, caricato_da: a.caricato_da, nomeFile: a.url_file, signedUrl: signedResults[i]?.data?.signedUrl })).filter(x => x.signedUrl);
-        if (items.length) {
-          hasFoto = true;
-          // Vista aggregata: stesso visualizzatore condiviso (zoom, navigazione, eliminazione),
-          // senza ricaricamento automatico della griglia dopo un'eliminazione da qui — riapri
-          // il dettaglio ordine per vedere l'elenco aggiornato (vedi apriVisualizzatoreDaLista).
-          window._fotoAggregateOrdine = items;
-          fotoGalleriaEl.innerHTML = `<div class="foto-grid">${items.map((x, i) =>
-            `<img src="${x.signedUrl}" class="foto-thumb" onerror="this.style.display='none'"
-              onclick="apriVisualizzatoreDaLista(window._fotoAggregateOrdine, ${i})" title="${escapeHtml(x.nomeFile.split('/').pop())}">`
-          ).join('')}</div>`;
-        }
-      }
-    }
-    if (fotoCard) fotoCard.style.display = hasFoto ? '' : 'none';
-    if (!hasFoto) fotoGalleriaEl.innerHTML = '';
-  }
+  // Galleria foto aggregate di tutte le fasi dell'ordine, sopra l'elenco fasi (richiesta del
+  // proprietario). Nota: oggi copre solo gli ordini standard — le foto di fase per gli ordini
+  // extra (fasi_ordine_extra) non risultano mai in questa aggregazione, limite preesistente
+  // non introdotto qui (segnalato, non risolto: vedi nota vault).
+  await caricaGalleriaOrdineDettaglio(id, mappaNomiFasi);
 
   // Log
   const { data: log } = await sb.from('archivio_log')
@@ -3501,6 +3485,72 @@ async function renderDettaglioOrdine(id) {
       </li>`;
     }).join('');
   }
+}
+
+// Galleria aggregata di tutte le foto di un ordine, sopra l'elenco fasi (richiesta del
+// proprietario: "vederle sia dentro le fasi sia in alto quando apro l'ordine"). Convive con la
+// vista per-fase (dentro openFaseDetail), non la sostituisce. Non passa da allegato-url/
+// elenco_foto_fase: il responsabile è sempre `authenticated`, con accesso diretto e già
+// sufficiente a `allegati` (SELECT anonima aperta, quindi anche authenticated) e allo storage
+// (policy "Auth select allegati-fasi") — una singola query con `.in()` sulle fasi dell'ordine è
+// già la versione efficiente, non N chiamate all'edge function per fase (vedi nota vault sul
+// perché non è stata estesa allegato-url per questo).
+async function caricaGalleriaOrdineDettaglio(ordineId, mappaNomiFasi) {
+  const el = document.getElementById('det-foto-galleria');
+  if (!el) return;
+
+  if (!navigator.onLine) {
+    el.innerHTML = '<div class="note-box" style="border-color:#C27B00">📵 Foto non consultabili senza connessione.</div>';
+    return;
+  }
+
+  const idsFasi = Array.from(mappaNomiFasi.keys());
+  if (!idsFasi.length) {
+    el.innerHTML = '<div class="note-box" style="color:var(--muted)">Nessuna foto allegata a questo ordine.</div>';
+    return;
+  }
+
+  const { data: tutteAllegati, error: eAllegati } = await sb.from('allegati')
+    .select('id, url_file, ordine_fase_id, caricato_da')
+    .in('ordine_fase_id', idsFasi);
+
+  if (eAllegati) {
+    console.error('Galleria ordine:', eAllegati);
+    el.innerHTML = '<div class="note-box" style="border-color:#B03A2E">⚠ Impossibile caricare la galleria — riprova.</div>';
+    return;
+  }
+  if (!tutteAllegati?.length) {
+    el.innerHTML = '<div class="note-box" style="color:var(--muted)">Nessuna foto allegata a questo ordine.</div>';
+    return;
+  }
+
+  const signedResults = await Promise.all(
+    tutteAllegati.map(a => sb.storage.from('allegati-fasi').createSignedUrl(a.url_file, 3600))
+  );
+  const items = tutteAllegati.map((a, i) => ({
+    id: a.id,
+    caricato_da: a.caricato_da,
+    ordine_fase_id: a.ordine_fase_id,
+    nomeFase: mappaNomiFasi.get(a.ordine_fase_id) || 'Fase',
+    nomeFile: a.url_file,
+    signedUrl: signedResults[i]?.data?.signedUrl
+  })).filter(x => x.signedUrl);
+
+  if (!items.length) {
+    el.innerHTML = '<div class="note-box" style="border-color:#B03A2E">⚠ Righe presenti ma nessun file leggibile dallo storage — segnalalo.</div>';
+    return;
+  }
+
+  window._fotoGalleriaOrdineCorrente = items;
+  const ricarica = () => caricaGalleriaOrdineDettaglio(ordineId, mappaNomiFasi);
+  window._ricaricaGalleriaOrdineCorrente = ricarica;
+  el.innerHTML = `<div class="foto-grid">${items.map((x, i) => `
+    <div class="foto-thumb-wrap">
+      <img src="${x.signedUrl}" class="foto-thumb" onerror="this.style.display='none'"
+        onclick="apriVisualizzatoreDaLista(window._fotoGalleriaOrdineCorrente, ${i}, window._ricaricaGalleriaOrdineCorrente)"
+        title="${escapeHtml(x.nomeFase)} — ${escapeHtml(x.nomeFile.split('/').pop())}">
+      <div class="foto-thumb-fase" title="${escapeHtml(x.nomeFase)}">${escapeHtml(x.nomeFase)}</div>
+    </div>`).join('')}</div>`;
 }
 
 async function openFaseDetail(ordFaseId, ordineId, readonly) {
