@@ -1801,6 +1801,7 @@ async function completaFase(ordFaseId, ordineId) {
       if (btnCompleta) btnCompleta.textContent = `Caricamento foto ${idx}/${files.length}...`;
       const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
       const { data: firma, error: eFirma } = await sb.functions.invoke('allegato-upload', {
+        headers: await _headerAutorizzazione(),
         body: {
           p_user_id: currentUser.id,
           p_session_token: sessionToken,
@@ -2258,6 +2259,7 @@ async function caricaScattiInterni() {
 async function _caricaScattoInterno(scatto, ordFaseId, ordineId) {
   try {
     const { data: firma, error: eFirma } = await sb.functions.invoke('allegato-upload', {
+      headers: await _headerAutorizzazione(),
       body: {
         p_user_id: currentUser.id,
         p_session_token: sessionToken,

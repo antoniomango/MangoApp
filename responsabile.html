@@ -5489,6 +5489,7 @@ async function _esportaOrdiniConVerifica(ordini) {
       // suo DELETE interno su allegati trova ormai 0 righe, no-op innocuo).
       if (idsVerificati.length) {
         const { data: elimData, error: elimErr } = await sb.functions.invoke('allegato-elimina', {
+          headers: await _headerAutorizzazione(),
           body: { p_allegato_ids: idsVerificati, p_operatore_id: currentUserRow.id, p_session_token: null }
         });
         if (elimErr || !elimData?.ok) {
