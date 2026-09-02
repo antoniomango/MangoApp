@@ -44,7 +44,7 @@ const IS_PRODUZIONE = AMBIENTE === 'produzione';
 // Versione del client — da incrementare SEMPRE insieme a CACHE in sw.js (stesso valore,
 // stesso commit). Letta da responsabile.html per la guardia di versione sulle operazioni
 // distruttive (esportazione/archiviazione) — vedi Checklist-Sicurezza.md nel vault.
-const APP_VERSION = 'mango-v19';
+const APP_VERSION = 'mango-v20';
 
 // ═══════════════════════════════════════════════
 // INDICATORE VISIVO — banda fissa quando non produzione
@@ -92,7 +92,7 @@ if (document.readyState === 'loading') {
 // firmati a scadenza breve — stesso schema di allegato-upload/allegato-elimina.
 // Vedi nota vault 2026-09-01-foto-lettura-operatori-visualizzatore.
 
-let _fotoViewerState = { items: [], idx: 0, ordineFaseId: null, containerId: null, selezione: new Set(), modoSelezione: false };
+let _fotoViewerState = { items: [], idx: 0, ordineFaseId: null, containerId: null, selezione: new Set(), modoSelezione: false, onRicarica: null };
 
 // Le edge function allegato-* girano internamente con la service role per operare sullo
 // storage, ma quando devono decidere CHI sta chiamando (valida_sessione, elimina_allegati,
@@ -140,7 +140,8 @@ async function caricaERenderizzaFoto(containerId, ordineFaseId) {
   }
 
   const items = risposta.allegati || [];
-  _fotoViewerState = { items, idx: 0, ordineFaseId, containerId, selezione: new Set(), modoSelezione: false };
+  _fotoViewerState = { items, idx: 0, ordineFaseId, containerId, selezione: new Set(), modoSelezione: false,
+    onRicarica: () => caricaERenderizzaFoto(containerId, ordineFaseId) };
 
   if (!items.length) {
     container.innerHTML = '<div class="note-box" style="color:var(--muted,#7A6E65)">Nessuna foto allegata.</div>';
@@ -265,7 +266,9 @@ function _creaVisualizzatoreDom() {
     const fatto = await _eliminaAllegatiConConferma([a.id]);
     if (fatto) {
       history.back(); // chiude il visualizzatore consumando lo stato pushato all'apertura
-      await caricaERenderizzaFoto(st.containerId, st.ordineFaseId);
+      // Mai fidarsi dello stato locale filtrato: chi ha aperto il visualizzatore decide come
+      // ricaricare (griglia di una fase, o galleria aggregata di un intero ordine).
+      if (st.onRicarica) await st.onRicarica();
     }
   };
 
@@ -274,11 +277,12 @@ function _creaVisualizzatoreDom() {
 }
 
 // Variante per una galleria non legata a una singola fase (es. vista aggregata di un intero
-// ordine in responsabile.html): stessi zoom/navigazione/eliminazione del visualizzatore
-// condiviso, ma senza un containerId/ordineFaseId da ricaricare automaticamente dopo
-// un'eliminazione — chi chiama deve riaprire la vista per rivedere l'elenco aggiornato.
-function apriVisualizzatoreDaLista(items, idx) {
-  _fotoViewerState = { items, idx: 0, ordineFaseId: null, containerId: null, selezione: new Set(), modoSelezione: false };
+// ordine in responsabile.html): stesso visualizzatore condiviso (zoom/navigazione/eliminazione),
+// senza un containerId/ordineFaseId — chi chiama passa invece onRicarica, la propria funzione
+// per ridisegnare la vista dopo un'eliminazione da qui. Se omesso, dopo un'eliminazione la vista
+// resta quella di prima finché non viene riaperta manualmente.
+function apriVisualizzatoreDaLista(items, idx, onRicarica = null) {
+  _fotoViewerState = { items, idx: 0, ordineFaseId: null, containerId: null, selezione: new Set(), modoSelezione: false, onRicarica };
   apriVisualizzatoreFoto(idx);
 }
 
