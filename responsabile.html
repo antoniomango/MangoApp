@@ -6669,6 +6669,19 @@ async function eliminaOrdine(id) {
   if (!confirm(`Eliminare definitivamente l'ordine "${label}"?\n\nQuesta azione non può essere annullata.`)) return;
   const { error } = await sb.from('ordini').update({ eliminato: true }).eq('id', id);
   if (error) { toast('Errore eliminazione: ' + error.message, 'err'); return; }
+
+  // Le fasi non ancora completate di un ordine eliminato non rappresentano più lavoro reale:
+  // portale a 'non_applicabile' (già nell'enum, significato esatto: fase che non va eseguita).
+  // Mai le fasi 'completata' — quel lavoro è stato svolto, la traccia resta. Causa radice delle
+  // "fasi fantasma" trovate il 2026-09-03 (238 righe ordine_fasi + 5 fasi_ordine_extra mai
+  // chiuse da questa funzione, che finora aggiornava solo ordini.eliminato) — vedi vault.
+  // RPC, non un update diretto: fasi_ordine_extra non ha alcuna policy di scrittura per
+  // authenticated (solo SELECT), un update client-side lì fallirebbe in silenzio sotto RLS.
+  const { error: errFasi, data: esitoFasi } = await sb.rpc('annulla_fasi_ordine_eliminato', {
+    p_ordine_id: id, p_responsabile_id: currentUserRow.id, p_session_token: null
+  });
+  if (errFasi || !esitoFasi?.ok) console.warn('Fasi non annullate su ordine eliminato:', errFasi?.message || esitoFasi?.errore);
+
   toast('Ordine eliminato', 'ok');
   showSection('dashboard');
   await loadOrdini();
