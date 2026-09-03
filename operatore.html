@@ -158,6 +158,9 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
 .azione-box h4 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
 .note-box { background: var(--phase-bg); border-radius: 8px; padding: 12px; font-size: 13px; margin-bottom: 12px; }
 .note-box strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); display: block; margin-bottom: 6px; }
+.nota-ordine-clamp { max-height: 4.2em; overflow: hidden; }
+.nota-ordine-clamp.espansa { max-height: none; }
+.nota-ordine-toggle { display: inline-block; margin-top: 8px; font-size: 12px; font-weight: 600; color: var(--wood); cursor: pointer; text-decoration: underline; background: none; border: none; padding: 0; }
 textarea { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 14px; background: var(--bg); color: var(--ink); resize: vertical; outline: none; min-height: 80px; }
 textarea:focus { border-color: var(--wood); }
 .upload-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; border: 2px dashed var(--border); border-radius: 8px; background: var(--phase-bg); color: var(--muted); font-size: 14px; cursor: pointer; margin-bottom: 12px; }
@@ -1285,6 +1288,7 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
   badgeEl.textContent = statoFaseLabel(f.stato);
 
   let bodyHtml = '';
+  bodyHtml += renderNotaOrdineBox(ordine);
   if (f.note_responsabile) bodyHtml += `<div class="note-box"><strong>Note Responsabile</strong>${escapeHtml(f.note_responsabile)}</div>`;
   if (f.note_operatore) bodyHtml += `<div class="note-box"><strong>Note Operatore</strong>${escapeHtml(f.note_operatore)}</div>`;
 
@@ -1553,6 +1557,8 @@ async function renderFaseDetail(ordFaseId, ordineId) {
   badgeEl.textContent = statoFaseLabel(f.stato);
 
   let bodyHtml = '';
+
+  bodyHtml += renderNotaOrdineBox(ordine);
 
   if (f.note_responsabile) {
     bodyHtml += `<div class="note-box"><strong>Note Responsabile</strong>${escapeHtml(f.note_responsabile)}</div>`;
@@ -2322,6 +2328,24 @@ async function renderAttivita() {
 // ═══════════════════════════════════════════════
 function escapeHtml(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Note scritte in fase di inserimento ordine (ordini.note_generali), visibili in ogni fase
+// dell'ordine — l'operatore lavora dentro la fase, se la nota sta solo nella schermata
+// dell'ordine non la legge. Unica eccezione al principio dei tre stati espliciti: qui
+// l'assenza di nota è la normalità, non un'anomalia da segnalare — nota vuota, nessun box.
+let _notaOrdineSeq = 0;
+function renderNotaOrdineBox(ordine) {
+  const testo = (ordine?.note_generali || '').trim();
+  if (!testo) return '';
+  const id = 'nota-ordine-' + (++_notaOrdineSeq);
+  const lunga = testo.length > 220;
+  const contenuto = escapeHtml(testo).replace(/\n/g, '<br>');
+  return `<div class="note-box" style="border-color:#FCD34D;background:#FFFBEB">
+    <strong>📋 Note ordine</strong>
+    <div id="${id}"${lunga ? ' class="nota-ordine-clamp"' : ''}>${contenuto}</div>
+    ${lunga ? `<button type="button" class="nota-ordine-toggle" onclick="(function(b){var el=document.getElementById('${id}');var esp=el.classList.toggle('espansa');b.textContent=esp?'Mostra meno':'Mostra tutto';})(this)">Mostra tutto</button>` : ''}
+  </div>`;
 }
 function strutturaLabel(s) { return { 'quattro_lati': '4 Lati', 'barra_l': 'Barra ad L', 'complanare': 'Complanare' }[s] || (s || '—'); }
 function tipoProdLabel(t) { return { 'portoncino': 'Portoncino', 'battente': 'Battente' }[t] || (t || '—'); }
