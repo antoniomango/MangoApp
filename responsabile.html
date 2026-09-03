@@ -193,59 +193,6 @@ tr:hover td { background: var(--phase-bg); }
 .badge-approvata { background: #FEF9C3; color: #713F12; }
 .badge-chiusa { background: #E0E7FF; color: #3730A3; }
 
-/* ── GANTT MULTI-GIORNO ── */
-.gantt-wrap { overflow-x: auto; margin-bottom: 8px; }
-.gantt-grid { min-width: 660px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-.gantt-row  { display: grid; grid-template-columns: 150px repeat(5, 1fr); }
-.gantt-row:not(.gantt-header) { border-top: 1px solid var(--border); }
-.gantt-header { background: var(--phase-bg); }
-.gantt-col-hdr { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 6px; text-align: center; }
-.gantt-col-hdr:not(:last-child) { border-right: 1px solid var(--border); }
-.gantt-label { padding: 6px 8px; display: flex; flex-direction: column; justify-content: center; min-height: 56px; border-right: 1px solid var(--border); background: var(--surface); }
-.gantt-label-code { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
-.gantt-label-cli  { font-size: 10px; color: var(--muted); margin-top: 2px; }
-.gantt-scad       { font-size: 9px; background: var(--phase-bg); color: var(--muted); padding: 1px 4px; border-radius: 3px; white-space: nowrap; }
-.gantt-scad-late  { background: #FEE2E2 !important; color: #991B1B !important; }
-.gantt-cell  { padding: 4px; min-height: 56px; }
-.gantt-cell:not(:last-child) { border-right: 1px solid var(--border); }
-.gantt-bar   { background: var(--wood); color: #fff; border-radius: 5px; padding: 5px 7px; cursor: pointer; min-height: 46px; display: flex; flex-direction: column; justify-content: center; transition: opacity .15s; height: 100%; box-sizing: border-box; }
-.gantt-bar:hover { opacity: .82; }
-.gantt-bar-uncertain { background: transparent !important; border: 2px dashed var(--wood); color: var(--ink); }
-.gantt-bar-fase { font-size: 10px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gantt-bar-op   { font-size: 9px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-.gantt-oltre-hdr { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 20px 0 10px; border-top: 1px solid var(--border); padding-top: 14px; }
-.gantt-oltre-list { display: flex; flex-direction: column; gap: 7px; }
-.gantt-oltre-group { display: flex; flex-wrap: wrap; gap: 5px; align-items: baseline; }
-.gantt-oltre-scad  { font-size: 11px; font-weight: 600; color: var(--muted); min-width: 100px; flex-shrink: 0; }
-.gantt-oltre-pill  { font-size: 11px; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 2px 9px; color: var(--ink); }
-/* ── GANTT BANNER + SLOT (vista per operatore) ── */
-.gantt-banner { border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; display: flex; gap: 10px; align-items: flex-start; }
-.gantt-banner-ok   { background: #ECFDF5; border: 1px solid #6EE7B7; color: #065F46; }
-.gantt-banner-warn { background: #FFFBEB; border: 1px solid #FCD34D; color: #78350F; }
-.gantt-banner-icon { font-size: 18px; flex-shrink: 0; line-height: 1.4; }
-.gantt-banner-body { flex: 1; min-width: 0; }
-.gantt-banner-title { font-size: 13px; font-weight: 700; }
-.gantt-banner-rows { display: flex; flex-direction: column; gap: 3px; margin-top: 6px; }
-.gantt-banner-row  { font-size: 12px; display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; }
-.gantt-banner-scad-late { color: #DC2626; font-weight: 600; }
-.gantt-banner-sub  { font-size: 11px; opacity: .75; margin-bottom: 4px; }
-.gantt-oltre-toggle { margin-top: 6px; background: none; border: none; padding: 0; font-size: 12px; font-weight: 600; cursor: pointer; color: inherit; opacity: .8; text-decoration: underline; }
-.gantt-oltre-toggle:hover { opacity: 1; }
-.gantt-cell-empty  { height: 100%; min-height: 40px; display: flex; align-items: center; justify-content: center; }
-.gantt-cell-empty-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--border); }
-.gantt-slot        { background: var(--wood); color: #fff; border-radius: 5px; padding: 5px 7px; margin-bottom: 3px; }
-.gantt-slot:last-child { margin-bottom: 0; }
-.gantt-slot-uncertain { background: transparent !important; border: 2px dashed var(--wood); color: var(--ink); }
-.gantt-slot-fase   { font-size: 10px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gantt-slot-ord    { font-size: 9px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
-.gantt-slot-min    { font-size: 9px; margin-top: 2px; opacity: .9; }
-.gantt-slot-uncertain .gantt-slot-min { font-style: italic; opacity: .65; }
-@media (prefers-color-scheme: dark) {
-  .gantt-banner-ok   { background: #022C22; border-color: #065F46; color: #6EE7B7; }
-  .gantt-banner-warn { background: #1C1400; border-color: #92400E; color: #FCD34D; }
-  .gantt-banner-scad-late { color: #FCA5A5; }
-}
-
 /* ── FILTRI ── */
 .filters { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
 .filters input, .filters select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; outline: none; }
@@ -462,10 +409,6 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       <div class="nav-item" onclick="showSection('pianificazione')" id="nav-pianificazione">
         <span class="icon">📅</span> Pianificazione
       </div>
-      <div class="nav-item" onclick="showSection('gantt')" id="nav-gantt">
-        <span class="icon">📊</span> Gantt 5 giorni
-      </div>
-
       <div class="nav-section">Gestione</div>
       <div class="nav-item" onclick="showSection('operatori')" id="nav-operatori">
         <span class="icon">👥</span> Operatori
@@ -724,18 +667,6 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         </div>
 
         <div id="piano-content"><div class="empty-state"><div class="icon">📅</div><p>Caricamento...</p></div></div>
-      </section>
-
-      <!-- GANTT MULTI-GIORNO -->
-      <section class="section" id="sec-gantt">
-        <div class="page-hdr">
-          <div>
-            <h1>Gantt 5 giorni</h1>
-            <div class="sub">Simulazione capacità — sola lettura. Righe per operatore, colonne per giorno lavorativo.</div>
-          </div>
-          <button class="btn btn-secondary" onclick="loadGantt()">↻ Aggiorna</button>
-        </div>
-        <div id="gantt-body"><div class="empty-state"><div class="icon">📊</div><p>Caricamento…</p></div></div>
       </section>
 
       <!-- KPI -->
@@ -2191,185 +2122,6 @@ function showSection(name) {
   else if (name === 'macchine-config') { loadMacchine().then(renderMacchine); }
   else if (name === 'fasi-extra-config') { loadCatalogoFasiExtra(); }
   else if (name === 'notif-config') { loadNotifDestinatari(); }
-  else if (name === 'gantt') { loadGantt(); }
-}
-
-// ═══════════════════════════════════════════════
-// GANTT MULTI-GIORNO
-// ═══════════════════════════════════════════════
-let _ganttCache = null;
-
-async function loadGantt() {
-  const el = document.getElementById('gantt-body');
-  if (el) el.innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>Simulazione in corso…</p></div>';
-  const { data, error } = await sb.rpc('piano_multi_giorno', { p_giorni: 5 });
-  if (error || !data?.ok) {
-    if (el) el.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div><p>Errore: ${error?.message || data?.errore || 'sconosciuto'}</p></div>`;
-    return;
-  }
-  _ganttCache = data;
-  renderGantt();
-}
-
-function renderGantt() {
-  const el = document.getElementById('gantt-body');
-  if (!el) return;
-  if (!_ganttCache) { loadGantt(); return; }
-
-  const { giorni_simulati, oltre } = _ganttCache;
-  const today = new Date().toISOString().split('T')[0];
-
-  if (!giorni_simulati.length && !oltre?.length) {
-    el.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>Nessuna fase da pianificare</p></div>';
-    return;
-  }
-
-  // ── 1. BANNER ordini a rischio ──────────────────────────────────────────
-  let bannerHtml;
-  if (!oltre?.length) {
-    bannerHtml = `<div class="gantt-banner gantt-banner-ok">
-      <div class="gantt-banner-icon">✅</div>
-      <div class="gantt-banner-body"><div class="gantt-banner-title">Nessun ordine a rischio nei prossimi 5 giorni simulati</div></div>
-    </div>`;
-  } else {
-    const SOGLIA_BANNER = 8;
-    const oltreSorted = [...oltre].sort((a, b) => {
-      if (!a.scadenza && !b.scadenza) return 0;
-      if (!a.scadenza) return 1;
-      if (!b.scadenza) return -1;
-      return a.scadenza < b.scadenza ? -1 : 1;
-    });
-    const nOrdini = new Set(oltre.map(f => f.ordine_id)).size;
-    const trunca = oltreSorted.length > SOGLIA_BANNER;
-    const visibili = trunca ? oltreSorted.slice(0, SOGLIA_BANNER) : oltreSorted;
-    const nascoste = trunca ? oltreSorted.slice(SOGLIA_BANNER) : [];
-
-    const _rigaBanner = f => {
-      const late = f.scadenza && f.scadenza < today;
-      const scadSpan = f.scadenza
-        ? `<span class="${late ? 'gantt-banner-scad-late' : ''}">scad. ${f.scadenza}</span>`
-        : '<span>senza scadenza</span>';
-      return `<div class="gantt-banner-row">
-        <strong>${escapeHtml(f.codice || '—')}</strong>
-        <span>${escapeHtml(f.cliente || '')}</span>
-        <span>· ${escapeHtml(f.fase_nome)}</span>
-        <span>· ${scadSpan}</span>
-      </div>`;
-    };
-
-    const extraBlock = trunca ? `
-      <div id="gantt-oltre-extra" style="display:none">${nascoste.map(_rigaBanner).join('')}</div>
-      <button class="gantt-oltre-toggle" onclick="_ganttOltreToggle(this, ${nascoste.length})">▼ Mostra tutte le ${nascoste.length} fasi rimanenti</button>
-    ` : '';
-
-    bannerHtml = `<div class="gantt-banner gantt-banner-warn">
-      <div class="gantt-banner-icon">⚠️</div>
-      <div class="gantt-banner-body">
-        <div class="gantt-banner-title">${oltreSorted.length} fasi su ${nOrdini} ordini non rientrano nei prossimi 5 giorni simulati</div>
-        <div class="gantt-banner-rows">
-          ${trunca ? `<div class="gantt-banner-sub">Prime ${SOGLIA_BANNER} per urgenza — ${nOrdini} ordini coinvolti</div>` : ''}
-          ${visibili.map(_rigaBanner).join('')}
-          ${extraBlock}
-        </div>
-      </div>
-    </div>`;
-  }
-
-  // ── 2. CORSIE PER OPERATORE ─────────────────────────────────────────────
-  // Operatori attivi non esclusi dalla pianificazione, ordinati per cognome
-  const ops = (operatoriCache || [])
-    .filter(o => o.attivo && !o.escluso_pianificazione)
-    .sort((a, b) => (a.cognome || '').localeCompare(b.cognome || '', 'it'));
-
-  // opDayMap: opId → { [giorno]: [fase,...] }
-  const opDayMap = new Map();
-  ops.forEach(o => opDayMap.set(o.id, {}));
-
-  giorni_simulati.forEach(g => {
-    (g.fasi || []).forEach(f => {
-      const key = f.op_id || '__nessuno';
-      if (!opDayMap.has(key)) opDayMap.set(key, {}); // op non in cache
-      const dm = opDayMap.get(key);
-      if (!dm[g.giorno]) dm[g.giorno] = [];
-      dm[g.giorno].push({ ...f, _data: g.data });
-    });
-  });
-
-  // Colonne: intestazioni giorni con data reale
-  const nGiorni = giorni_simulati.length;
-  const colTpl = `150px repeat(${nGiorni}, 1fr)`;
-  const headers = giorni_simulati.map(g => {
-    const d = new Date(g.data + 'T12:00:00');
-    const lbl = d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' });
-    return `<div class="gantt-col-hdr">${lbl}</div>`;
-  }).join('');
-
-  // Helper: singolo slot fase in cella
-  function slotHtml(f) {
-    const inc = f.stima_incerta;
-    const faseTrunc = f.fase_nome.length > 20 ? f.fase_nome.slice(0, 19) + '…' : f.fase_nome;
-    const stimaTxt = f.stima_min ? `${Math.round(f.stima_min)} min${inc ? ' ≈' : ''}` : '';
-    return `<div class="gantt-slot${inc ? ' gantt-slot-uncertain' : ''}">
-      <div class="gantt-slot-fase">${escapeHtml(faseTrunc)}</div>
-      <div class="gantt-slot-ord">${escapeHtml(f.codice || '')} · ${escapeHtml(f.cliente || '')}</div>
-      ${stimaTxt ? `<div class="gantt-slot-min">${stimaTxt}</div>` : ''}
-    </div>`;
-  }
-
-  // Righe: ops da cache + eventuali op_id non riconosciuti dai dati
-  const opNameMap = new Map(ops.map(o => [o.id, `${o.nome} ${o.cognome}`]));
-  const rowKeys = ops.map(o => o.id);
-  for (const key of opDayMap.keys()) {
-    if (!rowKeys.includes(key)) rowKeys.push(key);
-  }
-
-  const rows = rowKeys.map(opId => {
-    const dm = opDayMap.get(opId) || {};
-    const opName = opNameMap.get(opId) || (opId === '__nessuno' ? '— Non assegnato' : opId);
-    const cells = giorni_simulati.map(g => {
-      const fasi = dm[g.giorno] || [];
-      if (!fasi.length) {
-        return `<div class="gantt-cell"><div class="gantt-cell-empty"><div class="gantt-cell-empty-dot"></div></div></div>`;
-      }
-      return `<div class="gantt-cell">${fasi.map(slotHtml).join('')}</div>`;
-    }).join('');
-    return `<div class="gantt-row" style="grid-template-columns:${colTpl}">
-      <div class="gantt-label">
-        <div class="gantt-label-code">${escapeHtml(opName)}</div>
-      </div>
-      ${cells}
-    </div>`;
-  }).join('');
-
-  el.innerHTML = `
-    ${bannerHtml}
-    <div class="gantt-wrap">
-      <div class="gantt-grid">
-        <div class="gantt-row gantt-header" style="grid-template-columns:${colTpl}">
-          <div class="gantt-label gantt-col-hdr" style="text-align:left">Operatore</div>
-          ${headers}
-        </div>
-        ${rows}
-      </div>
-    </div>`;
-}
-
-function ganttClickGiorno(data) {
-  const sel = document.getElementById('piano-data-sel');
-  if (sel) sel.value = data;
-  showSection('pianificazione');
-}
-
-function _ganttOltreToggle(btn, nascosteCount) {
-  const ex = document.getElementById('gantt-oltre-extra');
-  if (!ex) return;
-  if (ex.style.display === 'none') {
-    ex.style.display = '';
-    btn.textContent = '▲ Mostra meno';
-  } else {
-    ex.style.display = 'none';
-    btn.textContent = `▼ Mostra tutte le ${nascosteCount} fasi rimanenti`;
-  }
 }
 
 // ═══════════════════════════════════════════════
