@@ -6856,13 +6856,21 @@ async function loadKpi() {
     new Date(2024,0,1,parseInt((orarioConfig?.ora_fine||'17:00').split(':')[0]),   parseInt((orarioConfig?.ora_fine||'17:00').split(':')[1])).toISOString()
   ) || 8;
 
-  // Conta fasi in coda (disponibile/in_corso) per fase — per collo di bottiglia
+  // Conta fasi in coda (disponibile/in_corso) per fase — per collo di bottiglia. JOIN a ordini
+  // ed esclusione eliminato=true: senza, il badge contava anche fasi di ordini che non esistono
+  // più — 238 righe fantasma trovate e corrette il 2026-09-03 (vedi vault). Filtro in JS dopo
+  // il fetch, stesso pattern già usato sopra per perOrdine — difesa in profondità: la causa
+  // radice (eliminaOrdine) è già corretta, questo protegge il punto che consuma il dato se in
+  // futuro un altro percorso lasciasse fasi orfane.
   const { data: fasiInCoda } = await sb.from('ordine_fasi')
-    .select('fase_id')
+    .select('fase_id, ordini(eliminato)')
     .in('stato', ['disponibile', 'in_corso'])
     .not('fase_id', 'is', null);
   const codaPerFase = {};
-  (fasiInCoda || []).forEach(f => { codaPerFase[f.fase_id] = (codaPerFase[f.fase_id] || 0) + 1; });
+  (fasiInCoda || []).forEach(f => {
+    if (f.ordini?.eliminato) return;
+    codaPerFase[f.fase_id] = (codaPerFase[f.fase_id] || 0) + 1;
+  });
 
   document.getElementById('kpi-fasi-tempo').innerHTML = faseTempoArr.length ? faseTempoArr.slice(0, 15).map(f => {
     const color = f.media > oreGiornoRef ? 'var(--alert)' : f.media > oreGiornoRef/2 ? 'var(--warn)' : 'var(--ok)';
