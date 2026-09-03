@@ -270,6 +270,9 @@ tr:hover td { background: var(--phase-bg); }
 .detail-field { }
 .detail-field label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); display: block; margin-bottom: 4px; }
 .detail-field span { font-size: 14px; font-weight: 500; }
+.nota-ordine-clamp { max-height: 6.5em; overflow: hidden; }
+.nota-ordine-clamp.espansa { max-height: none; }
+.nota-ordine-toggle { display: inline-block; margin-top: 8px; font-size: 12px; font-weight: 600; color: var(--wood); cursor: pointer; text-decoration: underline; background: none; border: none; padding: 0; }
 
 .fasi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
 .fase-card {
@@ -578,6 +581,10 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         </div>
         <div class="card" style="padding:20px">
           <div class="detail-grid" id="det-info"></div>
+        </div>
+        <div class="card" id="det-note-card" style="display:none">
+          <div class="card-hdr"><h3>📋 Note Ordine</h3></div>
+          <div style="padding:16px" id="det-note-body"></div>
         </div>
         <div class="card" id="det-foto-card">
           <div class="card-hdr"><h3>Foto allegate</h3></div>
@@ -3379,8 +3386,25 @@ async function renderDettaglioOrdine(id) {
     <div class="detail-field"><label>Consegna stimata</label><span id="det-stima-consegna" style="color:var(--muted)">Calcolo…</span></div>
     <div class="detail-field"><label>Quantità</label><span>${ordine.quantita || 1}</span></div>
     <div class="detail-field"><label>Creato il</label><span>${formatDateTime(ordine.creato_il)}</span></div>
-    ${ordine.note_generali ? `<div class="detail-field" style="grid-column:1/-1"><label>Note generali</label><span>${escapeHtml(ordine.note_generali)}</span></div>` : ''}
   `;
+
+  // Note ordine (ordini.note_generali) — card dedicata sopra la galleria foto/fasi, richiesta
+  // esplicita del proprietario ("in alto come le foto"), non più il piccolo campo in fondo alla
+  // griglia info qui sopra. Stessa eccezione dell'operatore al principio dei tre stati
+  // espliciti: nota vuota, card nascosta — non un riquadro vuoto.
+  const noteCard = document.getElementById('det-note-card');
+  const noteBody = document.getElementById('det-note-body');
+  const testoNota = (ordine.note_generali || '').trim();
+  if (testoNota) {
+    const lunga = testoNota.length > 300;
+    const contenuto = escapeHtml(testoNota).replace(/\n/g, '<br>');
+    noteBody.innerHTML = `<div${lunga ? ' id="det-note-testo" class="nota-ordine-clamp"' : ''}>${contenuto}</div>
+      ${lunga ? `<button type="button" class="nota-ordine-toggle" onclick="(function(b){var el=document.getElementById('det-note-testo');var esp=el.classList.toggle('espansa');b.textContent=esp?'Mostra meno':'Mostra tutto';})(this)">Mostra tutto</button>` : ''}`;
+    noteCard.style.display = '';
+  } else {
+    noteCard.style.display = 'none';
+    noteBody.innerHTML = '';
+  }
 
   // Calcola stima consegna per questo ordine (con coda)
   calcolaStimaSingoloOrdine(id);
