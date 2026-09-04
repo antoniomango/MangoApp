@@ -161,6 +161,22 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
 .nota-ordine-clamp { max-height: 4.2em; overflow: hidden; }
 .nota-ordine-clamp.espansa { max-height: none; }
 .nota-ordine-toggle { display: inline-block; margin-top: 8px; font-size: 12px; font-weight: 600; color: var(--wood); cursor: pointer; text-decoration: underline; background: none; border: none; padding: 0; }
+/* Nota ordine in evidenza: pulsa SOLO il colore del testo, fra due rossi sempre leggibili
+   (mai verso il trasparente/opacity — un testo che sfuma per metà ciclo smetterebbe di
+   essere letto). Riquadro, bordo, sfondo, dimensione e spaziatura restano fermi: l'unica
+   proprietà animata è "color", quindi nessun reflow/spostamento di layout durante il ciclo.
+   Contrasto verificato (WCAG): #991B1B ≥7.1:1 e #C0392B ≥4.67:1 su entrambi gli sfondi dove
+   compare (nota-box #FFFBEB e sfondo pagina #F2EDE6) — sempre sopra la soglia AA (4.5:1). */
+@keyframes notaOrdinePulse {
+  0%, 100% { color: #991B1B; }
+  50%      { color: #C0392B; }
+}
+.nota-ordine-testo {
+  animation: notaOrdinePulse 2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nota-ordine-testo { animation: none; color: #991B1B; }
+}
 textarea { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 14px; background: var(--bg); color: var(--ink); resize: vertical; outline: none; min-height: 80px; }
 textarea:focus { border-color: var(--wood); }
 .upload-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; border: 2px dashed var(--border); border-radius: 8px; background: var(--phase-bg); color: var(--muted); font-size: 14px; cursor: pointer; margin-bottom: 12px; }
@@ -1087,7 +1103,7 @@ async function renderOrdineDetail(ordineId) {
     <div class="meta-item"><label>Stato</label><span class="badge badge-${ordine.stato}">${ordine.stato}</span></div>
     <div class="meta-item"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}</span></div>
     <div class="meta-item" id="ord-stima-item"><label>Consegna stimata</label><span id="ord-stima-val" style="color:var(--muted)">—</span></div>
-    ${ordine.note_generali ? `<div class="meta-item" style="grid-column:1/-1"><label>Note</label><span>${ordine.note_generali}</span></div>` : ''}
+    ${ordine.note_generali ? `<div class="meta-item" style="grid-column:1/-1"><label>Note</label><span class="nota-ordine-testo">${escapeHtml(ordine.note_generali)}</span></div>` : ''}
   `;
 
   // Pulsante Spedisci — visibile solo se ordine in attesa corriere
@@ -2343,7 +2359,7 @@ function renderNotaOrdineBox(ordine) {
   const contenuto = escapeHtml(testo).replace(/\n/g, '<br>');
   return `<div class="note-box" style="border-color:#FCD34D;background:#FFFBEB">
     <strong>📋 Note ordine</strong>
-    <div id="${id}"${lunga ? ' class="nota-ordine-clamp"' : ''}>${contenuto}</div>
+    <div id="${id}" class="nota-ordine-testo${lunga ? ' nota-ordine-clamp' : ''}">${contenuto}</div>
     ${lunga ? `<button type="button" class="nota-ordine-toggle" onclick="(function(b){var el=document.getElementById('${id}');var esp=el.classList.toggle('espansa');b.textContent=esp?'Mostra meno':'Mostra tutto';})(this)">Mostra tutto</button>` : ''}
   </div>`;
 }
