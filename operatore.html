@@ -581,7 +581,7 @@ async function updateQueueBadge() {
 async function loadLoginUsers() {
   let users;
   if (isOnline) {
-    const { data } = await sb.from('users').select('id, nome, cognome, ruolo').in('ruolo', ['operatore', 'sola_lettura']).eq('attivo', true).order('cognome');
+    const { data } = await sb.rpc('lista_operatori_login');
     users = data || [];
     await cacheSet('users-login', users);
   } else {
@@ -724,7 +724,8 @@ async function loadFasi() {
 
 async function loadOrdini() {
   if (isOnline) {
-    const { data } = await sb.from('ordini').select('*').in('stato', ['aperto', 'sospeso', 'attesa_spedizione']).neq('eliminato', true);
+    const { data: resp } = await sb.rpc('ordini_attivi', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
+    const data = resp?.ok ? resp.dati : [];
     const prioOrd = { 'extra_urgente': 0, 'urgente': 1, 'normale': 2 };
     ordiniCache = (data || []).sort((a, b) => {
       const as = a.stato === 'attesa_spedizione' ? 0 : 1;
@@ -816,17 +817,12 @@ async function renderHome() {
   let mieFasi = [];
   let mieFasiExtra = [];
   if (isOnline) {
-    const [{ data: primarie }, { data: comeCollega }, { data: extraInCorso }] = await Promise.all([
-      sb.from('ordine_fasi')
-        .select('*, ordini(codice, cliente, stato), fasi(nome)')
-        .eq('operatore_id', currentUser.id)
-        .in('stato', ['in_corso', 'in_attesa', 'bloccata']),
+    const [{ data: mieFasiResp }, { data: comeCollega }] = await Promise.all([
+      sb.rpc('mie_fasi_in_corso', { p_operatore_id: currentUser.id, p_session_token: sessionToken }),
       sb.rpc('fasi_in_corso_come_collega', { p_operatore_id: currentUser.id }),
-      sb.from('fasi_ordine_extra')
-        .select('*, ordini(codice, cliente, stato)')
-        .eq('operatore_id', currentUser.id)
-        .in('stato', ['in_corso', 'in_attesa'])
     ]);
+    const primarie = mieFasiResp?.ok ? mieFasiResp.dati.primarie : [];
+    const extraInCorso = mieFasiResp?.ok ? mieFasiResp.dati.extra : [];
     const ids = new Set((primarie || []).map(f => f.id));
     const daCollega = (comeCollega || [])
       .filter(j => !ids.has(j.id))
@@ -888,24 +884,18 @@ async function renderHome() {
   // Ordini disponibili (aperto + attesa_spedizione visibili in lista)
   const aperti = ordiniCache.filter(o => o.stato === 'aperto' || o.stato === 'attesa_spedizione' || o.stato === 'sospeso');
   let conDisp = new Set();
-  if (isOnline && aperti.length) {
-    const soloAperti = aperti.filter(o => o.stato === 'aperto').map(o => o.id);
-    if (soloAperti.length) {
-      const { data: fasiDisp } = await sb.from('ordine_fasi')
-        .select('ordine_id').eq('stato', 'disponibile')
-        .in('ordine_id', soloAperti);
-      conDisp = new Set((fasiDisp || []).map(f => f.ordine_id));
-    }
-  }
-  // Carica avanzamento fasi per la lista ordini
   let fasiPerOrdine = {};
   if (isOnline && aperti.length) {
+    const soloAperti = aperti.filter(o => o.stato === 'aperto').map(o => o.id);
     const stdIds   = aperti.filter(o => o.tipo !== 'extra').map(o => o.id);
     const extraIds = aperti.filter(o => o.tipo === 'extra').map(o => o.id);
-    const fetches = [];
-    if (stdIds.length)   fetches.push(sb.from('ordine_fasi').select('ordine_id, stato, fase_id').in('ordine_id', stdIds));
-    if (extraIds.length) fetches.push(sb.from('fasi_ordine_extra').select('ordine_id, stato').in('ordine_id', extraIds));
-    const results = await Promise.all(fetches);
+    const { data: avResp } = await sb.rpc('fasi_avanzamento_ordini', {
+      p_operatore_id: currentUser.id, p_session_token: sessionToken,
+      p_std_ids: stdIds, p_extra_ids: extraIds, p_solo_aperti_ids: soloAperti
+    });
+    const dati = avResp?.ok ? avResp.dati : { disponibili_ordine_ids: [], std: [], extra: [] };
+    conDisp = new Set(dati.disponibili_ordine_ids || []);
+    const results = [{ data: dati.std }, { data: dati.extra }];
     for (const { data } of results) {
       for (const f of data || []) {
         if (!fasiPerOrdine[f.ordine_id]) fasiPerOrdine[f.ordine_id] = [];
@@ -1116,16 +1106,20 @@ async function renderOrdineDetail(ordineId) {
     }
   }
 
-  // Fasi — standard o extra
+  // Fasi — standard o extra. Un'unica RPC restituisce entrambe le liste (ordine_fasi
+  // e fasi_ordine_extra): l'ordine standard usa solo la seconda per le "lavorazioni
+  // aggiuntive", l'ordine extra la usa come lista principale — stesso dato, due usi.
   const el = document.getElementById('ord-det-fasi');
+  let dettaglioResp = null;
+  if (isOnline) {
+    const { data } = await sb.rpc('dettaglio_ordine_fasi', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_id: ordineId });
+    dettaglioResp = data?.ok ? data.dati : { ordine_fasi: [], fasi_extra: [] };
+  }
   if (ordine.tipo === 'extra') {
     // Ordine extra: fasi_ordine_extra
     let fasiExt = [];
     if (isOnline) {
-      const { data } = await sb.from('fasi_ordine_extra')
-        .select('*, users!operatore_id(nome, cognome)')
-        .eq('ordine_id', ordineId).order('numero');
-      fasiExt = data || [];
+      fasiExt = dettaglioResp.fasi_extra || [];
       await cacheSet('fasi-extra-' + ordineId, fasiExt);
     } else {
       fasiExt = await cacheGet('fasi-extra-' + ordineId) || [];
@@ -1147,9 +1141,7 @@ async function renderOrdineDetail(ordineId) {
     // Ordine standard: ordine_fasi
     let ordFasi = [];
     if (isOnline) {
-      const { data } = await sb.from('ordine_fasi')
-        .select('*, users!operatore_id(nome, cognome)')
-        .eq('ordine_id', ordineId);
+      const data = dettaglioResp.ordine_fasi || [];
       ordFasi = (data || []).sort((a, b) => {
         const posA = a.fase_id ? (fasi.find(f => f.id === a.fase_id)?.posizione ?? 9999) : 99999;
         const posB = b.fase_id ? (fasi.find(f => f.id === b.fase_id)?.posizione ?? 9999) : 99999;
@@ -1231,10 +1223,7 @@ async function renderOrdineDetail(ordineId) {
     // Fasi extra aggiunte manualmente (su qualsiasi tipo ordine)
     let fasiExtStd = [];
     if (isOnline) {
-      const { data: feData } = await sb.from('fasi_ordine_extra')
-        .select('*, users!operatore_id(nome, cognome)')
-        .eq('ordine_id', ordineId).order('numero');
-      fasiExtStd = feData || [];
+      fasiExtStd = dettaglioResp.fasi_extra || [];
     }
     if (fasiExtStd.length > 0) {
       el.innerHTML += `<div style="margin-top:14px;padding-top:10px;border-top:2px dashed var(--border)">
@@ -1275,12 +1264,9 @@ async function openFaseExtraDetail(faseExtraId, ordineId) {
 async function renderFaseExtraDetail(faseExtraId, ordineId) {
   let f, opMulti = [];
   if (isOnline) {
-    const [{ data: fd }, { data: om }] = await Promise.all([
-      sb.from('fasi_ordine_extra').select('*, users!operatore_id(nome, cognome)').eq('id', faseExtraId).single(),
-      sb.from('fasi_extra_operatori').select('operatore_id, users(nome, cognome)').eq('fasi_ordine_extra_id', faseExtraId)
-    ]);
-    f = fd;
-    opMulti = om || [];
+    const { data: detResp } = await sb.rpc('dettaglio_fase_extra_completa', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_fase_extra_id: faseExtraId });
+    f = detResp?.ok ? detResp.dati.fase : null;
+    opMulti = detResp?.ok ? detResp.dati.collaboratori : [];
   } else {
     const cached = await cacheGet('fasi-extra-' + ordineId) || [];
     f = cached.find(x => x.id === faseExtraId);
@@ -1361,7 +1347,8 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
     giaSulla.add(currentUser.id);
     let opzioniColleghi = '';
     if (isOnline) {
-      const { data: tuttiOp } = await sb.from('users').select('id, nome, cognome').eq('attivo', true).in('ruolo', ['operatore']).order('cognome');
+      const { data: collResp } = await sb.rpc('colleghi_disponibili', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
+      const tuttiOp = collResp?.ok ? collResp.dati : [];
       const disponibili = (tuttiOp || []).filter(u => !giaSulla.has(u.id));
       if (disponibili.length) {
         const chips = disponibili.map(u =>
@@ -1540,12 +1527,9 @@ async function renderFaseDetail(ordFaseId, ordineId) {
   _fotoAccumulate = []; // reset accumulo foto quando si apre una fase diversa
   let f, opMulti = [];
   if (isOnline) {
-    const [{ data: fd }, { data: om }] = await Promise.all([
-      sb.from('ordine_fasi').select('*, users!operatore_id(nome, cognome), fasi(tipo_gestione)').eq('id', ordFaseId).single(),
-      sb.from('ordine_fasi_operatori').select('operatore_id, users(nome, cognome)').eq('ordine_fase_id', ordFaseId),
-    ]);
-    f = fd;
-    opMulti = om || [];
+    const { data: detResp } = await sb.rpc('dettaglio_fase_completa', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ord_fase_id: ordFaseId });
+    f = detResp?.ok ? detResp.dati.fase : null;
+    opMulti = detResp?.ok ? detResp.dati.collaboratori : [];
   } else {
     const cached = await cacheGet('fasi-' + ordineId) || [];
     f = cached.find(x => x.id === ordFaseId);
@@ -1615,10 +1599,8 @@ async function renderFaseDetail(ordFaseId, ordineId) {
     const _faseMaster = fasi.find(fm => fm.id === f.fase_id);
     if (_faseMaster && (_faseMaster.dipendenze || []).length > 0) {
       const _depIds = _faseMaster.dipendenze;
-      const { data: _depFasi } = await sb.from('ordine_fasi')
-        .select('fase_id, stato')
-        .eq('ordine_id', ordineId)
-        .in('fase_id', _depIds);
+      const { data: depResp } = await sb.rpc('fasi_dipendenze_stato', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_id: ordineId, p_fase_ids: _depIds });
+      const _depFasi = depResp?.ok ? depResp.dati : [];
       _depBloccanti = (_depFasi || []).filter(df => !['completata', 'non_applicabile'].includes(df.stato))
         .map(df => { const fm = fasi.find(fm => fm.id === df.fase_id); return fm ? fm.nome : df.fase_id; });
     }
@@ -1656,7 +1638,8 @@ async function renderFaseDetail(ordFaseId, ordineId) {
     giaSulla.add(currentUser.id);
     let opzioniColleghi = '';
     if (isOnline) {
-      const { data: tuttiOp } = await sb.from('users').select('id, nome, cognome').eq('attivo', true).in('ruolo', ['operatore']).order('cognome');
+      const { data: collResp } = await sb.rpc('colleghi_disponibili', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
+      const tuttiOp = collResp?.ok ? collResp.dati : [];
       const disponibili = (tuttiOp || []).filter(u => !giaSulla.has(u.id));
       if (disponibili.length) {
         const chips = disponibili.map(u =>
@@ -1729,7 +1712,8 @@ async function renderFaseDetail(ordFaseId, ordineId) {
   } else if (f.stato === 'completata') {
     // Mostra pulsante spedizione se l'ultima fase applicabile è completata
     if (ordine?.stato === 'aperto') {
-      const { data: allFasi } = await sb.from('ordine_fasi').select('stato').eq('ordine_id', ordineId);
+      const { data: stResp } = await sb.rpc('fasi_stato_ordine', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_id: ordineId });
+      const allFasi = stResp?.ok ? stResp.dati : [];
       const allDone = (allFasi || []).every(x => x.stato === 'completata' || x.stato === 'non_applicabile');
       if (allDone && currentUser.ruolo !== 'sola_lettura') {
         bodyHtml += `
@@ -2317,12 +2301,8 @@ async function renderAttivita() {
     el.innerHTML = '<div class="empty-state"><div class="icon">📡</div><p>Disponibile solo online</p></div>';
     return;
   }
-  const { data } = await sb.from('ordine_fasi')
-    .select('*, ordini(codice, cliente), fasi(nome)')
-    .eq('operatore_id', currentUser.id)
-    .eq('stato', 'completata')
-    .order('completata_il', { ascending: false })
-    .limit(30);
+  const { data: storicoResp } = await sb.rpc('storico_fasi_completate', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
+  const data = storicoResp?.ok ? storicoResp.dati : [];
 
   if (!data?.length) {
     el.innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>Nessuna fase completata</p></div>';
@@ -2446,13 +2426,9 @@ function addGiorniLavorativi(dataInizio, giorni) {
 }
 
 async function loadFaseMediaMinuti() {
-  if (!isOnline) return;
-  const { data } = await sb.from('ordine_fasi')
-    .select('fase_id, tempo_accumulato_minuti, n_ordini_batch, ordini(quantita)')
-    .eq('stato', 'completata')
-    .gt('tempo_accumulato_minuti', 0)
-    .lt('tempo_accumulato_minuti', 20000)
-    .not('fase_id', 'is', null);
+  if (!isOnline || !currentUser) return;
+  const { data: tmResp } = await sb.rpc('tempo_medio_fasi_dati', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
+  const data = tmResp?.ok ? tmResp.dati : null;
   if (!data) return;
   const map = {};
   data.forEach(f => {
@@ -2472,23 +2448,18 @@ async function loadFaseMediaMinuti() {
 // ═══════════════════════════════════════════════
 async function loadNotificheOp() {
   if (!isOnline || !currentUser) return;
-  const [{ data }, { count }] = await Promise.all([
-    sb.from('notifiche')
-      .select('*').eq('destinatario_id', currentUser.id)
-      .order('creata_il', { ascending: false }).limit(30),
-    // Conteggio reale delle non lette, non le 30 righe della lista: il vecchio filtro
-    // su "app-ultima-apertura" confrontava creata_il con un timestamp scritto in showApp()
-    // PRIMA di questa chiamata, nella stessa apertura — quindi quasi nessuna notifica
-    // pregressa poteva mai risultare "dopo" quel timestamp e il badge restava a 0
-    // qualunque fosse l'arretrato reale (visto con 343 non lette accumulate di notte).
-    sb.from('notifiche')
-      .select('id', { count: 'exact', head: true })
-      .eq('destinatario_id', currentUser.id).eq('letta', false),
-  ]);
-  const notifiche = data || [];
+  // Conteggio reale delle non lette, non le 30 righe della lista: il vecchio filtro
+  // su "app-ultima-apertura" confrontava creata_il con un timestamp scritto in showApp()
+  // PRIMA di questa chiamata, nella stessa apertura — quindi quasi nessuna notifica
+  // pregressa poteva mai risultare "dopo" quel timestamp e il badge restava a 0
+  // qualunque fosse l'arretrato reale (visto con 343 non lette accumulate di notte).
+  // Il destinatario è sempre currentUser.id, derivato server-side dalla sessione
+  // validata dentro la RPC — mai un id passato a parte e fidato senza verifica.
+  const { data: notifResp } = await sb.rpc('notifiche_operatore', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
+  const notifiche = notifResp?.ok ? notifResp.dati.lista : [];
   window._notificheOp = notifiche;
 
-  const unread = count || 0;
+  const unread = notifResp?.ok ? notifResp.dati.non_lette : 0;
   const badge = document.getElementById('notif-badge-op');
   if (badge) {
     badge.textContent = unread;

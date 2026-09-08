@@ -266,7 +266,28 @@ header {
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 
+// Intercetta sessione_non_valida su tutte le chiamate RPC: reindirizza al login.
+// Stesso pattern di operatore.html — necessario ora che le letture passano da RPC
+// gated su session_token (scadenza 24h, o forzato_logout dal responsabile).
+(function() {
+  const _orig = sb.rpc.bind(sb);
+  sb.rpc = async function(...args) {
+    const result = await _orig(...args);
+    if (result.data?.errore === 'sessione_non_valida') {
+      currentUser = null; sessionToken = null;
+      localStorage.removeItem('ufficio-user');
+      localStorage.removeItem('ufficio-session-token');
+      clearInterval(refreshTimer);
+      document.getElementById('app-screen').style.display = 'none';
+      document.getElementById('login-screen').style.display = 'flex';
+      showErr('Sessione scaduta — effettua di nuovo l\'accesso');
+    }
+    return result;
+  };
+})();
+
 let currentUser       = null;
+let sessionToken      = null;
 let macroFasi         = [];
 let fasiNomi          = {};   // fase_id → {nome, posizione, macro_fase_id}
 let allOrdini         = [];
@@ -281,18 +302,19 @@ let refreshTimer      = null;
 // ── LOGIN ──
 async function init() {
   const saved = localStorage.getItem('ufficio-user');
-  if (saved) {
+  const savedToken = localStorage.getItem('ufficio-session-token');
+  if (saved && savedToken) {
     try {
       currentUser = JSON.parse(saved);
+      sessionToken = savedToken;
       mostraApp();
       await caricaMeta();
       await aggiornaUfficio();
       refreshTimer = setInterval(aggiornaUfficio, 120000);
       return;
-    } catch(e) { localStorage.removeItem('ufficio-user'); }
+    } catch(e) { localStorage.removeItem('ufficio-user'); localStorage.removeItem('ufficio-session-token'); }
   }
-  const { data } = await sb.from('users').select('id, nome, cognome')
-    .in('ruolo', ['sola_lettura']).eq('attivo', true).order('cognome');
+  const { data } = await sb.rpc('lista_operatori_login', { p_solo_sola_lettura: true });
   const sel = document.getElementById('login-user-select');
   sel.innerHTML = '<option value="">— Seleziona —</option>' +
     (data || []).map(u => `<option value="${u.id}">${esc(u.cognome)} ${esc(u.nome)}</option>`).join('');
@@ -313,7 +335,9 @@ async function doLogin() {
   if (!data?.ok) { showErr(data?.errore || 'PIN errato'); return; }
 
   currentUser = data.user;
+  sessionToken = data.session_token || null;
   localStorage.setItem('ufficio-user', JSON.stringify(currentUser));
+  if (sessionToken) localStorage.setItem('ufficio-session-token', sessionToken);
   mostraApp();
   await caricaMeta();
   await aggiornaUfficio();
@@ -334,7 +358,9 @@ function showErr(msg) { document.getElementById('login-err').textContent = msg; 
 function doLogout() {
   clearInterval(refreshTimer);
   currentUser = null;
+  sessionToken = null;
   localStorage.removeItem('ufficio-user');
+  localStorage.removeItem('ufficio-session-token');
   window.location.href = 'operatore.html?logout=1';
 }
 
@@ -359,19 +385,19 @@ async function aggiornaUfficio() {
   const ora = new Date().toLocaleTimeString('it-IT', { hour:'2-digit', minute:'2-digit' });
   document.getElementById('refresh-info').textContent = `Aggiornato alle ${ora} · Aggiornamento automatico ogni 2 minuti`;
 
-  const { data: ordini } = await sb.from('ordini')
-    .select('id, codice, cliente, scadenza, stato, priorita, tipo, tipo_prodotto, struttura, materiale, quantita')
-    .in('stato', ['aperto', 'attesa_spedizione', 'sospeso'])
-    .neq('eliminato', true)
-    .order('scadenza', { ascending: true, nullsFirst: false });
+  // ordini_attivi filtra già server-side su stato IN (aperto, sospeso, attesa_spedizione)
+  // AND NOT eliminato — stesso identico filtro della select() diretta che sostituisce.
+  const { data: ordResp } = await sb.rpc('ordini_attivi', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
+  const ordini = ordResp?.ok ? ordResp.dati : [];
 
-  allOrdini = ordini || [];
+  allOrdini = (ordini || []).sort((a, b) => (a.scadenza || '9999-99-99').localeCompare(b.scadenza || '9999-99-99'));
 
   // IMPORTANTE: non leggere MAI ordine_fasi/fasi_ordine_extra senza filtro su ordine_id.
-  // Sono tabelle storiche che crescono con ogni ordine spedito: una select() non filtrata
-  // viene troncata in silenzio da Supabase/PostgREST oltre il limite "Max Rows" del progetto,
-  // e il taglio avviene in un punto arbitrario (nessun .order() garantito) — non solo alla fine.
-  // Qui ci limitiamo esplicitamente agli ordini attivi appena caricati.
+  // Sono tabelle storiche che crescono con ogni ordine spedito. Qui ci limitiamo
+  // esplicitamente agli ordini attivi appena caricati. La RPC restituisce i dati come
+  // un unico blob jsonb (non un resultset REST paginato): il limite "Max Rows" di
+  // PostgREST — che troncava questa stessa query in silenzio prima di questa modifica —
+  // non si applica più a questo pattern, quindi non serve più il controllo count-vs-length.
   const idsAttivi = allOrdini.map(o => o.id);
 
   if (!idsAttivi.length) {
@@ -381,20 +407,11 @@ async function aggiornaUfficio() {
     return;
   }
 
-  const [{ data: ordFasi, count: nOrdFasi }, { data: fasiExtra }] = await Promise.all([
-    sb.from('ordine_fasi').select('ordine_id, fase_id, stato', { count: 'exact' }).in('ordine_id', idsAttivi),
-    sb.from('fasi_ordine_extra').select('ordine_id, nome, stato, numero').in('ordine_id', idsAttivi).order('numero')
-  ]);
+  const { data: avResp } = await sb.rpc('avanzamento_fasi_batch', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_ids: idsAttivi });
+  const dati = avResp?.ok ? avResp.dati : { ordine_fasi: [], fasi_extra: [] };
 
-  allOrdFasi   = ordFasi   || [];
-  allFasiExtra = fasiExtra || [];
-
-  // Rete di sicurezza: se il conteggio esatto lato server non coincide con le righe
-  // ricevute, la risposta è stata troncata — meglio saperlo subito che mostrare dati incompleti.
-  if (typeof nOrdFasi === 'number' && nOrdFasi !== allOrdFasi.length) {
-    console.error(`[ufficio] ordine_fasi troncato: ricevute ${allOrdFasi.length} righe su ${nOrdFasi} attese. Aumentare "Max Rows" in Project Settings → API o paginare la query.`);
-    document.getElementById('refresh-info').textContent += ' · ⚠ dati potenzialmente incompleti, contatta l\'amministratore';
-  }
+  allOrdFasi   = dati.ordine_fasi   || [];
+  allFasiExtra = dati.fasi_extra || [];
 
   renderLista();
 }
@@ -519,16 +536,17 @@ async function caricaStorico() {
   const alNext = `${anno + 1}-01-01`;
 
   // Includi tutti gli ordini (anche eliminato=true) con spedito_il o completato_il nell'anno corrente
-  const { data } = await sb.from('ordini')
-    .select('id, codice, cliente, spedito_il, completato_il, tipo_prodotto, struttura, materiale, tipo, stato, quantita, scadenza, priorita')
-    .or(
-      `and(spedito_il.gte.${dal},spedito_il.lt.${alNext}),` +
-      `and(spedito_il.is.null,completato_il.gte.${dal},completato_il.lt.${alNext})`
-    )
-    .order('spedito_il', { ascending: false, nullsFirst: false })
-    .order('completato_il', { ascending: false, nullsFirst: false });
-
-  allStorico = data || [];
+  const { data: storicoResp } = await sb.rpc('storico_ordini_periodo', {
+    p_operatore_id: currentUser.id, p_session_token: sessionToken, p_dal: dal, p_al: alNext
+  });
+  const data = storicoResp?.ok ? storicoResp.dati : [];
+  // La RPC ordina già per spedito_il DESC NULLS LAST: le righe con spedito_il restano
+  // in testa nell'ordine corretto. Ordiniamo qui solo il gruppo finale (spedito_il nullo)
+  // per completato_il DESC, replicando il secondo order() della query originale.
+  const conSpedizione = (data || []).filter(o => o.spedito_il);
+  const senzaSpedizione = (data || []).filter(o => !o.spedito_il)
+    .sort((a, b) => (b.completato_il || '').localeCompare(a.completato_il || ''));
+  allStorico = [...conSpedizione, ...senzaSpedizione];
   renderStorico();
 }
 
@@ -588,12 +606,11 @@ async function apriDettaglio(ordineId) {
   // Non ci fidiamo della cache allOrdFasi/allFasiExtra (che in teoria potrebbe ancora
   // essere incompleta su installazioni molto grandi): per il dettaglio rileggiamo sempre
   // le fasi filtrando esplicitamente per questo singolo ordine, come fa già lo storico.
-  const [{ data: ordFasi }, { data: fasiExtra }] = await Promise.all([
-    sb.from('ordine_fasi').select('ordine_id, fase_id, stato').eq('ordine_id', ordineId),
-    o.tipo === 'extra'
-      ? sb.from('fasi_ordine_extra').select('ordine_id, nome, stato, numero').eq('ordine_id', ordineId).order('numero')
-      : Promise.resolve({ data: [] })
-  ]);
+  const { data: detResp } = await sb.rpc('dettaglio_ordine_fasi', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_id: ordineId });
+  const ordFasi = detResp?.ok ? detResp.dati.ordine_fasi : [];
+  // Solo per ordini extra, come nella query originale — su un ordine standard le
+  // "lavorazioni aggiuntive" non fanno parte di questa vista.
+  const fasiExtra = (detResp?.ok && o.tipo === 'extra') ? detResp.dati.fasi_extra : [];
 
   renderDettaglio(o, ordFasi || [], fasiExtra || []);
 }
@@ -603,13 +620,12 @@ async function apriDettaglioStorico(ordineId) {
   if (!o) return;
   dettaglioSorgente = 'storico';
 
-  const [{ data: ordFasi }, { data: fasiExtra }, { data: statsArr }] = await Promise.all([
-    sb.from('ordine_fasi').select('ordine_id, fase_id, stato').eq('ordine_id', ordineId),
-    o.tipo === 'extra'
-      ? sb.from('fasi_ordine_extra').select('ordine_id, nome, stato, numero').eq('ordine_id', ordineId).order('numero')
-      : Promise.resolve({ data: [] }),
+  const [{ data: detResp }, { data: statsArr }] = await Promise.all([
+    sb.rpc('dettaglio_ordine_fasi', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_id: ordineId }),
     sb.rpc('statistiche_lavoro_ordini', { p_ordine_ids: [ordineId] }),
   ]);
+  const ordFasi = detResp?.ok ? detResp.dati.ordine_fasi : [];
+  const fasiExtra = (detResp?.ok && o.tipo === 'extra') ? detResp.dati.fasi_extra : [];
 
   const stats = statsArr?.[0] || null;
   renderDettaglio(o, ordFasi || [], fasiExtra || [], stats);
