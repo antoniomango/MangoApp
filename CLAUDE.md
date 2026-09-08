@@ -73,20 +73,24 @@ Regole permanenti:
 
 ## Job schedulati (pg_cron) e retention dei dati
 
-I job notturni attivi in produzione (`mtpzfxnyfkzikzlkomwz`) al 2026-07-08:
+I job notturni attivi in produzione (`mtpzfxnyfkzikzlkomwz`) al 2026-09-08:
 
 | Job | Schedule | Retention |
 |-----|----------|-----------|
 | `pulizia-notifiche-lette` | `0 2 * * *` | Elimina notifiche lette > 30 giorni |
 | `pulizia-notifiche-non-lette` | `1 2 * * *` | Elimina notifiche non lette > 120 giorni |
 | `pulizia-pin-tentativi` | `2 2 * * *` | Elimina tentativi PIN > 24 ore |
-| `pulizia-log-cron` | `3 2 * * *` | Elimina `cron.job_run_details` > 7 giorni |
+| `pulizia-log-cron` | `3 2 * * *` | Elimina `cron.job_run_details` > 7 giorni (`kpi_config.retention_log_cron_giorni`) |
+| `vacuum-log-cron` | `30 2 * * 0` | Domenica notte: `VACUUM (FULL) cron.job_run_details` — le sole `DELETE` di `pulizia-log-cron` non restituiscono lo spazio fisico al sistema operativo |
 | `alert-ordini-ritardo` | `30 5 * * *` | Invia alert ordini in ritardo |
+| `controllo-cron-falliti` | `0 5 * * *` | Notifica il responsabile se un job è fallito nelle ultime 24 ore |
 | `notifica-fine-giornata` | `* * * * *` | Notifica fine turno agli operatori |
 | `notifica-reminder-fasi` | `* * * * *` | Reminder fasi aperte > soglia |
 | `pausa-automatica-fine-turno` | `* * * * *` | Al termine del turno, mette in pausa le fasi in_corso standard (accumula tempo, logga 'fase_pausa_automatica') |
 
 **Regola non derogabile**: ogni nuovo job schedulato che scrive dati ripetutamente (log, storico, notifiche, audit trail) **deve prevedere fin dalla sua creazione una politica di retention esplicita** — un job di pulizia dedicato oppure una colonna `TTL`. Non farlo causa accumulo silenzioso: `cron.job_run_details` è arrivata a 137 MB in 14 giorni prima che venisse aggiunta la pulizia.
+
+**La sola retention non basta se la tabella non viene mai compattata**: il 2026-09-08 `cron.job_run_details` pesava di nuovo 136 MB su 154 MB di database totale — la retention era stata silenziosamente allentata da 7 a 30 giorni in `kpi_config` (riallineata a 7, il valore che questa tabella ha sempre indicato), ma soprattutto le `DELETE` della pulizia notturna non riducono mai la dimensione fisica del file su disco: serve un `VACUUM (FULL)` periodico (job `vacuum-log-cron` sopra) per restituire davvero lo spazio. **`VACUUM` non può girare dentro una transazione né dentro un blocco `DO`/plpgsql** — va passato a `cron.schedule()` come unico comando SQL diretto nello schedule, non incapsulato in altro codice. Verificato empiricamente su pg_cron 1.6.4 prima di programmarlo in permanenza (job di prova, `status='succeeded'`).
 
 ## Al termine di ogni sessione
 
