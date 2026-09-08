@@ -659,7 +659,7 @@ async function showApp() {
   await loadOrdini();
   await loadNotificheOp();
   await Promise.all([loadFaseMediaMinuti(), loadOrarioConfigOp(), loadChiusureCache()]);
-  setupRealtime();
+  avviaPollingAggiornamenti();
   scheduleEndOfShiftRefreshOp();
   updateQueueBadge();
   syncQueue();
@@ -745,30 +745,34 @@ async function loadOrdini() {
 }
 
 // ═══════════════════════════════════════════════
-// REALTIME
+// AGGIORNAMENTO PERIODICO (ex realtime)
 // ═══════════════════════════════════════════════
-function setupRealtime() {
-  if (!isOnline) return;
-  sb.channel('operatore')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'ordini' }, async () => {
-      await loadOrdini();
-      renderHome();
-    })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'ordine_fasi' }, async () => {
-      if (currentOrdineId) await renderOrdineDetail(currentOrdineId);
-      renderHome();
-    })
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'fasi_ordine_extra' }, async () => {
-      if (currentOrdineId) await renderOrdineDetail(currentOrdineId);
-      renderHome();
-    })
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifiche',
-      filter: `destinatario_id=eq.${currentUser.id}` }, async () => {
-      await loadNotificheOp();
-      const screen = document.getElementById('screen-notifiche');
-      if (screen?.classList.contains('active')) renderNotificheOp();
-    })
-    .subscribe();
+// Fino al 2026-09-08 qui c'era una sottoscrizione sb.channel(...).on('postgres_changes', ...)
+// su ordini/ordine_fasi/fasi_ordine_extra/notifiche. Rimossa insieme alla policy RLS
+// "anon USING(true)" su quelle tabelle (Punto 1/Fase 2 dell'audit di sicurezza): Realtime
+// applica la stessa RLS delle letture REST — verificato sperimentalmente su
+// mango-test-security prima di questo cambio (due canali, uno prima e uno dopo la rimozione
+// della policy, stesso UPDATE generato via SQL: il primo riceve l'evento, il secondo si
+// sottoscrive con successo ma non riceve mai nulla, silenziosamente). Senza una policy anon
+// su cui appoggiarsi, la sottoscrizione sarebbe rimasta "joined" ma muta per sempre.
+// Sostituita con un polling che richiama le stesse RPC gated su sessione già in uso altrove
+// in questo file (nessuna superficie nuova, stesso principio già adottato per le letture
+// nel Punto 1/Fase 1) — a costo di una latenza di aggiornamento fino a POLLING_INTERVALLO_MS
+// invece che quasi istantanea, accettabile per il numero di tablet in officina.
+const POLLING_INTERVALLO_MS = 20000;
+let _pollingTimer = null;
+
+function avviaPollingAggiornamenti() {
+  if (_pollingTimer) return;
+  _pollingTimer = setInterval(async () => {
+    if (!isOnline || !currentUser) return;
+    await loadOrdini();
+    if (currentOrdineId) await renderOrdineDetail(currentOrdineId);
+    renderHome();
+    await loadNotificheOp();
+    const screen = document.getElementById('screen-notifiche');
+    if (screen?.classList.contains('active')) renderNotificheOp();
+  }, POLLING_INTERVALLO_MS);
 }
 
 // ═══════════════════════════════════════════════
