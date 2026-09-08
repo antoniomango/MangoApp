@@ -5323,8 +5323,21 @@ async function _esportaOrdiniConVerifica(ordini) {
           continue;
         }
       }
-      const { error: rpcErr } = await sb.rpc('archivia_ordine', { p_ordine_id: o.id, p_responsabile_id: currentUserRow.id });
+      const { data: archData, error: rpcErr } = await sb.rpc('archivia_ordine', { p_ordine_id: o.id, p_responsabile_id: currentUserRow.id });
       if (rpcErr) { falliti.push(`${o.codice || o.cliente} (archivia_ordine fallita dopo cancellazione allegati: ${rpcErr.message})`); continue; }
+
+      // Rete di sicurezza, non il percorso principale: allegato-elimina sopra ha già
+      // ripulito riga+file, quindi qui url_eliminati è quasi sempre vuoto. Ma se in
+      // futuro archivia_ordine venisse chiamato senza quel passaggio (o idsVerificati
+      // fosse vuoto per un motivo diverso), questa RPC ora restituisce comunque i path
+      // che ha appena cancellato dalla tabella — non lasciarli orfani in storage.
+      // responsabile.html gira come authenticated con la policy "Auth delete
+      // allegati-fasi": può cancellare direttamente, nessuna edge function necessaria.
+      const urlResidui = archData?.url_eliminati || [];
+      if (urlResidui.length) {
+        const { error: eStorage } = await sb.storage.from('allegati-fasi').remove(urlResidui);
+        if (eStorage) console.warn(`Archiviazione ${o.codice}: righe allegati cancellate ma storage.remove() fallita (${eStorage.message}) — file potenzialmente orfani:`, urlResidui);
+      }
 
       archiviati.push(o);
 
