@@ -6,12 +6,11 @@
 --
 -- Rigenerare dopo ogni migration rilevante — vedi CLAUDE.md.
 --
-
 --
 -- PostgreSQL database dump
 --
 
-\restrict kAUWeXzMh8j5m7d3DpK7UDPfpr1SPb0tIgIOZJ8R6EsEQhsI698cnZ4facEo6fe
+\restrict Tz8te3dy3FuH1jzFXKGbtr8zmoC823qgajKqyLcZede1yjAIktUGTlvX7Yjcn8K
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -7677,7 +7676,6 @@ GRANT ALL ON FUNCTION public.elenco_foto_fase(p_user_id uuid, p_session_token uu
 --
 
 REVOKE ALL ON FUNCTION public.elenco_foto_ordine_responsabile(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
-GRANT ALL ON FUNCTION public.elenco_foto_ordine_responsabile(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid) TO anon;
 GRANT ALL ON FUNCTION public.elenco_foto_ordine_responsabile(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.elenco_foto_ordine_responsabile(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid) TO service_role;
 
@@ -8832,5 +8830,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON T
 -- PostgreSQL database dump complete
 --
 
-\unrestrict kAUWeXzMh8j5m7d3DpK7UDPfpr1SPb0tIgIOZJ8R6EsEQhsI698cnZ4facEo6fe
+\unrestrict Tz8te3dy3FuH1jzFXKGbtr8zmoC823qgajKqyLcZede1yjAIktUGTlvX7Yjcn8K
 
