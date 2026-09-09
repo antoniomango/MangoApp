@@ -10,7 +10,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict Tz8te3dy3FuH1jzFXKGbtr8zmoC823qgajKqyLcZede1yjAIktUGTlvX7Yjcn8K
+\restrict k1QdIfcQheB1jeCpvB52caa0xnN3rhuO7Wk6yzhFlZxcHabiaqyoTZ0dalgGTnM
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -1002,7 +1002,9 @@ CREATE FUNCTION public.completa_fase_extra(p_fase_extra_id uuid, p_operatore_id 
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-DECLARE v_fase fasi_ordine_extra%ROWTYPE;
+DECLARE
+  v_fase fasi_ordine_extra%ROWTYPE;
+  v_durata numeric;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -1018,8 +1020,9 @@ BEGIN
      AND NOT EXISTS (SELECT 1 FROM users WHERE id=p_operatore_id AND ruolo='responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
+  v_durata := GREATEST(0, EXTRACT(EPOCH FROM (NOW() - v_fase.iniziata_il)) / 60);
   UPDATE fasi_ordine_extra SET stato='completata', completata_il=NOW(), note_operatore=COALESCE(p_note, note_operatore),
-    tempo_accumulato_minuti=CASE WHEN v_fase.iniziata_il IS NOT NULL THEN EXTRACT(EPOCH FROM (NOW()-v_fase.iniziata_il))/60 ELSE NULL END
+    tempo_accumulato_minuti = COALESCE(tempo_accumulato_minuti, 0) + v_durata
   WHERE id=p_fase_extra_id;
   RETURN jsonb_build_object('ok', true);
 END;
@@ -8830,5 +8833,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON T
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Tz8te3dy3FuH1jzFXKGbtr8zmoC823qgajKqyLcZede1yjAIktUGTlvX7Yjcn8K
+\unrestrict k1QdIfcQheB1jeCpvB52caa0xnN3rhuO7Wk6yzhFlZxcHabiaqyoTZ0dalgGTnM
 
