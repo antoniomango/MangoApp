@@ -3265,12 +3265,14 @@ async function renderDettaglioOrdine(id) {
 
 // Galleria aggregata di tutte le foto di un ordine, sopra l'elenco fasi (richiesta del
 // proprietario: "vederle sia dentro le fasi sia in alto quando apro l'ordine"). Convive con la
-// vista per-fase (dentro openFaseDetail), non la sostituisce. Non passa da allegato-url/
-// elenco_foto_fase: il responsabile è sempre `authenticated`, con accesso diretto e già
-// sufficiente a `allegati` (SELECT anonima aperta, quindi anche authenticated) e allo storage
-// (policy "Auth select allegati-fasi") — una singola query con `.in()` sulle fasi dell'ordine è
-// già la versione efficiente, non N chiamate all'edge function per fase (vedi nota vault sul
-// perché non è stata estesa allegato-url per questo).
+// vista per-fase (dentro openFaseDetail), non la sostituisce.
+// Fino al 2026-09-09 leggeva `allegati` e firmava gli URL direttamente da qui, appoggiandosi
+// alle policy storage.objects a livello di bucket intero (V-29 — nessuno scoping per ordine,
+// qualunque authenticated poteva leggere/cancellare qualunque file). Passa ora dall'edge
+// function allegati-ordine-url, che chiama prima la RPC elenco_foto_ordine_responsabile
+// (verifica sessione + che l'ordine esista) e firma con la service role solo dopo — stesso
+// schema già in uso per allegato-url lato operatore, una sola chiamata per l'intero ordine
+// invece di N per fase.
 async function caricaGalleriaOrdineDettaglio(ordineId, mappaNomiFasi) {
   const el = document.getElementById('det-foto-galleria');
   if (!el) return;
@@ -3280,36 +3282,29 @@ async function caricaGalleriaOrdineDettaglio(ordineId, mappaNomiFasi) {
     return;
   }
 
-  const idsFasi = Array.from(mappaNomiFasi.keys());
-  if (!idsFasi.length) {
-    el.innerHTML = '<div class="note-box" style="color:var(--muted)">Nessuna foto allegata a questo ordine.</div>';
-    return;
-  }
+  const { data: esito, error: eEdge } = await sb.functions.invoke('allegati-ordine-url', {
+    headers: await _headerAutorizzazione(),
+    body: { p_responsabile_id: currentUserRow.id, p_ordine_id: ordineId }
+  });
 
-  const { data: tutteAllegati, error: eAllegati } = await sb.from('allegati')
-    .select('id, url_file, ordine_fase_id, caricato_da')
-    .in('ordine_fase_id', idsFasi);
-
-  if (eAllegati) {
-    console.error('Galleria ordine:', eAllegati);
+  if (eEdge || !esito?.ok) {
+    console.error('Galleria ordine:', eEdge || esito?.errore);
     el.innerHTML = '<div class="note-box" style="border-color:#B03A2E">⚠ Impossibile caricare la galleria — riprova.</div>';
     return;
   }
-  if (!tutteAllegati?.length) {
+  const tutteAllegati = esito.allegati || [];
+  if (!tutteAllegati.length) {
     el.innerHTML = '<div class="note-box" style="color:var(--muted)">Nessuna foto allegata a questo ordine.</div>';
     return;
   }
 
-  const signedResults = await Promise.all(
-    tutteAllegati.map(a => sb.storage.from('allegati-fasi').createSignedUrl(a.url_file, 3600))
-  );
-  const items = tutteAllegati.map((a, i) => ({
+  const items = tutteAllegati.map(a => ({
     id: a.id,
     caricato_da: a.caricato_da,
     ordine_fase_id: a.ordine_fase_id,
     nomeFase: mappaNomiFasi.get(a.ordine_fase_id) || 'Fase',
     nomeFile: a.url_file,
-    signedUrl: signedResults[i]?.data?.signedUrl
+    signedUrl: a.signedUrl
   })).filter(x => x.signedUrl);
 
   if (!items.length) {
@@ -5240,10 +5235,13 @@ async function _esportaOrdiniConVerifica(ordini) {
           .eq('ordine_id', o.id).order('creato_il'),
       ]);
 
-      const fasiIds = (fasiOrd || []).map(f => f.id);
-      const { data: allegati } = fasiIds.length
-        ? await sb.from('allegati').select('id, url_file, ordine_fase_id').in('ordine_fase_id', fasiIds)
-        : { data: [] };
+      // Path e URL firmati ottenuti insieme dalla stessa edge function della galleria (V-29:
+      // niente più lettura diretta di storage.objects — vedi caricaGalleriaOrdineDettaglio).
+      const { data: esitoFoto } = await sb.functions.invoke('allegati-ordine-url', {
+        headers: await _headerAutorizzazione(),
+        body: { p_responsabile_id: currentUserRow.id, p_ordine_id: o.id }
+      });
+      const allegati = esitoFoto?.ok ? esitoFoto.allegati : [];
 
       const speditoDate = o.spedito_il ? o.spedito_il.split('T')[0] : 'no-data';
       const folderName = `${o.cliente || 'cliente'}_${o.codice || o.id}_${speditoDate}`
@@ -5260,9 +5258,8 @@ async function _esportaOrdiniConVerifica(ordini) {
         const subDir = await dirHandle.getDirectoryHandle(folderName, { create: true });
 
         for (const a of (allegati || [])) {
-          const { data: signed } = await sb.storage.from('allegati-fasi').createSignedUrl(a.url_file, 300);
-          if (!signed?.signedUrl) { scritturaFallita = `signed URL fallito: ${a.url_file}`; break; }
-          const resp = await fetch(signed.signedUrl);
+          if (!a.signedUrl) { scritturaFallita = `signed URL fallito: ${a.url_file}`; break; }
+          const resp = await fetch(a.signedUrl);
           if (!resp.ok) { scritturaFallita = `download foto fallito (${resp.status}): ${a.url_file}`; break; }
           const blob = await resp.blob();
           const ok = await _scriviEVerifica(subDir, a.url_file.split('/').pop(), blob);
@@ -5283,9 +5280,8 @@ async function _esportaOrdiniConVerifica(ordini) {
         // spacciato per una vera rilettura da disco).
         const zip = new JSZip();
         for (const a of (allegati || [])) {
-          const { data: signed } = await sb.storage.from('allegati-fasi').createSignedUrl(a.url_file, 300);
-          if (!signed?.signedUrl) { scritturaFallita = `signed URL fallito: ${a.url_file}`; break; }
-          const resp = await fetch(signed.signedUrl);
+          if (!a.signedUrl) { scritturaFallita = `signed URL fallito: ${a.url_file}`; break; }
+          const resp = await fetch(a.signedUrl);
           if (!resp.ok) { scritturaFallita = `download foto fallito (${resp.status}): ${a.url_file}`; break; }
           const blob = await resp.blob();
           if (!blob.size) { scritturaFallita = `foto vuota: ${a.url_file}`; break; }
@@ -5323,20 +5319,24 @@ async function _esportaOrdiniConVerifica(ordini) {
           continue;
         }
       }
-      const { data: archData, error: rpcErr } = await sb.rpc('archivia_ordine', { p_ordine_id: o.id, p_responsabile_id: currentUserRow.id });
-      if (rpcErr) { falliti.push(`${o.codice || o.cliente} (archivia_ordine fallita dopo cancellazione allegati: ${rpcErr.message})`); continue; }
-
       // Rete di sicurezza, non il percorso principale: allegato-elimina sopra ha già
-      // ripulito riga+file, quindi qui url_eliminati è quasi sempre vuoto. Ma se in
-      // futuro archivia_ordine venisse chiamato senza quel passaggio (o idsVerificati
-      // fosse vuoto per un motivo diverso), questa RPC ora restituisce comunque i path
-      // che ha appena cancellato dalla tabella — non lasciarli orfani in storage.
-      // responsabile.html gira come authenticated con la policy "Auth delete
-      // allegati-fasi": può cancellare direttamente, nessuna edge function necessaria.
-      const urlResidui = archData?.url_eliminati || [];
-      if (urlResidui.length) {
-        const { error: eStorage } = await sb.storage.from('allegati-fasi').remove(urlResidui);
-        if (eStorage) console.warn(`Archiviazione ${o.codice}: righe allegati cancellate ma storage.remove() fallita (${eStorage.message}) — file potenzialmente orfani:`, urlResidui);
+      // ripulito riga+file, quindi qui url_eliminati è quasi sempre vuoto lato RPC. Ma se in
+      // futuro archivia_ordine venisse chiamato senza quel passaggio (o idsVerificati fosse
+      // vuoto per un motivo diverso), non deve restare nessun path orfano in storage.
+      // Dal 2026-09-09 (V-29) non più uno storage.remove() diretto dal client (appoggiato
+      // alle policy a livello di bucket intero) — l'edge function archivia-ordine chiama
+      // archivia_ordine come l'utente e cancella con la service role solo i path che la RPC
+      // ha appena autorizzato e restituito, stesso schema di allegato-elimina.
+      const { data: archEsito, error: archErr } = await sb.functions.invoke('archivia-ordine', {
+        headers: await _headerAutorizzazione(),
+        body: { p_ordine_id: o.id, p_responsabile_id: currentUserRow.id }
+      });
+      if (archErr || !archEsito?.ok) {
+        falliti.push(`${o.codice || o.cliente} (archivia_ordine fallita dopo cancellazione allegati: ${archErr?.message || archEsito?.errore})`);
+        continue;
+      }
+      if (archEsito.storage_errori?.length) {
+        console.warn(`Archiviazione ${o.codice}: righe allegati cancellate ma storage.remove() fallita — file potenzialmente orfani:`, archEsito.storage_errori);
       }
 
       archiviati.push(o);
