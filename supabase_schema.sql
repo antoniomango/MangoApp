@@ -1,16 +1,8 @@
 --
--- MangoApp — schema dump di produzione (mango-produzione, mtpzfxnyfkzikzlkomwz), schema public
--- Generato con pg_dump 17.6 (binario locale in pgsql/bin, versione identica al server —
--- niente Docker necessario), --schema-only --schema=public.
--- Non include dati, né gli schemi auth/storage/cron (gestiti da Supabase).
---
--- Rigenerare dopo ogni migration rilevante — vedi CLAUDE.md.
---
---
 -- PostgreSQL database dump
 --
 
-\restrict g4xOlePpGYSmXccHLly4gouRTtZwafn4br36AkxvLNd1BEcVXzMN2ZzVi2fJ6cP
+\restrict rlb839zj5imPbw1s7AFhUCVuxSGqXsm7IOfcqd8F1IiFXqcOqwWpeSoGGBZri6x
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -3130,13 +3122,18 @@ CREATE FUNCTION public.lista_schede_kpi() RETURNS TABLE(id uuid, nome text, crit
     SET search_path TO 'public'
     AS $$
 DECLARE
-  v_rec  record;
-  v_curr record;
+  v_rec     record;
+  v_curr    record;
 BEGIN
+  IF NOT e_responsabile() THEN
+    RAISE EXCEPTION 'non_autorizzato' USING ERRCODE = '42501';
+  END IF;
+
   FOR v_rec IN SELECT * FROM public.kpi_schede ORDER BY creata_il DESC LOOP
     SELECT t.ore_lavorazione_interna, t.giorni_calendario, t.n_campioni
     INTO v_curr
     FROM public.calcola_tempo_combinazione(v_rec.criteri) t;
+
     RETURN QUERY SELECT
       v_rec.id,
       v_rec.nome,
@@ -4376,12 +4373,21 @@ ALTER FUNCTION public.ricalcola_fase_su_ordini_esistenti(p_fase_id smallint, p_r
 --
 
 CREATE FUNCTION public.riepilogo_competenze_operatore(p_operatore_id uuid) RETURNS TABLE(fase_id smallint, fase_nome text, fase_posizione integer, priorita smallint)
-    LANGUAGE sql STABLE SECURITY DEFINER
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
+BEGIN
+  IF NOT e_responsabile() THEN
+    RAISE EXCEPTION 'non_autorizzato' USING ERRCODE = '42501';
+  END IF;
+
+  RETURN QUERY
   SELECT c.fase_id, f.nome, f.posizione, c.priorita
-  FROM competenze_operatore_fase c JOIN fasi f ON f.id = c.fase_id
-  WHERE c.operatore_id = p_operatore_id ORDER BY f.posizione, f.id;
+  FROM   competenze_operatore_fase c
+  JOIN   fasi f ON f.id = c.fase_id
+  WHERE  c.operatore_id = p_operatore_id
+  ORDER  BY f.posizione, f.id;
+END;
 $$;
 
 
@@ -7304,7 +7310,7 @@ ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 -- Name: users users_select; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY users_select ON public.users FOR SELECT TO authenticated USING (true);
+CREATE POLICY users_select ON public.users FOR SELECT TO authenticated USING ((public.e_responsabile() OR (auth.uid() = id)));
 
 
 --
@@ -8014,7 +8020,7 @@ GRANT ALL ON FUNCTION public.lista_priorita_giornaliera() TO service_role;
 -- Name: FUNCTION lista_schede_kpi(); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION public.lista_schede_kpi() TO anon;
+REVOKE ALL ON FUNCTION public.lista_schede_kpi() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.lista_schede_kpi() TO authenticated;
 GRANT ALL ON FUNCTION public.lista_schede_kpi() TO service_role;
 
@@ -8158,7 +8164,7 @@ GRANT ALL ON FUNCTION public.ricalcola_fase_su_ordini_esistenti(p_fase_id smalli
 -- Name: FUNCTION riepilogo_competenze_operatore(p_operatore_id uuid); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION public.riepilogo_competenze_operatore(p_operatore_id uuid) TO anon;
+REVOKE ALL ON FUNCTION public.riepilogo_competenze_operatore(p_operatore_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.riepilogo_competenze_operatore(p_operatore_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.riepilogo_competenze_operatore(p_operatore_id uuid) TO service_role;
 
@@ -8701,7 +8707,7 @@ GRANT ALL ON TABLE public.tipi_prodotto TO service_role;
 -- Name: TABLE users; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.users TO authenticated;
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE public.users TO authenticated;
 GRANT ALL ON TABLE public.users TO service_role;
 
 
@@ -8783,6 +8789,13 @@ GRANT SELECT(ore_default) ON TABLE public.users TO authenticated;
 
 
 --
+-- Name: COLUMN users.escluso_pianificazione; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT(escluso_pianificazione) ON TABLE public.users TO authenticated;
+
+
+--
 -- Name: DEFAULT PRIVILEGES FOR SEQUENCES; Type: DEFAULT ACL; Schema: public; Owner: postgres
 --
 
@@ -8846,5 +8859,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON T
 -- PostgreSQL database dump complete
 --
 
-\unrestrict g4xOlePpGYSmXccHLly4gouRTtZwafn4br36AkxvLNd1BEcVXzMN2ZzVi2fJ6cP
+\unrestrict rlb839zj5imPbw1s7AFhUCVuxSGqXsm7IOfcqd8F1IiFXqcOqwWpeSoGGBZri6x
 
