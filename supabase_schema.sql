@@ -1,498 +1,185 @@
 --
--- MangoApp — schema dump di produzione (mango-produzione, mtpzfxnyfkzikzlkomwz)
--- Generato il 2026-09-09T04:51:29.061Z via introspezione diretta del catalogo Postgres
--- (pg_get_functiondef / pg_get_constraintdef / pg_policies / information_schema), non con
--- pg_dump: né Docker né un pg_dump locale erano disponibili nell'ambiente della sessione che
--- lo ha generato. Schema `public` soltanto — non include auth/storage/cron (gestiti da
--- Supabase) né dati.
+-- MangoApp — schema dump di produzione (mango-produzione, mtpzfxnyfkzikzlkomwz), schema public
+-- Generato con pg_dump 17.6 (binario locale in pgsql/bin, versione identica al server —
+-- niente Docker necessario), --schema-only --schema=public.
+-- Non include dati, né gli schemi auth/storage/cron (gestiti da Supabase).
 --
 -- Rigenerare dopo ogni migration rilevante — vedi CLAUDE.md.
 --
 
--- ============ ESTENSIONI ============
-CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA pg_catalog;
-CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
-CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA extensions;
-CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
-CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault;
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA extensions;
+--
+-- PostgreSQL database dump
+--
 
--- ============ TIPI ENUM ============
-CREATE TYPE public.azione_log AS ENUM ('fase_iniziata', 'fase_completata', 'fase_riassegnata', 'nc_segnalata', 'nc_chiusa', 'ordine_sospeso', 'ordine_riattivato', 'ordine_spedito', 'ordine_creato', 'fase_messa_in_attesa', 'fase_ripresa', 'fase_confermata_ricezione', 'fase_annullata', 'ordine_modificato', 'fase_pausa_automatica', 'fase_riaperta', 'fase_eliminata');
-CREATE TYPE public.priorita_ordine AS ENUM ('normale', 'urgente', 'extra_urgente');
-CREATE TYPE public.ruolo_utente AS ENUM ('responsabile', 'operatore', 'sola_lettura');
-CREATE TYPE public.stato_fase AS ENUM ('disponibile', 'in_corso', 'completata', 'non_applicabile', 'in_attesa', 'bloccata');
-CREATE TYPE public.stato_nc AS ENUM ('aperta', 'approvata', 'chiusa');
-CREATE TYPE public.stato_ordine AS ENUM ('aperto', 'sospeso', 'spedito', 'attesa_spedizione');
-CREATE TYPE public.tipo_notifica AS ENUM ('nc_segnalata', 'ordine_in_ritardo', 'fase_riassegnata', 'fase_ripresa', 'ordine_creato', 'ordine_pronto_spedizione', 'ordine_sospeso', 'comunicazione');
-CREATE TYPE public.tipologia_ordine AS ENUM ('4_lati', 'barra_l', 'complanare', 'battente');
+\restrict WHCsSWfxCzOK7fiJ8AcML7V61uaSRGXbJYSMOtVAxiTVBm0g4gMJAm49HZPn59V
 
--- ============ SEQUENZE STANDALONE ============
-CREATE SEQUENCE public.ordini_codice_seq START WITH 1 INCREMENT BY 1 NO CYCLE;
-CREATE SEQUENCE public.macro_fasi_id_seq START WITH 1 INCREMENT BY 1 NO CYCLE;
+-- Dumped from database version 17.6
+-- Dumped by pg_dump version 17.6
 
--- ============ TABELLE ============
-CREATE TABLE public.allegati (
-  id uuid DEFAULT uuid_generate_v4() NOT NULL,
-  ordine_fase_id uuid NOT NULL,
-  url_file text NOT NULL,
-  caricato_da uuid NOT NULL,
-  caricato_il timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT allegati_pkey PRIMARY KEY (id)
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET transaction_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: public; Type: SCHEMA; Schema: -; Owner: pg_database_owner
+--
+
+CREATE SCHEMA public;
+
+
+ALTER SCHEMA public OWNER TO pg_database_owner;
+
+--
+-- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: pg_database_owner
+--
+
+COMMENT ON SCHEMA public IS 'standard public schema';
+
+
+--
+-- Name: azione_log; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.azione_log AS ENUM (
+    'fase_iniziata',
+    'fase_completata',
+    'fase_riassegnata',
+    'nc_segnalata',
+    'nc_chiusa',
+    'ordine_sospeso',
+    'ordine_riattivato',
+    'ordine_spedito',
+    'ordine_creato',
+    'fase_messa_in_attesa',
+    'fase_ripresa',
+    'fase_confermata_ricezione',
+    'fase_annullata',
+    'ordine_modificato',
+    'fase_pausa_automatica',
+    'fase_riaperta',
+    'fase_eliminata'
 );
 
-CREATE TABLE public.archivio_log (
-  id uuid DEFAULT uuid_generate_v4() NOT NULL,
-  ordine_id uuid NOT NULL,
-  fase_id smallint,
-  utente_id uuid NOT NULL,
-  azione azione_log NOT NULL,
-  "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
-  dettaglio jsonb,
-  CONSTRAINT archivio_log_pkey PRIMARY KEY (id)
+
+ALTER TYPE public.azione_log OWNER TO postgres;
+
+--
+-- Name: priorita_ordine; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.priorita_ordine AS ENUM (
+    'normale',
+    'urgente',
+    'extra_urgente'
 );
 
-CREATE TABLE public.attributi_prodotto_config (
-  id uuid DEFAULT uuid_generate_v4() NOT NULL,
-  chiave text NOT NULL,
-  etichetta text NOT NULL,
-  tipo text DEFAULT 'select_singola'::text NOT NULL,
-  opzioni jsonb DEFAULT '[]'::jsonb NOT NULL,
-  obbligatorio boolean DEFAULT true NOT NULL,
-  posizione integer DEFAULT 0 NOT NULL,
-  attivo boolean DEFAULT true NOT NULL,
-  CONSTRAINT attributi_prodotto_config_chiave_key UNIQUE (chiave),
-  CONSTRAINT attributi_prodotto_config_pkey PRIMARY KEY (id),
-  CONSTRAINT attributi_prodotto_config_tipo_check CHECK ((tipo = 'select_singola'::text))
+
+ALTER TYPE public.priorita_ordine OWNER TO postgres;
+
+--
+-- Name: ruolo_utente; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.ruolo_utente AS ENUM (
+    'responsabile',
+    'operatore',
+    'sola_lettura'
 );
 
-CREATE TABLE public.catalogo_fase_extra_macchine (
-  catalogo_fase_extra_id uuid NOT NULL,
-  macchina_id uuid NOT NULL,
-  CONSTRAINT catalogo_fase_extra_macchine_pkey PRIMARY KEY (catalogo_fase_extra_id, macchina_id)
+
+ALTER TYPE public.ruolo_utente OWNER TO postgres;
+
+--
+-- Name: stato_fase; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.stato_fase AS ENUM (
+    'disponibile',
+    'in_corso',
+    'completata',
+    'non_applicabile',
+    'in_attesa',
+    'bloccata'
 );
 
-CREATE TABLE public.catalogo_fasi_extra (
-  id uuid DEFAULT uuid_generate_v4() NOT NULL,
-  nome text NOT NULL,
-  descrizione text,
-  tipo_gestione text DEFAULT 'standard'::text NOT NULL,
-  e_attesa_esterna boolean DEFAULT false NOT NULL,
-  attiva boolean DEFAULT true NOT NULL,
-  creato_il timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT catalogo_fasi_extra_pkey PRIMARY KEY (id)
+
+ALTER TYPE public.stato_fase OWNER TO postgres;
+
+--
+-- Name: stato_nc; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.stato_nc AS ENUM (
+    'aperta',
+    'approvata',
+    'chiusa'
 );
 
-CREATE TABLE public.chiusure_aziendali (
-  id uuid DEFAULT gen_random_uuid() NOT NULL,
-  data_inizio date NOT NULL,
-  data_fine date NOT NULL,
-  descrizione text,
-  creato_il timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT chiusure_aziendali_pkey PRIMARY KEY (id),
-  CONSTRAINT chiusure_date_check CHECK ((data_fine >= data_inizio))
+
+ALTER TYPE public.stato_nc OWNER TO postgres;
+
+--
+-- Name: stato_ordine; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.stato_ordine AS ENUM (
+    'aperto',
+    'sospeso',
+    'spedito',
+    'attesa_spedizione'
 );
 
-CREATE TABLE public.competenze_operatore_fase (
-  id uuid DEFAULT uuid_generate_v4() NOT NULL,
-  operatore_id uuid NOT NULL,
-  fase_id smallint NOT NULL,
-  priorita smallint NOT NULL,
-  creato_il timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT competenze_operatore_fase_pkey PRIMARY KEY (id),
-  CONSTRAINT competenze_operatore_fase_priorita_check CHECK ((priorita >= 1)),
-  CONSTRAINT competenze_operatore_fase_unique UNIQUE (operatore_id, fase_id)
+
+ALTER TYPE public.stato_ordine OWNER TO postgres;
+
+--
+-- Name: tipo_notifica; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.tipo_notifica AS ENUM (
+    'nc_segnalata',
+    'ordine_in_ritardo',
+    'fase_riassegnata',
+    'fase_ripresa',
+    'ordine_creato',
+    'ordine_pronto_spedizione',
+    'ordine_sospeso',
+    'comunicazione'
 );
 
-CREATE TABLE public.competenze_operatore_fase_extra (
-  id uuid DEFAULT uuid_generate_v4() NOT NULL,
-  operatore_id uuid NOT NULL,
-  catalogo_fase_extra_id uuid NOT NULL,
-  priorita smallint NOT NULL,
-  creato_il timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT competenze_operatore_fase_ext_operatore_id_catalogo_fase_ex_key UNIQUE (operatore_id, catalogo_fase_extra_id),
-  CONSTRAINT competenze_operatore_fase_extra_pkey PRIMARY KEY (id)
+
+ALTER TYPE public.tipo_notifica OWNER TO postgres;
+
+--
+-- Name: tipologia_ordine; Type: TYPE; Schema: public; Owner: postgres
+--
+
+CREATE TYPE public.tipologia_ordine AS ENUM (
+    '4_lati',
+    'barra_l',
+    'complanare',
+    'battente'
 );
 
-CREATE TABLE public.competenze_operatore_macchina (
-  operatore_id uuid NOT NULL,
-  macchina_id uuid NOT NULL,
-  priorita integer DEFAULT 1 NOT NULL,
-  CONSTRAINT competenze_operatore_macchina_pkey PRIMARY KEY (operatore_id, macchina_id)
-);
 
-CREATE TABLE public.config_orario (
-  id boolean DEFAULT true NOT NULL,
-  ora_inizio time without time zone DEFAULT '08:00:00'::time without time zone NOT NULL,
-  ora_fine time without time zone DEFAULT '17:00:00'::time without time zone NOT NULL,
-  sabato_lavorativo boolean DEFAULT false NOT NULL,
-  ore_sabato numeric(4,2) DEFAULT 4,
-  domenica_lavorativa boolean DEFAULT false,
-  ore_domenica numeric(4,2) DEFAULT 0,
-  straordinario_attivo boolean DEFAULT false,
-  ore_straordinario numeric(4,2) DEFAULT 2,
-  pausa_attiva boolean DEFAULT true,
-  pausa_minuti integer DEFAULT 60,
-  ora_fine_sabato time without time zone DEFAULT '13:00:00'::time without time zone NOT NULL,
-  CONSTRAINT config_orario_id_check CHECK ((id = true)),
-  CONSTRAINT config_orario_pkey PRIMARY KEY (id)
-);
+ALTER TYPE public.tipologia_ordine OWNER TO postgres;
 
-CREATE TABLE public.config_sistema (
-  chiave text NOT NULL,
-  valore text,
-  CONSTRAINT config_sistema_pkey PRIMARY KEY (chiave)
-);
+--
+-- Name: aggiorna_criteri_fase(smallint, text[], text[], text[], uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
 
-CREATE TABLE public.disponibilita_giornaliera (
-  id uuid DEFAULT uuid_generate_v4() NOT NULL,
-  operatore_id uuid NOT NULL,
-  data date NOT NULL,
-  ore numeric(4,1) NOT NULL,
-  creato_il timestamp with time zone DEFAULT now() NOT NULL,
-  motivo text,
-  CONSTRAINT disponibilita_giornaliera_ore_check CHECK ((ore >= (0)::numeric)),
-  CONSTRAINT disponibilita_giornaliera_pkey PRIMARY KEY (id),
-  CONSTRAINT disponibilita_giornaliera_unique UNIQUE (operatore_id, data)
-);
-
-CREATE TABLE public.fase_dipendenze (
-  fase_id smallint NOT NULL,
-  dipende_da_fase_id smallint NOT NULL,
-  creato_il timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT fase_dipendenze_pkey PRIMARY KEY (fase_id, dipende_da_fase_id),
-  CONSTRAINT no_self_dep CHECK ((fase_id <> dipende_da_fase_id))
-);
-
-CREATE TABLE public.fase_macchine (
-  fase_id smallint NOT NULL,
-  macchina_id uuid NOT NULL,
-  CONSTRAINT fase_macchine_pkey PRIMARY KEY (fase_id, macchina_id)
-);
-
-CREATE TABLE public.fase_materiali (
-  fase_id smallint NOT NULL,
-  materiale_valore text NOT NULL,
-  CONSTRAINT fase_materiali_pkey PRIMARY KEY (fase_id, materiale_valore)
-);
-
-CREATE TABLE public.fase_strutture (
-  fase_id smallint NOT NULL,
-  struttura_valore text NOT NULL,
-  CONSTRAINT fase_strutture_pkey PRIMARY KEY (fase_id, struttura_valore)
-);
-
-CREATE TABLE public.fase_tipi_prodotto (
-  fase_id smallint NOT NULL,
-  tipo_prodotto_id text NOT NULL,
-  CONSTRAINT fase_tipi_prodotto_pkey PRIMARY KEY (fase_id, tipo_prodotto_id)
-);
-
-CREATE TABLE public.fasi (
-  id smallint NOT NULL,
-  nome text NOT NULL,
-  descrizione text,
-  posizione integer,
-  macro_fase_id integer,
-  e_attesa_esterna boolean DEFAULT false NOT NULL,
-  tipo_gestione text DEFAULT 'standard'::text NOT NULL,
-  opzionale boolean DEFAULT false NOT NULL,
-  avvio_automatico boolean DEFAULT false NOT NULL,
-  CONSTRAINT fasi_pkey PRIMARY KEY (id),
-  CONSTRAINT fasi_tipo_gestione_check CHECK ((tipo_gestione = ANY (ARRAY['standard'::text, 'conferma_ricezione'::text, 'spedizione_esterna'::text])))
-);
-
-CREATE TABLE public.fasi_extra_operatori (
-  id uuid DEFAULT gen_random_uuid() NOT NULL,
-  fasi_ordine_extra_id uuid NOT NULL,
-  operatore_id uuid NOT NULL,
-  CONSTRAINT fasi_extra_operatori_fasi_ordine_extra_id_operatore_id_key UNIQUE (fasi_ordine_extra_id, operatore_id),
-  CONSTRAINT fasi_extra_operatori_pkey PRIMARY KEY (id)
-);
-
-CREATE TABLE public.fasi_ordine_extra (
-  id uuid DEFAULT uuid_generate_v4() NOT NULL,
-  ordine_id uuid NOT NULL,
-  numero smallint NOT NULL,
-  nome text NOT NULL,
-  stato stato_fase DEFAULT 'disponibile'::stato_fase NOT NULL,
-  operatore_id uuid,
-  note_responsabile text,
-  note_operatore text,
-  iniziata_il timestamp with time zone,
-  completata_il timestamp with time zone,
-  creato_il timestamp with time zone DEFAULT now(),
-  reminder_inviato_il timestamp with time zone,
-  tempo_accumulato_minuti numeric,
-  n_ordini_batch smallint DEFAULT 1 NOT NULL,
-  e_attesa_esterna boolean DEFAULT false NOT NULL,
-  tipo_gestione text DEFAULT 'standard'::text NOT NULL,
-  spedita_il timestamp with time zone,
-  catalogo_fase_extra_id uuid,
-  macchina_id uuid,
-  ore_stimate_manuali numeric,
-  CONSTRAINT fasi_ordine_extra_numero_check CHECK (((numero >= 1) AND (numero <= 20))),
-  CONSTRAINT fasi_ordine_extra_ordine_id_numero_key UNIQUE (ordine_id, numero),
-  CONSTRAINT fasi_ordine_extra_pkey PRIMARY KEY (id),
-  CONSTRAINT foe_tipo_gestione_check CHECK ((tipo_gestione = ANY (ARRAY['standard'::text, 'conferma_ricezione'::text, 'spedizione_esterna'::text])))
-);
-
-CREATE TABLE public.kpi_config (
-  chiave text NOT NULL,
-  valore numeric NOT NULL,
-  descrizione text,
-  CONSTRAINT kpi_config_pkey PRIMARY KEY (chiave)
-);
-
-CREATE TABLE public.kpi_schede (
-  id uuid DEFAULT gen_random_uuid() NOT NULL,
-  nome text NOT NULL,
-  criteri jsonb NOT NULL,
-  ore_interne_iniziali numeric,
-  giorni_calendario_iniziali numeric,
-  n_campioni_iniziali integer,
-  creata_da uuid,
-  creata_il timestamp with time zone DEFAULT now(),
-  CONSTRAINT kpi_schede_pkey PRIMARY KEY (id)
-);
-
-CREATE TABLE public.macchine (
-  id uuid DEFAULT gen_random_uuid() NOT NULL,
-  nome text NOT NULL,
-  stato text DEFAULT 'attiva'::text NOT NULL,
-  ore_default numeric DEFAULT 8.0 NOT NULL,
-  creato_il timestamp with time zone DEFAULT now() NOT NULL,
-  aggiornato_il timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT macchine_pkey PRIMARY KEY (id),
-  CONSTRAINT macchine_stato_check CHECK ((stato = ANY (ARRAY['attiva'::text, 'manutenzione'::text, 'fuori_uso'::text])))
-);
-
-CREATE TABLE public.macro_fasi (
-  id integer DEFAULT nextval('macro_fasi_id_seq'::regclass) NOT NULL,
-  nome text NOT NULL,
-  posizione integer DEFAULT 0,
-  colore text DEFAULT '#6B7280'::text,
-  CONSTRAINT macro_fasi_pkey PRIMARY KEY (id)
-);
-
-CREATE TABLE public.manutenzioni_macchina (
-  id uuid DEFAULT gen_random_uuid() NOT NULL,
-  macchina_id uuid NOT NULL,
-  data_inizio date NOT NULL,
-  data_fine date NOT NULL,
-  descrizione text,
-  creato_il timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT manutenzioni_macchina_date_check CHECK ((data_fine >= data_inizio)),
-  CONSTRAINT manutenzioni_macchina_pkey PRIMARY KEY (id)
-);
-
-CREATE TABLE public.notifiche (
-  id uuid DEFAULT uuid_generate_v4() NOT NULL,
-  destinatario_id uuid NOT NULL,
-  tipo tipo_notifica NOT NULL,
-  testo text NOT NULL,
-  ordine_id uuid,
-  letta boolean DEFAULT false NOT NULL,
-  creata_il timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT notifiche_pkey PRIMARY KEY (id)
-);
-
-CREATE TABLE public.notifiche_destinatari_config (
-  id uuid DEFAULT gen_random_uuid() NOT NULL,
-  tipo_evento text NOT NULL,
-  utente_id uuid NOT NULL,
-  attivo boolean DEFAULT true NOT NULL,
-  creato_il timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT notifiche_destinatari_config_pkey PRIMARY KEY (id),
-  CONSTRAINT notifiche_destinatari_config_tipo_evento_utente_id_key UNIQUE (tipo_evento, utente_id)
-);
-
-CREATE TABLE public.ordine_fasi (
-  id uuid DEFAULT uuid_generate_v4() NOT NULL,
-  ordine_id uuid NOT NULL,
-  fase_id smallint,
-  stato stato_fase DEFAULT 'disponibile'::stato_fase NOT NULL,
-  operatore_id uuid,
-  iniziata_il timestamp with time zone,
-  completata_il timestamp with time zone,
-  note_responsabile text,
-  note_operatore text,
-  nome_custom text,
-  tempo_accumulato_minuti numeric DEFAULT 0,
-  reminder_inviato_il timestamp with time zone,
-  n_ordini_batch smallint DEFAULT 1 NOT NULL,
-  spedita_il timestamp with time zone,
-  CONSTRAINT ordine_fasi_ordine_id_fase_id_key UNIQUE (ordine_id, fase_id),
-  CONSTRAINT ordine_fasi_pkey PRIMARY KEY (id)
-);
-
-CREATE TABLE public.ordine_fasi_operatori (
-  id uuid DEFAULT gen_random_uuid() NOT NULL,
-  ordine_fase_id uuid NOT NULL,
-  operatore_id uuid NOT NULL,
-  aggiunto_il timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT ordine_fasi_operatori_ordine_fase_id_operatore_id_key UNIQUE (ordine_fase_id, operatore_id),
-  CONSTRAINT ordine_fasi_operatori_pkey PRIMARY KEY (id)
-);
-
-CREATE TABLE public.ordini (
-  id uuid DEFAULT uuid_generate_v4() NOT NULL,
-  codice text,
-  cliente text NOT NULL,
-  priorita text DEFAULT 'normale'::text NOT NULL,
-  scadenza date,
-  stato stato_ordine DEFAULT 'aperto'::stato_ordine NOT NULL,
-  note_generali text,
-  creato_da uuid NOT NULL,
-  creato_il timestamp with time zone DEFAULT now() NOT NULL,
-  spedito_il timestamp with time zone,
-  tipo text DEFAULT 'standard'::text,
-  struttura text DEFAULT 'quattro_lati'::text NOT NULL,
-  tipo_prodotto text DEFAULT 'portoncino'::text NOT NULL,
-  materiale text DEFAULT 'placchetta'::text NOT NULL,
-  eliminato boolean DEFAULT false NOT NULL,
-  quantita integer DEFAULT 1 NOT NULL,
-  completato_il timestamp with time zone,
-  archiviato_il timestamp with time zone,
-  CONSTRAINT ordini_pkey PRIMARY KEY (id),
-  CONSTRAINT ordini_quantita_check CHECK ((quantita >= 1)),
-  CONSTRAINT ordini_tipo_check CHECK ((tipo = ANY (ARRAY['standard'::text, 'extra'::text])))
-);
-
-CREATE TABLE public.pin_tentativi (
-  id uuid DEFAULT gen_random_uuid() NOT NULL,
-  user_id uuid NOT NULL,
-  tentato_il timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT pin_tentativi_pkey PRIMARY KEY (id)
-);
-
-CREATE TABLE public.priorita_ordine_config (
-  id text NOT NULL,
-  etichetta text NOT NULL,
-  peso integer DEFAULT 10 NOT NULL,
-  posizione integer DEFAULT 0 NOT NULL,
-  attivo boolean DEFAULT true NOT NULL,
-  CONSTRAINT priorita_ordine_config_pkey PRIMARY KEY (id)
-);
-
-CREATE TABLE public.snapshot_backfill_fasi_eliminate_20260903 (
-  id uuid NOT NULL,
-  tabella_origine text NOT NULL,
-  stato_precedente stato_fase NOT NULL,
-  momento timestamp with time zone DEFAULT now() NOT NULL,
-  CONSTRAINT snapshot_backfill_fasi_eliminate_20260903_pkey PRIMARY KEY (id, tabella_origine),
-  CONSTRAINT snapshot_backfill_fasi_eliminate_20260903_tabella_origine_check CHECK ((tabella_origine = ANY (ARRAY['ordine_fasi'::text, 'fasi_ordine_extra'::text])))
-);
-
-CREATE TABLE public.tipi_prodotto (
-  id text NOT NULL,
-  label text NOT NULL,
-  posizione integer DEFAULT 0 NOT NULL,
-  CONSTRAINT tipi_prodotto_pkey PRIMARY KEY (id)
-);
-
-CREATE TABLE public.users (
-  id uuid DEFAULT uuid_generate_v4() NOT NULL,
-  nome text NOT NULL,
-  cognome text NOT NULL,
-  email text,
-  ruolo ruolo_utente NOT NULL,
-  attivo boolean DEFAULT true NOT NULL,
-  creato_il timestamp with time zone DEFAULT now() NOT NULL,
-  eliminato boolean DEFAULT false NOT NULL,
-  pin_hash text,
-  onesignal_id text,
-  session_token uuid,
-  session_token_scadenza timestamp with time zone,
-  forzato_logout boolean DEFAULT false,
-  ore_default numeric(4,1) DEFAULT 8.0 NOT NULL,
-  escluso_pianificazione boolean DEFAULT false NOT NULL,
-  CONSTRAINT chk_responsabile_email CHECK (((ruolo <> 'responsabile'::ruolo_utente) OR (email IS NOT NULL))),
-  CONSTRAINT users_email_key UNIQUE (email),
-  CONSTRAINT users_pkey PRIMARY KEY (id)
-);
-
--- ============ FOREIGN KEY (separate, per rispettare l'ordine di creazione) ============
-ALTER TABLE ONLY public.allegati ADD CONSTRAINT allegati_caricato_da_fkey FOREIGN KEY (caricato_da) REFERENCES users(id);
-ALTER TABLE ONLY public.allegati ADD CONSTRAINT allegati_ordine_fase_id_fkey FOREIGN KEY (ordine_fase_id) REFERENCES ordine_fasi(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.archivio_log ADD CONSTRAINT archivio_log_fase_id_fkey FOREIGN KEY (fase_id) REFERENCES fasi(id);
-ALTER TABLE ONLY public.archivio_log ADD CONSTRAINT archivio_log_ordine_id_fkey FOREIGN KEY (ordine_id) REFERENCES ordini(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.archivio_log ADD CONSTRAINT archivio_log_utente_id_fkey FOREIGN KEY (utente_id) REFERENCES users(id);
-ALTER TABLE ONLY public.catalogo_fase_extra_macchine ADD CONSTRAINT catalogo_fase_extra_macchine_catalogo_fase_extra_id_fkey FOREIGN KEY (catalogo_fase_extra_id) REFERENCES catalogo_fasi_extra(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.catalogo_fase_extra_macchine ADD CONSTRAINT catalogo_fase_extra_macchine_macchina_id_fkey FOREIGN KEY (macchina_id) REFERENCES macchine(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.competenze_operatore_fase ADD CONSTRAINT competenze_operatore_fase_fase_id_fkey FOREIGN KEY (fase_id) REFERENCES fasi(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.competenze_operatore_fase ADD CONSTRAINT competenze_operatore_fase_operatore_id_fkey FOREIGN KEY (operatore_id) REFERENCES users(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.competenze_operatore_fase_extra ADD CONSTRAINT competenze_operatore_fase_extra_catalogo_fase_extra_id_fkey FOREIGN KEY (catalogo_fase_extra_id) REFERENCES catalogo_fasi_extra(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.competenze_operatore_fase_extra ADD CONSTRAINT competenze_operatore_fase_extra_operatore_id_fkey FOREIGN KEY (operatore_id) REFERENCES users(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.competenze_operatore_macchina ADD CONSTRAINT competenze_operatore_macchina_macchina_id_fkey FOREIGN KEY (macchina_id) REFERENCES macchine(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.competenze_operatore_macchina ADD CONSTRAINT competenze_operatore_macchina_operatore_id_fkey FOREIGN KEY (operatore_id) REFERENCES users(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.disponibilita_giornaliera ADD CONSTRAINT disponibilita_giornaliera_operatore_id_fkey FOREIGN KEY (operatore_id) REFERENCES users(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.fase_dipendenze ADD CONSTRAINT fase_dipendenze_dipende_da_fase_id_fkey FOREIGN KEY (dipende_da_fase_id) REFERENCES fasi(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.fase_dipendenze ADD CONSTRAINT fase_dipendenze_fase_id_fkey FOREIGN KEY (fase_id) REFERENCES fasi(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.fase_macchine ADD CONSTRAINT fase_macchine_fase_id_fkey FOREIGN KEY (fase_id) REFERENCES fasi(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.fase_macchine ADD CONSTRAINT fase_macchine_macchina_id_fkey FOREIGN KEY (macchina_id) REFERENCES macchine(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.fase_materiali ADD CONSTRAINT fase_materiali_fase_id_fkey FOREIGN KEY (fase_id) REFERENCES fasi(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.fase_strutture ADD CONSTRAINT fase_strutture_fase_id_fkey FOREIGN KEY (fase_id) REFERENCES fasi(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.fase_tipi_prodotto ADD CONSTRAINT fase_tipi_prodotto_fase_id_fkey FOREIGN KEY (fase_id) REFERENCES fasi(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.fase_tipi_prodotto ADD CONSTRAINT fase_tipi_prodotto_tipo_prodotto_id_fkey FOREIGN KEY (tipo_prodotto_id) REFERENCES tipi_prodotto(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.fasi ADD CONSTRAINT fasi_macro_fase_id_fkey FOREIGN KEY (macro_fase_id) REFERENCES macro_fasi(id) ON DELETE SET NULL;
-ALTER TABLE ONLY public.fasi_extra_operatori ADD CONSTRAINT fasi_extra_operatori_fasi_ordine_extra_id_fkey FOREIGN KEY (fasi_ordine_extra_id) REFERENCES fasi_ordine_extra(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.fasi_extra_operatori ADD CONSTRAINT fasi_extra_operatori_operatore_id_fkey FOREIGN KEY (operatore_id) REFERENCES users(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.fasi_ordine_extra ADD CONSTRAINT fasi_ordine_extra_catalogo_fase_extra_id_fkey FOREIGN KEY (catalogo_fase_extra_id) REFERENCES catalogo_fasi_extra(id) ON DELETE SET NULL;
-ALTER TABLE ONLY public.fasi_ordine_extra ADD CONSTRAINT fasi_ordine_extra_macchina_id_fkey FOREIGN KEY (macchina_id) REFERENCES macchine(id) ON DELETE SET NULL;
-ALTER TABLE ONLY public.fasi_ordine_extra ADD CONSTRAINT fasi_ordine_extra_operatore_id_fkey FOREIGN KEY (operatore_id) REFERENCES users(id);
-ALTER TABLE ONLY public.fasi_ordine_extra ADD CONSTRAINT fasi_ordine_extra_ordine_id_fkey FOREIGN KEY (ordine_id) REFERENCES ordini(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.kpi_schede ADD CONSTRAINT kpi_schede_creata_da_fkey FOREIGN KEY (creata_da) REFERENCES users(id);
-ALTER TABLE ONLY public.manutenzioni_macchina ADD CONSTRAINT manutenzioni_macchina_macchina_id_fkey FOREIGN KEY (macchina_id) REFERENCES macchine(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.notifiche ADD CONSTRAINT notifiche_destinatario_id_fkey FOREIGN KEY (destinatario_id) REFERENCES users(id);
-ALTER TABLE ONLY public.notifiche ADD CONSTRAINT notifiche_ordine_id_fkey FOREIGN KEY (ordine_id) REFERENCES ordini(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.notifiche_destinatari_config ADD CONSTRAINT notifiche_destinatari_config_utente_id_fkey FOREIGN KEY (utente_id) REFERENCES users(id);
-ALTER TABLE ONLY public.ordine_fasi ADD CONSTRAINT ordine_fasi_fase_id_fkey FOREIGN KEY (fase_id) REFERENCES fasi(id);
-ALTER TABLE ONLY public.ordine_fasi ADD CONSTRAINT ordine_fasi_operatore_id_fkey FOREIGN KEY (operatore_id) REFERENCES users(id);
-ALTER TABLE ONLY public.ordine_fasi ADD CONSTRAINT ordine_fasi_ordine_id_fkey FOREIGN KEY (ordine_id) REFERENCES ordini(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.ordine_fasi_operatori ADD CONSTRAINT ordine_fasi_operatori_operatore_id_fkey FOREIGN KEY (operatore_id) REFERENCES users(id);
-ALTER TABLE ONLY public.ordine_fasi_operatori ADD CONSTRAINT ordine_fasi_operatori_ordine_fase_id_fkey FOREIGN KEY (ordine_fase_id) REFERENCES ordine_fasi(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.ordini ADD CONSTRAINT fk_ordini_priorita FOREIGN KEY (priorita) REFERENCES priorita_ordine_config(id);
-ALTER TABLE ONLY public.ordini ADD CONSTRAINT ordini_creato_da_fkey FOREIGN KEY (creato_da) REFERENCES users(id);
-ALTER TABLE ONLY public.ordini ADD CONSTRAINT ordini_tipo_prodotto_fkey FOREIGN KEY (tipo_prodotto) REFERENCES tipi_prodotto(id);
-ALTER TABLE ONLY public.pin_tentativi ADD CONSTRAINT pin_tentativi_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
-
--- ============ INDICI (non da constraint) ============
-CREATE INDEX idx_allegati_caricato_da ON public.allegati USING btree (caricato_da);
-CREATE INDEX idx_allegati_ordine_fase ON public.allegati USING btree (ordine_fase_id);
-CREATE INDEX idx_archivio_log_fase_id ON public.archivio_log USING btree (fase_id);
-CREATE INDEX idx_log_ordine ON public.archivio_log USING btree (ordine_id);
-CREATE INDEX idx_log_timestamp ON public.archivio_log USING btree ("timestamp" DESC);
-CREATE INDEX idx_log_utente ON public.archivio_log USING btree (utente_id);
-CREATE INDEX idx_fasi_macro_fase_id ON public.fasi USING btree (macro_fase_id);
-CREATE INDEX idx_fasi_extra_operatori_operatore_id ON public.fasi_extra_operatori USING btree (operatore_id);
-CREATE INDEX idx_fasi_ordine_extra_operatore_id ON public.fasi_ordine_extra USING btree (operatore_id);
-CREATE INDEX idx_kpi_schede_creata_da ON public.kpi_schede USING btree (creata_da);
-CREATE INDEX idx_notifiche_creata ON public.notifiche USING btree (creata_il DESC);
-CREATE INDEX idx_notifiche_destinatario ON public.notifiche USING btree (destinatario_id, letta);
-CREATE INDEX idx_notifiche_ordine_id ON public.notifiche USING btree (ordine_id);
-CREATE INDEX idx_ordine_fasi_fase_id ON public.ordine_fasi USING btree (fase_id);
-CREATE INDEX idx_ordine_fasi_operatore ON public.ordine_fasi USING btree (operatore_id) WHERE (operatore_id IS NOT NULL);
-CREATE INDEX idx_ordine_fasi_ordine ON public.ordine_fasi USING btree (ordine_id);
-CREATE INDEX idx_ordine_fasi_stato ON public.ordine_fasi USING btree (stato);
-CREATE INDEX idx_ordine_fasi_operatori_operatore_id ON public.ordine_fasi_operatori USING btree (operatore_id);
-CREATE UNIQUE INDEX idx_ordini_codice_attivi ON public.ordini USING btree (codice) WHERE (eliminato = false);
-CREATE INDEX idx_ordini_creato_da ON public.ordini USING btree (creato_da);
-CREATE INDEX idx_ordini_priorita ON public.ordini USING btree (priorita);
-CREATE INDEX idx_ordini_scadenza ON public.ordini USING btree (scadenza) WHERE (stato <> 'spedito'::stato_ordine);
-CREATE INDEX idx_ordini_stato ON public.ordini USING btree (stato);
-CREATE INDEX idx_ordini_tipo_prodotto ON public.ordini USING btree (tipo_prodotto);
-CREATE INDEX idx_pin_tentativi_user_id_tentato_il ON public.pin_tentativi USING btree (user_id, tentato_il);
-CREATE INDEX idx_users_email ON public.users USING btree (email) WHERE (email IS NOT NULL);
-CREATE INDEX idx_users_ruolo ON public.users USING btree (ruolo);
-
--- ============ FUNZIONI (RPC) ============
-CREATE OR REPLACE FUNCTION public.aggiorna_criteri_fase(p_fase_id smallint, p_tipi_prodotto text[], p_materiali text[], p_strutture text[] DEFAULT '{}'::text[], p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+CREATE FUNCTION public.aggiorna_criteri_fase(p_fase_id smallint, p_tipi_prodotto text[], p_materiali text[], p_strutture text[] DEFAULT '{}'::text[], p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_ricalcolo JSONB;
 BEGIN
@@ -527,15 +214,19 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true, 'ricalcolo', v_ricalcolo);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.aggiorna_operatore(p_operatore_id uuid, p_nome text, p_cognome text, p_ruolo ruolo_utente, p_ore_default numeric, p_escluso_pianificazione boolean, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.aggiorna_criteri_fase(p_fase_id smallint, p_tipi_prodotto text[], p_materiali text[], p_strutture text[], p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: aggiorna_operatore(uuid, text, text, public.ruolo_utente, numeric, boolean, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.aggiorna_operatore(p_operatore_id uuid, p_nome text, p_cognome text, p_ruolo public.ruolo_utente, p_ore_default numeric, p_escluso_pianificazione boolean, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_ruolo_precedente ruolo_utente;
   v_count_responsabili integer;
@@ -574,15 +265,19 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true, 'ruolo_precedente', v_ruolo_precedente, 'ruolo_nuovo', p_ruolo);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.aggiorna_pin_operatore(p_operatore_id uuid, p_nuovo_pin text, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public', 'extensions'
-AS $function$
+ALTER FUNCTION public.aggiorna_operatore(p_operatore_id uuid, p_nome text, p_cognome text, p_ruolo public.ruolo_utente, p_ore_default numeric, p_escluso_pianificazione boolean, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: aggiorna_pin_operatore(uuid, text, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.aggiorna_pin_operatore(p_operatore_id uuid, p_nuovo_pin text, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'extensions'
+    AS $_$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -596,15 +291,19 @@ BEGIN
   IF NOT FOUND THEN RETURN json_build_object('ok', false, 'errore', 'utente_non_trovato'); END IF;
   RETURN json_build_object('ok', true);
 END;
-$function$
+$_$;
 
 
-CREATE OR REPLACE FUNCTION public.aggiorna_tipo_prodotto(p_id text, p_label text, p_posizione integer, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.aggiorna_pin_operatore(p_operatore_id uuid, p_nuovo_pin text, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: aggiorna_tipo_prodotto(text, text, integer, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.aggiorna_tipo_prodotto(p_id text, p_label text, p_posizione integer, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -616,15 +315,19 @@ BEGIN
   IF NOT FOUND THEN RETURN json_build_object('ok', false, 'errore', 'non_trovato'); END IF;
   RETURN json_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.aggiungi_collega_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.aggiorna_tipo_prodotto(p_id text, p_label text, p_posizione integer, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: aggiungi_collega_extra(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.aggiungi_collega_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -635,15 +338,19 @@ BEGIN
   INSERT INTO fasi_extra_operatori(fasi_ordine_extra_id, operatore_id) VALUES(p_fase_extra_id, p_operatore_id) ON CONFLICT DO NOTHING;
   RETURN json_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.aggiungi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.aggiungi_collega_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: aggiungi_collega_fase(uuid, uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.aggiungi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_fase ordine_fasi%ROWTYPE;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_richiedente_id, p_session_token), false) THEN
@@ -682,15 +389,19 @@ BEGIN
   END IF;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.aggiungi_tipo_prodotto(p_id text, p_label text, p_posizione integer, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.aggiungi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: aggiungi_tipo_prodotto(text, text, integer, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.aggiungi_tipo_prodotto(p_id text, p_label text, p_posizione integer, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -709,15 +420,19 @@ BEGIN
   IF NOT FOUND THEN RETURN json_build_object('ok', false, 'errore', 'id_gia_esistente'); END IF;
   RETURN json_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.annulla_fasi_ordine_eliminato(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.aggiungi_tipo_prodotto(p_id text, p_label text, p_posizione integer, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: annulla_fasi_ordine_eliminato(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.annulla_fasi_ordine_eliminato(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_fasi_agg INT := 0;
   v_extra_agg INT := 0;
@@ -754,15 +469,19 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true, 'fasi_annullate', v_fasi_agg, 'fasi_extra_annullate', v_extra_agg);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.annulla_presa_in_carico(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.annulla_fasi_ordine_eliminato(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: annulla_presa_in_carico(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.annulla_presa_in_carico(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_fase ordine_fasi%ROWTYPE;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
@@ -782,15 +501,19 @@ BEGIN
   UPDATE ordine_fasi SET stato='disponibile', operatore_id=NULL, iniziata_il=NULL, completata_il=NULL WHERE id=p_ordine_fase_id;
   RETURN json_build_object('ok', true, 'rimasti', 0);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.annulla_presa_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.annulla_presa_in_carico(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: annulla_presa_in_carico_extra(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.annulla_presa_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_fase fasi_ordine_extra%ROWTYPE;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
@@ -810,15 +533,19 @@ BEGIN
   UPDATE fasi_ordine_extra SET stato='disponibile', operatore_id=NULL, iniziata_il=NULL, completata_il=NULL WHERE id=p_fase_extra_id;
   RETURN json_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.archivia_ordine(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.annulla_presa_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: archivia_ordine(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.archivia_ordine(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_urls text[];
 BEGIN
@@ -853,15 +580,19 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true, 'url_eliminati', COALESCE(v_urls, '{}'));
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.autorizza_upload_allegato(p_user_id uuid, p_session_token uuid, p_tipo text, p_ordine_id uuid, p_ordine_fase_id uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.archivia_ordine(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: autorizza_upload_allegato(uuid, uuid, text, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.autorizza_upload_allegato(p_user_id uuid, p_session_token uuid, p_tipo text, p_ordine_id uuid, p_ordine_fase_id uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_ordine_esiste boolean;
   v_fase_ordine_id uuid;
@@ -887,15 +618,19 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.avanzamento_fasi_batch(p_operatore_id uuid, p_session_token uuid, p_ordine_ids uuid[])
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.autorizza_upload_allegato(p_user_id uuid, p_session_token uuid, p_tipo text, p_ordine_id uuid, p_ordine_fase_id uuid) OWNER TO postgres;
+
+--
+-- Name: avanzamento_fasi_batch(uuid, uuid, uuid[]); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.avanzamento_fasi_batch(p_operatore_id uuid, p_session_token uuid, p_ordine_ids uuid[]) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -913,15 +648,19 @@ BEGIN
     )
   ));
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.calcola_tempo_combinazione(p_criteri jsonb DEFAULT '{}'::jsonb)
- RETURNS TABLE(ore_lavorazione_interna numeric, giorni_calendario numeric, n_campioni integer)
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.avanzamento_fasi_batch(p_operatore_id uuid, p_session_token uuid, p_ordine_ids uuid[]) OWNER TO postgres;
+
+--
+-- Name: calcola_tempo_combinazione(jsonb); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.calcola_tempo_combinazione(p_criteri jsonb DEFAULT '{}'::jsonb) RETURNS TABLE(ore_lavorazione_interna numeric, giorni_calendario numeric, n_campioni integer)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   RETURN QUERY
   WITH ordini_filtrati AS (
@@ -975,15 +714,19 @@ BEGIN
   LEFT JOIN ore_per_ordine     opo ON opo.ordine_id = ofd.id
   LEFT JOIN giorni_per_ordine  gpo ON gpo.ordine_id = ofd.id;
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.capacita_produttiva_stimata()
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.calcola_tempo_combinazione(p_criteri jsonb) OWNER TO postgres;
+
+--
+-- Name: capacita_produttiva_stimata(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.capacita_produttiva_stimata() RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_settimane       integer;
   v_backlog_ore     numeric;
@@ -1090,79 +833,97 @@ BEGIN
     'settimane_storico',     v_settimane
   );
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.check_lock_fase()
- RETURNS trigger
- LANGUAGE plpgsql
- SET search_path TO 'public'
-AS $function$
-BEGIN
-  IF NEW.stato = 'in_corso' AND OLD.stato = 'disponibile' THEN
-    NEW.iniziata_il := NOW();
-  END IF;
-  IF NEW.stato = 'completata' AND OLD.stato IN ('in_corso', 'in_attesa') THEN
-    NEW.completata_il := NOW();
-  END IF;
-  RETURN NEW;
-END;
-$function$
+ALTER FUNCTION public.capacita_produttiva_stimata() OWNER TO postgres;
+
+--
+-- Name: check_lock_fase(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.check_lock_fase() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  IF NEW.stato = 'in_corso' AND OLD.stato = 'disponibile' THEN
+    NEW.iniziata_il := NOW();
+  END IF;
+  IF NEW.stato = 'completata' AND OLD.stato IN ('in_corso', 'in_attesa') THEN
+    NEW.completata_il := NOW();
+  END IF;
+  RETURN NEW;
+END;
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.check_ordine_completato()
- RETURNS trigger
- LANGUAGE plpgsql
- SET search_path TO 'public'
-AS $function$
-BEGIN
-  IF NEW.stato IN ('completata', 'non_applicabile', 'in_attesa') THEN
-    IF NOT EXISTS (
-      SELECT 1 FROM ordine_fasi
-      WHERE ordine_id = NEW.ordine_id
-      AND stato IN ('disponibile', 'in_corso')
-    ) THEN
-      UPDATE ordini
-      SET stato = 'attesa_spedizione', completato_il = NOW()
-      WHERE id = NEW.ordine_id
-      AND stato NOT IN ('spedito', 'attesa_spedizione', 'sospeso');
-    END IF;
-  END IF;
-  RETURN NEW;
-END;
-$function$
+ALTER FUNCTION public.check_lock_fase() OWNER TO postgres;
+
+--
+-- Name: check_ordine_completato(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.check_ordine_completato() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  IF NEW.stato IN ('completata', 'non_applicabile', 'in_attesa') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM ordine_fasi
+      WHERE ordine_id = NEW.ordine_id
+      AND stato IN ('disponibile', 'in_corso')
+    ) THEN
+      UPDATE ordini
+      SET stato = 'attesa_spedizione', completato_il = NOW()
+      WHERE id = NEW.ordine_id
+      AND stato NOT IN ('spedito', 'attesa_spedizione', 'sospeso');
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.check_ordine_extra_completato()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
-BEGIN
-  IF NEW.stato = 'completata' THEN
-    IF NOT EXISTS (
-      SELECT 1 FROM fasi_ordine_extra
-      WHERE ordine_id = NEW.ordine_id
-      AND stato IN ('disponibile', 'in_corso')
-    ) THEN
-      UPDATE ordini
-      SET stato = 'attesa_spedizione', completato_il = NOW()
-      WHERE id = NEW.ordine_id
-      AND stato NOT IN ('spedito', 'attesa_spedizione', 'sospeso');
-    END IF;
-  END IF;
-  RETURN NEW;
-END;
-$function$
+ALTER FUNCTION public.check_ordine_completato() OWNER TO postgres;
+
+--
+-- Name: check_ordine_extra_completato(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.check_ordine_extra_completato() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+BEGIN
+  IF NEW.stato = 'completata' THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM fasi_ordine_extra
+      WHERE ordine_id = NEW.ordine_id
+      AND stato IN ('disponibile', 'in_corso')
+    ) THEN
+      UPDATE ordini
+      SET stato = 'attesa_spedizione', completato_il = NOW()
+      WHERE id = NEW.ordine_id
+      AND stato NOT IN ('spedito', 'attesa_spedizione', 'sospeso');
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.colleghi_disponibili(p_operatore_id uuid, p_session_token uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.check_ordine_extra_completato() OWNER TO postgres;
+
+--
+-- Name: colleghi_disponibili(uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.colleghi_disponibili(p_operatore_id uuid, p_session_token uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -1173,15 +934,19 @@ BEGIN
     WHERE u.attivo = true AND u.ruolo = 'operatore'
   ));
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.completa_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_note_operatore text DEFAULT NULL::text, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.colleghi_disponibili(p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: completa_fase(uuid, uuid, text, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.completa_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_note_operatore text DEFAULT NULL::text, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_fase   ordine_fasi%ROWTYPE;
   v_tg     text;
@@ -1225,15 +990,19 @@ BEGIN
   END;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.completa_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_note text DEFAULT NULL::text, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.completa_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_note_operatore text, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: completa_fase_extra(uuid, uuid, text, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.completa_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_note text DEFAULT NULL::text, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_fase fasi_ordine_extra%ROWTYPE;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
@@ -1255,15 +1024,19 @@ BEGIN
   WHERE id=p_fase_extra_id;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.completa_fasi_batch(p_fase_id integer, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.completa_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_note text, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: completa_fasi_batch(integer, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.completa_fasi_batch(p_fase_id integer, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_count INT;
   v_now TIMESTAMPTZ := NOW();
@@ -1302,15 +1075,19 @@ BEGIN
 
   RETURN json_build_object('ok', true, 'completate', v_count);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.completa_fasi_extra_batch(p_nome text, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.completa_fasi_batch(p_fase_id integer, p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: completa_fasi_extra_batch(text, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.completa_fasi_extra_batch(p_nome text, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_count INT;
   v_now TIMESTAMPTZ := NOW();
@@ -1350,15 +1127,19 @@ BEGIN
 
   RETURN json_build_object('ok', true, 'completate', v_count);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.conferma_ricezione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.completa_fasi_extra_batch(p_nome text, p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: conferma_ricezione_extra(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.conferma_ricezione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_fase fasi_ordine_extra%ROWTYPE; v_durata numeric;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
@@ -1382,15 +1163,19 @@ BEGIN
   UPDATE fasi_ordine_extra SET stato='completata', completata_il=NOW(), tempo_accumulato_minuti=v_durata, n_ordini_batch=1 WHERE id=p_fase_extra_id;
   RETURN jsonb_build_object('ok', true, 'durata_min', v_durata);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.conferma_ricezione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.conferma_ricezione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: conferma_ricezione_fase(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.conferma_ricezione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_fase ordine_fasi%ROWTYPE; v_tg text; v_durata numeric;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
@@ -1423,15 +1208,19 @@ BEGIN
   END;
   RETURN jsonb_build_object('ok', true, 'durata_min', v_durata);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.confronto_operatori_per_fase()
- RETURNS TABLE(fase_id smallint, fase_nome text, operatore_id uuid, operatore_nome text, mediana_min numeric, campioni bigint)
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.conferma_ricezione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: confronto_operatori_per_fase(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.confronto_operatori_per_fase() RETURNS TABLE(fase_id smallint, fase_nome text, operatore_id uuid, operatore_nome text, mediana_min numeric, campioni bigint)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   k_soglia_campioni int;
 BEGIN
@@ -1461,15 +1250,19 @@ BEGIN
   HAVING COUNT(*)>=1
   ORDER BY f.posizione,f.id, mediana_min NULLS LAST;
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.confronto_operatori_per_fase_extra()
- RETURNS TABLE(catalogo_fase_extra_id uuid, fase_nome text, operatore_id uuid, operatore_nome text, mediana_min numeric, campioni bigint)
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.confronto_operatori_per_fase() OWNER TO postgres;
+
+--
+-- Name: confronto_operatori_per_fase_extra(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.confronto_operatori_per_fase_extra() RETURNS TABLE(catalogo_fase_extra_id uuid, fase_nome text, operatore_id uuid, operatore_nome text, mediana_min numeric, campioni bigint)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   k_soglia_campioni int;
 BEGIN
@@ -1506,15 +1299,19 @@ BEGIN
   HAVING COUNT(*) >= 1
   ORDER BY c.nome, u.cognome, mediana_min NULLS LAST;
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.controlla_sessione(p_user_id uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.confronto_operatori_per_fase_extra() OWNER TO postgres;
+
+--
+-- Name: controlla_sessione(uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.controlla_sessione(p_user_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_user users%ROWTYPE;
 BEGIN
   SELECT * INTO v_user FROM users WHERE id = p_user_id;
@@ -1530,15 +1327,19 @@ BEGIN
   END IF;
   RETURN jsonb_build_object('valida', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.crea_fasi_extra(p_ordine_id uuid, p_fasi jsonb, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.controlla_sessione(p_user_id uuid) OWNER TO postgres;
+
+--
+-- Name: crea_fasi_extra(uuid, jsonb, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.crea_fasi_extra(p_ordine_id uuid, p_fasi jsonb, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -1558,15 +1359,19 @@ BEGIN
     FROM jsonb_array_elements(p_fasi) AS el;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.crea_fasi_per_ordine()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.crea_fasi_extra(p_ordine_id uuid, p_fasi jsonb, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: crea_fasi_per_ordine(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.crea_fasi_per_ordine() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_struttura   TEXT;
   v_tipo_prod   TEXT;
@@ -1624,15 +1429,19 @@ BEGIN
 
   RETURN NEW;
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.crea_operatore(p_nome text, p_cognome text, p_pin text, p_ruolo ruolo_utente DEFAULT 'operatore'::ruolo_utente, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public', 'extensions'
-AS $function$
+ALTER FUNCTION public.crea_fasi_per_ordine() OWNER TO postgres;
+
+--
+-- Name: crea_operatore(text, text, text, public.ruolo_utente, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.crea_operatore(p_nome text, p_cognome text, p_pin text, p_ruolo public.ruolo_utente DEFAULT 'operatore'::public.ruolo_utente, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'extensions'
+    AS $_$
 DECLARE v_id UUID;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
@@ -1647,15 +1456,19 @@ BEGIN
     VALUES (p_nome, p_cognome, extensions.crypt(p_pin, extensions.gen_salt('bf')), p_ruolo) RETURNING id INTO v_id;
   RETURN jsonb_build_object('ok', true, 'id', v_id);
 END;
-$function$
+$_$;
 
 
-CREATE OR REPLACE FUNCTION public.crea_scheda_kpi(p_nome text, p_criteri jsonb, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.crea_operatore(p_nome text, p_cognome text, p_pin text, p_ruolo public.ruolo_utente, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: crea_scheda_kpi(text, jsonb, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.crea_scheda_kpi(p_nome text, p_criteri jsonb, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_ore numeric; v_giorni numeric; v_campioni integer; v_id uuid;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
@@ -1672,15 +1485,19 @@ BEGIN
   RETURN jsonb_build_object('ok', true, 'id', v_id, 'n_campioni_iniziali', v_campioni,
     'ore_interne_iniziali', v_ore, 'giorni_calendario_iniziali', v_giorni);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.data_consegna_stimata(p_giorni_lavorativi_necessari numeric)
- RETURNS date
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.crea_scheda_kpi(p_nome text, p_criteri jsonb, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: data_consegna_stimata(numeric); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.data_consegna_stimata(p_giorni_lavorativi_necessari numeric) RETURNS date
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_data   date := CURRENT_DATE;
   v_giorni int  := 0;
@@ -1696,15 +1513,19 @@ BEGIN
   END LOOP;
   RETURN v_data;
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.dettaglio_fase_completa(p_operatore_id uuid, p_session_token uuid, p_ord_fase_id uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.data_consegna_stimata(p_giorni_lavorativi_necessari numeric) OWNER TO postgres;
+
+--
+-- Name: dettaglio_fase_completa(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.dettaglio_fase_completa(p_operatore_id uuid, p_session_token uuid, p_ord_fase_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -1731,15 +1552,19 @@ BEGIN
     )
   ));
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.dettaglio_fase_extra_completa(p_operatore_id uuid, p_session_token uuid, p_fase_extra_id uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.dettaglio_fase_completa(p_operatore_id uuid, p_session_token uuid, p_ord_fase_id uuid) OWNER TO postgres;
+
+--
+-- Name: dettaglio_fase_extra_completa(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.dettaglio_fase_extra_completa(p_operatore_id uuid, p_session_token uuid, p_fase_extra_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -1764,15 +1589,19 @@ BEGIN
     )
   ));
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.dettaglio_ordine_fasi(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.dettaglio_fase_extra_completa(p_operatore_id uuid, p_session_token uuid, p_fase_extra_id uuid) OWNER TO postgres;
+
+--
+-- Name: dettaglio_ordine_fasi(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.dettaglio_ordine_fasi(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -1800,15 +1629,19 @@ BEGIN
     )
   ));
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.dimensione_database(p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.dettaglio_ordine_fasi(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid) OWNER TO postgres;
+
+--
+-- Name: dimensione_database(uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.dimensione_database(p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_db_bytes bigint;
   v_tabelle  jsonb;
@@ -1845,15 +1678,19 @@ BEGIN
     'tabelle',      COALESCE(v_tabelle, '[]'::jsonb)
   );
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.e_giorno_lavorativo(p_data date)
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.dimensione_database(p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: e_giorno_lavorativo(date); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.e_giorno_lavorativo(p_data date) RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_dow    int;
   v_sabato boolean;
@@ -1876,15 +1713,19 @@ BEGIN
 
   RETURN true;
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.e_responsabile()
- RETURNS boolean
- LANGUAGE sql
- STABLE SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.e_giorno_lavorativo(p_data date) OWNER TO postgres;
+
+--
+-- Name: e_responsabile(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.e_responsabile() RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.users
     WHERE id = auth.uid()
@@ -1892,15 +1733,19 @@ AS $function$
       AND attivo = true
       AND eliminato IS DISTINCT FROM true
   );
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.elenco_foto_fase(p_user_id uuid, p_session_token uuid, p_ordine_fase_id uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.e_responsabile() OWNER TO postgres;
+
+--
+-- Name: elenco_foto_fase(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.elenco_foto_fase(p_user_id uuid, p_session_token uuid, p_ordine_fase_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_allegati jsonb;
 BEGIN
@@ -1917,15 +1762,19 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true, 'allegati', v_allegati);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.elimina_allegati(p_allegato_ids uuid[], p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.elenco_foto_fase(p_user_id uuid, p_session_token uuid, p_ordine_fase_id uuid) OWNER TO postgres;
+
+--
+-- Name: elimina_allegati(uuid[], uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.elimina_allegati(p_allegato_ids uuid[], p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_is_responsabile BOOLEAN; v_allegato RECORD; v_autorizzato BOOLEAN;
   v_eliminati uuid[] := '{}'; v_url_eliminati text[] := '{}'; v_rifiutati uuid[] := '{}';
@@ -1953,15 +1802,19 @@ BEGIN
   END LOOP;
   RETURN jsonb_build_object('ok', true, 'eliminati', v_eliminati, 'url_eliminati', v_url_eliminati, 'rifiutati', v_rifiutati);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.elimina_allegati_fasi(p_fase_ids uuid[], p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.elimina_allegati(p_allegato_ids uuid[], p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: elimina_allegati_fasi(uuid[], uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.elimina_allegati_fasi(p_fase_ids uuid[], p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_urls text[];
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
@@ -1974,15 +1827,19 @@ BEGIN
   DELETE FROM public.allegati WHERE ordine_fase_id = ANY(p_fase_ids);
   RETURN jsonb_build_object('ok', true, 'url_eliminati', COALESCE(v_urls, '{}'));
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.elimina_chiusura_aziendale(p_chiusura_id uuid, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.elimina_allegati_fasi(p_fase_ids uuid[], p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: elimina_chiusura_aziendale(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.elimina_chiusura_aziendale(p_chiusura_id uuid, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE((SELECT valida_sessione(p_responsabile_id, p_session_token)), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -2000,15 +1857,19 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.elimina_fase_custom_ordine(p_ordine_fase_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.elimina_chiusura_aziendale(p_chiusura_id uuid, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: elimina_fase_custom_ordine(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.elimina_fase_custom_ordine(p_ordine_fase_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_row ordine_fasi%ROWTYPE;
 BEGIN
@@ -2042,15 +1903,19 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.elimina_fase_extra(p_fase_extra_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.elimina_fase_custom_ordine(p_ordine_fase_id uuid, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: elimina_fase_extra(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.elimina_fase_extra(p_fase_extra_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_fase fasi_ordine_extra%ROWTYPE;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
@@ -2068,15 +1933,19 @@ BEGIN
   DELETE FROM fasi_ordine_extra WHERE id = p_fase_extra_id;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.elimina_macchina(p_id uuid, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.elimina_fase_extra(p_fase_extra_id uuid, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: elimina_macchina(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.elimina_macchina(p_id uuid, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida'); END IF;
   IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato'); END IF;
@@ -2088,15 +1957,19 @@ BEGIN
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'macchina_non_trovata'); END IF;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.elimina_manutenzione_macchina(p_id uuid, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.elimina_macchina(p_id uuid, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: elimina_manutenzione_macchina(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.elimina_manutenzione_macchina(p_id uuid, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida'); END IF;
   IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato'); END IF;
@@ -2104,15 +1977,19 @@ BEGIN
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'manutenzione_non_trovata'); END IF;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.elimina_operatore(p_operatore_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.elimina_manutenzione_macchina(p_id uuid, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: elimina_operatore(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.elimina_operatore(p_operatore_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -2130,15 +2007,19 @@ BEGIN
   END IF;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.elimina_scheda_kpi(p_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.elimina_operatore(p_operatore_id uuid, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: elimina_scheda_kpi(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.elimina_scheda_kpi(p_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -2150,15 +2031,19 @@ BEGIN
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'scheda_non_trovata'); END IF;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.elimina_tipo_prodotto(p_id text, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.elimina_scheda_kpi(p_id uuid, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: elimina_tipo_prodotto(text, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.elimina_tipo_prodotto(p_id text, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_in_uso INT;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
@@ -2173,15 +2058,19 @@ BEGIN
   DELETE FROM public.tipi_prodotto WHERE id=p_id;
   RETURN json_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.fasi_avanzamento_ordini(p_operatore_id uuid, p_session_token uuid, p_std_ids uuid[] DEFAULT '{}'::uuid[], p_extra_ids uuid[] DEFAULT '{}'::uuid[], p_solo_aperti_ids uuid[] DEFAULT '{}'::uuid[])
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.elimina_tipo_prodotto(p_id text, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: fasi_avanzamento_ordini(uuid, uuid, uuid[], uuid[], uuid[]); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.fasi_avanzamento_ordini(p_operatore_id uuid, p_session_token uuid, p_std_ids uuid[] DEFAULT '{}'::uuid[], p_extra_ids uuid[] DEFAULT '{}'::uuid[], p_solo_aperti_ids uuid[] DEFAULT '{}'::uuid[]) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -2204,15 +2093,19 @@ BEGIN
     )
   ));
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.fasi_dipendenze_stato(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid, p_fase_ids smallint[])
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.fasi_avanzamento_ordini(p_operatore_id uuid, p_session_token uuid, p_std_ids uuid[], p_extra_ids uuid[], p_solo_aperti_ids uuid[]) OWNER TO postgres;
+
+--
+-- Name: fasi_dipendenze_stato(uuid, uuid, uuid, smallint[]); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.fasi_dipendenze_stato(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid, p_fase_ids smallint[]) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -2223,15 +2116,19 @@ BEGIN
     WHERE of.ordine_id = p_ordine_id AND of.fase_id = ANY(p_fase_ids)
   ));
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.fasi_dipendenze_stato(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid, p_fase_ids smallint[]) OWNER TO postgres;
+
+--
+-- Name: fasi_in_corso_come_collega(uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_result jsonb;
 BEGIN
@@ -2263,15 +2160,19 @@ BEGIN
 
   RETURN COALESCE(v_result, '[]'::jsonb);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.fasi_stato_ordine(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid) OWNER TO postgres;
+
+--
+-- Name: fasi_stato_ordine(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.fasi_stato_ordine(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -2282,15 +2183,19 @@ BEGIN
     WHERE of.ordine_id = p_ordine_id
   ));
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.forza_completa_fase_extra(p_fase_extra_id uuid, p_responsabile_id uuid, p_note text DEFAULT NULL::text, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.fasi_stato_ordine(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid) OWNER TO postgres;
+
+--
+-- Name: forza_completa_fase_extra(uuid, uuid, text, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.forza_completa_fase_extra(p_fase_extra_id uuid, p_responsabile_id uuid, p_note text DEFAULT NULL::text, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_fase fasi_ordine_extra%ROWTYPE;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
@@ -2314,15 +2219,19 @@ BEGIN
     WHERE id = p_fase_extra_id;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.forza_logout_operatore(p_operatore_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.forza_completa_fase_extra(p_fase_extra_id uuid, p_responsabile_id uuid, p_note text, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: forza_logout_operatore(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.forza_logout_operatore(p_operatore_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -2340,41 +2249,53 @@ BEGIN
   END IF;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.fotocamera_interna_attiva()
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.forza_logout_operatore(p_operatore_id uuid, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: fotocamera_interna_attiva(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.fotocamera_interna_attiva() RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_valore text;
 BEGIN
   SELECT valore INTO v_valore FROM config_sistema WHERE chiave = 'fotocamera_interna_attiva';
   RETURN COALESCE(v_valore = 'true', false);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.giorni_lavorativi_disponibili(p_da date, p_a date)
- RETURNS integer
- LANGUAGE sql
- STABLE SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.fotocamera_interna_attiva() OWNER TO postgres;
+
+--
+-- Name: giorni_lavorativi_disponibili(date, date); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.giorni_lavorativi_disponibili(p_da date, p_a date) RETURNS integer
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
   SELECT COUNT(*)::integer
   FROM generate_series(p_da, p_a, '1 day'::interval) gs(g)
   WHERE e_giorno_lavorativo(gs.g::date);
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.imposta_catalogo_fase_extra(p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid, p_id uuid DEFAULT NULL::uuid, p_nome text DEFAULT NULL::text, p_descrizione text DEFAULT NULL::text, p_tipo_gestione text DEFAULT 'standard'::text, p_e_attesa_esterna boolean DEFAULT false, p_attiva boolean DEFAULT true)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.giorni_lavorativi_disponibili(p_da date, p_a date) OWNER TO postgres;
+
+--
+-- Name: imposta_catalogo_fase_extra(uuid, uuid, uuid, text, text, text, boolean, boolean); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.imposta_catalogo_fase_extra(p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid, p_id uuid DEFAULT NULL::uuid, p_nome text DEFAULT NULL::text, p_descrizione text DEFAULT NULL::text, p_tipo_gestione text DEFAULT 'standard'::text, p_e_attesa_esterna boolean DEFAULT false, p_attiva boolean DEFAULT true) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_new_id uuid;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
@@ -2400,15 +2321,19 @@ BEGIN
     RETURN jsonb_build_object('ok', true, 'id', p_id);
   END IF;
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.imposta_chiusura_aziendale(p_data_inizio date, p_data_fine date, p_descrizione text DEFAULT NULL::text, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.imposta_catalogo_fase_extra(p_responsabile_id uuid, p_session_token uuid, p_id uuid, p_nome text, p_descrizione text, p_tipo_gestione text, p_e_attesa_esterna boolean, p_attiva boolean) OWNER TO postgres;
+
+--
+-- Name: imposta_chiusura_aziendale(date, date, text, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.imposta_chiusura_aziendale(p_data_inizio date, p_data_fine date, p_descrizione text DEFAULT NULL::text, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_id uuid;
 BEGIN
@@ -2430,15 +2355,19 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true, 'id', v_id);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.imposta_competenze_fase(p_fase_id smallint, p_operatori_ordinati uuid[], p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.imposta_chiusura_aziendale(p_data_inizio date, p_data_fine date, p_descrizione text, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: imposta_competenze_fase(smallint, uuid[], uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.imposta_competenze_fase(p_fase_id smallint, p_operatori_ordinati uuid[], p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -2455,15 +2384,19 @@ BEGIN
   RETURN jsonb_build_object('ok', true, 'fase_id', p_fase_id,
     'n_competenti', COALESCE(array_length(p_operatori_ordinati, 1), 0));
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.imposta_competenze_macchina(p_macchina_id uuid, p_operatori_ordinati uuid[] DEFAULT NULL::uuid[], p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.imposta_competenze_fase(p_fase_id smallint, p_operatori_ordinati uuid[], p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: imposta_competenze_macchina(uuid, uuid[], uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.imposta_competenze_macchina(p_macchina_id uuid, p_operatori_ordinati uuid[] DEFAULT NULL::uuid[], p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -2481,15 +2414,19 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true, 'n_competenti', COALESCE(array_length(p_operatori_ordinati, 1), 0));
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.imposta_competenze_per_catalogo_fase_extra(p_responsabile_id uuid, p_catalogo_fase_extra_id uuid, p_operatori_ordinati uuid[], p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.imposta_competenze_macchina(p_macchina_id uuid, p_operatori_ordinati uuid[], p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: imposta_competenze_per_catalogo_fase_extra(uuid, uuid, uuid[], uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.imposta_competenze_per_catalogo_fase_extra(p_responsabile_id uuid, p_catalogo_fase_extra_id uuid, p_operatori_ordinati uuid[], p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -2515,15 +2452,19 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.imposta_dipendenze_fase(p_fase_id smallint, p_dipende_da_ids smallint[], p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.imposta_competenze_per_catalogo_fase_extra(p_responsabile_id uuid, p_catalogo_fase_extra_id uuid, p_operatori_ordinati uuid[], p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: imposta_dipendenze_fase(smallint, smallint[], uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.imposta_dipendenze_fase(p_fase_id smallint, p_dipende_da_ids smallint[], p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_dep smallint;
 BEGIN
@@ -2565,15 +2506,19 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.imposta_disponibilita_giornaliera(p_operatore_id uuid, p_data date, p_ore numeric, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.imposta_dipendenze_fase(p_fase_id smallint, p_dipende_da_ids smallint[], p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: imposta_disponibilita_giornaliera(uuid, date, numeric, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.imposta_disponibilita_giornaliera(p_operatore_id uuid, p_data date, p_ore numeric, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -2585,15 +2530,19 @@ BEGIN
   ON CONFLICT (operatore_id, data) DO UPDATE SET ore = EXCLUDED.ore;
   RETURN jsonb_build_object('ok', true, 'operatore_id', p_operatore_id, 'data', p_data, 'ore', p_ore);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.imposta_fase_ordine(p_ordine_id uuid, p_fase_id smallint, p_attiva boolean, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.imposta_disponibilita_giornaliera(p_operatore_id uuid, p_data date, p_ore numeric, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: imposta_fase_ordine(uuid, smallint, boolean, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.imposta_fase_ordine(p_ordine_id uuid, p_fase_id smallint, p_attiva boolean, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_riga ordine_fasi%ROWTYPE; v_tg text; v_stato stato_fase;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
@@ -2625,15 +2574,19 @@ BEGIN
     RETURN jsonb_build_object('ok', true);
   END IF;
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.imposta_fasi_macchina(p_macchina_id uuid, p_fase_ids smallint[] DEFAULT NULL::smallint[], p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.imposta_fase_ordine(p_ordine_id uuid, p_fase_id smallint, p_attiva boolean, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: imposta_fasi_macchina(uuid, smallint[], uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.imposta_fasi_macchina(p_macchina_id uuid, p_fase_ids smallint[] DEFAULT NULL::smallint[], p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -2650,15 +2603,19 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true, 'n_fasi', COALESCE(array_length(p_fase_ids, 1), 0));
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.imposta_macchina(p_nome text, p_stato text DEFAULT 'attiva'::text, p_ore_default numeric DEFAULT 8.0, p_id uuid DEFAULT NULL::uuid, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.imposta_fasi_macchina(p_macchina_id uuid, p_fase_ids smallint[], p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: imposta_macchina(text, text, numeric, uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.imposta_macchina(p_nome text, p_stato text DEFAULT 'attiva'::text, p_ore_default numeric DEFAULT 8.0, p_id uuid DEFAULT NULL::uuid, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_id uuid;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
@@ -2678,15 +2635,19 @@ BEGIN
   END IF;
   RETURN jsonb_build_object('ok', true, 'id', v_id);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.imposta_macchine_fase_extra(p_responsabile_id uuid, p_catalogo_fase_extra_id uuid, p_macchine_ids jsonb, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.imposta_macchina(p_nome text, p_stato text, p_ore_default numeric, p_id uuid, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: imposta_macchine_fase_extra(uuid, uuid, jsonb, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.imposta_macchine_fase_extra(p_responsabile_id uuid, p_catalogo_fase_extra_id uuid, p_macchine_ids jsonb, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -2709,15 +2670,19 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.imposta_manutenzione_macchina(p_macchina_id uuid, p_data_inizio date, p_data_fine date, p_descrizione text DEFAULT NULL::text, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.imposta_macchine_fase_extra(p_responsabile_id uuid, p_catalogo_fase_extra_id uuid, p_macchine_ids jsonb, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: imposta_manutenzione_macchina(uuid, date, date, text, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.imposta_manutenzione_macchina(p_macchina_id uuid, p_data_inizio date, p_data_fine date, p_descrizione text DEFAULT NULL::text, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_id uuid;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida'); END IF;
@@ -2726,15 +2691,19 @@ BEGIN
   INSERT INTO manutenzioni_macchina (macchina_id, data_inizio, data_fine, descrizione) VALUES (p_macchina_id, p_data_inizio, p_data_fine, p_descrizione) RETURNING id INTO v_id;
   RETURN jsonb_build_object('ok', true, 'id', v_id);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.imposta_permesso_periodo(p_operatore_id uuid, p_data_inizio date, p_data_fine date, p_ore numeric, p_motivo text DEFAULT NULL::text, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.imposta_manutenzione_macchina(p_macchina_id uuid, p_data_inizio date, p_data_fine date, p_descrizione text, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: imposta_permesso_periodo(uuid, date, date, numeric, text, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.imposta_permesso_periodo(p_operatore_id uuid, p_data_inizio date, p_data_fine date, p_ore numeric, p_motivo text DEFAULT NULL::text, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_giorni int;
   v_data   date;
@@ -2776,15 +2745,19 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true, 'giorni_aggiornati', v_giorni);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.imposta_stato_operatore(p_operatore_id uuid, p_attivo boolean, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.imposta_permesso_periodo(p_operatore_id uuid, p_data_inizio date, p_data_fine date, p_ore numeric, p_motivo text, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: imposta_stato_operatore(uuid, boolean, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.imposta_stato_operatore(p_operatore_id uuid, p_attivo boolean, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -2802,15 +2775,19 @@ BEGIN
   END IF;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.in_orario_lavoro(p_momento timestamp with time zone DEFAULT now())
- RETURNS boolean
- LANGUAGE plpgsql
- STABLE
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.imposta_stato_operatore(p_operatore_id uuid, p_attivo boolean, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: in_orario_lavoro(timestamp with time zone); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.in_orario_lavoro(p_momento timestamp with time zone DEFAULT now()) RETURNS boolean
+    LANGUAGE plpgsql STABLE
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_config    config_orario%ROWTYPE;
   v_dow       int  := EXTRACT(DOW FROM p_momento AT TIME ZONE 'Europe/Rome');
@@ -2846,15 +2823,19 @@ BEGIN
 
   RETURN COALESCE(v_ora >= v_config.ora_inizio AND v_ora < v_ora_fine, false);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.lista_operatori_login(p_solo_sola_lettura boolean DEFAULT false)
- RETURNS TABLE(id uuid, nome text, cognome text, ruolo text)
- LANGUAGE sql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.in_orario_lavoro(p_momento timestamp with time zone) OWNER TO postgres;
+
+--
+-- Name: lista_operatori_login(boolean); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.lista_operatori_login(p_solo_sola_lettura boolean DEFAULT false) RETURNS TABLE(id uuid, nome text, cognome text, ruolo text)
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
   SELECT u.id, u.nome, u.cognome, u.ruolo::text
   FROM users u
   WHERE u.attivo = true
@@ -2864,15 +2845,19 @@ AS $function$
       OR (NOT p_solo_sola_lettura AND u.ruolo IN ('operatore', 'sola_lettura'))
     )
   ORDER BY u.cognome;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.lista_priorita_giornaliera()
- RETURNS TABLE(id uuid, codice text, cliente text, priorita text, scadenza date, ore_rimaste numeric, giorni_scadenza integer, rapporto_critico numeric, a_rischio boolean, giorni_stima_consegna numeric)
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.lista_operatori_login(p_solo_sola_lettura boolean) OWNER TO postgres;
+
+--
+-- Name: lista_priorita_giornaliera(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.lista_priorita_giornaliera() RETURNS TABLE(id uuid, codice text, cliente text, priorita text, scadenza date, ore_rimaste numeric, giorni_scadenza integer, rapporto_critico numeric, a_rischio boolean, giorni_stima_consegna numeric)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_soglia         numeric;
   v_min_giorno     numeric;
@@ -3076,15 +3061,19 @@ BEGIN
     AND o.scadenza IS NOT NULL
   ORDER BY rapporto_critico DESC, COALESCE(p.peso, 0) DESC, o.scadenza;
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.lista_schede_kpi()
- RETURNS TABLE(id uuid, nome text, criteri jsonb, ore_interne_iniziali numeric, giorni_calendario_iniziali numeric, n_campioni_iniziali integer, ore_interne_correnti numeric, giorni_calendario_correnti numeric, n_campioni_correnti integer, var_ore_pct numeric, var_giorni_pct numeric, creata_il timestamp with time zone, creata_da uuid)
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.lista_priorita_giornaliera() OWNER TO postgres;
+
+--
+-- Name: lista_schede_kpi(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.lista_schede_kpi() RETURNS TABLE(id uuid, nome text, criteri jsonb, ore_interne_iniziali numeric, giorni_calendario_iniziali numeric, n_campioni_iniziali integer, ore_interne_correnti numeric, giorni_calendario_correnti numeric, n_campioni_correnti integer, var_ore_pct numeric, var_giorni_pct numeric, creata_il timestamp with time zone, creata_da uuid)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_rec  record;
   v_curr record;
@@ -3117,15 +3106,19 @@ BEGIN
       v_rec.creata_da;
   END LOOP;
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.metti_in_attesa(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.lista_schede_kpi() OWNER TO postgres;
+
+--
+-- Name: metti_in_attesa(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.metti_in_attesa(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_fase ordine_fasi%ROWTYPE;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
@@ -3162,15 +3155,19 @@ BEGIN
   END;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.mie_fasi_in_corso(p_operatore_id uuid, p_session_token uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.metti_in_attesa(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: mie_fasi_in_corso(uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.mie_fasi_in_corso(p_operatore_id uuid, p_session_token uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -3202,15 +3199,19 @@ BEGIN
     )
   ));
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.modifica_chiusura_aziendale(p_id uuid, p_data_inizio date, p_data_fine date, p_descrizione text DEFAULT NULL::text, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.mie_fasi_in_corso(p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: modifica_chiusura_aziendale(uuid, date, date, text, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.modifica_chiusura_aziendale(p_id uuid, p_data_inizio date, p_data_fine date, p_descrizione text DEFAULT NULL::text, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE((SELECT valida_sessione(p_responsabile_id, p_session_token)), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -3236,15 +3237,19 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.notifiche_operatore(p_operatore_id uuid, p_session_token uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.modifica_chiusura_aziendale(p_id uuid, p_data_inizio date, p_data_fine date, p_descrizione text, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: notifiche_operatore(uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.notifiche_operatore(p_operatore_id uuid, p_session_token uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -3265,15 +3270,19 @@ BEGIN
     )
   ));
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.ordini_attivi(p_operatore_id uuid, p_session_token uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.notifiche_operatore(p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: ordini_attivi(uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.ordini_attivi(p_operatore_id uuid, p_session_token uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -3285,15 +3294,19 @@ BEGIN
       AND COALESCE(o.eliminato, false) = false
   ));
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.pausa_tutte_fasi(p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.ordini_attivi(p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: pausa_tutte_fasi(uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.pausa_tutte_fasi(p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -3319,15 +3332,19 @@ BEGIN
   WHERE operatore_id = p_operatore_id AND stato = 'in_corso';
   RETURN json_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.piano_giornaliero_raggruppato(p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid, p_data date DEFAULT NULL::date)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.pausa_tutte_fasi(p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: piano_giornaliero_raggruppato(uuid, uuid, date); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.piano_giornaliero_raggruppato(p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid, p_data date DEFAULT NULL::date) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_oggi               date;
   v_margine            numeric;
@@ -3681,15 +3698,19 @@ BEGIN
     'ore_per_macchina', COALESCE((SELECT jsonb_object_agg(macchina_id::text,jsonb_build_object('nome',macchina_nome,'ore_disponibili',ROUND(ore_disp::numeric,2),'ore_assegnate',ROUND(ore_usate::numeric,2))) FROM _maccap_r),'{}'::jsonb)
   );
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.piano_multi_giorno(p_giorni integer DEFAULT 5, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.piano_giornaliero_raggruppato(p_responsabile_id uuid, p_session_token uuid, p_data date) OWNER TO postgres;
+
+--
+-- Name: piano_multi_giorno(integer, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.piano_multi_giorno(p_giorni integer DEFAULT 5, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_margine            numeric;
   v_k_soglia           int;
@@ -3948,15 +3969,19 @@ BEGIN
     'oltre',           COALESCE(v_oltre, '[]'::jsonb)
   );
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.prendi_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.piano_multi_giorno(p_giorni integer, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: prendi_in_carico_extra(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.prendi_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_stato TEXT;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
@@ -3971,15 +3996,19 @@ BEGIN
   INSERT INTO fasi_extra_operatori(fasi_ordine_extra_id, operatore_id) VALUES(p_fase_extra_id, p_operatore_id) ON CONFLICT DO NOTHING;
   RETURN json_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.prendi_in_carico_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.prendi_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: prendi_in_carico_fase(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.prendi_in_carico_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_fase ordine_fasi%ROWTYPE;
   v_deps_ns jsonb;
@@ -4035,15 +4064,19 @@ BEGIN
   END;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.riapri_fase_extra_resp(p_fase_extra_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.prendi_in_carico_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: riapri_fase_extra_resp(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.riapri_fase_extra_resp(p_fase_extra_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_ordine_id uuid;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
@@ -4076,15 +4109,19 @@ BEGIN
 
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.riapri_fase_operatore(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.riapri_fase_extra_resp(p_fase_extra_id uuid, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: riapri_fase_operatore(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.riapri_fase_operatore(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_fase            ordine_fasi%ROWTYPE;
   v_is_responsabile BOOLEAN := FALSE;
@@ -4120,15 +4157,19 @@ BEGIN
   END;
   RETURN json_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.riassegna_fase(p_ordine_fase_id uuid, p_responsabile_id uuid, p_nuovo_operatore uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.riapri_fase_operatore(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: riassegna_fase(uuid, uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.riassegna_fase(p_ordine_fase_id uuid, p_responsabile_id uuid, p_nuovo_operatore uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_fase ordine_fasi%ROWTYPE;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
@@ -4153,15 +4194,19 @@ BEGIN
     SELECT id, 'fase_riassegnata', 'Fase riassegnata a nuovo operatore', v_fase.ordine_id FROM users WHERE ruolo='responsabile';
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.riassegna_fase_extra(p_fase_extra_id uuid, p_nuovo_op uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.riassegna_fase(p_ordine_fase_id uuid, p_responsabile_id uuid, p_nuovo_operatore uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: riassegna_fase_extra(uuid, uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.riassegna_fase_extra(p_fase_extra_id uuid, p_nuovo_op uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -4172,15 +4217,19 @@ BEGIN
   UPDATE fasi_ordine_extra SET operatore_id=p_nuovo_op WHERE id=p_fase_extra_id;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.ricalcola_fase_su_ordini_esistenti(p_fase_id smallint, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.riassegna_fase_extra(p_fase_extra_id uuid, p_nuovo_op uuid, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: ricalcola_fase_su_ordini_esistenti(smallint, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.ricalcola_fase_su_ordini_esistenti(p_fase_id smallint, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_ord       RECORD;
   v_tipo_prod TEXT;
@@ -4262,27 +4311,35 @@ BEGIN
     'saltate_stato_avanzato', v_saltate
   );
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.riepilogo_competenze_operatore(p_operatore_id uuid)
- RETURNS TABLE(fase_id smallint, fase_nome text, fase_posizione integer, priorita smallint)
- LANGUAGE sql
- STABLE SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.ricalcola_fase_su_ordini_esistenti(p_fase_id smallint, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: riepilogo_competenze_operatore(uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.riepilogo_competenze_operatore(p_operatore_id uuid) RETURNS TABLE(fase_id smallint, fase_nome text, fase_posizione integer, priorita smallint)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
   SELECT c.fase_id, f.nome, f.posizione, c.priorita
   FROM competenze_operatore_fase c JOIN fasi f ON f.id = c.fase_id
   WHERE c.operatore_id = p_operatore_id ORDER BY f.posizione, f.id;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.rimuovi_collega_extra(p_fase_extra_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.riepilogo_competenze_operatore(p_operatore_id uuid) OWNER TO postgres;
+
+--
+-- Name: rimuovi_collega_extra(uuid, uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.rimuovi_collega_extra(p_fase_extra_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_fase fasi_ordine_extra%ROWTYPE;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_richiedente_id, p_session_token), false) THEN
@@ -4302,15 +4359,19 @@ BEGIN
   DELETE FROM fasi_extra_operatori WHERE fasi_ordine_extra_id=p_fase_extra_id AND operatore_id=p_collega_id;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.rimuovi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.rimuovi_collega_extra(p_fase_extra_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: rimuovi_collega_fase(uuid, uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.rimuovi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_fase ordine_fasi%ROWTYPE;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_richiedente_id, p_session_token), false) THEN
@@ -4337,15 +4398,19 @@ BEGIN
   END;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.riprendi_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_forza boolean DEFAULT false, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.rimuovi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: riprendi_fase(uuid, uuid, boolean, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.riprendi_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_forza boolean DEFAULT false, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_fase ordine_fasi%ROWTYPE; v_tg text;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
@@ -4368,15 +4433,19 @@ BEGIN
   UPDATE ordine_fasi SET stato='in_corso', operatore_id=p_operatore_id, iniziata_il=COALESCE(v_fase.iniziata_il, NOW()) WHERE id=p_ordine_fase_id;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.riprendi_tutte_fasi(p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.riprendi_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_forza boolean, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: riprendi_tutte_fasi(uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.riprendi_tutte_fasi(p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -4388,15 +4457,19 @@ BEGIN
   UPDATE fasi_ordine_extra SET stato='in_corso', iniziata_il=NOW() WHERE operatore_id=p_operatore_id AND stato='in_attesa';
   RETURN json_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.salva_allegato(p_ordine_fase_id uuid, p_url_file text, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.riprendi_tutte_fasi(p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: salva_allegato(uuid, text, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.salva_allegato(p_ordine_fase_id uuid, p_url_file text, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_fase ordine_fasi%ROWTYPE;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
@@ -4415,15 +4488,19 @@ BEGIN
   INSERT INTO allegati(ordine_fase_id, url_file, caricato_da) VALUES(p_ordine_fase_id, p_url_file, p_operatore_id);
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.salva_nota_fase_extra(p_fase_extra_id uuid, p_note text, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.salva_allegato(p_ordine_fase_id uuid, p_url_file text, p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: salva_nota_fase_extra(uuid, text, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.salva_nota_fase_extra(p_fase_extra_id uuid, p_note text, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -4434,15 +4511,19 @@ BEGIN
   UPDATE fasi_ordine_extra SET note_responsabile=p_note WHERE id=p_fase_extra_id;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.salva_onesignal_id(p_user_id uuid, p_onesignal_id text, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.salva_nota_fase_extra(p_fase_extra_id uuid, p_note text, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: salva_onesignal_id(uuid, text, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.salva_onesignal_id(p_user_id uuid, p_onesignal_id text, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_count INT;
 BEGIN
@@ -4457,15 +4538,19 @@ BEGIN
   GET DIAGNOSTICS v_count = ROW_COUNT;
   RETURN json_build_object('ok', v_count > 0, 'righe', v_count);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.segna_notifiche_lette(p_utente_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS integer
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.salva_onesignal_id(p_user_id uuid, p_onesignal_id text, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: segna_notifiche_lette(uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.segna_notifiche_lette(p_utente_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_count integer;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_utente_id, p_session_token), false) THEN
@@ -4479,15 +4564,19 @@ BEGIN
   GET DIAGNOSTICS v_count = ROW_COUNT;
   RETURN v_count;
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.segna_spedito(p_ordine_id uuid, p_utente_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.segna_notifiche_lette(p_utente_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: segna_spedito(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.segna_spedito(p_ordine_id uuid, p_utente_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_ordine ordini%ROWTYPE;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_utente_id, p_session_token), false) THEN
@@ -4510,15 +4599,19 @@ BEGIN
   END;
   RETURN json_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.segna_spedizione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.segna_spedito(p_ordine_id uuid, p_utente_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: segna_spedizione_extra(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.segna_spedizione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_fase fasi_ordine_extra%ROWTYPE;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
@@ -4542,15 +4635,19 @@ BEGIN
   UPDATE fasi_ordine_extra SET stato='in_attesa', spedita_il=NOW() WHERE id=p_fase_extra_id;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.segna_spedizione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.segna_spedizione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: segna_spedizione_fase(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.segna_spedizione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_fase ordine_fasi%ROWTYPE; v_tg text;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
@@ -4569,15 +4666,19 @@ BEGIN
   UPDATE ordine_fasi SET stato='in_attesa', spedita_il=NOW() WHERE id=p_ordine_fase_id;
   RETURN jsonb_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[])
- RETURNS TABLE(ordine_id uuid, minuti_lavoro numeric, minuti_attesa_esterna numeric, n_operatori bigint)
- LANGUAGE sql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.segna_spedizione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: statistiche_lavoro_ordini(uuid[]); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[]) RETURNS TABLE(ordine_id uuid, minuti_lavoro numeric, minuti_attesa_esterna numeric, n_operatori bigint)
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
   WITH fasi_std AS (
     SELECT
       of2.ordine_id,
@@ -4667,15 +4768,19 @@ AS $function$
   FROM unnest(p_ordine_ids) AS o(id)
   LEFT JOIN tempo    t  ON t.ordine_id  = o.id
   LEFT JOIN op_count oc ON oc.ordine_id = o.id;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.storico_fasi_completate(p_operatore_id uuid, p_session_token uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[]) OWNER TO postgres;
+
+--
+-- Name: storico_fasi_completate(uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.storico_fasi_completate(p_operatore_id uuid, p_session_token uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -4696,15 +4801,19 @@ BEGIN
     ) sub
   ));
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.storico_ordini_periodo(p_operatore_id uuid, p_session_token uuid, p_dal timestamp with time zone, p_al timestamp with time zone)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.storico_fasi_completate(p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: storico_ordini_periodo(uuid, uuid, timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.storico_ordini_periodo(p_operatore_id uuid, p_session_token uuid, p_dal timestamp with time zone, p_al timestamp with time zone) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -4716,29 +4825,38 @@ BEGIN
        OR (o.spedito_il IS NULL AND o.completato_il >= p_dal AND o.completato_il < p_al)
   ));
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.sync_e_attesa_esterna()
- RETURNS trigger
- LANGUAGE plpgsql
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.storico_ordini_periodo(p_operatore_id uuid, p_session_token uuid, p_dal timestamp with time zone, p_al timestamp with time zone) OWNER TO postgres;
+
+--
+-- Name: sync_e_attesa_esterna(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.sync_e_attesa_esterna() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NEW.tipo_gestione IN ('conferma_ricezione','spedizione_esterna') THEN
     NEW.e_attesa_esterna := true;
   END IF;
   RETURN NEW;
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.tempo_medio_fasi_dati(p_operatore_id uuid, p_session_token uuid)
- RETURNS jsonb
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.sync_e_attesa_esterna() OWNER TO postgres;
+
+--
+-- Name: tempo_medio_fasi_dati(uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.tempo_medio_fasi_dati(p_operatore_id uuid, p_session_token uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -4758,15 +4876,19 @@ BEGIN
       AND of.fase_id IS NOT NULL
   ));
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.trigger_push_notifica()
- RETURNS trigger
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.tempo_medio_fasi_dati(p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: trigger_push_notifica(); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.trigger_push_notifica() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_url TEXT;
   v_secret_key TEXT;
@@ -4816,15 +4938,19 @@ BEGIN
   );
   RETURN NEW;
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.unisciti_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.trigger_push_notifica() OWNER TO postgres;
+
+--
+-- Name: unisciti_fase_extra(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.unisciti_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_stato TEXT;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
@@ -4839,15 +4965,19 @@ BEGIN
   INSERT INTO fasi_extra_operatori(fasi_ordine_extra_id, operatore_id) VALUES(p_fase_extra_id, p_operatore_id) ON CONFLICT DO NOTHING;
   RETURN json_build_object('ok', true);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.valida_sessione(p_user_id uuid, p_session_token uuid)
- RETURNS boolean
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.unisciti_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: valida_sessione(uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.valida_sessione(p_user_id uuid, p_session_token uuid) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE v_user users%ROWTYPE;
 BEGIN
   IF p_user_id IS NULL THEN RETURN false; END IF;
@@ -4875,15 +5005,19 @@ BEGIN
              AND v_user.session_token_scadenza > NOW(),
            false);
 END;
-$function$
+$$;
 
 
-CREATE OR REPLACE FUNCTION public.verifica_pin(p_user_id uuid, p_pin text)
- RETURNS json
- LANGUAGE plpgsql
- SECURITY DEFINER
- SET search_path TO 'public'
-AS $function$
+ALTER FUNCTION public.valida_sessione(p_user_id uuid, p_session_token uuid) OWNER TO postgres;
+
+--
+-- Name: verifica_pin(uuid, text); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.verifica_pin(p_user_id uuid, p_pin text) RETURNS json
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
 DECLARE
   v_user RECORD;
   v_tentativi INT;
@@ -4942,406 +5076,3711 @@ BEGIN
 
   RETURN json_build_object('ok', false, 'errore', 'pin_errato');
 END;
-$function$
+$$;
 
 
--- ============ TRIGGER ============
-CREATE TRIGGER tg_sync_e_attesa_fasi BEFORE INSERT OR UPDATE ON public.fasi FOR EACH ROW EXECUTE FUNCTION sync_e_attesa_esterna();
-CREATE TRIGGER tg_sync_e_attesa_fasi_extra BEFORE INSERT OR UPDATE ON public.fasi_ordine_extra FOR EACH ROW EXECUTE FUNCTION sync_e_attesa_esterna();
-CREATE TRIGGER trigger_check_ordine_extra_completato AFTER UPDATE ON public.fasi_ordine_extra FOR EACH ROW EXECUTE FUNCTION check_ordine_extra_completato();
-CREATE TRIGGER trg_push_notifica AFTER INSERT ON public.notifiche FOR EACH ROW EXECUTE FUNCTION trigger_push_notifica();
-CREATE TRIGGER trg_check_lock_fase BEFORE UPDATE ON public.ordine_fasi FOR EACH ROW EXECUTE FUNCTION check_lock_fase();
-CREATE TRIGGER trigger_check_ordine_completato AFTER UPDATE OF stato ON public.ordine_fasi FOR EACH ROW EXECUTE FUNCTION check_ordine_completato();
-CREATE TRIGGER trg_crea_fasi_ordine AFTER INSERT ON public.ordini FOR EACH ROW EXECUTE FUNCTION crea_fasi_per_ordine();
+ALTER FUNCTION public.verifica_pin(p_user_id uuid, p_pin text) OWNER TO postgres;
 
--- ============ ROW LEVEL SECURITY ============
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: allegati; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.allegati (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    ordine_fase_id uuid NOT NULL,
+    url_file text NOT NULL,
+    caricato_da uuid NOT NULL,
+    caricato_il timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.allegati OWNER TO postgres;
+
+--
+-- Name: archivio_log; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.archivio_log (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    ordine_id uuid NOT NULL,
+    fase_id smallint,
+    utente_id uuid NOT NULL,
+    azione public.azione_log NOT NULL,
+    "timestamp" timestamp with time zone DEFAULT now() NOT NULL,
+    dettaglio jsonb
+);
+
+
+ALTER TABLE public.archivio_log OWNER TO postgres;
+
+--
+-- Name: attributi_prodotto_config; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.attributi_prodotto_config (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    chiave text NOT NULL,
+    etichetta text NOT NULL,
+    tipo text DEFAULT 'select_singola'::text NOT NULL,
+    opzioni jsonb DEFAULT '[]'::jsonb NOT NULL,
+    obbligatorio boolean DEFAULT true NOT NULL,
+    posizione integer DEFAULT 0 NOT NULL,
+    attivo boolean DEFAULT true NOT NULL,
+    CONSTRAINT attributi_prodotto_config_tipo_check CHECK ((tipo = 'select_singola'::text))
+);
+
+
+ALTER TABLE public.attributi_prodotto_config OWNER TO postgres;
+
+--
+-- Name: catalogo_fase_extra_macchine; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.catalogo_fase_extra_macchine (
+    catalogo_fase_extra_id uuid NOT NULL,
+    macchina_id uuid NOT NULL
+);
+
+
+ALTER TABLE public.catalogo_fase_extra_macchine OWNER TO postgres;
+
+--
+-- Name: catalogo_fasi_extra; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.catalogo_fasi_extra (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    nome text NOT NULL,
+    descrizione text,
+    tipo_gestione text DEFAULT 'standard'::text NOT NULL,
+    e_attesa_esterna boolean DEFAULT false NOT NULL,
+    attiva boolean DEFAULT true NOT NULL,
+    creato_il timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.catalogo_fasi_extra OWNER TO postgres;
+
+--
+-- Name: chiusure_aziendali; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.chiusure_aziendali (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    data_inizio date NOT NULL,
+    data_fine date NOT NULL,
+    descrizione text,
+    creato_il timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT chiusure_date_check CHECK ((data_fine >= data_inizio))
+);
+
+
+ALTER TABLE public.chiusure_aziendali OWNER TO postgres;
+
+--
+-- Name: competenze_operatore_fase; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.competenze_operatore_fase (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    operatore_id uuid NOT NULL,
+    fase_id smallint NOT NULL,
+    priorita smallint NOT NULL,
+    creato_il timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT competenze_operatore_fase_priorita_check CHECK ((priorita >= 1))
+);
+
+
+ALTER TABLE public.competenze_operatore_fase OWNER TO postgres;
+
+--
+-- Name: competenze_operatore_fase_extra; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.competenze_operatore_fase_extra (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    operatore_id uuid NOT NULL,
+    catalogo_fase_extra_id uuid NOT NULL,
+    priorita smallint NOT NULL,
+    creato_il timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.competenze_operatore_fase_extra OWNER TO postgres;
+
+--
+-- Name: competenze_operatore_macchina; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.competenze_operatore_macchina (
+    operatore_id uuid NOT NULL,
+    macchina_id uuid NOT NULL,
+    priorita integer DEFAULT 1 NOT NULL
+);
+
+
+ALTER TABLE public.competenze_operatore_macchina OWNER TO postgres;
+
+--
+-- Name: config_orario; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.config_orario (
+    id boolean DEFAULT true NOT NULL,
+    ora_inizio time without time zone DEFAULT '08:00:00'::time without time zone NOT NULL,
+    ora_fine time without time zone DEFAULT '17:00:00'::time without time zone NOT NULL,
+    sabato_lavorativo boolean DEFAULT false NOT NULL,
+    ore_sabato numeric(4,2) DEFAULT 4,
+    domenica_lavorativa boolean DEFAULT false,
+    ore_domenica numeric(4,2) DEFAULT 0,
+    straordinario_attivo boolean DEFAULT false,
+    ore_straordinario numeric(4,2) DEFAULT 2,
+    pausa_attiva boolean DEFAULT true,
+    pausa_minuti integer DEFAULT 60,
+    ora_fine_sabato time without time zone DEFAULT '13:00:00'::time without time zone NOT NULL,
+    CONSTRAINT config_orario_id_check CHECK ((id = true))
+);
+
+
+ALTER TABLE public.config_orario OWNER TO postgres;
+
+--
+-- Name: config_sistema; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.config_sistema (
+    chiave text NOT NULL,
+    valore text
+);
+
+
+ALTER TABLE public.config_sistema OWNER TO postgres;
+
+--
+-- Name: disponibilita_giornaliera; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.disponibilita_giornaliera (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    operatore_id uuid NOT NULL,
+    data date NOT NULL,
+    ore numeric(4,1) NOT NULL,
+    creato_il timestamp with time zone DEFAULT now() NOT NULL,
+    motivo text,
+    CONSTRAINT disponibilita_giornaliera_ore_check CHECK ((ore >= (0)::numeric))
+);
+
+
+ALTER TABLE public.disponibilita_giornaliera OWNER TO postgres;
+
+--
+-- Name: fase_dipendenze; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.fase_dipendenze (
+    fase_id smallint NOT NULL,
+    dipende_da_fase_id smallint NOT NULL,
+    creato_il timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT no_self_dep CHECK ((fase_id <> dipende_da_fase_id))
+);
+
+
+ALTER TABLE public.fase_dipendenze OWNER TO postgres;
+
+--
+-- Name: fase_macchine; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.fase_macchine (
+    fase_id smallint NOT NULL,
+    macchina_id uuid NOT NULL
+);
+
+
+ALTER TABLE public.fase_macchine OWNER TO postgres;
+
+--
+-- Name: fase_materiali; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.fase_materiali (
+    fase_id smallint NOT NULL,
+    materiale_valore text NOT NULL
+);
+
+
+ALTER TABLE public.fase_materiali OWNER TO postgres;
+
+--
+-- Name: fase_strutture; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.fase_strutture (
+    fase_id smallint NOT NULL,
+    struttura_valore text NOT NULL
+);
+
+
+ALTER TABLE public.fase_strutture OWNER TO postgres;
+
+--
+-- Name: fase_tipi_prodotto; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.fase_tipi_prodotto (
+    fase_id smallint NOT NULL,
+    tipo_prodotto_id text NOT NULL
+);
+
+
+ALTER TABLE public.fase_tipi_prodotto OWNER TO postgres;
+
+--
+-- Name: fasi; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.fasi (
+    id smallint NOT NULL,
+    nome text NOT NULL,
+    descrizione text,
+    posizione integer,
+    macro_fase_id integer,
+    e_attesa_esterna boolean DEFAULT false NOT NULL,
+    tipo_gestione text DEFAULT 'standard'::text NOT NULL,
+    opzionale boolean DEFAULT false NOT NULL,
+    avvio_automatico boolean DEFAULT false NOT NULL,
+    CONSTRAINT fasi_tipo_gestione_check CHECK ((tipo_gestione = ANY (ARRAY['standard'::text, 'conferma_ricezione'::text, 'spedizione_esterna'::text])))
+);
+
+
+ALTER TABLE public.fasi OWNER TO postgres;
+
+--
+-- Name: fasi_extra_operatori; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.fasi_extra_operatori (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    fasi_ordine_extra_id uuid NOT NULL,
+    operatore_id uuid NOT NULL
+);
+
+
+ALTER TABLE public.fasi_extra_operatori OWNER TO postgres;
+
+--
+-- Name: fasi_ordine_extra; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.fasi_ordine_extra (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    ordine_id uuid NOT NULL,
+    numero smallint NOT NULL,
+    nome text NOT NULL,
+    stato public.stato_fase DEFAULT 'disponibile'::public.stato_fase NOT NULL,
+    operatore_id uuid,
+    note_responsabile text,
+    note_operatore text,
+    iniziata_il timestamp with time zone,
+    completata_il timestamp with time zone,
+    creato_il timestamp with time zone DEFAULT now(),
+    reminder_inviato_il timestamp with time zone,
+    tempo_accumulato_minuti numeric,
+    n_ordini_batch smallint DEFAULT 1 NOT NULL,
+    e_attesa_esterna boolean DEFAULT false NOT NULL,
+    tipo_gestione text DEFAULT 'standard'::text NOT NULL,
+    spedita_il timestamp with time zone,
+    catalogo_fase_extra_id uuid,
+    macchina_id uuid,
+    ore_stimate_manuali numeric,
+    CONSTRAINT fasi_ordine_extra_numero_check CHECK (((numero >= 1) AND (numero <= 20))),
+    CONSTRAINT foe_tipo_gestione_check CHECK ((tipo_gestione = ANY (ARRAY['standard'::text, 'conferma_ricezione'::text, 'spedizione_esterna'::text])))
+);
+
+
+ALTER TABLE public.fasi_ordine_extra OWNER TO postgres;
+
+--
+-- Name: kpi_config; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.kpi_config (
+    chiave text NOT NULL,
+    valore numeric NOT NULL,
+    descrizione text
+);
+
+
+ALTER TABLE public.kpi_config OWNER TO postgres;
+
+--
+-- Name: kpi_schede; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.kpi_schede (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    nome text NOT NULL,
+    criteri jsonb NOT NULL,
+    ore_interne_iniziali numeric,
+    giorni_calendario_iniziali numeric,
+    n_campioni_iniziali integer,
+    creata_da uuid,
+    creata_il timestamp with time zone DEFAULT now()
+);
+
+
+ALTER TABLE public.kpi_schede OWNER TO postgres;
+
+--
+-- Name: macchine; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.macchine (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    nome text NOT NULL,
+    stato text DEFAULT 'attiva'::text NOT NULL,
+    ore_default numeric DEFAULT 8.0 NOT NULL,
+    creato_il timestamp with time zone DEFAULT now() NOT NULL,
+    aggiornato_il timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT macchine_stato_check CHECK ((stato = ANY (ARRAY['attiva'::text, 'manutenzione'::text, 'fuori_uso'::text])))
+);
+
+
+ALTER TABLE public.macchine OWNER TO postgres;
+
+--
+-- Name: macro_fasi; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.macro_fasi (
+    id integer NOT NULL,
+    nome text NOT NULL,
+    posizione integer DEFAULT 0,
+    colore text DEFAULT '#6B7280'::text
+);
+
+
+ALTER TABLE public.macro_fasi OWNER TO postgres;
+
+--
+-- Name: macro_fasi_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.macro_fasi_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.macro_fasi_id_seq OWNER TO postgres;
+
+--
+-- Name: macro_fasi_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.macro_fasi_id_seq OWNED BY public.macro_fasi.id;
+
+
+--
+-- Name: manutenzioni_macchina; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.manutenzioni_macchina (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    macchina_id uuid NOT NULL,
+    data_inizio date NOT NULL,
+    data_fine date NOT NULL,
+    descrizione text,
+    creato_il timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT manutenzioni_macchina_date_check CHECK ((data_fine >= data_inizio))
+);
+
+
+ALTER TABLE public.manutenzioni_macchina OWNER TO postgres;
+
+--
+-- Name: notifiche; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.notifiche (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    destinatario_id uuid NOT NULL,
+    tipo public.tipo_notifica NOT NULL,
+    testo text NOT NULL,
+    ordine_id uuid,
+    letta boolean DEFAULT false NOT NULL,
+    creata_il timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.notifiche OWNER TO postgres;
+
+--
+-- Name: notifiche_destinatari_config; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.notifiche_destinatari_config (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tipo_evento text NOT NULL,
+    utente_id uuid NOT NULL,
+    attivo boolean DEFAULT true NOT NULL,
+    creato_il timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.notifiche_destinatari_config OWNER TO postgres;
+
+--
+-- Name: ordine_fasi; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.ordine_fasi (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    ordine_id uuid NOT NULL,
+    fase_id smallint,
+    stato public.stato_fase DEFAULT 'disponibile'::public.stato_fase NOT NULL,
+    operatore_id uuid,
+    iniziata_il timestamp with time zone,
+    completata_il timestamp with time zone,
+    note_responsabile text,
+    note_operatore text,
+    nome_custom text,
+    tempo_accumulato_minuti numeric DEFAULT 0,
+    reminder_inviato_il timestamp with time zone,
+    n_ordini_batch smallint DEFAULT 1 NOT NULL,
+    spedita_il timestamp with time zone
+);
+
+
+ALTER TABLE public.ordine_fasi OWNER TO postgres;
+
+--
+-- Name: COLUMN ordine_fasi.n_ordini_batch; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.ordine_fasi.n_ordini_batch IS 'Numero di ordini completati insieme nello stesso batch. Per calcolare il tempo EFFETTIVO per singola unità in qualsiasi analisi/KPI futura, dividere sempre tempo_accumulato_minuti per n_ordini_batch — non usare mai tempo_accumulato_minuti da solo per calcoli di tempo medio per fase.';
+
+
+--
+-- Name: ordine_fasi_operatori; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.ordine_fasi_operatori (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    ordine_fase_id uuid NOT NULL,
+    operatore_id uuid NOT NULL,
+    aggiunto_il timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.ordine_fasi_operatori OWNER TO postgres;
+
+--
+-- Name: ordini; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.ordini (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    codice text,
+    cliente text NOT NULL,
+    priorita text DEFAULT 'normale'::text NOT NULL,
+    scadenza date,
+    stato public.stato_ordine DEFAULT 'aperto'::public.stato_ordine NOT NULL,
+    note_generali text,
+    creato_da uuid NOT NULL,
+    creato_il timestamp with time zone DEFAULT now() NOT NULL,
+    spedito_il timestamp with time zone,
+    tipo text DEFAULT 'standard'::text,
+    struttura text DEFAULT 'quattro_lati'::text NOT NULL,
+    tipo_prodotto text DEFAULT 'portoncino'::text NOT NULL,
+    materiale text DEFAULT 'placchetta'::text NOT NULL,
+    eliminato boolean DEFAULT false NOT NULL,
+    quantita integer DEFAULT 1 NOT NULL,
+    completato_il timestamp with time zone,
+    archiviato_il timestamp with time zone,
+    CONSTRAINT ordini_quantita_check CHECK ((quantita >= 1)),
+    CONSTRAINT ordini_tipo_check CHECK ((tipo = ANY (ARRAY['standard'::text, 'extra'::text])))
+);
+
+
+ALTER TABLE public.ordini OWNER TO postgres;
+
+--
+-- Name: ordini_codice_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.ordini_codice_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.ordini_codice_seq OWNER TO postgres;
+
+--
+-- Name: pin_tentativi; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.pin_tentativi (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    tentato_il timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.pin_tentativi OWNER TO postgres;
+
+--
+-- Name: priorita_ordine_config; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.priorita_ordine_config (
+    id text NOT NULL,
+    etichetta text NOT NULL,
+    peso integer DEFAULT 10 NOT NULL,
+    posizione integer DEFAULT 0 NOT NULL,
+    attivo boolean DEFAULT true NOT NULL
+);
+
+
+ALTER TABLE public.priorita_ordine_config OWNER TO postgres;
+
+--
+-- Name: snapshot_backfill_fasi_eliminate_20260903; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.snapshot_backfill_fasi_eliminate_20260903 (
+    id uuid NOT NULL,
+    tabella_origine text NOT NULL,
+    stato_precedente public.stato_fase NOT NULL,
+    momento timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT snapshot_backfill_fasi_eliminate_20260903_tabella_origine_check CHECK ((tabella_origine = ANY (ARRAY['ordine_fasi'::text, 'fasi_ordine_extra'::text])))
+);
+
+
+ALTER TABLE public.snapshot_backfill_fasi_eliminate_20260903 OWNER TO postgres;
+
+--
+-- Name: tipi_prodotto; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.tipi_prodotto (
+    id text NOT NULL,
+    label text NOT NULL,
+    posizione integer DEFAULT 0 NOT NULL
+);
+
+
+ALTER TABLE public.tipi_prodotto OWNER TO postgres;
+
+--
+-- Name: users; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.users (
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
+    nome text NOT NULL,
+    cognome text NOT NULL,
+    email text,
+    ruolo public.ruolo_utente NOT NULL,
+    attivo boolean DEFAULT true NOT NULL,
+    creato_il timestamp with time zone DEFAULT now() NOT NULL,
+    eliminato boolean DEFAULT false NOT NULL,
+    pin_hash text,
+    onesignal_id text,
+    session_token uuid,
+    session_token_scadenza timestamp with time zone,
+    forzato_logout boolean DEFAULT false,
+    ore_default numeric(4,1) DEFAULT 8.0 NOT NULL,
+    escluso_pianificazione boolean DEFAULT false NOT NULL,
+    CONSTRAINT chk_responsabile_email CHECK (((ruolo <> 'responsabile'::public.ruolo_utente) OR (email IS NOT NULL)))
+);
+
+
+ALTER TABLE public.users OWNER TO postgres;
+
+--
+-- Name: macro_fasi id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.macro_fasi ALTER COLUMN id SET DEFAULT nextval('public.macro_fasi_id_seq'::regclass);
+
+
+--
+-- Name: allegati allegati_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.allegati
+    ADD CONSTRAINT allegati_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: archivio_log archivio_log_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.archivio_log
+    ADD CONSTRAINT archivio_log_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: attributi_prodotto_config attributi_prodotto_config_chiave_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.attributi_prodotto_config
+    ADD CONSTRAINT attributi_prodotto_config_chiave_key UNIQUE (chiave);
+
+
+--
+-- Name: attributi_prodotto_config attributi_prodotto_config_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.attributi_prodotto_config
+    ADD CONSTRAINT attributi_prodotto_config_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: catalogo_fase_extra_macchine catalogo_fase_extra_macchine_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.catalogo_fase_extra_macchine
+    ADD CONSTRAINT catalogo_fase_extra_macchine_pkey PRIMARY KEY (catalogo_fase_extra_id, macchina_id);
+
+
+--
+-- Name: catalogo_fasi_extra catalogo_fasi_extra_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.catalogo_fasi_extra
+    ADD CONSTRAINT catalogo_fasi_extra_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: chiusure_aziendali chiusure_aziendali_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.chiusure_aziendali
+    ADD CONSTRAINT chiusure_aziendali_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: competenze_operatore_fase_extra competenze_operatore_fase_ext_operatore_id_catalogo_fase_ex_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competenze_operatore_fase_extra
+    ADD CONSTRAINT competenze_operatore_fase_ext_operatore_id_catalogo_fase_ex_key UNIQUE (operatore_id, catalogo_fase_extra_id);
+
+
+--
+-- Name: competenze_operatore_fase_extra competenze_operatore_fase_extra_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competenze_operatore_fase_extra
+    ADD CONSTRAINT competenze_operatore_fase_extra_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: competenze_operatore_fase competenze_operatore_fase_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competenze_operatore_fase
+    ADD CONSTRAINT competenze_operatore_fase_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: competenze_operatore_fase competenze_operatore_fase_unique; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competenze_operatore_fase
+    ADD CONSTRAINT competenze_operatore_fase_unique UNIQUE (operatore_id, fase_id);
+
+
+--
+-- Name: competenze_operatore_macchina competenze_operatore_macchina_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competenze_operatore_macchina
+    ADD CONSTRAINT competenze_operatore_macchina_pkey PRIMARY KEY (operatore_id, macchina_id);
+
+
+--
+-- Name: config_orario config_orario_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.config_orario
+    ADD CONSTRAINT config_orario_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: config_sistema config_sistema_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.config_sistema
+    ADD CONSTRAINT config_sistema_pkey PRIMARY KEY (chiave);
+
+
+--
+-- Name: disponibilita_giornaliera disponibilita_giornaliera_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.disponibilita_giornaliera
+    ADD CONSTRAINT disponibilita_giornaliera_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: disponibilita_giornaliera disponibilita_giornaliera_unique; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.disponibilita_giornaliera
+    ADD CONSTRAINT disponibilita_giornaliera_unique UNIQUE (operatore_id, data);
+
+
+--
+-- Name: fase_dipendenze fase_dipendenze_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fase_dipendenze
+    ADD CONSTRAINT fase_dipendenze_pkey PRIMARY KEY (fase_id, dipende_da_fase_id);
+
+
+--
+-- Name: fase_macchine fase_macchine_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fase_macchine
+    ADD CONSTRAINT fase_macchine_pkey PRIMARY KEY (fase_id, macchina_id);
+
+
+--
+-- Name: fase_materiali fase_materiali_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fase_materiali
+    ADD CONSTRAINT fase_materiali_pkey PRIMARY KEY (fase_id, materiale_valore);
+
+
+--
+-- Name: fase_strutture fase_strutture_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fase_strutture
+    ADD CONSTRAINT fase_strutture_pkey PRIMARY KEY (fase_id, struttura_valore);
+
+
+--
+-- Name: fase_tipi_prodotto fase_tipi_prodotto_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fase_tipi_prodotto
+    ADD CONSTRAINT fase_tipi_prodotto_pkey PRIMARY KEY (fase_id, tipo_prodotto_id);
+
+
+--
+-- Name: fasi_extra_operatori fasi_extra_operatori_fasi_ordine_extra_id_operatore_id_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fasi_extra_operatori
+    ADD CONSTRAINT fasi_extra_operatori_fasi_ordine_extra_id_operatore_id_key UNIQUE (fasi_ordine_extra_id, operatore_id);
+
+
+--
+-- Name: fasi_extra_operatori fasi_extra_operatori_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fasi_extra_operatori
+    ADD CONSTRAINT fasi_extra_operatori_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fasi_ordine_extra fasi_ordine_extra_ordine_id_numero_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fasi_ordine_extra
+    ADD CONSTRAINT fasi_ordine_extra_ordine_id_numero_key UNIQUE (ordine_id, numero);
+
+
+--
+-- Name: fasi_ordine_extra fasi_ordine_extra_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fasi_ordine_extra
+    ADD CONSTRAINT fasi_ordine_extra_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: fasi fasi_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fasi
+    ADD CONSTRAINT fasi_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: kpi_config kpi_config_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.kpi_config
+    ADD CONSTRAINT kpi_config_pkey PRIMARY KEY (chiave);
+
+
+--
+-- Name: kpi_schede kpi_schede_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.kpi_schede
+    ADD CONSTRAINT kpi_schede_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: macchine macchine_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.macchine
+    ADD CONSTRAINT macchine_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: macro_fasi macro_fasi_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.macro_fasi
+    ADD CONSTRAINT macro_fasi_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: manutenzioni_macchina manutenzioni_macchina_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.manutenzioni_macchina
+    ADD CONSTRAINT manutenzioni_macchina_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: notifiche_destinatari_config notifiche_destinatari_config_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.notifiche_destinatari_config
+    ADD CONSTRAINT notifiche_destinatari_config_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: notifiche_destinatari_config notifiche_destinatari_config_tipo_evento_utente_id_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.notifiche_destinatari_config
+    ADD CONSTRAINT notifiche_destinatari_config_tipo_evento_utente_id_key UNIQUE (tipo_evento, utente_id);
+
+
+--
+-- Name: notifiche notifiche_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.notifiche
+    ADD CONSTRAINT notifiche_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ordine_fasi_operatori ordine_fasi_operatori_ordine_fase_id_operatore_id_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.ordine_fasi_operatori
+    ADD CONSTRAINT ordine_fasi_operatori_ordine_fase_id_operatore_id_key UNIQUE (ordine_fase_id, operatore_id);
+
+
+--
+-- Name: ordine_fasi_operatori ordine_fasi_operatori_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.ordine_fasi_operatori
+    ADD CONSTRAINT ordine_fasi_operatori_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ordine_fasi ordine_fasi_ordine_id_fase_id_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.ordine_fasi
+    ADD CONSTRAINT ordine_fasi_ordine_id_fase_id_key UNIQUE (ordine_id, fase_id);
+
+
+--
+-- Name: ordine_fasi ordine_fasi_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.ordine_fasi
+    ADD CONSTRAINT ordine_fasi_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ordini ordini_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.ordini
+    ADD CONSTRAINT ordini_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: pin_tentativi pin_tentativi_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.pin_tentativi
+    ADD CONSTRAINT pin_tentativi_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: priorita_ordine_config priorita_ordine_config_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.priorita_ordine_config
+    ADD CONSTRAINT priorita_ordine_config_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: snapshot_backfill_fasi_eliminate_20260903 snapshot_backfill_fasi_eliminate_20260903_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.snapshot_backfill_fasi_eliminate_20260903
+    ADD CONSTRAINT snapshot_backfill_fasi_eliminate_20260903_pkey PRIMARY KEY (id, tabella_origine);
+
+
+--
+-- Name: tipi_prodotto tipi_prodotto_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.tipi_prodotto
+    ADD CONSTRAINT tipi_prodotto_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: users users_email_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_email_key UNIQUE (email);
+
+
+--
+-- Name: users users_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.users
+    ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: idx_allegati_caricato_da; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_allegati_caricato_da ON public.allegati USING btree (caricato_da);
+
+
+--
+-- Name: idx_allegati_ordine_fase; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_allegati_ordine_fase ON public.allegati USING btree (ordine_fase_id);
+
+
+--
+-- Name: idx_archivio_log_fase_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_archivio_log_fase_id ON public.archivio_log USING btree (fase_id);
+
+
+--
+-- Name: idx_fasi_extra_operatori_operatore_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_fasi_extra_operatori_operatore_id ON public.fasi_extra_operatori USING btree (operatore_id);
+
+
+--
+-- Name: idx_fasi_macro_fase_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_fasi_macro_fase_id ON public.fasi USING btree (macro_fase_id);
+
+
+--
+-- Name: idx_fasi_ordine_extra_operatore_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_fasi_ordine_extra_operatore_id ON public.fasi_ordine_extra USING btree (operatore_id);
+
+
+--
+-- Name: idx_kpi_schede_creata_da; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_kpi_schede_creata_da ON public.kpi_schede USING btree (creata_da);
+
+
+--
+-- Name: idx_log_ordine; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_log_ordine ON public.archivio_log USING btree (ordine_id);
+
+
+--
+-- Name: idx_log_timestamp; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_log_timestamp ON public.archivio_log USING btree ("timestamp" DESC);
+
+
+--
+-- Name: idx_log_utente; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_log_utente ON public.archivio_log USING btree (utente_id);
+
+
+--
+-- Name: idx_notifiche_creata; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_notifiche_creata ON public.notifiche USING btree (creata_il DESC);
+
+
+--
+-- Name: idx_notifiche_destinatario; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_notifiche_destinatario ON public.notifiche USING btree (destinatario_id, letta);
+
+
+--
+-- Name: idx_notifiche_ordine_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_notifiche_ordine_id ON public.notifiche USING btree (ordine_id);
+
+
+--
+-- Name: idx_ordine_fasi_fase_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_ordine_fasi_fase_id ON public.ordine_fasi USING btree (fase_id);
+
+
+--
+-- Name: idx_ordine_fasi_operatore; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_ordine_fasi_operatore ON public.ordine_fasi USING btree (operatore_id) WHERE (operatore_id IS NOT NULL);
+
+
+--
+-- Name: idx_ordine_fasi_operatori_operatore_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_ordine_fasi_operatori_operatore_id ON public.ordine_fasi_operatori USING btree (operatore_id);
+
+
+--
+-- Name: idx_ordine_fasi_ordine; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_ordine_fasi_ordine ON public.ordine_fasi USING btree (ordine_id);
+
+
+--
+-- Name: idx_ordine_fasi_stato; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_ordine_fasi_stato ON public.ordine_fasi USING btree (stato);
+
+
+--
+-- Name: idx_ordini_codice_attivi; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE UNIQUE INDEX idx_ordini_codice_attivi ON public.ordini USING btree (codice) WHERE (eliminato = false);
+
+
+--
+-- Name: idx_ordini_creato_da; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_ordini_creato_da ON public.ordini USING btree (creato_da);
+
+
+--
+-- Name: idx_ordini_priorita; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_ordini_priorita ON public.ordini USING btree (priorita);
+
+
+--
+-- Name: idx_ordini_scadenza; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_ordini_scadenza ON public.ordini USING btree (scadenza) WHERE (stato <> 'spedito'::public.stato_ordine);
+
+
+--
+-- Name: idx_ordini_stato; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_ordini_stato ON public.ordini USING btree (stato);
+
+
+--
+-- Name: idx_ordini_tipo_prodotto; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_ordini_tipo_prodotto ON public.ordini USING btree (tipo_prodotto);
+
+
+--
+-- Name: idx_pin_tentativi_user_id_tentato_il; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_pin_tentativi_user_id_tentato_il ON public.pin_tentativi USING btree (user_id, tentato_il);
+
+
+--
+-- Name: idx_users_email; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_users_email ON public.users USING btree (email) WHERE (email IS NOT NULL);
+
+
+--
+-- Name: idx_users_ruolo; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_users_ruolo ON public.users USING btree (ruolo);
+
+
+--
+-- Name: archivio_log no_delete_log; Type: RULE; Schema: public; Owner: postgres
+--
+
+CREATE RULE no_delete_log AS
+    ON DELETE TO public.archivio_log DO INSTEAD NOTHING;
+
+
+--
+-- Name: archivio_log no_update_log; Type: RULE; Schema: public; Owner: postgres
+--
+
+CREATE RULE no_update_log AS
+    ON UPDATE TO public.archivio_log DO INSTEAD NOTHING;
+
+
+--
+-- Name: fasi tg_sync_e_attesa_fasi; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER tg_sync_e_attesa_fasi BEFORE INSERT OR UPDATE ON public.fasi FOR EACH ROW EXECUTE FUNCTION public.sync_e_attesa_esterna();
+
+
+--
+-- Name: fasi_ordine_extra tg_sync_e_attesa_fasi_extra; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER tg_sync_e_attesa_fasi_extra BEFORE INSERT OR UPDATE ON public.fasi_ordine_extra FOR EACH ROW EXECUTE FUNCTION public.sync_e_attesa_esterna();
+
+
+--
+-- Name: ordine_fasi trg_check_lock_fase; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trg_check_lock_fase BEFORE UPDATE ON public.ordine_fasi FOR EACH ROW EXECUTE FUNCTION public.check_lock_fase();
+
+
+--
+-- Name: ordini trg_crea_fasi_ordine; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trg_crea_fasi_ordine AFTER INSERT ON public.ordini FOR EACH ROW EXECUTE FUNCTION public.crea_fasi_per_ordine();
+
+
+--
+-- Name: notifiche trg_push_notifica; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trg_push_notifica AFTER INSERT ON public.notifiche FOR EACH ROW EXECUTE FUNCTION public.trigger_push_notifica();
+
+
+--
+-- Name: ordine_fasi trigger_check_ordine_completato; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trigger_check_ordine_completato AFTER UPDATE OF stato ON public.ordine_fasi FOR EACH ROW EXECUTE FUNCTION public.check_ordine_completato();
+
+
+--
+-- Name: fasi_ordine_extra trigger_check_ordine_extra_completato; Type: TRIGGER; Schema: public; Owner: postgres
+--
+
+CREATE TRIGGER trigger_check_ordine_extra_completato AFTER UPDATE ON public.fasi_ordine_extra FOR EACH ROW EXECUTE FUNCTION public.check_ordine_extra_completato();
+
+
+--
+-- Name: allegati allegati_caricato_da_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.allegati
+    ADD CONSTRAINT allegati_caricato_da_fkey FOREIGN KEY (caricato_da) REFERENCES public.users(id);
+
+
+--
+-- Name: allegati allegati_ordine_fase_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.allegati
+    ADD CONSTRAINT allegati_ordine_fase_id_fkey FOREIGN KEY (ordine_fase_id) REFERENCES public.ordine_fasi(id) ON DELETE CASCADE;
+
+
+--
+-- Name: archivio_log archivio_log_fase_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.archivio_log
+    ADD CONSTRAINT archivio_log_fase_id_fkey FOREIGN KEY (fase_id) REFERENCES public.fasi(id);
+
+
+--
+-- Name: archivio_log archivio_log_ordine_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.archivio_log
+    ADD CONSTRAINT archivio_log_ordine_id_fkey FOREIGN KEY (ordine_id) REFERENCES public.ordini(id) ON DELETE CASCADE;
+
+
+--
+-- Name: archivio_log archivio_log_utente_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.archivio_log
+    ADD CONSTRAINT archivio_log_utente_id_fkey FOREIGN KEY (utente_id) REFERENCES public.users(id);
+
+
+--
+-- Name: catalogo_fase_extra_macchine catalogo_fase_extra_macchine_catalogo_fase_extra_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.catalogo_fase_extra_macchine
+    ADD CONSTRAINT catalogo_fase_extra_macchine_catalogo_fase_extra_id_fkey FOREIGN KEY (catalogo_fase_extra_id) REFERENCES public.catalogo_fasi_extra(id) ON DELETE CASCADE;
+
+
+--
+-- Name: catalogo_fase_extra_macchine catalogo_fase_extra_macchine_macchina_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.catalogo_fase_extra_macchine
+    ADD CONSTRAINT catalogo_fase_extra_macchine_macchina_id_fkey FOREIGN KEY (macchina_id) REFERENCES public.macchine(id) ON DELETE CASCADE;
+
+
+--
+-- Name: competenze_operatore_fase_extra competenze_operatore_fase_extra_catalogo_fase_extra_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competenze_operatore_fase_extra
+    ADD CONSTRAINT competenze_operatore_fase_extra_catalogo_fase_extra_id_fkey FOREIGN KEY (catalogo_fase_extra_id) REFERENCES public.catalogo_fasi_extra(id) ON DELETE CASCADE;
+
+
+--
+-- Name: competenze_operatore_fase_extra competenze_operatore_fase_extra_operatore_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competenze_operatore_fase_extra
+    ADD CONSTRAINT competenze_operatore_fase_extra_operatore_id_fkey FOREIGN KEY (operatore_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: competenze_operatore_fase competenze_operatore_fase_fase_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competenze_operatore_fase
+    ADD CONSTRAINT competenze_operatore_fase_fase_id_fkey FOREIGN KEY (fase_id) REFERENCES public.fasi(id) ON DELETE CASCADE;
+
+
+--
+-- Name: competenze_operatore_fase competenze_operatore_fase_operatore_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competenze_operatore_fase
+    ADD CONSTRAINT competenze_operatore_fase_operatore_id_fkey FOREIGN KEY (operatore_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: competenze_operatore_macchina competenze_operatore_macchina_macchina_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competenze_operatore_macchina
+    ADD CONSTRAINT competenze_operatore_macchina_macchina_id_fkey FOREIGN KEY (macchina_id) REFERENCES public.macchine(id) ON DELETE CASCADE;
+
+
+--
+-- Name: competenze_operatore_macchina competenze_operatore_macchina_operatore_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.competenze_operatore_macchina
+    ADD CONSTRAINT competenze_operatore_macchina_operatore_id_fkey FOREIGN KEY (operatore_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: disponibilita_giornaliera disponibilita_giornaliera_operatore_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.disponibilita_giornaliera
+    ADD CONSTRAINT disponibilita_giornaliera_operatore_id_fkey FOREIGN KEY (operatore_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: fase_dipendenze fase_dipendenze_dipende_da_fase_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fase_dipendenze
+    ADD CONSTRAINT fase_dipendenze_dipende_da_fase_id_fkey FOREIGN KEY (dipende_da_fase_id) REFERENCES public.fasi(id) ON DELETE CASCADE;
+
+
+--
+-- Name: fase_dipendenze fase_dipendenze_fase_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fase_dipendenze
+    ADD CONSTRAINT fase_dipendenze_fase_id_fkey FOREIGN KEY (fase_id) REFERENCES public.fasi(id) ON DELETE CASCADE;
+
+
+--
+-- Name: fase_macchine fase_macchine_fase_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fase_macchine
+    ADD CONSTRAINT fase_macchine_fase_id_fkey FOREIGN KEY (fase_id) REFERENCES public.fasi(id) ON DELETE CASCADE;
+
+
+--
+-- Name: fase_macchine fase_macchine_macchina_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fase_macchine
+    ADD CONSTRAINT fase_macchine_macchina_id_fkey FOREIGN KEY (macchina_id) REFERENCES public.macchine(id) ON DELETE CASCADE;
+
+
+--
+-- Name: fase_materiali fase_materiali_fase_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fase_materiali
+    ADD CONSTRAINT fase_materiali_fase_id_fkey FOREIGN KEY (fase_id) REFERENCES public.fasi(id) ON DELETE CASCADE;
+
+
+--
+-- Name: fase_strutture fase_strutture_fase_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fase_strutture
+    ADD CONSTRAINT fase_strutture_fase_id_fkey FOREIGN KEY (fase_id) REFERENCES public.fasi(id) ON DELETE CASCADE;
+
+
+--
+-- Name: fase_tipi_prodotto fase_tipi_prodotto_fase_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fase_tipi_prodotto
+    ADD CONSTRAINT fase_tipi_prodotto_fase_id_fkey FOREIGN KEY (fase_id) REFERENCES public.fasi(id) ON DELETE CASCADE;
+
+
+--
+-- Name: fase_tipi_prodotto fase_tipi_prodotto_tipo_prodotto_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fase_tipi_prodotto
+    ADD CONSTRAINT fase_tipi_prodotto_tipo_prodotto_id_fkey FOREIGN KEY (tipo_prodotto_id) REFERENCES public.tipi_prodotto(id) ON DELETE CASCADE;
+
+
+--
+-- Name: fasi_extra_operatori fasi_extra_operatori_fasi_ordine_extra_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fasi_extra_operatori
+    ADD CONSTRAINT fasi_extra_operatori_fasi_ordine_extra_id_fkey FOREIGN KEY (fasi_ordine_extra_id) REFERENCES public.fasi_ordine_extra(id) ON DELETE CASCADE;
+
+
+--
+-- Name: fasi_extra_operatori fasi_extra_operatori_operatore_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fasi_extra_operatori
+    ADD CONSTRAINT fasi_extra_operatori_operatore_id_fkey FOREIGN KEY (operatore_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: fasi fasi_macro_fase_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fasi
+    ADD CONSTRAINT fasi_macro_fase_id_fkey FOREIGN KEY (macro_fase_id) REFERENCES public.macro_fasi(id) ON DELETE SET NULL;
+
+
+--
+-- Name: fasi_ordine_extra fasi_ordine_extra_catalogo_fase_extra_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fasi_ordine_extra
+    ADD CONSTRAINT fasi_ordine_extra_catalogo_fase_extra_id_fkey FOREIGN KEY (catalogo_fase_extra_id) REFERENCES public.catalogo_fasi_extra(id) ON DELETE SET NULL;
+
+
+--
+-- Name: fasi_ordine_extra fasi_ordine_extra_macchina_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fasi_ordine_extra
+    ADD CONSTRAINT fasi_ordine_extra_macchina_id_fkey FOREIGN KEY (macchina_id) REFERENCES public.macchine(id) ON DELETE SET NULL;
+
+
+--
+-- Name: fasi_ordine_extra fasi_ordine_extra_operatore_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fasi_ordine_extra
+    ADD CONSTRAINT fasi_ordine_extra_operatore_id_fkey FOREIGN KEY (operatore_id) REFERENCES public.users(id);
+
+
+--
+-- Name: fasi_ordine_extra fasi_ordine_extra_ordine_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.fasi_ordine_extra
+    ADD CONSTRAINT fasi_ordine_extra_ordine_id_fkey FOREIGN KEY (ordine_id) REFERENCES public.ordini(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ordini fk_ordini_priorita; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.ordini
+    ADD CONSTRAINT fk_ordini_priorita FOREIGN KEY (priorita) REFERENCES public.priorita_ordine_config(id);
+
+
+--
+-- Name: kpi_schede kpi_schede_creata_da_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.kpi_schede
+    ADD CONSTRAINT kpi_schede_creata_da_fkey FOREIGN KEY (creata_da) REFERENCES public.users(id);
+
+
+--
+-- Name: manutenzioni_macchina manutenzioni_macchina_macchina_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.manutenzioni_macchina
+    ADD CONSTRAINT manutenzioni_macchina_macchina_id_fkey FOREIGN KEY (macchina_id) REFERENCES public.macchine(id) ON DELETE CASCADE;
+
+
+--
+-- Name: notifiche_destinatari_config notifiche_destinatari_config_utente_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.notifiche_destinatari_config
+    ADD CONSTRAINT notifiche_destinatari_config_utente_id_fkey FOREIGN KEY (utente_id) REFERENCES public.users(id);
+
+
+--
+-- Name: notifiche notifiche_destinatario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.notifiche
+    ADD CONSTRAINT notifiche_destinatario_id_fkey FOREIGN KEY (destinatario_id) REFERENCES public.users(id);
+
+
+--
+-- Name: notifiche notifiche_ordine_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.notifiche
+    ADD CONSTRAINT notifiche_ordine_id_fkey FOREIGN KEY (ordine_id) REFERENCES public.ordini(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ordine_fasi ordine_fasi_fase_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.ordine_fasi
+    ADD CONSTRAINT ordine_fasi_fase_id_fkey FOREIGN KEY (fase_id) REFERENCES public.fasi(id);
+
+
+--
+-- Name: ordine_fasi ordine_fasi_operatore_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.ordine_fasi
+    ADD CONSTRAINT ordine_fasi_operatore_id_fkey FOREIGN KEY (operatore_id) REFERENCES public.users(id);
+
+
+--
+-- Name: ordine_fasi_operatori ordine_fasi_operatori_operatore_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.ordine_fasi_operatori
+    ADD CONSTRAINT ordine_fasi_operatori_operatore_id_fkey FOREIGN KEY (operatore_id) REFERENCES public.users(id);
+
+
+--
+-- Name: ordine_fasi_operatori ordine_fasi_operatori_ordine_fase_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.ordine_fasi_operatori
+    ADD CONSTRAINT ordine_fasi_operatori_ordine_fase_id_fkey FOREIGN KEY (ordine_fase_id) REFERENCES public.ordine_fasi(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ordine_fasi ordine_fasi_ordine_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.ordine_fasi
+    ADD CONSTRAINT ordine_fasi_ordine_id_fkey FOREIGN KEY (ordine_id) REFERENCES public.ordini(id) ON DELETE CASCADE;
+
+
+--
+-- Name: ordini ordini_creato_da_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.ordini
+    ADD CONSTRAINT ordini_creato_da_fkey FOREIGN KEY (creato_da) REFERENCES public.users(id);
+
+
+--
+-- Name: ordini ordini_tipo_prodotto_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.ordini
+    ADD CONSTRAINT ordini_tipo_prodotto_fkey FOREIGN KEY (tipo_prodotto) REFERENCES public.tipi_prodotto(id);
+
+
+--
+-- Name: pin_tentativi pin_tentativi_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.pin_tentativi
+    ADD CONSTRAINT pin_tentativi_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: fasi Lettura pubblica fasi; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY "Lettura pubblica fasi" ON public.fasi FOR SELECT TO authenticated, anon USING (true);
+
+
+--
+-- Name: macro_fasi Solo autenticati modificano macro_fasi; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY "Solo autenticati modificano macro_fasi" ON public.macro_fasi USING ((( SELECT auth.role() AS role) = 'authenticated'::text));
+
+
+--
+-- Name: macro_fasi Tutti possono leggere macro_fasi; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY "Tutti possono leggere macro_fasi" ON public.macro_fasi FOR SELECT USING (true);
+
+
+--
+-- Name: allegati; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.allegati ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: archivio_log; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.archivio_log ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: archivio_log archivio_log_insert; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY archivio_log_insert ON public.archivio_log FOR INSERT TO authenticated WITH CHECK (( SELECT public.e_responsabile() AS e_responsabile));
+
+
+--
+-- Name: archivio_log archivio_log_select; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY archivio_log_select ON public.archivio_log FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: attributi_prodotto_config; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.attributi_prodotto_config ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: allegati auth_select; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY auth_select ON public.allegati FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: ordine_fasi_operatori auth_select; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY auth_select ON public.ordine_fasi_operatori FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: catalogo_fase_extra_macchine; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.catalogo_fase_extra_macchine ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: catalogo_fase_extra_macchine catalogo_fase_extra_macchine_select; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY catalogo_fase_extra_macchine_select ON public.catalogo_fase_extra_macchine FOR SELECT TO authenticated, anon USING (true);
+
+
+--
+-- Name: catalogo_fase_extra_macchine catalogo_fase_extra_macchine_write_responsabile; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY catalogo_fase_extra_macchine_write_responsabile ON public.catalogo_fase_extra_macchine TO authenticated USING (( SELECT public.e_responsabile() AS e_responsabile)) WITH CHECK (( SELECT public.e_responsabile() AS e_responsabile));
+
+
+--
+-- Name: catalogo_fasi_extra; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.catalogo_fasi_extra ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: catalogo_fasi_extra catalogo_fasi_extra_select; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY catalogo_fasi_extra_select ON public.catalogo_fasi_extra FOR SELECT TO authenticated, anon USING (true);
+
+
+--
+-- Name: catalogo_fasi_extra catalogo_fasi_extra_write_responsabile; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY catalogo_fasi_extra_write_responsabile ON public.catalogo_fasi_extra TO authenticated USING (( SELECT public.e_responsabile() AS e_responsabile)) WITH CHECK (( SELECT public.e_responsabile() AS e_responsabile));
+
+
+--
+-- Name: chiusure_aziendali; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.chiusure_aziendali ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: chiusure_aziendali chiusure_select; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY chiusure_select ON public.chiusure_aziendali FOR SELECT USING (true);
+
+
+--
+-- Name: competenze_operatore_macchina comp_op_mac_sel; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY comp_op_mac_sel ON public.competenze_operatore_macchina FOR SELECT USING (true);
+
+
+--
+-- Name: competenze_operatore_fase_extra competenze_fase_extra_select; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY competenze_fase_extra_select ON public.competenze_operatore_fase_extra FOR SELECT TO authenticated, anon USING (true);
+
+
+--
+-- Name: competenze_operatore_fase_extra competenze_fase_extra_write_responsabile; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY competenze_fase_extra_write_responsabile ON public.competenze_operatore_fase_extra TO authenticated USING (( SELECT public.e_responsabile() AS e_responsabile)) WITH CHECK (( SELECT public.e_responsabile() AS e_responsabile));
+
+
+--
+-- Name: competenze_operatore_fase; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.competenze_operatore_fase ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: competenze_operatore_fase_extra; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.competenze_operatore_fase_extra ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: competenze_operatore_macchina; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.competenze_operatore_macchina ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: config_orario; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.config_orario ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: config_orario config_orario_select_tutti; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY config_orario_select_tutti ON public.config_orario FOR SELECT TO authenticated, anon USING (true);
+
+
+--
+-- Name: config_orario config_orario_update_responsabile; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY config_orario_update_responsabile ON public.config_orario FOR UPDATE TO authenticated USING (( SELECT public.e_responsabile() AS e_responsabile)) WITH CHECK (( SELECT public.e_responsabile() AS e_responsabile));
+
+
+--
+-- Name: config_sistema; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.config_sistema ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: config_sistema config_sistema_select; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY config_sistema_select ON public.config_sistema FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: config_sistema config_sistema_update_responsabile; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY config_sistema_update_responsabile ON public.config_sistema FOR UPDATE TO authenticated USING ((EXISTS ( SELECT 1
+   FROM public.users
+  WHERE ((users.id = auth.uid()) AND (users.ruolo = 'responsabile'::public.ruolo_utente))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM public.users
+  WHERE ((users.id = auth.uid()) AND (users.ruolo = 'responsabile'::public.ruolo_utente)))));
+
+
+--
+-- Name: disponibilita_giornaliera; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.disponibilita_giornaliera ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: fase_dipendenze; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.fase_dipendenze ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: fase_macchine; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.fase_macchine ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: fase_macchine fase_macchine_sel; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY fase_macchine_sel ON public.fase_macchine FOR SELECT USING (true);
+
+
+--
+-- Name: fase_materiali; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.fase_materiali ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: fase_strutture; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.fase_strutture ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: fase_tipi_prodotto; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.fase_tipi_prodotto ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: fasi; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.fasi ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: fasi_extra_operatori fasi_extra_op_select; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY fasi_extra_op_select ON public.fasi_extra_operatori FOR SELECT TO authenticated, anon USING (true);
+
+
+--
+-- Name: fasi_extra_operatori; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.fasi_extra_operatori ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: fasi_ordine_extra; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.fasi_ordine_extra ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: fasi_ordine_extra fasi_ordine_extra_select; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY fasi_ordine_extra_select ON public.fasi_ordine_extra FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: fasi fasi_write_responsabile; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY fasi_write_responsabile ON public.fasi TO authenticated USING (( SELECT public.e_responsabile() AS e_responsabile)) WITH CHECK (( SELECT public.e_responsabile() AS e_responsabile));
+
+
+--
+-- Name: kpi_config; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.kpi_config ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: kpi_config kpi_config_insert_responsabile; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY kpi_config_insert_responsabile ON public.kpi_config FOR INSERT TO authenticated WITH CHECK ((EXISTS ( SELECT 1
+   FROM public.users
+  WHERE ((users.id = auth.uid()) AND (users.ruolo = 'responsabile'::public.ruolo_utente)))));
+
+
+--
+-- Name: kpi_config kpi_config_lettura; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY kpi_config_lettura ON public.kpi_config FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: kpi_config kpi_config_scrittura_responsabile; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY kpi_config_scrittura_responsabile ON public.kpi_config FOR UPDATE TO authenticated USING ((EXISTS ( SELECT 1
+   FROM public.users
+  WHERE ((users.id = auth.uid()) AND (users.ruolo = 'responsabile'::public.ruolo_utente))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM public.users
+  WHERE ((users.id = auth.uid()) AND (users.ruolo = 'responsabile'::public.ruolo_utente)))));
+
+
+--
+-- Name: kpi_schede; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.kpi_schede ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: attributi_prodotto_config lettura_autenticati; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY lettura_autenticati ON public.attributi_prodotto_config FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: competenze_operatore_fase lettura_autenticati; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY lettura_autenticati ON public.competenze_operatore_fase FOR SELECT USING (true);
+
+
+--
+-- Name: disponibilita_giornaliera lettura_autenticati; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY lettura_autenticati ON public.disponibilita_giornaliera FOR SELECT USING (true);
+
+
+--
+-- Name: fase_materiali lettura_autenticati; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY lettura_autenticati ON public.fase_materiali FOR SELECT USING (true);
+
+
+--
+-- Name: fase_strutture lettura_autenticati; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY lettura_autenticati ON public.fase_strutture FOR SELECT USING (true);
+
+
+--
+-- Name: fase_tipi_prodotto lettura_autenticati; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY lettura_autenticati ON public.fase_tipi_prodotto FOR SELECT USING (true);
+
+
+--
+-- Name: notifiche_destinatari_config lettura_autenticati; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY lettura_autenticati ON public.notifiche_destinatari_config FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: priorita_ordine_config lettura_autenticati; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY lettura_autenticati ON public.priorita_ordine_config FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: tipi_prodotto lettura_tipi_prodotto; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY lettura_tipi_prodotto ON public.tipi_prodotto FOR SELECT USING (true);
+
+
+--
+-- Name: macchine; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.macchine ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: macchine macchine_sel; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY macchine_sel ON public.macchine FOR SELECT USING (true);
+
+
+--
+-- Name: macro_fasi; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.macro_fasi ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: manutenzioni_macchina manut_mac_sel; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY manut_mac_sel ON public.manutenzioni_macchina FOR SELECT USING (true);
+
+
+--
+-- Name: manutenzioni_macchina; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.manutenzioni_macchina ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: attributi_prodotto_config modifica_responsabile; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY modifica_responsabile ON public.attributi_prodotto_config TO authenticated USING ((( SELECT users.ruolo
+   FROM public.users
+  WHERE (users.id = auth.uid())) = 'responsabile'::public.ruolo_utente)) WITH CHECK ((( SELECT users.ruolo
+   FROM public.users
+  WHERE (users.id = auth.uid())) = 'responsabile'::public.ruolo_utente));
+
+
+--
+-- Name: notifiche_destinatari_config modifica_responsabile; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY modifica_responsabile ON public.notifiche_destinatari_config TO authenticated USING ((( SELECT users.ruolo
+   FROM public.users
+  WHERE (users.id = auth.uid())) = 'responsabile'::public.ruolo_utente)) WITH CHECK ((( SELECT users.ruolo
+   FROM public.users
+  WHERE (users.id = auth.uid())) = 'responsabile'::public.ruolo_utente));
+
+
+--
+-- Name: priorita_ordine_config modifica_responsabile; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY modifica_responsabile ON public.priorita_ordine_config TO authenticated USING ((( SELECT users.ruolo
+   FROM public.users
+  WHERE (users.id = auth.uid())) = 'responsabile'::public.ruolo_utente)) WITH CHECK ((( SELECT users.ruolo
+   FROM public.users
+  WHERE (users.id = auth.uid())) = 'responsabile'::public.ruolo_utente));
+
+
+--
+-- Name: notifiche; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.notifiche ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: notifiche_destinatari_config; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.notifiche_destinatari_config ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: notifiche notifiche_select; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY notifiche_select ON public.notifiche FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: notifiche notifiche_write_responsabile; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY notifiche_write_responsabile ON public.notifiche TO authenticated USING (( SELECT public.e_responsabile() AS e_responsabile)) WITH CHECK (( SELECT public.e_responsabile() AS e_responsabile));
+
+
+--
+-- Name: ordine_fasi; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.ordine_fasi ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: ordine_fasi_operatori; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.ordine_fasi_operatori ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: ordine_fasi ordine_fasi_select; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY ordine_fasi_select ON public.ordine_fasi FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: ordine_fasi ordine_fasi_write_responsabile; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY ordine_fasi_write_responsabile ON public.ordine_fasi TO authenticated USING (( SELECT public.e_responsabile() AS e_responsabile)) WITH CHECK (( SELECT public.e_responsabile() AS e_responsabile));
+
+
+--
+-- Name: ordini; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.ordini ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: ordini ordini_select; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY ordini_select ON public.ordini FOR SELECT TO authenticated USING (true);
+
+
+--
+-- Name: ordini ordini_write_responsabile; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY ordini_write_responsabile ON public.ordini TO authenticated USING (( SELECT public.e_responsabile() AS e_responsabile)) WITH CHECK (( SELECT public.e_responsabile() AS e_responsabile));
+
+
+--
+-- Name: pin_tentativi; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.pin_tentativi ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: priorita_ordine_config; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.priorita_ordine_config ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: kpi_schede responsabile_full_access; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY responsabile_full_access ON public.kpi_schede USING ((EXISTS ( SELECT 1
+   FROM public.users
+  WHERE ((users.id = auth.uid()) AND (users.ruolo = 'responsabile'::public.ruolo_utente))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM public.users
+  WHERE ((users.id = auth.uid()) AND (users.ruolo = 'responsabile'::public.ruolo_utente)))));
+
+
+--
+-- Name: fase_dipendenze select_all; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY select_all ON public.fase_dipendenze FOR SELECT USING (true);
+
+
+--
+-- Name: snapshot_backfill_fasi_eliminate_20260903; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.snapshot_backfill_fasi_eliminate_20260903 ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: tipi_prodotto; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.tipi_prodotto ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: users; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 
--- ============ POLICY RLS ============
-CREATE POLICY auth_select ON public.allegati AS PERMISSIVE FOR SELECT TO authenticated USING (true);
-CREATE POLICY archivio_log_insert ON public.archivio_log AS PERMISSIVE FOR INSERT TO authenticated WITH CHECK (( SELECT e_responsabile() AS e_responsabile));
-CREATE POLICY archivio_log_select ON public.archivio_log AS PERMISSIVE FOR SELECT TO authenticated USING (true);
-CREATE POLICY lettura_autenticati ON public.attributi_prodotto_config AS PERMISSIVE FOR SELECT TO authenticated USING (true);
-CREATE POLICY modifica_responsabile ON public.attributi_prodotto_config AS PERMISSIVE FOR ALL TO authenticated USING ((( SELECT users.ruolo
-   FROM users
-  WHERE (users.id = auth.uid())) = 'responsabile'::ruolo_utente)) WITH CHECK ((( SELECT users.ruolo
-   FROM users
-  WHERE (users.id = auth.uid())) = 'responsabile'::ruolo_utente));
-CREATE POLICY catalogo_fase_extra_macchine_select ON public.catalogo_fase_extra_macchine AS PERMISSIVE FOR SELECT TO anon, authenticated USING (true);
-CREATE POLICY catalogo_fase_extra_macchine_write_responsabile ON public.catalogo_fase_extra_macchine AS PERMISSIVE FOR ALL TO authenticated USING (( SELECT e_responsabile() AS e_responsabile)) WITH CHECK (( SELECT e_responsabile() AS e_responsabile));
-CREATE POLICY catalogo_fasi_extra_select ON public.catalogo_fasi_extra AS PERMISSIVE FOR SELECT TO anon, authenticated USING (true);
-CREATE POLICY catalogo_fasi_extra_write_responsabile ON public.catalogo_fasi_extra AS PERMISSIVE FOR ALL TO authenticated USING (( SELECT e_responsabile() AS e_responsabile)) WITH CHECK (( SELECT e_responsabile() AS e_responsabile));
-CREATE POLICY chiusure_select ON public.chiusure_aziendali AS PERMISSIVE FOR SELECT TO public USING (true);
-CREATE POLICY lettura_autenticati ON public.competenze_operatore_fase AS PERMISSIVE FOR SELECT TO public USING (true);
-CREATE POLICY competenze_fase_extra_select ON public.competenze_operatore_fase_extra AS PERMISSIVE FOR SELECT TO anon, authenticated USING (true);
-CREATE POLICY competenze_fase_extra_write_responsabile ON public.competenze_operatore_fase_extra AS PERMISSIVE FOR ALL TO authenticated USING (( SELECT e_responsabile() AS e_responsabile)) WITH CHECK (( SELECT e_responsabile() AS e_responsabile));
-CREATE POLICY comp_op_mac_sel ON public.competenze_operatore_macchina AS PERMISSIVE FOR SELECT TO public USING (true);
-CREATE POLICY config_orario_select_tutti ON public.config_orario AS PERMISSIVE FOR SELECT TO anon, authenticated USING (true);
-CREATE POLICY config_orario_update_responsabile ON public.config_orario AS PERMISSIVE FOR UPDATE TO authenticated USING (( SELECT e_responsabile() AS e_responsabile)) WITH CHECK (( SELECT e_responsabile() AS e_responsabile));
-CREATE POLICY config_sistema_select ON public.config_sistema AS PERMISSIVE FOR SELECT TO authenticated USING (true);
-CREATE POLICY config_sistema_update_responsabile ON public.config_sistema AS PERMISSIVE FOR UPDATE TO authenticated USING ((EXISTS ( SELECT 1
-   FROM users
-  WHERE ((users.id = auth.uid()) AND (users.ruolo = 'responsabile'::ruolo_utente))))) WITH CHECK ((EXISTS ( SELECT 1
-   FROM users
-  WHERE ((users.id = auth.uid()) AND (users.ruolo = 'responsabile'::ruolo_utente)))));
-CREATE POLICY lettura_autenticati ON public.disponibilita_giornaliera AS PERMISSIVE FOR SELECT TO public USING (true);
-CREATE POLICY select_all ON public.fase_dipendenze AS PERMISSIVE FOR SELECT TO public USING (true);
-CREATE POLICY fase_macchine_sel ON public.fase_macchine AS PERMISSIVE FOR SELECT TO public USING (true);
-CREATE POLICY lettura_autenticati ON public.fase_materiali AS PERMISSIVE FOR SELECT TO public USING (true);
-CREATE POLICY lettura_autenticati ON public.fase_strutture AS PERMISSIVE FOR SELECT TO public USING (true);
-CREATE POLICY lettura_autenticati ON public.fase_tipi_prodotto AS PERMISSIVE FOR SELECT TO public USING (true);
-CREATE POLICY "Lettura pubblica fasi" ON public.fasi AS PERMISSIVE FOR SELECT TO anon, authenticated USING (true);
-CREATE POLICY fasi_write_responsabile ON public.fasi AS PERMISSIVE FOR ALL TO authenticated USING (( SELECT e_responsabile() AS e_responsabile)) WITH CHECK (( SELECT e_responsabile() AS e_responsabile));
-CREATE POLICY fasi_extra_op_select ON public.fasi_extra_operatori AS PERMISSIVE FOR SELECT TO anon, authenticated USING (true);
-CREATE POLICY fasi_ordine_extra_select ON public.fasi_ordine_extra AS PERMISSIVE FOR SELECT TO authenticated USING (true);
-CREATE POLICY kpi_config_insert_responsabile ON public.kpi_config AS PERMISSIVE FOR INSERT TO authenticated WITH CHECK ((EXISTS ( SELECT 1
-   FROM users
-  WHERE ((users.id = auth.uid()) AND (users.ruolo = 'responsabile'::ruolo_utente)))));
-CREATE POLICY kpi_config_lettura ON public.kpi_config AS PERMISSIVE FOR SELECT TO authenticated USING (true);
-CREATE POLICY kpi_config_scrittura_responsabile ON public.kpi_config AS PERMISSIVE FOR UPDATE TO authenticated USING ((EXISTS ( SELECT 1
-   FROM users
-  WHERE ((users.id = auth.uid()) AND (users.ruolo = 'responsabile'::ruolo_utente))))) WITH CHECK ((EXISTS ( SELECT 1
-   FROM users
-  WHERE ((users.id = auth.uid()) AND (users.ruolo = 'responsabile'::ruolo_utente)))));
-CREATE POLICY responsabile_full_access ON public.kpi_schede AS PERMISSIVE FOR ALL TO public USING ((EXISTS ( SELECT 1
-   FROM users
-  WHERE ((users.id = auth.uid()) AND (users.ruolo = 'responsabile'::ruolo_utente))))) WITH CHECK ((EXISTS ( SELECT 1
-   FROM users
-  WHERE ((users.id = auth.uid()) AND (users.ruolo = 'responsabile'::ruolo_utente)))));
-CREATE POLICY macchine_sel ON public.macchine AS PERMISSIVE FOR SELECT TO public USING (true);
-CREATE POLICY "Solo autenticati modificano macro_fasi" ON public.macro_fasi AS PERMISSIVE FOR ALL TO public USING ((( SELECT auth.role() AS role) = 'authenticated'::text));
-CREATE POLICY "Tutti possono leggere macro_fasi" ON public.macro_fasi AS PERMISSIVE FOR SELECT TO public USING (true);
-CREATE POLICY manut_mac_sel ON public.manutenzioni_macchina AS PERMISSIVE FOR SELECT TO public USING (true);
-CREATE POLICY notifiche_select ON public.notifiche AS PERMISSIVE FOR SELECT TO authenticated USING (true);
-CREATE POLICY notifiche_write_responsabile ON public.notifiche AS PERMISSIVE FOR ALL TO authenticated USING (( SELECT e_responsabile() AS e_responsabile)) WITH CHECK (( SELECT e_responsabile() AS e_responsabile));
-CREATE POLICY lettura_autenticati ON public.notifiche_destinatari_config AS PERMISSIVE FOR SELECT TO authenticated USING (true);
-CREATE POLICY modifica_responsabile ON public.notifiche_destinatari_config AS PERMISSIVE FOR ALL TO authenticated USING ((( SELECT users.ruolo
-   FROM users
-  WHERE (users.id = auth.uid())) = 'responsabile'::ruolo_utente)) WITH CHECK ((( SELECT users.ruolo
-   FROM users
-  WHERE (users.id = auth.uid())) = 'responsabile'::ruolo_utente));
-CREATE POLICY ordine_fasi_select ON public.ordine_fasi AS PERMISSIVE FOR SELECT TO authenticated USING (true);
-CREATE POLICY ordine_fasi_write_responsabile ON public.ordine_fasi AS PERMISSIVE FOR ALL TO authenticated USING (( SELECT e_responsabile() AS e_responsabile)) WITH CHECK (( SELECT e_responsabile() AS e_responsabile));
-CREATE POLICY auth_select ON public.ordine_fasi_operatori AS PERMISSIVE FOR SELECT TO authenticated USING (true);
-CREATE POLICY ordini_select ON public.ordini AS PERMISSIVE FOR SELECT TO authenticated USING (true);
-CREATE POLICY ordini_write_responsabile ON public.ordini AS PERMISSIVE FOR ALL TO authenticated USING (( SELECT e_responsabile() AS e_responsabile)) WITH CHECK (( SELECT e_responsabile() AS e_responsabile));
-CREATE POLICY lettura_autenticati ON public.priorita_ordine_config AS PERMISSIVE FOR SELECT TO authenticated USING (true);
-CREATE POLICY modifica_responsabile ON public.priorita_ordine_config AS PERMISSIVE FOR ALL TO authenticated USING ((( SELECT users.ruolo
-   FROM users
-  WHERE (users.id = auth.uid())) = 'responsabile'::ruolo_utente)) WITH CHECK ((( SELECT users.ruolo
-   FROM users
-  WHERE (users.id = auth.uid())) = 'responsabile'::ruolo_utente));
-CREATE POLICY lettura_tipi_prodotto ON public.tipi_prodotto AS PERMISSIVE FOR SELECT TO public USING (true);
-CREATE POLICY users_select ON public.users AS PERMISSIVE FOR SELECT TO authenticated USING (true);
-CREATE POLICY users_write_responsabile ON public.users AS PERMISSIVE FOR ALL TO authenticated USING (( SELECT e_responsabile() AS e_responsabile)) WITH CHECK (( SELECT e_responsabile() AS e_responsabile));
+--
+-- Name: users users_select; Type: POLICY; Schema: public; Owner: postgres
+--
 
--- ============ GRANT DI TABELLA (anon / authenticated / service_role) ============
-GRANT REFERENCES, TRIGGER, TRUNCATE ON TABLE public.allegati TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.allegati TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.allegati TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.archivio_log TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.archivio_log TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.archivio_log TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.attributi_prodotto_config TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.attributi_prodotto_config TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.attributi_prodotto_config TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.catalogo_fase_extra_macchine TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.catalogo_fase_extra_macchine TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.catalogo_fase_extra_macchine TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.catalogo_fasi_extra TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.catalogo_fasi_extra TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.catalogo_fasi_extra TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.chiusure_aziendali TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.chiusure_aziendali TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.chiusure_aziendali TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.competenze_operatore_fase TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.competenze_operatore_fase TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.competenze_operatore_fase TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.competenze_operatore_fase_extra TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.competenze_operatore_fase_extra TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.competenze_operatore_fase_extra TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.competenze_operatore_macchina TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.competenze_operatore_macchina TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.competenze_operatore_macchina TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.config_orario TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.config_orario TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.config_orario TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.config_sistema TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.config_sistema TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.config_sistema TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.disponibilita_giornaliera TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.disponibilita_giornaliera TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.disponibilita_giornaliera TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fase_dipendenze TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fase_dipendenze TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fase_dipendenze TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fase_macchine TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fase_macchine TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fase_macchine TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fase_materiali TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fase_materiali TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fase_materiali TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fase_strutture TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fase_strutture TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fase_strutture TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fase_tipi_prodotto TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fase_tipi_prodotto TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fase_tipi_prodotto TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fasi TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fasi TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fasi TO service_role;
-GRANT REFERENCES, SELECT, TRIGGER, TRUNCATE ON TABLE public.fasi_extra_operatori TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fasi_extra_operatori TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fasi_extra_operatori TO service_role;
-GRANT REFERENCES, TRIGGER, TRUNCATE ON TABLE public.fasi_ordine_extra TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fasi_ordine_extra TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.fasi_ordine_extra TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.kpi_config TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.kpi_config TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.kpi_config TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.kpi_schede TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.kpi_schede TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.kpi_schede TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.macchine TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.macchine TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.macchine TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.macro_fasi TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.macro_fasi TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.macro_fasi TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.manutenzioni_macchina TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.manutenzioni_macchina TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.manutenzioni_macchina TO service_role;
-GRANT REFERENCES, TRIGGER, TRUNCATE ON TABLE public.notifiche TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.notifiche TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.notifiche TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.notifiche_destinatari_config TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.notifiche_destinatari_config TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.notifiche_destinatari_config TO service_role;
-GRANT REFERENCES, TRIGGER, TRUNCATE ON TABLE public.ordine_fasi TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.ordine_fasi TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.ordine_fasi TO service_role;
-GRANT REFERENCES, TRIGGER, TRUNCATE ON TABLE public.ordine_fasi_operatori TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.ordine_fasi_operatori TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.ordine_fasi_operatori TO service_role;
-GRANT REFERENCES, TRIGGER, TRUNCATE ON TABLE public.ordini TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.ordini TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.ordini TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.pin_tentativi TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.priorita_ordine_config TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.priorita_ordine_config TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.priorita_ordine_config TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.snapshot_backfill_fasi_eliminate_20260903 TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.snapshot_backfill_fasi_eliminate_20260903 TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.snapshot_backfill_fasi_eliminate_20260903 TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.tipi_prodotto TO anon;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.tipi_prodotto TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.tipi_prodotto TO service_role;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.users TO authenticated;
-GRANT DELETE, INSERT, REFERENCES, SELECT, TRIGGER, TRUNCATE, UPDATE ON TABLE public.users TO service_role;
+CREATE POLICY users_select ON public.users FOR SELECT TO authenticated USING (true);
 
--- ============ GRANT EXECUTE SULLE FUNZIONI (anon / authenticated) ============
-GRANT EXECUTE ON FUNCTION public.aggiorna_criteri_fase(p_fase_id smallint, p_tipi_prodotto text[], p_materiali text[], p_strutture text[], p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.aggiorna_operatore(p_operatore_id uuid, p_nome text, p_cognome text, p_ruolo ruolo_utente, p_ore_default numeric, p_escluso_pianificazione boolean, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.aggiorna_pin_operatore(p_operatore_id uuid, p_nuovo_pin text, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.aggiorna_tipo_prodotto(p_id text, p_label text, p_posizione integer, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.aggiungi_collega_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.aggiungi_collega_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.aggiungi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.aggiungi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.aggiungi_tipo_prodotto(p_id text, p_label text, p_posizione integer, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.annulla_fasi_ordine_eliminato(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.annulla_presa_in_carico(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.annulla_presa_in_carico(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.annulla_presa_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.annulla_presa_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.archivia_ordine(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.autorizza_upload_allegato(p_user_id uuid, p_session_token uuid, p_tipo text, p_ordine_id uuid, p_ordine_fase_id uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.autorizza_upload_allegato(p_user_id uuid, p_session_token uuid, p_tipo text, p_ordine_id uuid, p_ordine_fase_id uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.avanzamento_fasi_batch(p_operatore_id uuid, p_session_token uuid, p_ordine_ids uuid[]) TO anon;
-GRANT EXECUTE ON FUNCTION public.avanzamento_fasi_batch(p_operatore_id uuid, p_session_token uuid, p_ordine_ids uuid[]) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.calcola_tempo_combinazione(p_criteri jsonb) TO anon;
-GRANT EXECUTE ON FUNCTION public.calcola_tempo_combinazione(p_criteri jsonb) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.capacita_produttiva_stimata() TO anon;
-GRANT EXECUTE ON FUNCTION public.capacita_produttiva_stimata() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.check_lock_fase() TO anon;
-GRANT EXECUTE ON FUNCTION public.check_lock_fase() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.check_ordine_completato() TO anon;
-GRANT EXECUTE ON FUNCTION public.check_ordine_completato() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.check_ordine_extra_completato() TO anon;
-GRANT EXECUTE ON FUNCTION public.check_ordine_extra_completato() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.colleghi_disponibili(p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.colleghi_disponibili(p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.completa_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_note_operatore text, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.completa_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_note_operatore text, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.completa_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_note text, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.completa_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_note text, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.completa_fasi_batch(p_fase_id integer, p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.completa_fasi_batch(p_fase_id integer, p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.completa_fasi_extra_batch(p_nome text, p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.completa_fasi_extra_batch(p_nome text, p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.conferma_ricezione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.conferma_ricezione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.conferma_ricezione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.conferma_ricezione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.confronto_operatori_per_fase() TO anon;
-GRANT EXECUTE ON FUNCTION public.confronto_operatori_per_fase() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.confronto_operatori_per_fase_extra() TO anon;
-GRANT EXECUTE ON FUNCTION public.confronto_operatori_per_fase_extra() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.controlla_sessione(p_user_id uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.controlla_sessione(p_user_id uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.crea_fasi_extra(p_ordine_id uuid, p_fasi jsonb, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.crea_fasi_per_ordine() TO anon;
-GRANT EXECUTE ON FUNCTION public.crea_fasi_per_ordine() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.crea_operatore(p_nome text, p_cognome text, p_pin text, p_ruolo ruolo_utente, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.crea_scheda_kpi(p_nome text, p_criteri jsonb, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.data_consegna_stimata(p_giorni_lavorativi_necessari numeric) TO anon;
-GRANT EXECUTE ON FUNCTION public.data_consegna_stimata(p_giorni_lavorativi_necessari numeric) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.dettaglio_fase_completa(p_operatore_id uuid, p_session_token uuid, p_ord_fase_id uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.dettaglio_fase_completa(p_operatore_id uuid, p_session_token uuid, p_ord_fase_id uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.dettaglio_fase_extra_completa(p_operatore_id uuid, p_session_token uuid, p_fase_extra_id uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.dettaglio_fase_extra_completa(p_operatore_id uuid, p_session_token uuid, p_fase_extra_id uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.dettaglio_ordine_fasi(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.dettaglio_ordine_fasi(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.dimensione_database(p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.e_responsabile() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.elenco_foto_fase(p_user_id uuid, p_session_token uuid, p_ordine_fase_id uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.elenco_foto_fase(p_user_id uuid, p_session_token uuid, p_ordine_fase_id uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.elimina_allegati(p_allegato_ids uuid[], p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.elimina_allegati(p_allegato_ids uuid[], p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.elimina_allegati_fasi(p_fase_ids uuid[], p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.elimina_chiusura_aziendale(p_chiusura_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.elimina_fase_custom_ordine(p_ordine_fase_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.elimina_fase_extra(p_fase_extra_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.elimina_macchina(p_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.elimina_manutenzione_macchina(p_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.elimina_operatore(p_operatore_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.elimina_scheda_kpi(p_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.elimina_tipo_prodotto(p_id text, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.fasi_avanzamento_ordini(p_operatore_id uuid, p_session_token uuid, p_std_ids uuid[], p_extra_ids uuid[], p_solo_aperti_ids uuid[]) TO anon;
-GRANT EXECUTE ON FUNCTION public.fasi_avanzamento_ordini(p_operatore_id uuid, p_session_token uuid, p_std_ids uuid[], p_extra_ids uuid[], p_solo_aperti_ids uuid[]) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.fasi_dipendenze_stato(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid, p_fase_ids smallint[]) TO anon;
-GRANT EXECUTE ON FUNCTION public.fasi_dipendenze_stato(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid, p_fase_ids smallint[]) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.fasi_stato_ordine(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.fasi_stato_ordine(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.forza_completa_fase_extra(p_fase_extra_id uuid, p_responsabile_id uuid, p_note text, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.forza_logout_operatore(p_operatore_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.fotocamera_interna_attiva() TO anon;
-GRANT EXECUTE ON FUNCTION public.fotocamera_interna_attiva() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.imposta_catalogo_fase_extra(p_responsabile_id uuid, p_session_token uuid, p_id uuid, p_nome text, p_descrizione text, p_tipo_gestione text, p_e_attesa_esterna boolean, p_attiva boolean) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.imposta_chiusura_aziendale(p_data_inizio date, p_data_fine date, p_descrizione text, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.imposta_competenze_fase(p_fase_id smallint, p_operatori_ordinati uuid[], p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.imposta_competenze_macchina(p_macchina_id uuid, p_operatori_ordinati uuid[], p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.imposta_competenze_per_catalogo_fase_extra(p_responsabile_id uuid, p_catalogo_fase_extra_id uuid, p_operatori_ordinati uuid[], p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.imposta_dipendenze_fase(p_fase_id smallint, p_dipende_da_ids smallint[], p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.imposta_disponibilita_giornaliera(p_operatore_id uuid, p_data date, p_ore numeric, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.imposta_fase_ordine(p_ordine_id uuid, p_fase_id smallint, p_attiva boolean, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.imposta_fasi_macchina(p_macchina_id uuid, p_fase_ids smallint[], p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.imposta_macchina(p_nome text, p_stato text, p_ore_default numeric, p_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.imposta_macchine_fase_extra(p_responsabile_id uuid, p_catalogo_fase_extra_id uuid, p_macchine_ids jsonb, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.imposta_manutenzione_macchina(p_macchina_id uuid, p_data_inizio date, p_data_fine date, p_descrizione text, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.imposta_permesso_periodo(p_operatore_id uuid, p_data_inizio date, p_data_fine date, p_ore numeric, p_motivo text, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.imposta_stato_operatore(p_operatore_id uuid, p_attivo boolean, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.lista_operatori_login(p_solo_sola_lettura boolean) TO anon;
-GRANT EXECUTE ON FUNCTION public.lista_operatori_login(p_solo_sola_lettura boolean) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.lista_priorita_giornaliera() TO anon;
-GRANT EXECUTE ON FUNCTION public.lista_priorita_giornaliera() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.lista_schede_kpi() TO anon;
-GRANT EXECUTE ON FUNCTION public.lista_schede_kpi() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.metti_in_attesa(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.metti_in_attesa(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.mie_fasi_in_corso(p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.mie_fasi_in_corso(p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.modifica_chiusura_aziendale(p_id uuid, p_data_inizio date, p_data_fine date, p_descrizione text, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.notifiche_operatore(p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.notifiche_operatore(p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.ordini_attivi(p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.ordini_attivi(p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.pausa_tutte_fasi(p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.pausa_tutte_fasi(p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.piano_giornaliero_raggruppato(p_responsabile_id uuid, p_session_token uuid, p_data date) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.piano_multi_giorno(p_giorni integer, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.prendi_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.prendi_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.prendi_in_carico_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.prendi_in_carico_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.riapri_fase_extra_resp(p_fase_extra_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.riapri_fase_operatore(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.riapri_fase_operatore(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.riassegna_fase(p_ordine_fase_id uuid, p_responsabile_id uuid, p_nuovo_operatore uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.riassegna_fase_extra(p_fase_extra_id uuid, p_nuovo_op uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.ricalcola_fase_su_ordini_esistenti(p_fase_id smallint, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.riepilogo_competenze_operatore(p_operatore_id uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.riepilogo_competenze_operatore(p_operatore_id uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.rimuovi_collega_extra(p_fase_extra_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.rimuovi_collega_extra(p_fase_extra_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.rimuovi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.rimuovi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.riprendi_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_forza boolean, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.riprendi_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_forza boolean, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.riprendi_tutte_fasi(p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.riprendi_tutte_fasi(p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.salva_allegato(p_ordine_fase_id uuid, p_url_file text, p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.salva_allegato(p_ordine_fase_id uuid, p_url_file text, p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.salva_nota_fase_extra(p_fase_extra_id uuid, p_note text, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.salva_onesignal_id(p_user_id uuid, p_onesignal_id text, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.salva_onesignal_id(p_user_id uuid, p_onesignal_id text, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.segna_notifiche_lette(p_utente_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.segna_notifiche_lette(p_utente_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.segna_spedito(p_ordine_id uuid, p_utente_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.segna_spedito(p_ordine_id uuid, p_utente_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.segna_spedizione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.segna_spedizione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.segna_spedizione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.segna_spedizione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[]) TO anon;
-GRANT EXECUTE ON FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[]) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.storico_fasi_completate(p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.storico_fasi_completate(p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.storico_ordini_periodo(p_operatore_id uuid, p_session_token uuid, p_dal timestamp with time zone, p_al timestamp with time zone) TO anon;
-GRANT EXECUTE ON FUNCTION public.storico_ordini_periodo(p_operatore_id uuid, p_session_token uuid, p_dal timestamp with time zone, p_al timestamp with time zone) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.sync_e_attesa_esterna() TO anon;
-GRANT EXECUTE ON FUNCTION public.sync_e_attesa_esterna() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.tempo_medio_fasi_dati(p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.tempo_medio_fasi_dati(p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.trigger_push_notifica() TO anon;
-GRANT EXECUTE ON FUNCTION public.trigger_push_notifica() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.unisciti_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.unisciti_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.verifica_pin(p_user_id uuid, p_pin text) TO anon;
-GRANT EXECUTE ON FUNCTION public.verifica_pin(p_user_id uuid, p_pin text) TO authenticated;
+
+--
+-- Name: users users_write_responsabile; Type: POLICY; Schema: public; Owner: postgres
+--
+
+CREATE POLICY users_write_responsabile ON public.users TO authenticated USING (( SELECT public.e_responsabile() AS e_responsabile)) WITH CHECK (( SELECT public.e_responsabile() AS e_responsabile));
+
+
+--
+-- Name: SCHEMA public; Type: ACL; Schema: -; Owner: pg_database_owner
+--
+
+GRANT USAGE ON SCHEMA public TO postgres;
+GRANT USAGE ON SCHEMA public TO anon;
+GRANT USAGE ON SCHEMA public TO authenticated;
+GRANT USAGE ON SCHEMA public TO service_role;
+
+
+--
+-- Name: FUNCTION aggiorna_criteri_fase(p_fase_id smallint, p_tipi_prodotto text[], p_materiali text[], p_strutture text[], p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.aggiorna_criteri_fase(p_fase_id smallint, p_tipi_prodotto text[], p_materiali text[], p_strutture text[], p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.aggiorna_criteri_fase(p_fase_id smallint, p_tipi_prodotto text[], p_materiali text[], p_strutture text[], p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.aggiorna_criteri_fase(p_fase_id smallint, p_tipi_prodotto text[], p_materiali text[], p_strutture text[], p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION aggiorna_operatore(p_operatore_id uuid, p_nome text, p_cognome text, p_ruolo public.ruolo_utente, p_ore_default numeric, p_escluso_pianificazione boolean, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.aggiorna_operatore(p_operatore_id uuid, p_nome text, p_cognome text, p_ruolo public.ruolo_utente, p_ore_default numeric, p_escluso_pianificazione boolean, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.aggiorna_operatore(p_operatore_id uuid, p_nome text, p_cognome text, p_ruolo public.ruolo_utente, p_ore_default numeric, p_escluso_pianificazione boolean, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.aggiorna_operatore(p_operatore_id uuid, p_nome text, p_cognome text, p_ruolo public.ruolo_utente, p_ore_default numeric, p_escluso_pianificazione boolean, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION aggiorna_pin_operatore(p_operatore_id uuid, p_nuovo_pin text, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.aggiorna_pin_operatore(p_operatore_id uuid, p_nuovo_pin text, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.aggiorna_pin_operatore(p_operatore_id uuid, p_nuovo_pin text, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.aggiorna_pin_operatore(p_operatore_id uuid, p_nuovo_pin text, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION aggiorna_tipo_prodotto(p_id text, p_label text, p_posizione integer, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.aggiorna_tipo_prodotto(p_id text, p_label text, p_posizione integer, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.aggiorna_tipo_prodotto(p_id text, p_label text, p_posizione integer, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.aggiorna_tipo_prodotto(p_id text, p_label text, p_posizione integer, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION aggiungi_collega_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.aggiungi_collega_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.aggiungi_collega_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.aggiungi_collega_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION aggiungi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.aggiungi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.aggiungi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.aggiungi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION aggiungi_tipo_prodotto(p_id text, p_label text, p_posizione integer, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.aggiungi_tipo_prodotto(p_id text, p_label text, p_posizione integer, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.aggiungi_tipo_prodotto(p_id text, p_label text, p_posizione integer, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.aggiungi_tipo_prodotto(p_id text, p_label text, p_posizione integer, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION annulla_fasi_ordine_eliminato(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.annulla_fasi_ordine_eliminato(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.annulla_fasi_ordine_eliminato(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.annulla_fasi_ordine_eliminato(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION annulla_presa_in_carico(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.annulla_presa_in_carico(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.annulla_presa_in_carico(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.annulla_presa_in_carico(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION annulla_presa_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.annulla_presa_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.annulla_presa_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.annulla_presa_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION archivia_ordine(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.archivia_ordine(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.archivia_ordine(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.archivia_ordine(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION autorizza_upload_allegato(p_user_id uuid, p_session_token uuid, p_tipo text, p_ordine_id uuid, p_ordine_fase_id uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.autorizza_upload_allegato(p_user_id uuid, p_session_token uuid, p_tipo text, p_ordine_id uuid, p_ordine_fase_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.autorizza_upload_allegato(p_user_id uuid, p_session_token uuid, p_tipo text, p_ordine_id uuid, p_ordine_fase_id uuid) TO anon;
+GRANT ALL ON FUNCTION public.autorizza_upload_allegato(p_user_id uuid, p_session_token uuid, p_tipo text, p_ordine_id uuid, p_ordine_fase_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.autorizza_upload_allegato(p_user_id uuid, p_session_token uuid, p_tipo text, p_ordine_id uuid, p_ordine_fase_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION avanzamento_fasi_batch(p_operatore_id uuid, p_session_token uuid, p_ordine_ids uuid[]); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.avanzamento_fasi_batch(p_operatore_id uuid, p_session_token uuid, p_ordine_ids uuid[]) TO anon;
+GRANT ALL ON FUNCTION public.avanzamento_fasi_batch(p_operatore_id uuid, p_session_token uuid, p_ordine_ids uuid[]) TO authenticated;
+GRANT ALL ON FUNCTION public.avanzamento_fasi_batch(p_operatore_id uuid, p_session_token uuid, p_ordine_ids uuid[]) TO service_role;
+
+
+--
+-- Name: FUNCTION calcola_tempo_combinazione(p_criteri jsonb); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.calcola_tempo_combinazione(p_criteri jsonb) TO anon;
+GRANT ALL ON FUNCTION public.calcola_tempo_combinazione(p_criteri jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.calcola_tempo_combinazione(p_criteri jsonb) TO service_role;
+
+
+--
+-- Name: FUNCTION capacita_produttiva_stimata(); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.capacita_produttiva_stimata() TO anon;
+GRANT ALL ON FUNCTION public.capacita_produttiva_stimata() TO authenticated;
+GRANT ALL ON FUNCTION public.capacita_produttiva_stimata() TO service_role;
+
+
+--
+-- Name: FUNCTION check_lock_fase(); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.check_lock_fase() TO anon;
+GRANT ALL ON FUNCTION public.check_lock_fase() TO authenticated;
+GRANT ALL ON FUNCTION public.check_lock_fase() TO service_role;
+
+
+--
+-- Name: FUNCTION check_ordine_completato(); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.check_ordine_completato() TO anon;
+GRANT ALL ON FUNCTION public.check_ordine_completato() TO authenticated;
+GRANT ALL ON FUNCTION public.check_ordine_completato() TO service_role;
+
+
+--
+-- Name: FUNCTION check_ordine_extra_completato(); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.check_ordine_extra_completato() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.check_ordine_extra_completato() TO anon;
+GRANT ALL ON FUNCTION public.check_ordine_extra_completato() TO authenticated;
+GRANT ALL ON FUNCTION public.check_ordine_extra_completato() TO service_role;
+
+
+--
+-- Name: FUNCTION colleghi_disponibili(p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.colleghi_disponibili(p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.colleghi_disponibili(p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.colleghi_disponibili(p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION completa_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_note_operatore text, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.completa_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_note_operatore text, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.completa_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_note_operatore text, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.completa_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_note_operatore text, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION completa_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_note text, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.completa_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_note text, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.completa_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_note text, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.completa_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_note text, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION completa_fasi_batch(p_fase_id integer, p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.completa_fasi_batch(p_fase_id integer, p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.completa_fasi_batch(p_fase_id integer, p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.completa_fasi_batch(p_fase_id integer, p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION completa_fasi_extra_batch(p_nome text, p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.completa_fasi_extra_batch(p_nome text, p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.completa_fasi_extra_batch(p_nome text, p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.completa_fasi_extra_batch(p_nome text, p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conferma_ricezione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.conferma_ricezione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.conferma_ricezione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conferma_ricezione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conferma_ricezione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.conferma_ricezione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.conferma_ricezione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conferma_ricezione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION confronto_operatori_per_fase(); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.confronto_operatori_per_fase() TO anon;
+GRANT ALL ON FUNCTION public.confronto_operatori_per_fase() TO authenticated;
+GRANT ALL ON FUNCTION public.confronto_operatori_per_fase() TO service_role;
+
+
+--
+-- Name: FUNCTION confronto_operatori_per_fase_extra(); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.confronto_operatori_per_fase_extra() TO anon;
+GRANT ALL ON FUNCTION public.confronto_operatori_per_fase_extra() TO authenticated;
+GRANT ALL ON FUNCTION public.confronto_operatori_per_fase_extra() TO service_role;
+
+
+--
+-- Name: FUNCTION controlla_sessione(p_user_id uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.controlla_sessione(p_user_id uuid) TO anon;
+GRANT ALL ON FUNCTION public.controlla_sessione(p_user_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.controlla_sessione(p_user_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION crea_fasi_extra(p_ordine_id uuid, p_fasi jsonb, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.crea_fasi_extra(p_ordine_id uuid, p_fasi jsonb, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.crea_fasi_extra(p_ordine_id uuid, p_fasi jsonb, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.crea_fasi_extra(p_ordine_id uuid, p_fasi jsonb, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION crea_fasi_per_ordine(); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.crea_fasi_per_ordine() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.crea_fasi_per_ordine() TO anon;
+GRANT ALL ON FUNCTION public.crea_fasi_per_ordine() TO authenticated;
+GRANT ALL ON FUNCTION public.crea_fasi_per_ordine() TO service_role;
+
+
+--
+-- Name: FUNCTION crea_operatore(p_nome text, p_cognome text, p_pin text, p_ruolo public.ruolo_utente, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.crea_operatore(p_nome text, p_cognome text, p_pin text, p_ruolo public.ruolo_utente, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.crea_operatore(p_nome text, p_cognome text, p_pin text, p_ruolo public.ruolo_utente, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.crea_operatore(p_nome text, p_cognome text, p_pin text, p_ruolo public.ruolo_utente, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION crea_scheda_kpi(p_nome text, p_criteri jsonb, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.crea_scheda_kpi(p_nome text, p_criteri jsonb, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.crea_scheda_kpi(p_nome text, p_criteri jsonb, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.crea_scheda_kpi(p_nome text, p_criteri jsonb, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION data_consegna_stimata(p_giorni_lavorativi_necessari numeric); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.data_consegna_stimata(p_giorni_lavorativi_necessari numeric) TO anon;
+GRANT ALL ON FUNCTION public.data_consegna_stimata(p_giorni_lavorativi_necessari numeric) TO authenticated;
+GRANT ALL ON FUNCTION public.data_consegna_stimata(p_giorni_lavorativi_necessari numeric) TO service_role;
+
+
+--
+-- Name: FUNCTION dettaglio_fase_completa(p_operatore_id uuid, p_session_token uuid, p_ord_fase_id uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.dettaglio_fase_completa(p_operatore_id uuid, p_session_token uuid, p_ord_fase_id uuid) TO anon;
+GRANT ALL ON FUNCTION public.dettaglio_fase_completa(p_operatore_id uuid, p_session_token uuid, p_ord_fase_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.dettaglio_fase_completa(p_operatore_id uuid, p_session_token uuid, p_ord_fase_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION dettaglio_fase_extra_completa(p_operatore_id uuid, p_session_token uuid, p_fase_extra_id uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.dettaglio_fase_extra_completa(p_operatore_id uuid, p_session_token uuid, p_fase_extra_id uuid) TO anon;
+GRANT ALL ON FUNCTION public.dettaglio_fase_extra_completa(p_operatore_id uuid, p_session_token uuid, p_fase_extra_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.dettaglio_fase_extra_completa(p_operatore_id uuid, p_session_token uuid, p_fase_extra_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION dettaglio_ordine_fasi(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.dettaglio_ordine_fasi(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid) TO anon;
+GRANT ALL ON FUNCTION public.dettaglio_ordine_fasi(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.dettaglio_ordine_fasi(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION dimensione_database(p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.dimensione_database(p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.dimensione_database(p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.dimensione_database(p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION e_giorno_lavorativo(p_data date); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.e_giorno_lavorativo(p_data date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.e_giorno_lavorativo(p_data date) TO service_role;
+
+
+--
+-- Name: FUNCTION e_responsabile(); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.e_responsabile() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.e_responsabile() TO authenticated;
+GRANT ALL ON FUNCTION public.e_responsabile() TO service_role;
+
+
+--
+-- Name: FUNCTION elenco_foto_fase(p_user_id uuid, p_session_token uuid, p_ordine_fase_id uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.elenco_foto_fase(p_user_id uuid, p_session_token uuid, p_ordine_fase_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.elenco_foto_fase(p_user_id uuid, p_session_token uuid, p_ordine_fase_id uuid) TO anon;
+GRANT ALL ON FUNCTION public.elenco_foto_fase(p_user_id uuid, p_session_token uuid, p_ordine_fase_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.elenco_foto_fase(p_user_id uuid, p_session_token uuid, p_ordine_fase_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION elimina_allegati(p_allegato_ids uuid[], p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.elimina_allegati(p_allegato_ids uuid[], p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.elimina_allegati(p_allegato_ids uuid[], p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.elimina_allegati(p_allegato_ids uuid[], p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION elimina_allegati_fasi(p_fase_ids uuid[], p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.elimina_allegati_fasi(p_fase_ids uuid[], p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.elimina_allegati_fasi(p_fase_ids uuid[], p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.elimina_allegati_fasi(p_fase_ids uuid[], p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION elimina_chiusura_aziendale(p_chiusura_id uuid, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.elimina_chiusura_aziendale(p_chiusura_id uuid, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.elimina_chiusura_aziendale(p_chiusura_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.elimina_chiusura_aziendale(p_chiusura_id uuid, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION elimina_fase_custom_ordine(p_ordine_fase_id uuid, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.elimina_fase_custom_ordine(p_ordine_fase_id uuid, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.elimina_fase_custom_ordine(p_ordine_fase_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.elimina_fase_custom_ordine(p_ordine_fase_id uuid, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION elimina_fase_extra(p_fase_extra_id uuid, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.elimina_fase_extra(p_fase_extra_id uuid, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.elimina_fase_extra(p_fase_extra_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.elimina_fase_extra(p_fase_extra_id uuid, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION elimina_macchina(p_id uuid, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.elimina_macchina(p_id uuid, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.elimina_macchina(p_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.elimina_macchina(p_id uuid, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION elimina_manutenzione_macchina(p_id uuid, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.elimina_manutenzione_macchina(p_id uuid, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.elimina_manutenzione_macchina(p_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.elimina_manutenzione_macchina(p_id uuid, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION elimina_operatore(p_operatore_id uuid, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.elimina_operatore(p_operatore_id uuid, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.elimina_operatore(p_operatore_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.elimina_operatore(p_operatore_id uuid, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION elimina_scheda_kpi(p_id uuid, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.elimina_scheda_kpi(p_id uuid, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.elimina_scheda_kpi(p_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.elimina_scheda_kpi(p_id uuid, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION elimina_tipo_prodotto(p_id text, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.elimina_tipo_prodotto(p_id text, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.elimina_tipo_prodotto(p_id text, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.elimina_tipo_prodotto(p_id text, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION fasi_avanzamento_ordini(p_operatore_id uuid, p_session_token uuid, p_std_ids uuid[], p_extra_ids uuid[], p_solo_aperti_ids uuid[]); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.fasi_avanzamento_ordini(p_operatore_id uuid, p_session_token uuid, p_std_ids uuid[], p_extra_ids uuid[], p_solo_aperti_ids uuid[]) TO anon;
+GRANT ALL ON FUNCTION public.fasi_avanzamento_ordini(p_operatore_id uuid, p_session_token uuid, p_std_ids uuid[], p_extra_ids uuid[], p_solo_aperti_ids uuid[]) TO authenticated;
+GRANT ALL ON FUNCTION public.fasi_avanzamento_ordini(p_operatore_id uuid, p_session_token uuid, p_std_ids uuid[], p_extra_ids uuid[], p_solo_aperti_ids uuid[]) TO service_role;
+
+
+--
+-- Name: FUNCTION fasi_dipendenze_stato(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid, p_fase_ids smallint[]); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.fasi_dipendenze_stato(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid, p_fase_ids smallint[]) TO anon;
+GRANT ALL ON FUNCTION public.fasi_dipendenze_stato(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid, p_fase_ids smallint[]) TO authenticated;
+GRANT ALL ON FUNCTION public.fasi_dipendenze_stato(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid, p_fase_ids smallint[]) TO service_role;
+
+
+--
+-- Name: FUNCTION fasi_in_corso_come_collega(p_operatore_id uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid) TO anon;
+GRANT ALL ON FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION fasi_stato_ordine(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.fasi_stato_ordine(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid) TO anon;
+GRANT ALL ON FUNCTION public.fasi_stato_ordine(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fasi_stato_ordine(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION forza_completa_fase_extra(p_fase_extra_id uuid, p_responsabile_id uuid, p_note text, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.forza_completa_fase_extra(p_fase_extra_id uuid, p_responsabile_id uuid, p_note text, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.forza_completa_fase_extra(p_fase_extra_id uuid, p_responsabile_id uuid, p_note text, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.forza_completa_fase_extra(p_fase_extra_id uuid, p_responsabile_id uuid, p_note text, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION forza_logout_operatore(p_operatore_id uuid, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.forza_logout_operatore(p_operatore_id uuid, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.forza_logout_operatore(p_operatore_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.forza_logout_operatore(p_operatore_id uuid, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION fotocamera_interna_attiva(); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.fotocamera_interna_attiva() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fotocamera_interna_attiva() TO anon;
+GRANT ALL ON FUNCTION public.fotocamera_interna_attiva() TO authenticated;
+GRANT ALL ON FUNCTION public.fotocamera_interna_attiva() TO service_role;
+
+
+--
+-- Name: FUNCTION giorni_lavorativi_disponibili(p_da date, p_a date); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.giorni_lavorativi_disponibili(p_da date, p_a date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.giorni_lavorativi_disponibili(p_da date, p_a date) TO service_role;
+
+
+--
+-- Name: FUNCTION imposta_catalogo_fase_extra(p_responsabile_id uuid, p_session_token uuid, p_id uuid, p_nome text, p_descrizione text, p_tipo_gestione text, p_e_attesa_esterna boolean, p_attiva boolean); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.imposta_catalogo_fase_extra(p_responsabile_id uuid, p_session_token uuid, p_id uuid, p_nome text, p_descrizione text, p_tipo_gestione text, p_e_attesa_esterna boolean, p_attiva boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.imposta_catalogo_fase_extra(p_responsabile_id uuid, p_session_token uuid, p_id uuid, p_nome text, p_descrizione text, p_tipo_gestione text, p_e_attesa_esterna boolean, p_attiva boolean) TO authenticated;
+GRANT ALL ON FUNCTION public.imposta_catalogo_fase_extra(p_responsabile_id uuid, p_session_token uuid, p_id uuid, p_nome text, p_descrizione text, p_tipo_gestione text, p_e_attesa_esterna boolean, p_attiva boolean) TO service_role;
+
+
+--
+-- Name: FUNCTION imposta_chiusura_aziendale(p_data_inizio date, p_data_fine date, p_descrizione text, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.imposta_chiusura_aziendale(p_data_inizio date, p_data_fine date, p_descrizione text, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.imposta_chiusura_aziendale(p_data_inizio date, p_data_fine date, p_descrizione text, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.imposta_chiusura_aziendale(p_data_inizio date, p_data_fine date, p_descrizione text, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION imposta_competenze_fase(p_fase_id smallint, p_operatori_ordinati uuid[], p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.imposta_competenze_fase(p_fase_id smallint, p_operatori_ordinati uuid[], p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.imposta_competenze_fase(p_fase_id smallint, p_operatori_ordinati uuid[], p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.imposta_competenze_fase(p_fase_id smallint, p_operatori_ordinati uuid[], p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION imposta_competenze_macchina(p_macchina_id uuid, p_operatori_ordinati uuid[], p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.imposta_competenze_macchina(p_macchina_id uuid, p_operatori_ordinati uuid[], p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.imposta_competenze_macchina(p_macchina_id uuid, p_operatori_ordinati uuid[], p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.imposta_competenze_macchina(p_macchina_id uuid, p_operatori_ordinati uuid[], p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION imposta_competenze_per_catalogo_fase_extra(p_responsabile_id uuid, p_catalogo_fase_extra_id uuid, p_operatori_ordinati uuid[], p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.imposta_competenze_per_catalogo_fase_extra(p_responsabile_id uuid, p_catalogo_fase_extra_id uuid, p_operatori_ordinati uuid[], p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.imposta_competenze_per_catalogo_fase_extra(p_responsabile_id uuid, p_catalogo_fase_extra_id uuid, p_operatori_ordinati uuid[], p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.imposta_competenze_per_catalogo_fase_extra(p_responsabile_id uuid, p_catalogo_fase_extra_id uuid, p_operatori_ordinati uuid[], p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION imposta_dipendenze_fase(p_fase_id smallint, p_dipende_da_ids smallint[], p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.imposta_dipendenze_fase(p_fase_id smallint, p_dipende_da_ids smallint[], p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.imposta_dipendenze_fase(p_fase_id smallint, p_dipende_da_ids smallint[], p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.imposta_dipendenze_fase(p_fase_id smallint, p_dipende_da_ids smallint[], p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION imposta_disponibilita_giornaliera(p_operatore_id uuid, p_data date, p_ore numeric, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.imposta_disponibilita_giornaliera(p_operatore_id uuid, p_data date, p_ore numeric, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.imposta_disponibilita_giornaliera(p_operatore_id uuid, p_data date, p_ore numeric, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.imposta_disponibilita_giornaliera(p_operatore_id uuid, p_data date, p_ore numeric, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION imposta_fase_ordine(p_ordine_id uuid, p_fase_id smallint, p_attiva boolean, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.imposta_fase_ordine(p_ordine_id uuid, p_fase_id smallint, p_attiva boolean, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.imposta_fase_ordine(p_ordine_id uuid, p_fase_id smallint, p_attiva boolean, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.imposta_fase_ordine(p_ordine_id uuid, p_fase_id smallint, p_attiva boolean, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION imposta_fasi_macchina(p_macchina_id uuid, p_fase_ids smallint[], p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.imposta_fasi_macchina(p_macchina_id uuid, p_fase_ids smallint[], p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.imposta_fasi_macchina(p_macchina_id uuid, p_fase_ids smallint[], p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.imposta_fasi_macchina(p_macchina_id uuid, p_fase_ids smallint[], p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION imposta_macchina(p_nome text, p_stato text, p_ore_default numeric, p_id uuid, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.imposta_macchina(p_nome text, p_stato text, p_ore_default numeric, p_id uuid, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.imposta_macchina(p_nome text, p_stato text, p_ore_default numeric, p_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.imposta_macchina(p_nome text, p_stato text, p_ore_default numeric, p_id uuid, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION imposta_macchine_fase_extra(p_responsabile_id uuid, p_catalogo_fase_extra_id uuid, p_macchine_ids jsonb, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.imposta_macchine_fase_extra(p_responsabile_id uuid, p_catalogo_fase_extra_id uuid, p_macchine_ids jsonb, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.imposta_macchine_fase_extra(p_responsabile_id uuid, p_catalogo_fase_extra_id uuid, p_macchine_ids jsonb, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.imposta_macchine_fase_extra(p_responsabile_id uuid, p_catalogo_fase_extra_id uuid, p_macchine_ids jsonb, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION imposta_manutenzione_macchina(p_macchina_id uuid, p_data_inizio date, p_data_fine date, p_descrizione text, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.imposta_manutenzione_macchina(p_macchina_id uuid, p_data_inizio date, p_data_fine date, p_descrizione text, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.imposta_manutenzione_macchina(p_macchina_id uuid, p_data_inizio date, p_data_fine date, p_descrizione text, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.imposta_manutenzione_macchina(p_macchina_id uuid, p_data_inizio date, p_data_fine date, p_descrizione text, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION imposta_permesso_periodo(p_operatore_id uuid, p_data_inizio date, p_data_fine date, p_ore numeric, p_motivo text, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.imposta_permesso_periodo(p_operatore_id uuid, p_data_inizio date, p_data_fine date, p_ore numeric, p_motivo text, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.imposta_permesso_periodo(p_operatore_id uuid, p_data_inizio date, p_data_fine date, p_ore numeric, p_motivo text, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.imposta_permesso_periodo(p_operatore_id uuid, p_data_inizio date, p_data_fine date, p_ore numeric, p_motivo text, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION imposta_stato_operatore(p_operatore_id uuid, p_attivo boolean, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.imposta_stato_operatore(p_operatore_id uuid, p_attivo boolean, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.imposta_stato_operatore(p_operatore_id uuid, p_attivo boolean, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.imposta_stato_operatore(p_operatore_id uuid, p_attivo boolean, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION in_orario_lavoro(p_momento timestamp with time zone); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.in_orario_lavoro(p_momento timestamp with time zone) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.in_orario_lavoro(p_momento timestamp with time zone) TO service_role;
+
+
+--
+-- Name: FUNCTION lista_operatori_login(p_solo_sola_lettura boolean); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.lista_operatori_login(p_solo_sola_lettura boolean) TO anon;
+GRANT ALL ON FUNCTION public.lista_operatori_login(p_solo_sola_lettura boolean) TO authenticated;
+GRANT ALL ON FUNCTION public.lista_operatori_login(p_solo_sola_lettura boolean) TO service_role;
+
+
+--
+-- Name: FUNCTION lista_priorita_giornaliera(); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.lista_priorita_giornaliera() TO anon;
+GRANT ALL ON FUNCTION public.lista_priorita_giornaliera() TO authenticated;
+GRANT ALL ON FUNCTION public.lista_priorita_giornaliera() TO service_role;
+
+
+--
+-- Name: FUNCTION lista_schede_kpi(); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.lista_schede_kpi() TO anon;
+GRANT ALL ON FUNCTION public.lista_schede_kpi() TO authenticated;
+GRANT ALL ON FUNCTION public.lista_schede_kpi() TO service_role;
+
+
+--
+-- Name: FUNCTION metti_in_attesa(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.metti_in_attesa(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.metti_in_attesa(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.metti_in_attesa(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION mie_fasi_in_corso(p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.mie_fasi_in_corso(p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.mie_fasi_in_corso(p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.mie_fasi_in_corso(p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION modifica_chiusura_aziendale(p_id uuid, p_data_inizio date, p_data_fine date, p_descrizione text, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.modifica_chiusura_aziendale(p_id uuid, p_data_inizio date, p_data_fine date, p_descrizione text, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.modifica_chiusura_aziendale(p_id uuid, p_data_inizio date, p_data_fine date, p_descrizione text, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.modifica_chiusura_aziendale(p_id uuid, p_data_inizio date, p_data_fine date, p_descrizione text, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION notifiche_operatore(p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.notifiche_operatore(p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.notifiche_operatore(p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.notifiche_operatore(p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION ordini_attivi(p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.ordini_attivi(p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.ordini_attivi(p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.ordini_attivi(p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION pausa_tutte_fasi(p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.pausa_tutte_fasi(p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.pausa_tutte_fasi(p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.pausa_tutte_fasi(p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION piano_giornaliero_raggruppato(p_responsabile_id uuid, p_session_token uuid, p_data date); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.piano_giornaliero_raggruppato(p_responsabile_id uuid, p_session_token uuid, p_data date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.piano_giornaliero_raggruppato(p_responsabile_id uuid, p_session_token uuid, p_data date) TO authenticated;
+GRANT ALL ON FUNCTION public.piano_giornaliero_raggruppato(p_responsabile_id uuid, p_session_token uuid, p_data date) TO service_role;
+
+
+--
+-- Name: FUNCTION piano_multi_giorno(p_giorni integer, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.piano_multi_giorno(p_giorni integer, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.piano_multi_giorno(p_giorni integer, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.piano_multi_giorno(p_giorni integer, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION prendi_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.prendi_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.prendi_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.prendi_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION prendi_in_carico_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.prendi_in_carico_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.prendi_in_carico_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.prendi_in_carico_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION riapri_fase_extra_resp(p_fase_extra_id uuid, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.riapri_fase_extra_resp(p_fase_extra_id uuid, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.riapri_fase_extra_resp(p_fase_extra_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.riapri_fase_extra_resp(p_fase_extra_id uuid, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION riapri_fase_operatore(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.riapri_fase_operatore(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.riapri_fase_operatore(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.riapri_fase_operatore(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION riassegna_fase(p_ordine_fase_id uuid, p_responsabile_id uuid, p_nuovo_operatore uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.riassegna_fase(p_ordine_fase_id uuid, p_responsabile_id uuid, p_nuovo_operatore uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.riassegna_fase(p_ordine_fase_id uuid, p_responsabile_id uuid, p_nuovo_operatore uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.riassegna_fase(p_ordine_fase_id uuid, p_responsabile_id uuid, p_nuovo_operatore uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION riassegna_fase_extra(p_fase_extra_id uuid, p_nuovo_op uuid, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.riassegna_fase_extra(p_fase_extra_id uuid, p_nuovo_op uuid, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.riassegna_fase_extra(p_fase_extra_id uuid, p_nuovo_op uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.riassegna_fase_extra(p_fase_extra_id uuid, p_nuovo_op uuid, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION ricalcola_fase_su_ordini_esistenti(p_fase_id smallint, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.ricalcola_fase_su_ordini_esistenti(p_fase_id smallint, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.ricalcola_fase_su_ordini_esistenti(p_fase_id smallint, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.ricalcola_fase_su_ordini_esistenti(p_fase_id smallint, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION riepilogo_competenze_operatore(p_operatore_id uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.riepilogo_competenze_operatore(p_operatore_id uuid) TO anon;
+GRANT ALL ON FUNCTION public.riepilogo_competenze_operatore(p_operatore_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.riepilogo_competenze_operatore(p_operatore_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION rimuovi_collega_extra(p_fase_extra_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.rimuovi_collega_extra(p_fase_extra_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.rimuovi_collega_extra(p_fase_extra_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.rimuovi_collega_extra(p_fase_extra_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION rimuovi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.rimuovi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.rimuovi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.rimuovi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION riprendi_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_forza boolean, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.riprendi_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_forza boolean, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.riprendi_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_forza boolean, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.riprendi_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_forza boolean, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION riprendi_tutte_fasi(p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.riprendi_tutte_fasi(p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.riprendi_tutte_fasi(p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.riprendi_tutte_fasi(p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION salva_allegato(p_ordine_fase_id uuid, p_url_file text, p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.salva_allegato(p_ordine_fase_id uuid, p_url_file text, p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.salva_allegato(p_ordine_fase_id uuid, p_url_file text, p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.salva_allegato(p_ordine_fase_id uuid, p_url_file text, p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION salva_nota_fase_extra(p_fase_extra_id uuid, p_note text, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.salva_nota_fase_extra(p_fase_extra_id uuid, p_note text, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.salva_nota_fase_extra(p_fase_extra_id uuid, p_note text, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.salva_nota_fase_extra(p_fase_extra_id uuid, p_note text, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION salva_onesignal_id(p_user_id uuid, p_onesignal_id text, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.salva_onesignal_id(p_user_id uuid, p_onesignal_id text, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.salva_onesignal_id(p_user_id uuid, p_onesignal_id text, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.salva_onesignal_id(p_user_id uuid, p_onesignal_id text, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION segna_notifiche_lette(p_utente_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.segna_notifiche_lette(p_utente_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.segna_notifiche_lette(p_utente_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.segna_notifiche_lette(p_utente_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.segna_notifiche_lette(p_utente_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION segna_spedito(p_ordine_id uuid, p_utente_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.segna_spedito(p_ordine_id uuid, p_utente_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.segna_spedito(p_ordine_id uuid, p_utente_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.segna_spedito(p_ordine_id uuid, p_utente_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION segna_spedizione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.segna_spedizione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.segna_spedizione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.segna_spedizione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION segna_spedizione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.segna_spedizione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.segna_spedizione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.segna_spedizione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION statistiche_lavoro_ordini(p_ordine_ids uuid[]); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[]) TO anon;
+GRANT ALL ON FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[]) TO authenticated;
+GRANT ALL ON FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[]) TO service_role;
+
+
+--
+-- Name: FUNCTION storico_fasi_completate(p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.storico_fasi_completate(p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.storico_fasi_completate(p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.storico_fasi_completate(p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION storico_ordini_periodo(p_operatore_id uuid, p_session_token uuid, p_dal timestamp with time zone, p_al timestamp with time zone); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.storico_ordini_periodo(p_operatore_id uuid, p_session_token uuid, p_dal timestamp with time zone, p_al timestamp with time zone) TO anon;
+GRANT ALL ON FUNCTION public.storico_ordini_periodo(p_operatore_id uuid, p_session_token uuid, p_dal timestamp with time zone, p_al timestamp with time zone) TO authenticated;
+GRANT ALL ON FUNCTION public.storico_ordini_periodo(p_operatore_id uuid, p_session_token uuid, p_dal timestamp with time zone, p_al timestamp with time zone) TO service_role;
+
+
+--
+-- Name: FUNCTION sync_e_attesa_esterna(); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.sync_e_attesa_esterna() TO anon;
+GRANT ALL ON FUNCTION public.sync_e_attesa_esterna() TO authenticated;
+GRANT ALL ON FUNCTION public.sync_e_attesa_esterna() TO service_role;
+
+
+--
+-- Name: FUNCTION tempo_medio_fasi_dati(p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.tempo_medio_fasi_dati(p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.tempo_medio_fasi_dati(p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.tempo_medio_fasi_dati(p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION trigger_push_notifica(); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.trigger_push_notifica() TO anon;
+GRANT ALL ON FUNCTION public.trigger_push_notifica() TO authenticated;
+GRANT ALL ON FUNCTION public.trigger_push_notifica() TO service_role;
+
+
+--
+-- Name: FUNCTION unisciti_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON FUNCTION public.unisciti_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.unisciti_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.unisciti_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION valida_sessione(p_user_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.valida_sessione(p_user_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.valida_sessione(p_user_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION verifica_pin(p_user_id uuid, p_pin text); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.verifica_pin(p_user_id uuid, p_pin text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.verifica_pin(p_user_id uuid, p_pin text) TO anon;
+GRANT ALL ON FUNCTION public.verifica_pin(p_user_id uuid, p_pin text) TO authenticated;
+GRANT ALL ON FUNCTION public.verifica_pin(p_user_id uuid, p_pin text) TO service_role;
+
+
+--
+-- Name: TABLE allegati; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.allegati TO anon;
+GRANT ALL ON TABLE public.allegati TO authenticated;
+GRANT ALL ON TABLE public.allegati TO service_role;
+
+
+--
+-- Name: TABLE archivio_log; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.archivio_log TO anon;
+GRANT ALL ON TABLE public.archivio_log TO authenticated;
+GRANT ALL ON TABLE public.archivio_log TO service_role;
+
+
+--
+-- Name: TABLE attributi_prodotto_config; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.attributi_prodotto_config TO anon;
+GRANT ALL ON TABLE public.attributi_prodotto_config TO authenticated;
+GRANT ALL ON TABLE public.attributi_prodotto_config TO service_role;
+
+
+--
+-- Name: TABLE catalogo_fase_extra_macchine; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.catalogo_fase_extra_macchine TO anon;
+GRANT ALL ON TABLE public.catalogo_fase_extra_macchine TO authenticated;
+GRANT ALL ON TABLE public.catalogo_fase_extra_macchine TO service_role;
+
+
+--
+-- Name: TABLE catalogo_fasi_extra; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.catalogo_fasi_extra TO anon;
+GRANT ALL ON TABLE public.catalogo_fasi_extra TO authenticated;
+GRANT ALL ON TABLE public.catalogo_fasi_extra TO service_role;
+
+
+--
+-- Name: TABLE chiusure_aziendali; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.chiusure_aziendali TO anon;
+GRANT ALL ON TABLE public.chiusure_aziendali TO authenticated;
+GRANT ALL ON TABLE public.chiusure_aziendali TO service_role;
+
+
+--
+-- Name: TABLE competenze_operatore_fase; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.competenze_operatore_fase TO anon;
+GRANT ALL ON TABLE public.competenze_operatore_fase TO authenticated;
+GRANT ALL ON TABLE public.competenze_operatore_fase TO service_role;
+
+
+--
+-- Name: TABLE competenze_operatore_fase_extra; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.competenze_operatore_fase_extra TO anon;
+GRANT ALL ON TABLE public.competenze_operatore_fase_extra TO authenticated;
+GRANT ALL ON TABLE public.competenze_operatore_fase_extra TO service_role;
+
+
+--
+-- Name: TABLE competenze_operatore_macchina; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.competenze_operatore_macchina TO anon;
+GRANT ALL ON TABLE public.competenze_operatore_macchina TO authenticated;
+GRANT ALL ON TABLE public.competenze_operatore_macchina TO service_role;
+
+
+--
+-- Name: TABLE config_orario; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.config_orario TO anon;
+GRANT ALL ON TABLE public.config_orario TO authenticated;
+GRANT ALL ON TABLE public.config_orario TO service_role;
+
+
+--
+-- Name: TABLE config_sistema; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.config_sistema TO anon;
+GRANT ALL ON TABLE public.config_sistema TO authenticated;
+GRANT ALL ON TABLE public.config_sistema TO service_role;
+
+
+--
+-- Name: TABLE disponibilita_giornaliera; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.disponibilita_giornaliera TO anon;
+GRANT ALL ON TABLE public.disponibilita_giornaliera TO authenticated;
+GRANT ALL ON TABLE public.disponibilita_giornaliera TO service_role;
+
+
+--
+-- Name: TABLE fase_dipendenze; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.fase_dipendenze TO anon;
+GRANT ALL ON TABLE public.fase_dipendenze TO authenticated;
+GRANT ALL ON TABLE public.fase_dipendenze TO service_role;
+
+
+--
+-- Name: TABLE fase_macchine; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.fase_macchine TO anon;
+GRANT ALL ON TABLE public.fase_macchine TO authenticated;
+GRANT ALL ON TABLE public.fase_macchine TO service_role;
+
+
+--
+-- Name: TABLE fase_materiali; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.fase_materiali TO anon;
+GRANT ALL ON TABLE public.fase_materiali TO authenticated;
+GRANT ALL ON TABLE public.fase_materiali TO service_role;
+
+
+--
+-- Name: TABLE fase_strutture; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.fase_strutture TO anon;
+GRANT ALL ON TABLE public.fase_strutture TO authenticated;
+GRANT ALL ON TABLE public.fase_strutture TO service_role;
+
+
+--
+-- Name: TABLE fase_tipi_prodotto; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.fase_tipi_prodotto TO anon;
+GRANT ALL ON TABLE public.fase_tipi_prodotto TO authenticated;
+GRANT ALL ON TABLE public.fase_tipi_prodotto TO service_role;
+
+
+--
+-- Name: TABLE fasi; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.fasi TO anon;
+GRANT ALL ON TABLE public.fasi TO authenticated;
+GRANT ALL ON TABLE public.fasi TO service_role;
+
+
+--
+-- Name: TABLE fasi_extra_operatori; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.fasi_extra_operatori TO anon;
+GRANT ALL ON TABLE public.fasi_extra_operatori TO authenticated;
+GRANT ALL ON TABLE public.fasi_extra_operatori TO service_role;
+
+
+--
+-- Name: TABLE fasi_ordine_extra; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.fasi_ordine_extra TO anon;
+GRANT ALL ON TABLE public.fasi_ordine_extra TO authenticated;
+GRANT ALL ON TABLE public.fasi_ordine_extra TO service_role;
+
+
+--
+-- Name: COLUMN fasi_ordine_extra.catalogo_fase_extra_id; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT(catalogo_fase_extra_id),UPDATE(catalogo_fase_extra_id) ON TABLE public.fasi_ordine_extra TO authenticated;
+
+
+--
+-- Name: COLUMN fasi_ordine_extra.macchina_id; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT(macchina_id),UPDATE(macchina_id) ON TABLE public.fasi_ordine_extra TO authenticated;
+
+
+--
+-- Name: COLUMN fasi_ordine_extra.ore_stimate_manuali; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT(ore_stimate_manuali),UPDATE(ore_stimate_manuali) ON TABLE public.fasi_ordine_extra TO authenticated;
+
+
+--
+-- Name: TABLE kpi_config; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.kpi_config TO anon;
+GRANT ALL ON TABLE public.kpi_config TO authenticated;
+GRANT ALL ON TABLE public.kpi_config TO service_role;
+
+
+--
+-- Name: TABLE kpi_schede; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.kpi_schede TO anon;
+GRANT ALL ON TABLE public.kpi_schede TO authenticated;
+GRANT ALL ON TABLE public.kpi_schede TO service_role;
+
+
+--
+-- Name: TABLE macchine; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.macchine TO anon;
+GRANT ALL ON TABLE public.macchine TO authenticated;
+GRANT ALL ON TABLE public.macchine TO service_role;
+
+
+--
+-- Name: TABLE macro_fasi; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.macro_fasi TO anon;
+GRANT ALL ON TABLE public.macro_fasi TO authenticated;
+GRANT ALL ON TABLE public.macro_fasi TO service_role;
+
+
+--
+-- Name: SEQUENCE macro_fasi_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.macro_fasi_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.macro_fasi_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.macro_fasi_id_seq TO service_role;
+
+
+--
+-- Name: TABLE manutenzioni_macchina; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.manutenzioni_macchina TO anon;
+GRANT ALL ON TABLE public.manutenzioni_macchina TO authenticated;
+GRANT ALL ON TABLE public.manutenzioni_macchina TO service_role;
+
+
+--
+-- Name: TABLE notifiche; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.notifiche TO anon;
+GRANT ALL ON TABLE public.notifiche TO authenticated;
+GRANT ALL ON TABLE public.notifiche TO service_role;
+
+
+--
+-- Name: TABLE notifiche_destinatari_config; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.notifiche_destinatari_config TO anon;
+GRANT ALL ON TABLE public.notifiche_destinatari_config TO authenticated;
+GRANT ALL ON TABLE public.notifiche_destinatari_config TO service_role;
+
+
+--
+-- Name: TABLE ordine_fasi; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.ordine_fasi TO anon;
+GRANT ALL ON TABLE public.ordine_fasi TO authenticated;
+GRANT ALL ON TABLE public.ordine_fasi TO service_role;
+
+
+--
+-- Name: TABLE ordine_fasi_operatori; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.ordine_fasi_operatori TO anon;
+GRANT ALL ON TABLE public.ordine_fasi_operatori TO authenticated;
+GRANT ALL ON TABLE public.ordine_fasi_operatori TO service_role;
+
+
+--
+-- Name: TABLE ordini; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.ordini TO anon;
+GRANT ALL ON TABLE public.ordini TO authenticated;
+GRANT ALL ON TABLE public.ordini TO service_role;
+
+
+--
+-- Name: COLUMN ordini.archiviato_il; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL(archiviato_il) ON TABLE public.ordini TO postgres;
+GRANT REFERENCES(archiviato_il) ON TABLE public.ordini TO anon;
+GRANT ALL(archiviato_il) ON TABLE public.ordini TO authenticated;
+GRANT ALL(archiviato_il) ON TABLE public.ordini TO service_role;
+
+
+--
+-- Name: SEQUENCE ordini_codice_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.ordini_codice_seq TO anon;
+GRANT ALL ON SEQUENCE public.ordini_codice_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.ordini_codice_seq TO service_role;
+
+
+--
+-- Name: TABLE pin_tentativi; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.pin_tentativi TO service_role;
+
+
+--
+-- Name: TABLE priorita_ordine_config; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.priorita_ordine_config TO anon;
+GRANT ALL ON TABLE public.priorita_ordine_config TO authenticated;
+GRANT ALL ON TABLE public.priorita_ordine_config TO service_role;
+
+
+--
+-- Name: TABLE snapshot_backfill_fasi_eliminate_20260903; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.snapshot_backfill_fasi_eliminate_20260903 TO anon;
+GRANT ALL ON TABLE public.snapshot_backfill_fasi_eliminate_20260903 TO authenticated;
+GRANT ALL ON TABLE public.snapshot_backfill_fasi_eliminate_20260903 TO service_role;
+
+
+--
+-- Name: TABLE tipi_prodotto; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.tipi_prodotto TO anon;
+GRANT ALL ON TABLE public.tipi_prodotto TO authenticated;
+GRANT ALL ON TABLE public.tipi_prodotto TO service_role;
+
+
+--
+-- Name: TABLE users; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.users TO authenticated;
+GRANT ALL ON TABLE public.users TO service_role;
+
+
+--
+-- Name: COLUMN users.id; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT(id) ON TABLE public.users TO authenticated;
+
+
+--
+-- Name: COLUMN users.nome; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT(nome) ON TABLE public.users TO authenticated;
+
+
+--
+-- Name: COLUMN users.cognome; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT(cognome) ON TABLE public.users TO authenticated;
+
+
+--
+-- Name: COLUMN users.email; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT(email) ON TABLE public.users TO authenticated;
+
+
+--
+-- Name: COLUMN users.ruolo; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT(ruolo) ON TABLE public.users TO authenticated;
+
+
+--
+-- Name: COLUMN users.attivo; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT(attivo) ON TABLE public.users TO authenticated;
+
+
+--
+-- Name: COLUMN users.creato_il; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT(creato_il) ON TABLE public.users TO authenticated;
+
+
+--
+-- Name: COLUMN users.eliminato; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT(eliminato) ON TABLE public.users TO authenticated;
+
+
+--
+-- Name: COLUMN users.onesignal_id; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT(onesignal_id) ON TABLE public.users TO authenticated;
+
+
+--
+-- Name: COLUMN users.forzato_logout; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT(forzato_logout) ON TABLE public.users TO authenticated;
+
+
+--
+-- Name: COLUMN users.ore_default; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT SELECT(ore_default) ON TABLE public.users TO authenticated;
+
+
+--
+-- Name: DEFAULT PRIVILEGES FOR SEQUENCES; Type: DEFAULT ACL; Schema: public; Owner: postgres
+--
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON SEQUENCES TO postgres;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON SEQUENCES TO anon;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON SEQUENCES TO authenticated;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON SEQUENCES TO service_role;
+
+
+--
+-- Name: DEFAULT PRIVILEGES FOR SEQUENCES; Type: DEFAULT ACL; Schema: public; Owner: supabase_admin
+--
+
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON SEQUENCES TO postgres;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON SEQUENCES TO anon;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON SEQUENCES TO authenticated;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON SEQUENCES TO service_role;
+
+
+--
+-- Name: DEFAULT PRIVILEGES FOR FUNCTIONS; Type: DEFAULT ACL; Schema: public; Owner: postgres
+--
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON FUNCTIONS TO postgres;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON FUNCTIONS TO authenticated;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON FUNCTIONS TO service_role;
+
+
+--
+-- Name: DEFAULT PRIVILEGES FOR FUNCTIONS; Type: DEFAULT ACL; Schema: public; Owner: supabase_admin
+--
+
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON FUNCTIONS TO postgres;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON FUNCTIONS TO authenticated;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON FUNCTIONS TO service_role;
+
+
+--
+-- Name: DEFAULT PRIVILEGES FOR TABLES; Type: DEFAULT ACL; Schema: public; Owner: postgres
+--
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO postgres;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO anon;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO authenticated;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO service_role;
+
+
+--
+-- Name: DEFAULT PRIVILEGES FOR TABLES; Type: DEFAULT ACL; Schema: public; Owner: supabase_admin
+--
+
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON TABLES TO postgres;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON TABLES TO anon;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON TABLES TO authenticated;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON TABLES TO service_role;
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict WHCsSWfxCzOK7fiJ8AcML7V61uaSRGXbJYSMOtVAxiTVBm0g4gMJAm49HZPn59V
+
