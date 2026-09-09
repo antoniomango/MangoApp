@@ -11,7 +11,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict WHCsSWfxCzOK7fiJ8AcML7V61uaSRGXbJYSMOtVAxiTVBm0g4gMJAm49HZPn59V
+\restrict kAUWeXzMh8j5m7d3DpK7UDPfpr1SPb0tIgIOZJ8R6EsEQhsI698cnZ4facEo6fe
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -1766,6 +1766,46 @@ $$;
 
 
 ALTER FUNCTION public.elenco_foto_fase(p_user_id uuid, p_session_token uuid, p_ordine_fase_id uuid) OWNER TO postgres;
+
+--
+-- Name: elenco_foto_ordine_responsabile(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.elenco_foto_ordine_responsabile(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+DECLARE
+  v_allegati jsonb;
+BEGIN
+  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM users
+    WHERE id = p_responsabile_id AND ruolo = 'responsabile' AND attivo = true AND eliminato IS DISTINCT FROM true
+  ) THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM ordini WHERE id = p_ordine_id) THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'ordine_non_trovato');
+  END IF;
+
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+           'id', a.id, 'url_file', a.url_file, 'ordine_fase_id', a.ordine_fase_id, 'caricato_da', a.caricato_da
+         )), '[]'::jsonb)
+    INTO v_allegati
+    FROM allegati a
+    WHERE a.ordine_fase_id IN (SELECT id FROM ordine_fasi WHERE ordine_id = p_ordine_id);
+
+  RETURN jsonb_build_object('ok', true, 'allegati', v_allegati);
+END;
+$$;
+
+
+ALTER FUNCTION public.elenco_foto_ordine_responsabile(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid) OWNER TO postgres;
 
 --
 -- Name: elimina_allegati(uuid[], uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
@@ -7633,6 +7673,16 @@ GRANT ALL ON FUNCTION public.elenco_foto_fase(p_user_id uuid, p_session_token uu
 
 
 --
+-- Name: FUNCTION elenco_foto_ordine_responsabile(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.elenco_foto_ordine_responsabile(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.elenco_foto_ordine_responsabile(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.elenco_foto_ordine_responsabile(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.elenco_foto_ordine_responsabile(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION elimina_allegati(p_allegato_ids uuid[], p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -8782,5 +8832,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON T
 -- PostgreSQL database dump complete
 --
 
-\unrestrict WHCsSWfxCzOK7fiJ8AcML7V61uaSRGXbJYSMOtVAxiTVBm0g4gMJAm49HZPn59V
+\unrestrict kAUWeXzMh8j5m7d3DpK7UDPfpr1SPb0tIgIOZJ8R6EsEQhsI698cnZ4facEo6fe
 
