@@ -22,6 +22,27 @@ Questo file viene letto automaticamente da Claude Code all'inizio di ogni sessio
 - Dopo una sessione di test pesante, verifica gli advisor di sicurezza (RLS, policy) sul progetto di test e conferma che restino allineati alla produzione.
 - Se lo schema del progetto di test diverge da quello di produzione, segnalalo esplicitamente invece di procedere come se fossero identici.
 
+## `supabase_schema.sql` — rigenerarlo dopo ogni migration rilevante
+
+- Il file `supabase_schema.sql` nella radice del repository è un dump dello schema `public` di
+  **produzione** (`mtpzfxnyfkzikzlkomwz`) — tabelle, funzioni/RPC, RLS, policy, grant. Non
+  contiene dati, né gli schemi `auth`/`storage`/`cron` (gestiti da Supabase).
+- **Va rigenerato dopo ogni migration rilevante** (nuova RPC, nuova tabella, cambio di policy o
+  di grant) — non farlo lo rende silenziosamente disallineato dal database vero. Il disallineamento accumulato dal 2026-06-19 (mai più aggiornato dopo il commit iniziale) è quello che ha
+  confuso un report di sicurezza automatico basato su quel file invece che sul DB reale
+  (2026-09-09) — vedi vault.
+- **Come rigenerarlo**: se disponibile, `supabase db dump --db-url <connessione diretta> -f
+  supabase_schema.sql --schema public` (richiede Docker o un `pg_dump` locale compatibile — la
+  CLI lo usa sotto per garantire un dump fedele). In assenza di entrambi (come nell'ambiente di
+  questa sessione), rigenerarlo via introspezione diretta del catalogo Postgres (`pg_get_functiondef`,
+  `pg_get_constraintdef`, `pg_get_triggerdef`, `pg_policies`, `information_schema`) — meno
+  standard di un vero `pg_dump` ma ugualmente fedele al DB live; ordine da rispettare per la
+  validità del file rigenerato da zero: estensioni → tipi enum → sequenze → tabelle (senza FK) →
+  foreign key separate → indici → funzioni → trigger → RLS/policy → grant.
+- Non fidarsi di un report di sicurezza (interno o esterno) che cita questo file senza aver
+  prima verificato che sia aggiornato — in caso di dubbio, verificare sempre contro il database
+  vero via MCP/CLI, mai fidarsi ciecamente del file.
+
 ## Convenzioni tecniche del frontend
 
 - Nessun framework: tre file HTML autonomi (`responsabile.html`, `operatore.html`, `ufficio.html`), Supabase JS v2 via CDN, DOM manipolato direttamente, variabili globali come cache.
