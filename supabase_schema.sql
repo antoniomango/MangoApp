@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict rlb839zj5imPbw1s7AFhUCVuxSGqXsm7IOfcqd8F1IiFXqcOqwWpeSoGGBZri6x
+\restrict V3WeNtX26YIPiSx5UZ9lLS3cekrhX6vDTK1DmyWaTlGXnExrn9etvcvcEOC2j5c
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -4733,13 +4733,19 @@ $$;
 ALTER FUNCTION public.segna_spedizione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
 
 --
--- Name: statistiche_lavoro_ordini(uuid[]); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: statistiche_lavoro_ordini(uuid[], uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[]) RETURNS TABLE(ordine_id uuid, minuti_lavoro numeric, minuti_attesa_esterna numeric, n_operatori bigint)
-    LANGUAGE sql SECURITY DEFINER
+CREATE FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[], p_operatore_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS TABLE(ordine_id uuid, minuti_lavoro numeric, minuti_attesa_esterna numeric, n_operatori bigint)
+    LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
+BEGIN
+  IF NOT (e_responsabile() OR COALESCE(valida_sessione(p_operatore_id, p_session_token), false)) THEN
+    RAISE EXCEPTION 'sessione_non_valida' USING ERRCODE = '42501';
+  END IF;
+
+  RETURN QUERY
   WITH fasi_std AS (
     SELECT
       of2.ordine_id,
@@ -4763,15 +4769,15 @@ CREATE FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[]) RETURNS TA
   ),
   tempo AS (
     SELECT
-      ordine_id,
-      SUM(CASE WHEN NOT is_attesa_esterna THEN minuti ELSE 0 END) AS minuti_lavoro,
-      SUM(CASE WHEN     is_attesa_esterna THEN minuti ELSE 0 END) AS minuti_attesa_esterna
+      all_fasi.ordine_id,
+      SUM(CASE WHEN NOT all_fasi.is_attesa_esterna THEN all_fasi.minuti ELSE 0 END) AS minuti_lavoro,
+      SUM(CASE WHEN     all_fasi.is_attesa_esterna THEN all_fasi.minuti ELSE 0 END) AS minuti_attesa_esterna
     FROM (
-      SELECT ordine_id, minuti, is_attesa_esterna FROM fasi_std
+      SELECT fasi_std.ordine_id, fasi_std.minuti, fasi_std.is_attesa_esterna FROM fasi_std
       UNION ALL
-      SELECT ordine_id, minuti, is_attesa_esterna FROM fasi_extra
+      SELECT fasi_extra.ordine_id, fasi_extra.minuti, fasi_extra.is_attesa_esterna FROM fasi_extra
     ) all_fasi
-    GROUP BY ordine_id
+    GROUP BY all_fasi.ordine_id
   ),
   op_std AS (
     SELECT of2.ordine_id, of2.operatore_id AS op_id
@@ -4808,18 +4814,19 @@ CREATE FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[]) RETURNS TA
       AND NOT COALESCE(foe.e_attesa_esterna, false)
   ),
   tutti_op AS (
-    SELECT ordine_id, op_id FROM op_std
+    SELECT op_std.ordine_id, op_std.op_id FROM op_std
     UNION
-    SELECT ordine_id, op_id FROM op_std_jn
+    SELECT op_std_jn.ordine_id, op_std_jn.op_id FROM op_std_jn
     UNION
-    SELECT ordine_id, op_id FROM op_extra
+    SELECT op_extra.ordine_id, op_extra.op_id FROM op_extra
     UNION
-    SELECT ordine_id, op_id FROM op_extra_jn
+    SELECT op_extra_jn.ordine_id, op_extra_jn.op_id FROM op_extra_jn
   ),
   op_count AS (
-    SELECT ordine_id, COUNT(DISTINCT op_id) AS n_operatori
-    FROM tutti_op WHERE op_id IS NOT NULL
-    GROUP BY ordine_id
+    SELECT tutti_op.ordine_id, COUNT(DISTINCT tutti_op.op_id) AS n_operatori
+    FROM tutti_op
+    WHERE tutti_op.op_id IS NOT NULL
+    GROUP BY tutti_op.ordine_id
   )
   SELECT
     o.id                                  AS ordine_id,
@@ -4829,10 +4836,11 @@ CREATE FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[]) RETURNS TA
   FROM unnest(p_ordine_ids) AS o(id)
   LEFT JOIN tempo    t  ON t.ordine_id  = o.id
   LEFT JOIN op_count oc ON oc.ordine_id = o.id;
+END;
 $$;
 
 
-ALTER FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[]) OWNER TO postgres;
+ALTER FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[], p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
 
 --
 -- Name: storico_fasi_completate(uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
@@ -8270,12 +8278,12 @@ GRANT ALL ON FUNCTION public.segna_spedizione_fase(p_ordine_fase_id uuid, p_oper
 
 
 --
--- Name: FUNCTION statistiche_lavoro_ordini(p_ordine_ids uuid[]); Type: ACL; Schema: public; Owner: postgres
+-- Name: FUNCTION statistiche_lavoro_ordini(p_ordine_ids uuid[], p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[]) TO anon;
-GRANT ALL ON FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[]) TO authenticated;
-GRANT ALL ON FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[]) TO service_role;
+GRANT ALL ON FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[], p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[], p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[], p_operatore_id uuid, p_session_token uuid) TO service_role;
 
 
 --
@@ -8859,5 +8867,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON T
 -- PostgreSQL database dump complete
 --
 
-\unrestrict rlb839zj5imPbw1s7AFhUCVuxSGqXsm7IOfcqd8F1IiFXqcOqwWpeSoGGBZri6x
+\unrestrict V3WeNtX26YIPiSx5UZ9lLS3cekrhX6vDTK1DmyWaTlGXnExrn9etvcvcEOC2j5c
 

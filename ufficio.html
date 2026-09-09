@@ -622,7 +622,7 @@ async function apriDettaglioStorico(ordineId) {
 
   const [{ data: detResp }, { data: statsArr }] = await Promise.all([
     sb.rpc('dettaglio_ordine_fasi', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_id: ordineId }),
-    sb.rpc('statistiche_lavoro_ordini', { p_ordine_ids: [ordineId] }),
+    sb.rpc('statistiche_lavoro_ordini', { p_ordine_ids: [ordineId], p_operatore_id: currentUser.id, p_session_token: sessionToken }),
   ]);
   const ordFasi = detResp?.ok ? detResp.dati.ordine_fasi : [];
   const fasiExtra = (detResp?.ok && o.tipo === 'extra') ? detResp.dati.fasi_extra : [];
