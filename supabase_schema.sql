@@ -10,7 +10,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict k1QdIfcQheB1jeCpvB52caa0xnN3rhuO7Wk6yzhFlZxcHabiaqyoTZ0dalgGTnM
+\restrict g4xOlePpGYSmXccHLly4gouRTtZwafn4br36AkxvLNd1BEcVXzMN2ZzVi2fJ6cP
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -1142,7 +1142,9 @@ CREATE FUNCTION public.conferma_ricezione_extra(p_fase_extra_id uuid, p_operator
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-DECLARE v_fase fasi_ordine_extra%ROWTYPE; v_durata numeric;
+DECLARE
+  v_fase   fasi_ordine_extra%ROWTYPE;
+  v_durata numeric;
 BEGIN
   IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -1152,17 +1154,28 @@ BEGIN
   END IF;
   SELECT * INTO v_fase FROM fasi_ordine_extra WHERE id = p_fase_extra_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
-  IF v_fase.tipo_gestione <> 'spedizione_esterna' THEN RETURN jsonb_build_object('ok', false, 'errore', 'tipo_gestione_non_valido'); END IF;
-  IF v_fase.stato <> 'in_attesa' THEN RETURN jsonb_build_object('ok', false, 'errore', 'stato_non_in_attesa', 'stato', v_fase.stato); END IF;
-  IF v_fase.spedita_il IS NULL THEN RETURN jsonb_build_object('ok', false, 'errore', 'non_ancora_spedita'); END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id=p_operatore_id AND ruolo='responsabile') THEN
-    IF v_fase.operatore_id IS NOT NULL AND v_fase.operatore_id IS DISTINCT FROM p_operatore_id
-       AND NOT EXISTS (SELECT 1 FROM fasi_extra_operatori WHERE fasi_ordine_extra_id=p_fase_extra_id AND operatore_id=p_operatore_id) THEN
+  IF v_fase.tipo_gestione <> 'spedizione_esterna' THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'tipo_gestione_non_valido');
+  END IF;
+  IF v_fase.stato <> 'in_attesa' THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'stato_non_in_attesa', 'stato', v_fase.stato);
+  END IF;
+  IF v_fase.spedita_il IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'non_ancora_spedita');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_operatore_id AND ruolo = 'responsabile') THEN
+    IF v_fase.operatore_id IS NOT NULL
+       AND v_fase.operatore_id IS DISTINCT FROM p_operatore_id
+       AND NOT EXISTS (SELECT 1 FROM fasi_extra_operatori WHERE fasi_ordine_extra_id = p_fase_extra_id AND operatore_id = p_operatore_id) THEN
       RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
     END IF;
   END IF;
-  v_durata := EXTRACT(EPOCH FROM (NOW() - v_fase.spedita_il)) / 60;
-  UPDATE fasi_ordine_extra SET stato='completata', completata_il=NOW(), tempo_accumulato_minuti=v_durata, n_ordini_batch=1 WHERE id=p_fase_extra_id;
+  v_durata := GREATEST(0, EXTRACT(EPOCH FROM (NOW() - v_fase.spedita_il)) / 60);
+  UPDATE fasi_ordine_extra
+  SET stato = 'completata', completata_il = NOW(),
+      tempo_accumulato_minuti = COALESCE(tempo_accumulato_minuti, 0) + v_durata,
+      n_ordini_batch = 1
+  WHERE id = p_fase_extra_id;
   RETURN jsonb_build_object('ok', true, 'durata_min', v_durata);
 END;
 $$;
@@ -8833,5 +8846,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON T
 -- PostgreSQL database dump complete
 --
 
-\unrestrict k1QdIfcQheB1jeCpvB52caa0xnN3rhuO7Wk6yzhFlZxcHabiaqyoTZ0dalgGTnM
+\unrestrict g4xOlePpGYSmXccHLly4gouRTtZwafn4br36AkxvLNd1BEcVXzMN2ZzVi2fJ6cP
 
