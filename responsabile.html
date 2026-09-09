@@ -10,9 +10,13 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Mango — Responsabile</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<!-- CSP via meta: frame-ancestors/report-uri/sandbox non hanno effetto qui (richiedono
+     l'header HTTP reale, che GitHub Pages non permette di impostare) -- vedi vault per la
+     verifica completa (stessa limitazione strutturale documentata per HSTS). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.onesignal.com https://*.onesignal.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co; connect-src 'self' https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co wss://kpdlynvmsoctagwtzrxr.supabase.co wss://mtpzfxnyfkzikzlkomwz.supabase.co https://onesignal.com https://*.onesignal.com; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js" integrity="sha384-JBR+x8blGwjDRO63aHCGiZMD4VNiTR4ZUGA+N6ZKLf3zNt1fK8IBpcgPaMrxqWBp" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap');
 
@@ -2237,7 +2241,7 @@ function renderCatalogoFasiExtraSection() {
         <div style="display:flex;gap:6px;flex-shrink:0">
           <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="apriDettaglioCFE('${c.id}')">Configura</button>
           <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="apriFormCatalogoFaseExtra('${c.id}')">Modifica</button>
-          <button class="btn btn-alert" style="padding:5px 10px;font-size:12px" onclick="eliminaCatalogoFaseExtra('${c.id}','${escapeHtml(c.nome)}')">✕</button>
+          <button class="btn btn-alert" style="padding:5px 10px;font-size:12px" onclick="eliminaCatalogoFaseExtra('${c.id}','${escapeJsAttr(c.nome)}')">✕</button>
         </div>
       </div>`;
     }).join('')}
@@ -3195,7 +3199,7 @@ async function renderDettaglioOrdine(id) {
       .order('numero');
     (fasiExt || []).forEach(f => mappaNomiFasi.set(f.id, f.nome));
     fasiEl.innerHTML = (fasiExt || []).map(f => {
-      const opNome = f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '';
+      const opNome = f['users'] ? `${escapeHtml(f['users'].nome)} ${escapeHtml(f['users'].cognome)}` : '';
       return `<div class="fase-card ${f.stato}" onclick="openFaseExtraDetail('${f.id}', '${id}', ${readonly})">
         <div class="fase-num">${f.numero}. ${f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '▶' : '○'}</div>
         <div class="fase-nome">${escapeHtml(f.nome)}</div>
@@ -3214,9 +3218,10 @@ async function renderDettaglioOrdine(id) {
     });
     fasiEl.innerHTML = (ordFasi || []).map(f => {
       const isCustom = !f.fase_id;
-      const nomeFase = isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id);
-      mappaNomiFasi.set(f.id, nomeFase);
-      const opNome = f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '';
+      const nomeFaseRaw = isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id);
+      mappaNomiFasi.set(f.id, nomeFaseRaw);
+      const nomeFase = escapeHtml(nomeFaseRaw);
+      const opNome = f['users'] ? `${escapeHtml(f['users'].nome)} ${escapeHtml(f['users'].cognome)}` : '';
       const isNA = f.stato === 'non_applicabile';
       const cnc = !isCustom && isCNC(f.fase_id);
       const est = !isCustom && isEsterna(f.fase_id);
@@ -3250,8 +3255,8 @@ async function renderDettaglioOrdine(id) {
     logEl.innerHTML = '<li style="color:var(--muted);font-size:13px;padding:12px 0">Nessuna attività registrata</li>';
   } else {
     logEl.innerHTML = log.map(l => {
-      const u = l['users'] ? `${l['users'].nome} ${l['users'].cognome}` : 'Sistema';
-      const fase = l['fasi'] ? l['fasi'].nome : '';
+      const u = l['users'] ? `${escapeHtml(l['users'].nome)} ${escapeHtml(l['users'].cognome)}` : 'Sistema';
+      const fase = l['fasi'] ? escapeHtml(l['fasi'].nome) : '';
       return `<li class="log-item">
         <div class="log-icon">${logIcon(l.azione)}</div>
         <div class="log-content">
@@ -3342,7 +3347,7 @@ async function openFaseDetail(ordFaseId, ordineId, readonly) {
   const opList = (opMulti || []);
   const opNomiHtml = opList.length
     ? opList.map(o => `<span style="display:inline-block;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:12px;margin:2px">${escapeHtml(o.users?.nome || '')} ${escapeHtml(o.users?.cognome || '')}</span>`).join('')
-    : (f['users'] ? `<span>${f['users'].nome} ${f['users'].cognome}</span>` : '<span style="color:var(--muted)">—</span>');
+    : (f['users'] ? `<span>${escapeHtml(f['users'].nome)} ${escapeHtml(f['users'].cognome)}</span>` : '<span style="color:var(--muted)">—</span>');
 
   document.getElementById('modal-fase-body').innerHTML = `
     <div class="fase-detail">
@@ -3361,7 +3366,7 @@ async function openFaseDetail(ordFaseId, ordineId, readonly) {
       ${!readonly ? `
       <div class="form-group" style="margin-top:16px">
         <label>Note Responsabile (modifica)</label>
-        <textarea id="note-resp-edit" rows="3" style="resize:vertical">${f.note_responsabile || ''}</textarea>
+        <textarea id="note-resp-edit" rows="3" style="resize:vertical">${escapeHtml(f.note_responsabile || '')}</textarea>
       </div>` : ''}
     </div>
   `;
@@ -3378,7 +3383,7 @@ async function openFaseDetail(ordFaseId, ordineId, readonly) {
     const puoRimuovere = isCustom && f.stato !== 'completata';
     footerEl.innerHTML = `
       <button class="btn btn-secondary" onclick="closeModal('modal-fase')">Annulla</button>
-      ${puoRimuovere ? `<button class="btn btn-alert" onclick="eliminaFaseCustomOrdine('${ordFaseId}','${ordineId}','${nomeFase.replace(/'/g,"\\'")}')">🗑 Rimuovi fase</button>` : ''}
+      ${puoRimuovere ? `<button class="btn btn-alert" onclick="eliminaFaseCustomOrdine('${ordFaseId}','${ordineId}','${escapeJsAttr(nomeFase)}')">🗑 Rimuovi fase</button>` : ''}
       ${f.stato === 'in_corso' ? `<button class="btn btn-secondary" onclick="openRiassegnaModal('${ordFaseId}')">Riassegna</button>` : ''}
       ${puoCompletare ? `<button class="btn btn-ok" onclick="apriCompletaFase('${ordFaseId}','${ordineId}')">✓ Segna completata</button>` : ''}
       ${puoRiaprire   ? `<button class="btn btn-secondary" onclick="riaprieFaseResp('${ordFaseId}','${ordineId}')">↩ Riapri fase</button>` : ''}
@@ -3571,7 +3576,7 @@ async function addFaseExtra() {
   if (count >= 20) { toast('Massimo 20 fasi', 'err'); return; }
   extraFaseCounter++;
   const optsHtml = catalogoFasiExtra.filter(c => c.attiva)
-    .map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+    .map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
   const row = document.createElement('div');
   row.className = 'extra-fase-row';
   row.style.cssText = 'display:flex;flex-direction:column;gap:4px';
@@ -3820,7 +3825,7 @@ function openRiassegnaModal(ordFaseId) {
   const sel = document.getElementById('riassegna-op-select');
   sel.innerHTML = operatoriCache
     .filter(o => o.ruolo === 'operatore' && o.attivo)
-    .map(o => `<option value="${o.id}">${o.nome} ${o.cognome}</option>`)
+    .map(o => `<option value="${o.id}">${escapeHtml(o.nome)} ${escapeHtml(o.cognome)}</option>`)
     .join('');
   closeModal('modal-fase');
   document.getElementById('modal-riassegna').classList.add('open');
@@ -3864,8 +3869,8 @@ function renderOperatori() {
           ? `<button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="toggleOperatore('${op.id}', false)">Disattiva</button>`
           : `<button class="btn btn-ok" style="padding:5px 10px;font-size:12px" onclick="toggleOperatore('${op.id}', true)">Attiva</button>`
         }
-        <button class="btn" style="padding:5px 10px;font-size:12px;background:#F59E0B;color:#fff" onclick="forzaLogout('${op.id}', '${escapeHtml(op.nome)}')">⏏ Esci</button>
-        <button class="btn" style="padding:5px 10px;font-size:12px;background:var(--alert);color:#fff" onclick="eliminaOperatore('${op.id}', '${escapeHtml(op.nome)} ${escapeHtml(op.cognome)}')">🗑</button>
+        <button class="btn" style="padding:5px 10px;font-size:12px;background:#F59E0B;color:#fff" onclick="forzaLogout('${op.id}', '${escapeJsAttr(op.nome)}')">⏏ Esci</button>
+        <button class="btn" style="padding:5px 10px;font-size:12px;background:var(--alert);color:#fff" onclick="eliminaOperatore('${op.id}', '${escapeJsAttr(op.nome + ' ' + op.cognome)}')">🗑</button>
       </div>
     </div>
   `).join('');
@@ -4549,7 +4554,7 @@ async function loadChiusureAziendali() {
     const desc = c.descrizione ? ` · ${escapeHtml(c.descrizione)}` : '';
     return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;margin-bottom:6px;font-size:12px">
       <span style="flex:1;font-weight:600">${range}</span><span style="color:var(--muted)">${desc}</span>
-      <button style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--ink);font-size:11px;padding:1px 7px" onclick="avviaModificaChiusura('${c.id}','${c.data_inizio}','${c.data_fine}',${JSON.stringify(c.descrizione || '')})" title="Modifica">Modifica</button>
+      <button style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--ink);font-size:11px;padding:1px 7px" onclick="avviaModificaChiusura('${c.id}','${c.data_inizio}','${c.data_fine}','${escapeJsAttr(c.descrizione || '')}')" title="Modifica">Modifica</button>
       <button style="background:none;border:none;cursor:pointer;color:var(--alert);font-size:13px;padding:0 4px" onclick="eliminaChiusura('${c.id}')" title="Elimina">✕</button>
     </div>`;
   }).join('');
@@ -4637,7 +4642,7 @@ function renderMacroConfig() {
         <div style="display:flex;gap:6px">
           ${idx > 0 ? `<button class="btn btn-secondary" style="padding:5px 10px" onclick="spostaM(${m.id},-1)">▲</button>` : ''}
           ${idx < macroFasiCache.length-1 ? `<button class="btn btn-secondary" style="padding:5px 10px" onclick="spostaM(${m.id},1)">▼</button>` : ''}
-          <button class="btn" style="padding:5px 10px;background:var(--alert);color:#fff" onclick="eliminaMacro(${m.id},'${escapeHtml(m.nome)}')">🗑</button>
+          <button class="btn" style="padding:5px 10px;background:var(--alert);color:#fff" onclick="eliminaMacro(${m.id},'${escapeJsAttr(m.nome)}')">🗑</button>
         </div>
       </div>
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Fasi incluse in questo gruppo</div>
@@ -4768,11 +4773,11 @@ function renderUfficio(ordini, ordFasi) {
       return `
         <div class="ufficio-macro-row">
           <div class="ufficio-macro-label">
-            <span style="color:${m.colore}">${escapeHtml(m.nome)}</span>
+            <span style="color:${escapeHtml(m.colore)}">${escapeHtml(m.nome)}</span>
             <span style="color:var(--muted)">${mComp}/${mTot} — ${pct}%</span>
           </div>
           <div class="ufficio-macro-track">
-            <div class="ufficio-macro-fill" style="width:${pct}%;background:${m.colore}"></div>
+            <div class="ufficio-macro-fill" style="width:${pct}%;background:${escapeHtml(m.colore)}"></div>
           </div>
         </div>`;
     }).join('');
@@ -4849,7 +4854,7 @@ function renderArchivioTable() {
     const ultimaCol = isArchiviati
       ? `<td style="color:var(--muted);font-size:12px">${o.archiviato_il ? formatDate(o.archiviato_il) : '—'}</td>`
       : `<td onclick="event.stopPropagation()">
-           <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="scaricaEliminaFoto('${o.id}','${escapeHtml(o.codice||o.id)}','${escapeHtml(o.cliente)}')">📦 Esporta & rimuovi foto</button>
+           <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="scaricaEliminaFoto('${o.id}','${escapeJsAttr(o.codice||o.id)}','${escapeJsAttr(o.cliente)}')">📦 Esporta & rimuovi foto</button>
          </td>`;
     return `
     <tr class="clickable" onclick="openDettaglioOrdine('${o.id}')">
@@ -5510,8 +5515,8 @@ async function renderNotifiche() {
     <div class="notif-item ${n.letta ? '' : 'unread'}">
       <div class="notif-dot ${n.letta ? 'read' : ''}"></div>
       <div class="notif-text">
-        ${n.testo}
-        ${n.ordini ? `<span style="font-size:11px;color:var(--muted);margin-left:6px">(${n.ordini.codice})</span>` : ''}
+        ${escapeHtml(n.testo)}
+        ${n.ordini ? `<span style="font-size:11px;color:var(--muted);margin-left:6px">(${escapeHtml(n.ordini.codice)})</span>` : ''}
         <div class="notif-time">${formatDateTime(n.creata_il)}</div>
       </div>
     </div>
@@ -5559,7 +5564,7 @@ async function openFaseExtraDetail(faseExtraId, ordineId, readonly) {
   const ordine = [...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === ordineId);
 
   document.getElementById('modal-fase-title').textContent = `${f.numero}. ${f.nome}`;
-  const opNome = f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '';
+  const opNome = f['users'] ? `${escapeHtml(f['users'].nome)} ${escapeHtml(f['users'].cognome)}` : '';
 
   let body = `<span class="badge badge-${f.stato}" style="margin-bottom:12px;display:inline-flex">${f.stato}</span>`;
   if (opNome) body += `<div class="detail-field" style="margin-bottom:8px"><label>Operatore</label><span>${opNome}</span></div>`;
@@ -5865,7 +5870,7 @@ function aggiungiNuovaFase() {
   const sel = document.getElementById('nf-posizione');
   if (sel) {
     sel.innerHTML = '<option value="0">— In cima alla lista</option>' +
-      fasi.map((f, i) => `<option value="${i + 1}">${i + 1}. ${f.nome}</option>`).join('');
+      fasi.map((f, i) => `<option value="${i + 1}">${i + 1}. ${escapeHtml(f.nome)}</option>`).join('');
   }
   // Reset campi
   ['nf-nome','nf-desc'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
@@ -6099,7 +6104,7 @@ function renderAttributoConfig(chiave) {
     <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
       <span style="font-size:13px;font-weight:600;flex:1">${escapeHtml(o.etichetta)}</span>
       <span style="font-size:11px;color:var(--muted);font-family:monospace">${escapeHtml(o.valore)}</span>
-      <button class="btn btn-danger" style="padding:4px 10px;font-size:12px" onclick="rimuoviOpzioneAttributo('${chiave}','${escapeHtml(o.valore)}')">✕</button>
+      <button class="btn btn-danger" style="padding:4px 10px;font-size:12px" onclick="rimuoviOpzioneAttributo('${chiave}','${escapeJsAttr(o.valore)}')">✕</button>
     </div>
   `).join('') : '<p style="color:var(--muted);padding:12px 0">Nessuna opzione.</p>') + `
     <div style="display:flex;gap:8px;margin-top:14px;align-items:flex-end">
@@ -6383,6 +6388,17 @@ function closeModal(id) {
 
 function escapeHtml(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+// Per valori di testo libero (nomi operatori, nomi fase/macchina/scheda) usati come argomento
+// dentro onclick="fn('${...}')": escapeHtml da solo non basta -- un apice singolo nel dato
+// termina prematuramente la stringa JS letterale nell'attributo, un vettore di injection
+// reale. La decodifica HTML degli attributi avviene PRIMA che il motore JS interpreti il
+// codice dell'handler, quindi un entity HTML (&#39;) non protegge: l'apice va neutralizzato a
+// livello di stringa JS (\'), non a livello di entity HTML. Sostituisce i due fix isolati e
+// incompleti (.replace(/'/g,"\\'") senza escapeHtml) già presenti nel file prima di questo
+// giro di sicurezza (2026-09-09).
+function escapeJsAttr(str) {
+  return escapeHtml(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 // ═══════════════════════════════════════════════
@@ -7235,7 +7251,7 @@ async function renderSchedeKpi() {
           <div style="font-size:11px;color:var(--muted);margin-top:2px">${escapeHtml(criteriHtml(s.criteri))}</div>
         </div>
         <button class="btn btn-secondary" style="padding:3px 10px;font-size:11px;color:var(--alert)"
-          onclick="eliminaSchedaKpi('${s.id}','${escapeHtml(s.nome)}')">Elimina</button>
+          onclick="eliminaSchedaKpi('${s.id}','${escapeJsAttr(s.nome)}')">Elimina</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div style="background:var(--bg);border-radius:6px;padding:10px">
@@ -7374,7 +7390,7 @@ async function caricaFasiExtraModal(ordineId) {
     const canDelete = f.stato !== 'completata';
     const delBtn = canDelete
       ? `<button class="btn btn-alert" style="padding:2px 8px;font-size:11px;margin-left:auto;flex-shrink:0"
-           onclick="eliminaFaseExtra('${f.id}','${escapeHtml(f.nome)}','${ordineId}')">✕ Elimina</button>`
+           onclick="eliminaFaseExtra('${f.id}','${escapeJsAttr(f.nome)}','${ordineId}')">✕ Elimina</button>`
       : `<span style="font-size:11px;color:var(--muted);margin-left:auto;flex-shrink:0">completata</span>`;
     return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
       <span style="background:${badge};padding:2px 8px;border-radius:10px;font-size:11px;white-space:nowrap">${f.stato}</span>
@@ -7611,7 +7627,7 @@ function renderMacchine() {
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-primary" style="font-size:12px" onclick="salvaMacchina('${m.id}')">💾 Salva</button>
-          <button class="btn btn-secondary" style="font-size:12px;color:var(--alert)" onclick="eliminaMacchina('${m.id}', '${escapeHtml(m.nome).replace(/'/g,"\\'")}')">✕ Elimina</button>
+          <button class="btn btn-secondary" style="font-size:12px;color:var(--alert)" onclick="eliminaMacchina('${m.id}', '${escapeJsAttr(m.nome)}')">✕ Elimina</button>
         </div>
       </div>
 

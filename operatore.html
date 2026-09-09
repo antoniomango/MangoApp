@@ -10,7 +10,10 @@
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Mango — Operatore</title>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- CSP via meta: frame-ancestors/report-uri/sandbox non hanno effetto qui (richiedono
+     l'header HTTP reale, che GitHub Pages non permette di impostare) -- vedi vault. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.onesignal.com https://*.onesignal.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co; connect-src 'self' https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co wss://kpdlynvmsoctagwtzrxr.supabase.co wss://mtpzfxnyfkzikzlkomwz.supabase.co https://onesignal.com https://*.onesignal.com; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js" integrity="sha384-JBR+x8blGwjDRO63aHCGiZMD4VNiTR4ZUGA+N6ZKLf3zNt1fK8IBpcgPaMrxqWBp" crossorigin="anonymous"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap');
 
@@ -461,6 +464,22 @@ let chiusureAziendaliCache = [];
 // ═══════════════════════════════════════════════
 // INDEXEDDB — OFFLINE QUEUE
 // ═══════════════════════════════════════════════
+// TTL — scoperto durante il giro di sicurezza del 2026-09-09: il campo `ts` veniva scritto su
+// ogni voce di `cache`/`queue` ma non era mai letto da nessuna parte, quindi nessuna scadenza
+// reale esisteva. Due soglie diverse per due scopi diversi:
+// - CACHE_TTL_MS: dati di sola lettura (roster operatori, fasi di un ordine) — sempre
+//   ririscaricati dal server appena si torna online, la cache serve solo da ripiego per una
+//   interruzione di connessione temporanea. 24h è già abbondante e limita quanto a lungo
+//   l'elenco nomi/ruoli degli operatori resta leggibile su un tablet condiviso.
+// - QUEUE_STALE_MS: azioni offline non ancora confermate (lavoro reale dell'operatore) — mai
+//   scartate solo per l'età, solo se hanno ANCHE fallito almeno una sincronizzazione reale
+//   (fase non più disponibile, completata da altri, ecc. — lo stesso genere di guardia server-
+//   side già verificata in prendi_in_carico_fase/completa_fase). Senza questo, una voce che
+//   fallisce sempre allo stesso modo (es. fase già presa in carico da un collega mentre si era
+//   offline) restava in coda per sempre, ritentata ad ogni sync, senza che l'operatore lo sapesse.
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const QUEUE_STALE_MS = 7 * 24 * 60 * 60 * 1000;
+
 let db = null;
 
 async function initDB() {
@@ -479,7 +498,7 @@ async function initDB() {
 async function queueAction(action) {
   return new Promise((resolve, reject) => {
     const tx = db.transaction('queue', 'readwrite');
-    tx.objectStore('queue').add({ ...action, ts: Date.now() });
+    tx.objectStore('queue').add({ ...action, ts: Date.now(), tentativiFalliti: 0 });
     tx.oncomplete = resolve;
     tx.onerror = reject;
   });
@@ -501,6 +520,16 @@ async function deleteQueued(id) {
   });
 }
 
+// Incrementa il contatore di fallimenti di una voce in coda, mantenendo intatto il resto
+// (azione, ts originale) — usato da syncQueue per riconoscere le voci ormai stantie.
+async function segnaFallimentoQueued(item) {
+  return new Promise((resolve) => {
+    const tx = db.transaction('queue', 'readwrite');
+    tx.objectStore('queue').put({ ...item, tentativiFalliti: (item.tentativiFalliti || 0) + 1, ultimoTentativo: Date.now() });
+    tx.oncomplete = resolve;
+  });
+}
+
 async function cacheSet(key, value) {
   return new Promise((resolve) => {
     const tx = db.transaction('cache', 'readwrite');
@@ -513,8 +542,58 @@ async function cacheGet(key) {
   return new Promise((resolve) => {
     const tx = db.transaction('cache', 'readonly');
     const req = tx.objectStore('cache').get(key);
-    req.onsuccess = () => resolve(req.result?.value);
+    req.onsuccess = () => {
+      const row = req.result;
+      if (!row) { resolve(undefined); return; }
+      if (Date.now() - (row.ts || 0) > CACHE_TTL_MS) {
+        // Scaduta: la tratta come assente per il chiamante e la ripulisce in background,
+        // invece di continuare a restituire dati potenzialmente stale (o PII di operatori
+        // ormai disattivati) indefinitamente su un tablet condiviso.
+        const delTx = db.transaction('cache', 'readwrite');
+        delTx.objectStore('cache').delete(key);
+        resolve(undefined);
+        return;
+      }
+      resolve(row.value);
+    };
   });
+}
+
+// Rimuove le voci di cache scadute e le azioni in coda ormai stantie (fallite ripetutamente
+// da più di QUEUE_STALE_MS) — eseguita una volta all'avvio, non ad ogni singola lettura.
+async function pulisciDatiOfflineScaduti() {
+  const now = Date.now();
+  await new Promise((resolve) => {
+    const tx = db.transaction('cache', 'readwrite');
+    const store = tx.objectStore('cache');
+    const req = store.openCursor();
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (!cursor) { resolve(); return; }
+      if (now - (cursor.value.ts || 0) > CACHE_TTL_MS) cursor.delete();
+      cursor.continue();
+    };
+    req.onerror = resolve;
+  });
+  const scartate = [];
+  await new Promise((resolve) => {
+    const tx = db.transaction('queue', 'readwrite');
+    const store = tx.objectStore('queue');
+    const req = store.openCursor();
+    req.onsuccess = (e) => {
+      const cursor = e.target.result;
+      if (!cursor) { resolve(); return; }
+      const item = cursor.value;
+      const eStantia = (now - (item.ts || 0) > QUEUE_STALE_MS) && (item.tentativiFalliti || 0) > 0;
+      if (eStantia) { scartate.push(item); cursor.delete(); }
+      cursor.continue();
+    };
+    req.onerror = resolve;
+  });
+  if (scartate.length) {
+    console.warn('Azioni offline scartate perché stantie (fallite ripetutamente da oltre 7 giorni):', scartate);
+    toast(`${scartate.length} azione(i) offline non sincronizzabili da oltre una settimana sono state scartate — verifica lo stato con il responsabile`, 'err');
+  }
 }
 
 // ═══════════════════════════════════════════════
@@ -555,7 +634,8 @@ async function syncQueue() {
         ok = data?.ok;
       }
       if (ok) await deleteQueued(item.id);
-    } catch (e) { console.warn('sync error', e); }
+      else await segnaFallimentoQueued(item);
+    } catch (e) { console.warn('sync error', e); await segnaFallimentoQueued(item); }
   }
   await loadOrdini();
   renderHome();
@@ -588,7 +668,7 @@ async function loadLoginUsers() {
     users = await cacheGet('users-login') || [];
   }
   const sel = document.getElementById('login-user-select');
-  sel.innerHTML = '<option value="">— Scegli il tuo nome —</option>' + users.map(u => `<option value="${u.id}">${u.cognome} ${u.nome} (${u.ruolo === 'sola_lettura' ? 'Sola lettura' : 'Operatore'})</option>`).join('');
+  sel.innerHTML = '<option value="">— Scegli il tuo nome —</option>' + users.map(u => `<option value="${u.id}">${escapeHtml(u.cognome)} ${escapeHtml(u.nome)} (${u.ruolo === 'sola_lettura' ? 'Sola lettura' : 'Operatore'})</option>`).join('');
 }
 
 function pinNext(idx) {
@@ -866,7 +946,7 @@ async function renderHome() {
   if (batchCompletaDiv) {
     batchCompletaDiv.style.display = batchCompleta.length ? 'flex' : 'none';
     batchCompletaDiv.innerHTML = batchCompleta.map(g => `
-      <button class="btn btn-ok" style="flex:1;font-size:13px" onclick="completaTutteFasiUguali('${g.isExtra ? g.nome : g.faseId}', ${g.isExtra})">
+      <button class="btn btn-ok" style="flex:1;font-size:13px" onclick="completaTutteFasiUguali('${escapeJsAttr(g.isExtra ? g.nome : g.faseId)}', ${g.isExtra})">
         ✓ Completa tutte le "${escapeHtml(g.nome)}" (${g.count})
       </button>`).join('');
   }
@@ -1129,12 +1209,12 @@ async function renderOrdineDetail(ordineId) {
       fasiExt = await cacheGet('fasi-extra-' + ordineId) || [];
     }
     el.innerHTML = fasiExt.map(f => {
-      const opNome = f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '';
+      const opNome = f['users'] ? `${escapeHtml(f['users'].nome)} ${escapeHtml(f['users'].cognome)}` : '';
       const isMia = f.operatore_id === currentUser.id;
       return `<div class="fase-row ${f.stato}" onclick="openFaseExtraDetail('${f.id}', '${ordineId}')">
         <div class="fase-num-circle">${f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '▶' : f.numero}</div>
         <div class="fase-info">
-          <div class="fn">${f.nome}</div>
+          <div class="fn">${escapeHtml(f.nome)}</div>
           <div class="fo">${opNome ? opNome + (isMia ? ' (tu)' : '') : 'Disponibile'}</div>
         </div>
         <span class="badge badge-${f.stato}" style="font-size:10px">${statoFaseLabel(f.stato)}</span>
@@ -1184,8 +1264,8 @@ async function renderOrdineDetail(ordineId) {
     const struttura = ordine?.struttura || '';
     el.innerHTML = ordFasi.map(f => {
       const isCustom = !f.fase_id;
-      const nomeFase = isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id);
-      const opNome = f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '';
+      const nomeFase = escapeHtml(isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id));
+      const opNome = f['users'] ? `${escapeHtml(f['users'].nome)} ${escapeHtml(f['users'].cognome)}` : '';
       const isMia = f.operatore_id === currentUser.id;
       const isNA = f.stato === 'non_applicabile';
       const est = !isCustom && isEsterna(f.fase_id);
@@ -1208,7 +1288,7 @@ async function renderOrdineDetail(ordineId) {
       else if (isBloccata) {
         const blockantiNomi = (faseMaster.dipendenze || [])
           .filter(depId => { const d = ordFasi.find(of => of.fase_id === depId); return d && !['completata', 'non_applicabile'].includes(d.stato); })
-          .map(depId => { const fm = fasi.find(fm => fm.id === depId); return fm ? fm.nome : depId; });
+          .map(depId => { const fm = fasi.find(fm => fm.id === depId); return escapeHtml(fm ? fm.nome : depId); });
         subLabel = 'Attende: ' + blockantiNomi.join(', ');
       } else if (opNome) subLabel = opNome + (isMia ? ' (tu)' : '');
       else if (est) subLabel = 'Fase esterna';
@@ -1233,7 +1313,7 @@ async function renderOrdineDetail(ordineId) {
       el.innerHTML += `<div style="margin-top:14px;padding-top:10px;border-top:2px dashed var(--border)">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:6px">Lavorazioni aggiuntive</div>
         ${fasiExtStd.map(f => {
-          const opNome = f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '';
+          const opNome = f['users'] ? `${escapeHtml(f['users'].nome)} ${escapeHtml(f['users'].cognome)}` : '';
           const isMia = f.operatore_id === currentUser.id;
           const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '▶' : f.stato === 'in_attesa' ? '⏸' : '★';
           return `<div class="fase-row ${f.stato}" onclick="openFaseExtraDetail('${f.id}', '${ordineId}')">
@@ -1306,7 +1386,7 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
       const puoiRimuovere = isMia && !sei_tu && f.stato === 'in_corso';
       return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0">
         <span>${sei_tu ? `<strong>${escapeHtml(n)} (tu)</strong>` : escapeHtml(n)}</span>
-        ${puoiRimuovere ? `<button class="btn btn-alert" style="padding:3px 10px;font-size:12px" onclick="rimuoviCollegaExtra('${faseExtraId}','${ordineId}','${o.operatore_id}','${escapeHtml(n)}')">Rimuovi</button>` : ''}
+        ${puoiRimuovere ? `<button class="btn btn-alert" style="padding:3px 10px;font-size:12px" onclick="rimuoviCollegaExtra('${faseExtraId}','${ordineId}','${o.operatore_id}','${escapeJsAttr(n)}')">Rimuovi</button>` : ''}
       </div>`;
     }).join('');
     bodyHtml += `<div class="note-box" style="border-color:var(--wood)"><strong>Operatori su questa fase</strong>${righe}</div>`;
@@ -1356,7 +1436,7 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
       const disponibili = (tuttiOp || []).filter(u => !giaSulla.has(u.id));
       if (disponibili.length) {
         const chips = disponibili.map(u =>
-          `<button class="btn btn-secondary" style="padding:8px 14px;font-size:13px" onclick="aggiungiCollegaExtra('${faseExtraId}','${ordineId}','${u.id}','${escapeHtml(u.nome)} ${escapeHtml(u.cognome)}')">${escapeHtml(u.nome)} ${escapeHtml(u.cognome)}</button>`
+          `<button class="btn btn-secondary" style="padding:8px 14px;font-size:13px" onclick="aggiungiCollegaExtra('${faseExtraId}','${ordineId}','${u.id}','${escapeJsAttr(u.nome + ' ' + u.cognome)}')">${escapeHtml(u.nome)} ${escapeHtml(u.cognome)}</button>`
         ).join('');
         opzioniColleghi = `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
           <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);display:block;margin-bottom:8px">Aggiungi collega</label>
@@ -1366,7 +1446,7 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
     }
     bodyHtml += `<div class="azione-box"><h4>Completa fase</h4>
       <div class="form-group" style="margin-bottom:12px"><label>Le tue note (opzionale)</label>
-        <textarea id="note-op-extra" placeholder="Scrivi eventuali note…">${f.note_operatore || ''}</textarea></div>
+        <textarea id="note-op-extra" placeholder="Scrivi eventuali note…">${escapeHtml(f.note_operatore || '')}</textarea></div>
       ${opzioniColleghi}
       <button class="btn btn-ok" style="margin-top:14px" onclick="completaFaseExtra('${faseExtraId}','${ordineId}')">✓ Segna come completata</button>
       <button class="btn btn-alert" style="margin-top:10px;font-size:12px;opacity:0.8" onclick="annullaPresaInCaricoExtra('${faseExtraId}','${ordineId}')">✕ Annulla presa in carico</button></div>`;
@@ -1579,7 +1659,7 @@ async function renderFaseDetail(ordFaseId, ordineId) {
       const puoiRimuovere = isMia && !sei_tu && f.stato === 'in_corso';
       return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0">
         <span>${sei_tu ? `<strong>${escapeHtml(n)} (tu)</strong>` : escapeHtml(n)}</span>
-        ${puoiRimuovere ? `<button class="btn btn-alert" style="padding:3px 10px;font-size:12px" onclick="rimuoviCollega('${ordFaseId}','${ordineId}','${o.operatore_id}','${escapeHtml(n)}')">Rimuovi</button>` : ''}
+        ${puoiRimuovere ? `<button class="btn btn-alert" style="padding:3px 10px;font-size:12px" onclick="rimuoviCollega('${ordFaseId}','${ordineId}','${o.operatore_id}','${escapeJsAttr(n)}')">Rimuovi</button>` : ''}
       </div>`;
     }).join('');
     bodyHtml += `<div class="note-box" style="border-color:var(--wood)"><strong>Operatori su questa fase</strong>${righe}</div>`;
@@ -1647,7 +1727,7 @@ async function renderFaseDetail(ordFaseId, ordineId) {
       const disponibili = (tuttiOp || []).filter(u => !giaSulla.has(u.id));
       if (disponibili.length) {
         const chips = disponibili.map(u =>
-          `<button class="btn btn-secondary" style="padding:8px 14px;font-size:13px" onclick="aggiungiCollega('${ordFaseId}','${ordineId}','${u.id}','${escapeHtml(u.nome)} ${escapeHtml(u.cognome)}')">${escapeHtml(u.nome)} ${escapeHtml(u.cognome)}</button>`
+          `<button class="btn btn-secondary" style="padding:8px 14px;font-size:13px" onclick="aggiungiCollega('${ordFaseId}','${ordineId}','${u.id}','${escapeJsAttr(u.nome + ' ' + u.cognome)}')">${escapeHtml(u.nome)} ${escapeHtml(u.cognome)}</button>`
         ).join('');
         opzioniColleghi = `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
           <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);display:block;margin-bottom:8px">Aggiungi collega</label>
@@ -1660,7 +1740,7 @@ async function renderFaseDetail(ordFaseId, ordineId) {
         <h4>Completa fase</h4>
         <div class="form-group" style="margin-bottom:12px">
           <label>Le tue note (opzionale)</label>
-          <textarea id="note-op" placeholder="Scrivi eventuali note sul lavoro svolto…">${f.note_operatore || ''}</textarea>
+          <textarea id="note-op" placeholder="Scrivi eventuali note sul lavoro svolto…">${escapeHtml(f.note_operatore || '')}</textarea>
         </div>
         <div class="form-group">
           <label>Foto (opzionale)</label>
@@ -2317,8 +2397,8 @@ async function renderAttivita() {
       ? Math.round((new Date(f.completata_il) - new Date(f.iniziata_il)) / 60000) + ' min'
       : '—';
     return `<div class="attivita-item">
-      <div class="at-title">${f.fasi?.nome || 'Fase'} — ${f.ordini?.codice}</div>
-      <div class="at-sub">${f.ordini?.cliente} · ${formatDate(f.completata_il)} · ⏱ ${durata}</div>
+      <div class="at-title">${escapeHtml(f.fasi?.nome || 'Fase')} — ${escapeHtml(f.ordini?.codice)}</div>
+      <div class="at-sub">${escapeHtml(f.ordini?.cliente)} · ${formatDate(f.completata_il)} · ⏱ ${durata}</div>
     </div>`;
   }).join('');
 }
@@ -2328,6 +2408,16 @@ async function renderAttivita() {
 // ═══════════════════════════════════════════════
 function escapeHtml(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+// Per valori di testo libero (nomi operatori, nomi fase) usati come argomento dentro
+// onclick="fn('${...}')": escapeHtml da solo non basta -- un apice singolo nel dato (es.
+// un cognome come "D'Angelo") termina prematuramente la stringa JS letterale nell'attributo,
+// un vettore di injection reale, non solo un problema di rendering. La decodifica HTML degli
+// attributi avviene PRIMA che il motore JS interpreti il codice dell'handler, quindi un
+// entity HTML (&#39;) non protegge: l'apice va neutralizzato a livello di stringa JS (\'),
+// non a livello di entity HTML. Scoperto nel giro sicurezza del 2026-09-09 (vedi vault).
+function escapeJsAttr(str) {
+  return escapeHtml(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
 // Note scritte in fase di inserimento ordine (ordini.note_generali), visibili in ogni fase
@@ -2483,7 +2573,7 @@ function renderNotificheOp() {
     <div style="display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);${n.letta ? '' : 'background:#FFFBF0;margin:0 -16px;padding:14px 16px'}">
       <div style="font-size:20px;flex-shrink:0">${icone[n.tipo] || '🔔'}</div>
       <div style="flex:1">
-        <div style="font-size:13px;${n.letta ? 'color:var(--muted)' : 'font-weight:600'}">${n.testo}</div>
+        <div style="font-size:13px;${n.letta ? 'color:var(--muted)' : 'font-weight:600'}">${escapeHtml(n.testo)}</div>
         <div style="font-size:11px;color:var(--muted);margin-top:3px">${formatDateTime(n.creata_il)}</div>
       </div>
     </div>`).join('');
@@ -2517,6 +2607,7 @@ function toast(msg, type = '') {
 // ═══════════════════════════════════════════════
 async function start() {
   await initDB();
+  await pulisciDatiOfflineScaduti();
   await caricaFlagFotocameraInterna();
   if (new URLSearchParams(window.location.search).get('logout') === '1') {
     await cacheSet('current-user', null);
