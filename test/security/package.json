@@ -1,0 +1,13 @@
+{
+  "name": "mangoapp-test-autorizzazione",
+  "private": true,
+  "type": "module",
+  "description": "Suite di test automatici di autorizzazione (A01-A12) contro mango-test-security. Vedi autorizzazione.mjs.",
+  "scripts": {
+    "test": "node autorizzazione.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "pg": "^8.13.0"
+  }
+}

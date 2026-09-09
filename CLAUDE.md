@@ -21,6 +21,10 @@ Questo file viene letto automaticamente da Claude Code all'inizio di ogni sessio
 - Testa ogni scenario sul progetto Supabase di **test** (`kpdlynvmsoctagwtzrxr`) prima di toccare **produzione** (`mtpzfxnyfkzikzlkomwz`). L'app è in uso quotidiano attivo, non deve mai essere interrotta.
 - Dopo una sessione di test pesante, verifica gli advisor di sicurezza (RLS, policy) sul progetto di test e conferma che restino allineati alla produzione.
 - Se lo schema del progetto di test diverge da quello di produzione, segnalalo esplicitamente invece di procedere come se fossero identici.
+- **Prima di ogni deploy che tocca RLS, policy storage, grant o RPC di autenticazione**, esegui
+  `test/security/autorizzazione.mjs` (suite A01-A12, contro `mango-test-security`) — vedi
+  `test/security/README.md`. Un test fallito è un segnale di una policy o RPC tornata permissiva,
+  non un problema del test: indaga la causa prima di procedere.
 
 ## `supabase_schema.sql` — rigenerarlo dopo ogni migration rilevante
 
