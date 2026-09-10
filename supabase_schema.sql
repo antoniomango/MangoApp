@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict V3WeNtX26YIPiSx5UZ9lLS3cekrhX6vDTK1DmyWaTlGXnExrn9etvcvcEOC2j5c
+\restrict q2YON8KHaF2Z9wdFq9SgWjVAVDB4GV9XdJ27koerheeaae9c1d8HH5rtKqHjwgM
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -169,40 +169,34 @@ ALTER TYPE public.tipologia_ordine OWNER TO postgres;
 
 CREATE FUNCTION public.aggiorna_criteri_fase(p_fase_id smallint, p_tipi_prodotto text[], p_materiali text[], p_strutture text[] DEFAULT '{}'::text[], p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_ricalcolo JSONB;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-
-  DELETE FROM fase_tipi_prodotto WHERE fase_id = p_fase_id;
+  DELETE FROM public.fase_tipi_prodotto WHERE fase_id = p_fase_id;
   IF array_length(p_tipi_prodotto, 1) > 0 THEN
-    INSERT INTO fase_tipi_prodotto (fase_id, tipo_prodotto_id)
+    INSERT INTO public.fase_tipi_prodotto (fase_id, tipo_prodotto_id)
     SELECT p_fase_id, unnest(p_tipi_prodotto);
   END IF;
-
-  DELETE FROM fase_materiali WHERE fase_id = p_fase_id;
+  DELETE FROM public.fase_materiali WHERE fase_id = p_fase_id;
   IF array_length(p_materiali, 1) > 0 THEN
-    INSERT INTO fase_materiali (fase_id, materiale_valore)
+    INSERT INTO public.fase_materiali (fase_id, materiale_valore)
     SELECT p_fase_id, unnest(p_materiali);
   END IF;
-
-  DELETE FROM fase_strutture WHERE fase_id = p_fase_id;
+  DELETE FROM public.fase_strutture WHERE fase_id = p_fase_id;
   IF array_length(p_strutture, 1) > 0 THEN
-    INSERT INTO fase_strutture (fase_id, struttura_valore)
+    INSERT INTO public.fase_strutture (fase_id, struttura_valore)
     SELECT p_fase_id, unnest(p_strutture);
   END IF;
-
   SELECT public.ricalcola_fase_su_ordini_esistenti(p_fase_id, p_responsabile_id, p_session_token)
   INTO v_ricalcolo;
-
   RETURN jsonb_build_object('ok', true, 'ricalcolo', v_ricalcolo);
 END;
 $$;
@@ -216,28 +210,25 @@ ALTER FUNCTION public.aggiorna_criteri_fase(p_fase_id smallint, p_tipi_prodotto 
 
 CREATE FUNCTION public.aggiorna_operatore(p_operatore_id uuid, p_nome text, p_cognome text, p_ruolo public.ruolo_utente, p_ore_default numeric, p_escluso_pianificazione boolean, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
-  v_ruolo_precedente ruolo_utente;
+  v_ruolo_precedente public.ruolo_utente;
   v_count_responsabili integer;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_responsabile_id AND ruolo='responsabile' AND attivo=TRUE AND eliminato IS DISTINCT FROM TRUE) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-
   SELECT ruolo INTO v_ruolo_precedente FROM public.users WHERE id = p_operatore_id;
   IF NOT FOUND THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'utente_non_trovato');
   END IF;
-
   IF p_operatore_id = p_responsabile_id AND p_ruolo IS DISTINCT FROM v_ruolo_precedente THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'auto_cambio_ruolo_non_consentito');
   END IF;
-
   IF v_ruolo_precedente = 'responsabile' AND p_ruolo IS DISTINCT FROM v_ruolo_precedente THEN
     SELECT count(*) INTO v_count_responsabili FROM public.users
       WHERE ruolo = 'responsabile' AND attivo = TRUE AND eliminato IS DISTINCT FROM TRUE;
@@ -245,15 +236,10 @@ BEGIN
       RETURN jsonb_build_object('ok', false, 'errore', 'ultimo_responsabile');
     END IF;
   END IF;
-
   UPDATE public.users
-  SET nome = p_nome,
-      cognome = p_cognome,
-      ruolo = p_ruolo,
-      ore_default = p_ore_default,
-      escluso_pianificazione = p_escluso_pianificazione
+  SET nome = p_nome, cognome = p_cognome, ruolo = p_ruolo,
+      ore_default = p_ore_default, escluso_pianificazione = p_escluso_pianificazione
   WHERE id = p_operatore_id;
-
   RETURN jsonb_build_object('ok', true, 'ruolo_precedente', v_ruolo_precedente, 'ruolo_nuovo', p_ruolo);
 END;
 $$;
@@ -267,10 +253,10 @@ ALTER FUNCTION public.aggiorna_operatore(p_operatore_id uuid, p_nome text, p_cog
 
 CREATE FUNCTION public.aggiorna_pin_operatore(p_operatore_id uuid, p_nuovo_pin text, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public', 'extensions'
+    SET search_path TO ''
     AS $_$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF p_responsabile_id IS NULL THEN RETURN json_build_object('ok', false, 'errore', 'responsabile_id_obbligatorio'); END IF;
@@ -293,10 +279,10 @@ ALTER FUNCTION public.aggiorna_pin_operatore(p_operatore_id uuid, p_nuovo_pin te
 
 CREATE FUNCTION public.aggiorna_tipo_prodotto(p_id text, p_label text, p_posizione integer, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_responsabile_id AND ruolo='responsabile') THEN
@@ -317,16 +303,16 @@ ALTER FUNCTION public.aggiorna_tipo_prodotto(p_id text, p_label text, p_posizion
 
 CREATE FUNCTION public.aggiungi_collega_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN json_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  INSERT INTO fasi_extra_operatori(fasi_ordine_extra_id, operatore_id) VALUES(p_fase_extra_id, p_operatore_id) ON CONFLICT DO NOTHING;
+  INSERT INTO public.fasi_extra_operatori(fasi_ordine_extra_id, operatore_id) VALUES(p_fase_extra_id, p_operatore_id) ON CONFLICT DO NOTHING;
   RETURN json_build_object('ok', true);
 END;
 $$;
@@ -340,30 +326,30 @@ ALTER FUNCTION public.aggiungi_collega_extra(p_fase_extra_id uuid, p_operatore_i
 
 CREATE FUNCTION public.aggiungi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
-DECLARE v_fase ordine_fasi%ROWTYPE;
+DECLARE v_fase public.ordine_fasi%ROWTYPE;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_richiedente_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_richiedente_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_richiedente_id AND ruolo = 'sola_lettura') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  SELECT * INTO v_fase FROM ordine_fasi WHERE id = p_ordine_fase_id;
+  SELECT * INTO v_fase FROM public.ordine_fasi WHERE id = p_ordine_fase_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
   IF p_collega_id IS DISTINCT FROM p_richiedente_id THEN
     IF v_fase.operatore_id IS DISTINCT FROM p_richiedente_id
-       AND NOT EXISTS (SELECT 1 FROM ordine_fasi_operatori WHERE ordine_fase_id=p_ordine_fase_id AND operatore_id=p_richiedente_id)
-       AND NOT EXISTS (SELECT 1 FROM users WHERE id=p_richiedente_id AND ruolo='responsabile') THEN
+       AND NOT EXISTS (SELECT 1 FROM public.ordine_fasi_operatori WHERE ordine_fase_id=p_ordine_fase_id AND operatore_id=p_richiedente_id)
+       AND NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_richiedente_id AND ruolo='responsabile') THEN
       RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
     END IF;
   END IF;
-  INSERT INTO ordine_fasi_operatori(ordine_fase_id, operatore_id)
+  INSERT INTO public.ordine_fasi_operatori(ordine_fase_id, operatore_id)
   VALUES(p_ordine_fase_id, p_collega_id) ON CONFLICT DO NOTHING;
   IF p_collega_id = p_richiedente_id THEN
     BEGIN
-    INSERT INTO archivio_log(ordine_id, utente_id, azione, dettaglio)
+    INSERT INTO public.archivio_log(ordine_id, utente_id, azione, dettaglio)
     VALUES(v_fase.ordine_id, p_richiedente_id, 'fase_iniziata',
            jsonb_build_object('unione', true, 'ordine_fase_id', p_ordine_fase_id));
   EXCEPTION WHEN OTHERS THEN
@@ -371,7 +357,7 @@ BEGIN
   END;
   ELSE
     BEGIN
-    INSERT INTO archivio_log(ordine_id, utente_id, azione, dettaglio)
+    INSERT INTO public.archivio_log(ordine_id, utente_id, azione, dettaglio)
     VALUES(v_fase.ordine_id, p_richiedente_id, 'fase_iniziata',
            jsonb_build_object('aggiunto_da', p_richiedente_id, 'operatore_id', p_collega_id, 'ordine_fase_id', p_ordine_fase_id));
   EXCEPTION WHEN OTHERS THEN
@@ -391,10 +377,10 @@ ALTER FUNCTION public.aggiungi_collega_fase(p_ordine_fase_id uuid, p_collega_id 
 
 CREATE FUNCTION public.aggiungi_tipo_prodotto(p_id text, p_label text, p_posizione integer, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF EXISTS (SELECT 1 FROM public.users WHERE id=p_responsabile_id AND ruolo='sola_lettura') THEN
@@ -422,42 +408,31 @@ ALTER FUNCTION public.aggiungi_tipo_prodotto(p_id text, p_label text, p_posizion
 
 CREATE FUNCTION public.annulla_fasi_ordine_eliminato(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_fasi_agg INT := 0;
   v_extra_agg INT := 0;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-
-  -- Le fasi non ancora completate di un ordine eliminato non rappresentano più lavoro reale:
-  -- passano a 'non_applicabile' (significato esatto nell'enum: fase che non va eseguita).
-  -- Mai le 'completata' (traccia del lavoro davvero svolto) né le 'in_corso' (interrompere un
-  -- lavoro attivo è una decisione diversa, non presa qui — vedi nota nel report/vault).
-  UPDATE ordine_fasi SET stato = 'non_applicabile'
+  UPDATE public.ordine_fasi SET stato = 'non_applicabile'
   WHERE ordine_id = p_ordine_id AND stato IN ('disponibile', 'in_attesa');
   GET DIAGNOSTICS v_fasi_agg = ROW_COUNT;
-
-  UPDATE fasi_ordine_extra SET stato = 'non_applicabile'
+  UPDATE public.fasi_ordine_extra SET stato = 'non_applicabile'
   WHERE ordine_id = p_ordine_id AND stato IN ('disponibile', 'in_attesa');
   GET DIAGNOSTICS v_extra_agg = ROW_COUNT;
-
-  -- Il log è accessorio: un suo fallimento non deve annullare le UPDATE già applicate sopra
-  -- (stesso principio del job pausa-automatica-fine-turno).
   BEGIN
-    INSERT INTO archivio_log (ordine_id, utente_id, azione, dettaglio)
+    INSERT INTO public.archivio_log (ordine_id, utente_id, azione, dettaglio)
     VALUES (p_ordine_id, p_responsabile_id, 'ordine_modificato',
             jsonb_build_object('motivo', 'ordine_eliminato', 'fasi_annullate', v_fasi_agg, 'fasi_extra_annullate', v_extra_agg));
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING 'log ordine_eliminato non scritto per ordine %: %', p_ordine_id, SQLERRM;
   END;
-
   RETURN jsonb_build_object('ok', true, 'fasi_annullate', v_fasi_agg, 'fasi_extra_annullate', v_extra_agg);
 END;
 $$;
@@ -471,25 +446,25 @@ ALTER FUNCTION public.annulla_fasi_ordine_eliminato(p_ordine_id uuid, p_responsa
 
 CREATE FUNCTION public.annulla_presa_in_carico(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
-DECLARE v_fase ordine_fasi%ROWTYPE;
+DECLARE v_fase public.ordine_fasi%ROWTYPE;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN json_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  SELECT * INTO v_fase FROM ordine_fasi WHERE id = p_ordine_fase_id;
+  SELECT * INTO v_fase FROM public.ordine_fasi WHERE id = p_ordine_fase_id;
   IF NOT FOUND THEN RETURN json_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
   IF v_fase.operatore_id IS DISTINCT FROM p_operatore_id THEN
-    IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_operatore_id AND ruolo = 'responsabile' AND attivo = TRUE) THEN
+    IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'responsabile' AND attivo = TRUE) THEN
       RETURN json_build_object('ok', false, 'errore', 'non_autorizzato');
     END IF;
   END IF;
-  DELETE FROM ordine_fasi_operatori WHERE ordine_fase_id = p_ordine_fase_id;
-  UPDATE ordine_fasi SET stato='disponibile', operatore_id=NULL, iniziata_il=NULL, completata_il=NULL WHERE id=p_ordine_fase_id;
+  DELETE FROM public.ordine_fasi_operatori WHERE ordine_fase_id = p_ordine_fase_id;
+  UPDATE public.ordine_fasi SET stato='disponibile', operatore_id=NULL, iniziata_il=NULL, completata_il=NULL WHERE id=p_ordine_fase_id;
   RETURN json_build_object('ok', true, 'rimasti', 0);
 END;
 $$;
@@ -503,25 +478,25 @@ ALTER FUNCTION public.annulla_presa_in_carico(p_ordine_fase_id uuid, p_operatore
 
 CREATE FUNCTION public.annulla_presa_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
-DECLARE v_fase fasi_ordine_extra%ROWTYPE;
+DECLARE v_fase public.fasi_ordine_extra%ROWTYPE;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN json_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  SELECT * INTO v_fase FROM fasi_ordine_extra WHERE id = p_fase_extra_id;
+  SELECT * INTO v_fase FROM public.fasi_ordine_extra WHERE id = p_fase_extra_id;
   IF NOT FOUND THEN RETURN json_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
   IF v_fase.operatore_id IS DISTINCT FROM p_operatore_id THEN
-    IF NOT EXISTS (SELECT 1 FROM users WHERE id=p_operatore_id AND ruolo='responsabile' AND attivo=TRUE) THEN
+    IF NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_operatore_id AND ruolo='responsabile' AND attivo=TRUE) THEN
       RETURN json_build_object('ok', false, 'errore', 'non_autorizzato');
     END IF;
   END IF;
-  DELETE FROM fasi_extra_operatori WHERE fasi_ordine_extra_id = p_fase_extra_id;
-  UPDATE fasi_ordine_extra SET stato='disponibile', operatore_id=NULL, iniziata_il=NULL, completata_il=NULL WHERE id=p_fase_extra_id;
+  DELETE FROM public.fasi_extra_operatori WHERE fasi_ordine_extra_id = p_fase_extra_id;
+  UPDATE public.fasi_ordine_extra SET stato='disponibile', operatore_id=NULL, iniziata_il=NULL, completata_il=NULL WHERE id=p_fase_extra_id;
   RETURN json_build_object('ok', true);
 END;
 $$;
@@ -535,7 +510,7 @@ ALTER FUNCTION public.annulla_presa_in_carico_extra(p_fase_extra_id uuid, p_oper
 
 CREATE FUNCTION public.archivia_ordine(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_urls text[];
@@ -543,32 +518,21 @@ BEGIN
   IF p_ordine_id IS NULL THEN
     RAISE EXCEPTION 'ordine_id_obbligatorio' USING ERRCODE = '22004';
   END IF;
-
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RAISE EXCEPTION 'sessione_non_valida' USING ERRCODE = '42501';
   END IF;
-
   IF NOT EXISTS (
-    SELECT 1 FROM users
-    WHERE id = p_responsabile_id
-      AND ruolo = 'responsabile'
-      AND attivo = true
-      AND eliminato IS DISTINCT FROM true
+    SELECT 1 FROM public.users
+    WHERE id = p_responsabile_id AND ruolo = 'responsabile' AND attivo = true AND eliminato IS DISTINCT FROM true
   ) THEN
     RAISE EXCEPTION 'non_autorizzato' USING ERRCODE = '42501';
   END IF;
-
   SELECT array_agg(a.url_file) INTO v_urls
-  FROM allegati a
-  WHERE a.ordine_fase_id IN (SELECT id FROM ordine_fasi WHERE ordine_id = p_ordine_id);
-
-  DELETE FROM allegati
-  WHERE ordine_fase_id IN (
-    SELECT id FROM ordine_fasi WHERE ordine_id = p_ordine_id
-  );
-
-  UPDATE ordini SET archiviato_il = NOW() WHERE id = p_ordine_id;
-
+  FROM public.allegati a
+  WHERE a.ordine_fase_id IN (SELECT id FROM public.ordine_fasi WHERE ordine_id = p_ordine_id);
+  DELETE FROM public.allegati
+  WHERE ordine_fase_id IN (SELECT id FROM public.ordine_fasi WHERE ordine_id = p_ordine_id);
+  UPDATE public.ordini SET archiviato_il = NOW() WHERE id = p_ordine_id;
   RETURN jsonb_build_object('ok', true, 'url_eliminati', COALESCE(v_urls, '{}'));
 END;
 $$;
@@ -582,21 +546,19 @@ ALTER FUNCTION public.archivia_ordine(p_ordine_id uuid, p_responsabile_id uuid, 
 
 CREATE FUNCTION public.autorizza_upload_allegato(p_user_id uuid, p_session_token uuid, p_tipo text, p_ordine_id uuid, p_ordine_fase_id uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_ordine_esiste boolean;
   v_fase_ordine_id uuid;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_user_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_user_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-
   SELECT EXISTS(SELECT 1 FROM public.ordini WHERE id = p_ordine_id) INTO v_ordine_esiste;
   IF NOT v_ordine_esiste THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'ordine_non_trovato');
   END IF;
-
   IF p_tipo = 'fase' THEN
     IF p_ordine_fase_id IS NULL THEN
       RETURN jsonb_build_object('ok', false, 'errore', 'ordine_fase_id_obbligatorio');
@@ -606,7 +568,6 @@ BEGIN
       RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_coerente');
     END IF;
   END IF;
-
   RETURN jsonb_build_object('ok', true);
 END;
 $$;
@@ -620,21 +581,21 @@ ALTER FUNCTION public.autorizza_upload_allegato(p_user_id uuid, p_session_token 
 
 CREATE FUNCTION public.avanzamento_fasi_batch(p_operatore_id uuid, p_session_token uuid, p_ordine_ids uuid[]) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   RETURN jsonb_build_object('ok', true, 'dati', jsonb_build_object(
     'ordine_fasi', (
       SELECT COALESCE(jsonb_agg(jsonb_build_object('ordine_id', of.ordine_id, 'fase_id', of.fase_id, 'stato', of.stato)), '[]'::jsonb)
-      FROM ordine_fasi of
+      FROM public.ordine_fasi of
       WHERE of.ordine_id = ANY(p_ordine_ids)
     ),
     'fasi_extra', (
       SELECT COALESCE(jsonb_agg(jsonb_build_object('ordine_id', fe.ordine_id, 'nome', fe.nome, 'stato', fe.stato, 'numero', fe.numero) ORDER BY fe.numero), '[]'::jsonb)
-      FROM fasi_ordine_extra fe
+      FROM public.fasi_ordine_extra fe
       WHERE fe.ordine_id = ANY(p_ordine_ids)
     )
   ));
@@ -650,13 +611,13 @@ ALTER FUNCTION public.avanzamento_fasi_batch(p_operatore_id uuid, p_session_toke
 
 CREATE FUNCTION public.calcola_tempo_combinazione(p_criteri jsonb DEFAULT '{}'::jsonb) RETURNS TABLE(ore_lavorazione_interna numeric, giorni_calendario numeric, n_campioni integer)
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
   RETURN QUERY
   WITH ordini_filtrati AS (
     SELECT o.id, o.creato_il, COALESCE(o.spedito_il, o.completato_il) AS chiusura_il
-    FROM ordini o
+    FROM public.ordini o
     WHERE COALESCE(o.spedito_il, o.completato_il) IS NOT NULL
       AND o.creato_il IS NOT NULL
       AND (p_criteri->'struttura' IS NULL OR jsonb_array_length(p_criteri->'struttura') = 0
@@ -668,14 +629,14 @@ BEGIN
       AND NOT EXISTS (
         SELECT 1 FROM jsonb_array_elements(COALESCE(p_criteri->'fasi_incluse', '[]'::jsonb)) fi_val
         WHERE NOT EXISTS (
-          SELECT 1 FROM ordine_fasi of2
+          SELECT 1 FROM public.ordine_fasi of2
           WHERE of2.ordine_id = o.id AND of2.fase_id = (fi_val#>>'{}')::smallint AND of2.stato = 'completata'
         )
       )
       AND NOT EXISTS (
         SELECT 1 FROM jsonb_array_elements(COALESCE(p_criteri->'fasi_escluse', '[]'::jsonb)) fe_val
         WHERE EXISTS (
-          SELECT 1 FROM ordine_fasi of2
+          SELECT 1 FROM public.ordine_fasi of2
           WHERE of2.ordine_id = o.id AND of2.fase_id = (fe_val#>>'{}')::smallint AND of2.stato != 'non_applicabile'
         )
       )
@@ -683,13 +644,11 @@ BEGIN
   ore_per_ordine AS (
     SELECT of2.ordine_id,
       SUM(of2.tempo_accumulato_minuti::numeric / GREATEST(of2.n_ordini_batch, 1)) / 60.0 AS ore_interne
-    FROM ordine_fasi of2
-    JOIN fasi f ON f.id = of2.fase_id
+    FROM public.ordine_fasi of2
+    JOIN public.fasi f ON f.id = of2.fase_id
     JOIN ordini_filtrati ofd ON ofd.id = of2.ordine_id
-    WHERE of2.stato = 'completata'
-      AND of2.tempo_accumulato_minuti > 0
-      AND of2.completata_il IS NOT NULL
-      AND NOT COALESCE(f.e_attesa_esterna, false)
+    WHERE of2.stato = 'completata' AND of2.tempo_accumulato_minuti > 0
+      AND of2.completata_il IS NOT NULL AND NOT COALESCE(f.e_attesa_esterna, false)
     GROUP BY of2.ordine_id
   ),
   giorni_per_ordine AS (
@@ -716,7 +675,7 @@ ALTER FUNCTION public.calcola_tempo_combinazione(p_criteri jsonb) OWNER TO postg
 
 CREATE FUNCTION public.capacita_produttiva_stimata() RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_settimane       integer;
@@ -727,96 +686,79 @@ DECLARE
   v_default_extra   numeric;
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'non_autenticato'; END IF;
-  SELECT COALESCE(MAX(valore)::integer, 6) INTO v_settimane    FROM kpi_config WHERE chiave = 'settimane_storico_capacita';
-  SELECT COALESCE(MAX(valore), 30)         INTO v_default_extra FROM kpi_config WHERE chiave = 'durata_default_fase_extra_minuti';
-
+  SELECT COALESCE(MAX(valore)::integer, 6) INTO v_settimane    FROM public.kpi_config WHERE chiave = 'settimane_storico_capacita';
+  SELECT COALESCE(MAX(valore), 30)         INTO v_default_extra FROM public.kpi_config WHERE chiave = 'durata_default_fase_extra_minuti';
   SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (
     ORDER BY tempo_accumulato_minuti::numeric / GREATEST(n_ordini_batch,1)
   ) INTO v_fallback_extra
-  FROM fasi_ordine_extra WHERE stato = 'completata' AND tempo_accumulato_minuti > 0;
+  FROM public.fasi_ordine_extra WHERE stato = 'completata' AND tempo_accumulato_minuti > 0;
   v_fallback_extra := COALESCE(v_fallback_extra, v_default_extra);
-
   WITH mediane AS (
     SELECT of2.fase_id,
       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY
         of2.tempo_accumulato_minuti::numeric / GREATEST(of2.n_ordini_batch,1) / GREATEST(o.quantita,1)
       ) AS med_min
-    FROM ordine_fasi of2
-    JOIN ordini o ON o.id = of2.ordine_id
-    JOIN fasi f   ON f.id = of2.fase_id
-    WHERE of2.stato = 'completata'
-      AND of2.tempo_accumulato_minuti > 0
+    FROM public.ordine_fasi of2
+    JOIN public.ordini o ON o.id = of2.ordine_id
+    JOIN public.fasi f   ON f.id = of2.fase_id
+    WHERE of2.stato = 'completata' AND of2.tempo_accumulato_minuti > 0
       AND NOT COALESCE(f.e_attesa_esterna, false)
     GROUP BY of2.fase_id
   )
   SELECT COALESCE(SUM(
-    CASE of2.stato
-      WHEN 'in_corso' THEN COALESCE(m.med_min,0) * 0.5
-      ELSE                  COALESCE(m.med_min,0)
-    END
+    CASE of2.stato WHEN 'in_corso' THEN COALESCE(m.med_min,0) * 0.5 ELSE COALESCE(m.med_min,0) END
   ) / 60, 0)
   INTO v_backlog_ore
-  FROM ordine_fasi of2
-  JOIN fasi f ON f.id = of2.fase_id
-  JOIN ordini o ON o.id = of2.ordine_id
+  FROM public.ordine_fasi of2
+  JOIN public.fasi f ON f.id = of2.fase_id
+  JOIN public.ordini o ON o.id = of2.ordine_id
   LEFT JOIN mediane m ON m.fase_id = of2.fase_id
   WHERE of2.stato IN ('disponibile','in_corso')
     AND NOT COALESCE(f.e_attesa_esterna, false)
     AND o.stato IN ('aperto','attesa_spedizione')
     AND COALESCE(o.eliminato, false) = false;
-
   WITH mediane_extra AS (
     SELECT lower(nome) AS nome_lower,
       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY
         tempo_accumulato_minuti::numeric / GREATEST(n_ordini_batch,1)
       ) AS med_min
-    FROM fasi_ordine_extra
+    FROM public.fasi_ordine_extra
     WHERE stato = 'completata' AND tempo_accumulato_minuti > 0
     GROUP BY lower(nome)
     HAVING COUNT(*) >= 2
   )
   SELECT v_backlog_ore + COALESCE(SUM(
-    CASE foe.stato
-      WHEN 'in_corso' THEN COALESCE(me.med_min, v_fallback_extra) * 0.5
-      ELSE                  COALESCE(me.med_min, v_fallback_extra)
-    END
+    CASE foe.stato WHEN 'in_corso' THEN COALESCE(me.med_min, v_fallback_extra) * 0.5 ELSE COALESCE(me.med_min, v_fallback_extra) END
   ) / 60, 0)
   INTO v_backlog_ore
-  FROM fasi_ordine_extra foe
+  FROM public.fasi_ordine_extra foe
   LEFT JOIN mediane_extra me ON me.nome_lower = lower(foe.nome)
-  JOIN ordini o ON o.id = foe.ordine_id
+  JOIN public.ordini o ON o.id = foe.ordine_id
   WHERE foe.stato IN ('disponibile','in_corso')
     AND NOT COALESCE(foe.e_attesa_esterna, false)
     AND o.stato IN ('aperto','attesa_spedizione')
     AND COALESCE(o.eliminato, false) = false;
-
   SELECT COALESCE(SUM(
     of2.tempo_accumulato_minuti::numeric / GREATEST(of2.n_ordini_batch,1) / GREATEST(o.quantita,1)
   ) / 60 / v_settimane, 0)
   INTO v_ore_settimana
-  FROM ordine_fasi of2
-  JOIN ordini o ON o.id = of2.ordine_id
-  JOIN fasi f   ON f.id = of2.fase_id
+  FROM public.ordine_fasi of2
+  JOIN public.ordini o ON o.id = of2.ordine_id
+  JOIN public.fasi f   ON f.id = of2.fase_id
   WHERE of2.stato = 'completata'
     AND of2.completata_il >= NOW() - (v_settimane * 7 || ' days')::interval
     AND of2.tempo_accumulato_minuti > 0
     AND NOT COALESCE(f.e_attesa_esterna, false);
-
   SELECT v_ore_settimana + COALESCE(SUM(
     foe.tempo_accumulato_minuti::numeric / GREATEST(foe.n_ordini_batch,1)
   ) / 60 / v_settimane, 0)
   INTO v_ore_settimana
-  FROM fasi_ordine_extra foe
+  FROM public.fasi_ordine_extra foe
   WHERE foe.stato = 'completata'
     AND foe.completata_il >= NOW() - (v_settimane * 7 || ' days')::interval
     AND foe.tempo_accumulato_minuti > 0
     AND NOT COALESCE(foe.e_attesa_esterna, false);
-
-  v_smaltimento := CASE
-    WHEN v_ore_settimana > 0 THEN ROUND((v_backlog_ore / v_ore_settimana)::numeric, 1)
-    ELSE NULL
-  END;
-
+  v_smaltimento := CASE WHEN v_ore_settimana > 0 THEN ROUND((v_backlog_ore / v_ore_settimana)::numeric, 1) ELSE NULL END;
   RETURN jsonb_build_object(
     'backlog_ore',           ROUND(v_backlog_ore::numeric, 1),
     'ore_per_settimana',     ROUND(v_ore_settimana::numeric, 1),
@@ -885,23 +827,21 @@ ALTER FUNCTION public.check_ordine_completato() OWNER TO postgres;
 
 CREATE FUNCTION public.check_ordine_extra_completato() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
-    AS $$
-BEGIN
-  IF NEW.stato = 'completata' THEN
-    IF NOT EXISTS (
-      SELECT 1 FROM fasi_ordine_extra
-      WHERE ordine_id = NEW.ordine_id
-      AND stato IN ('disponibile', 'in_corso')
-    ) THEN
-      UPDATE ordini
-      SET stato = 'attesa_spedizione', completato_il = NOW()
-      WHERE id = NEW.ordine_id
-      AND stato NOT IN ('spedito', 'attesa_spedizione', 'sospeso');
-    END IF;
-  END IF;
-  RETURN NEW;
-END;
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF NEW.stato = 'completata' THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.fasi_ordine_extra
+      WHERE ordine_id = NEW.ordine_id AND stato IN ('disponibile', 'in_corso')
+    ) THEN
+      UPDATE public.ordini
+      SET stato = 'attesa_spedizione', completato_il = NOW()
+      WHERE id = NEW.ordine_id AND stato NOT IN ('spedito', 'attesa_spedizione', 'sospeso');
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
 $$;
 
 
@@ -913,15 +853,15 @@ ALTER FUNCTION public.check_ordine_extra_completato() OWNER TO postgres;
 
 CREATE FUNCTION public.colleghi_disponibili(p_operatore_id uuid, p_session_token uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   RETURN jsonb_build_object('ok', true, 'dati', (
     SELECT COALESCE(jsonb_agg(jsonb_build_object('id', u.id, 'nome', u.nome, 'cognome', u.cognome) ORDER BY u.cognome), '[]'::jsonb)
-    FROM users u
+    FROM public.users u
     WHERE u.attivo = true AND u.ruolo = 'operatore'
   ));
 END;
@@ -936,23 +876,23 @@ ALTER FUNCTION public.colleghi_disponibili(p_operatore_id uuid, p_session_token 
 
 CREATE FUNCTION public.completa_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_note_operatore text DEFAULT NULL::text, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
-  v_fase   ordine_fasi%ROWTYPE;
+  v_fase   public.ordine_fasi%ROWTYPE;
   v_tg     text;
   v_durata numeric;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF EXISTS (SELECT 1 FROM users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
+  IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  SELECT * INTO v_fase FROM ordine_fasi WHERE id = p_ordine_fase_id FOR UPDATE;
+  SELECT * INTO v_fase FROM public.ordine_fasi WHERE id = p_ordine_fase_id FOR UPDATE;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
   IF v_fase.fase_id IS NOT NULL THEN
-    SELECT tipo_gestione INTO v_tg FROM fasi WHERE id = v_fase.fase_id;
+    SELECT tipo_gestione INTO v_tg FROM public.fasi WHERE id = v_fase.fase_id;
     IF v_tg IS DISTINCT FROM 'standard' THEN
       RETURN jsonb_build_object('ok', false, 'errore', 'usa_conferma_ricezione',
                                 'tipo_gestione', v_tg, 'messaggio', 'Usa il pulsante specifico per questo tipo di fase');
@@ -962,18 +902,18 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'errore', 'stato_non_in_corso', 'stato', v_fase.stato);
   END IF;
   IF v_fase.operatore_id IS DISTINCT FROM p_operatore_id
-     AND NOT EXISTS (SELECT 1 FROM ordine_fasi_operatori WHERE ordine_fase_id = p_ordine_fase_id AND operatore_id = p_operatore_id)
-     AND NOT EXISTS (SELECT 1 FROM users WHERE id = p_operatore_id AND ruolo = 'responsabile') THEN
+     AND NOT EXISTS (SELECT 1 FROM public.ordine_fasi_operatori WHERE ordine_fase_id = p_ordine_fase_id AND operatore_id = p_operatore_id)
+     AND NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
   v_durata := GREATEST(0, EXTRACT(EPOCH FROM (NOW() - v_fase.iniziata_il)) / 60);
-  UPDATE ordine_fasi
+  UPDATE public.ordine_fasi
   SET stato = 'completata', completata_il = NOW(),
       note_operatore = COALESCE(p_note_operatore, note_operatore),
       tempo_accumulato_minuti = COALESCE(tempo_accumulato_minuti, 0) + v_durata
   WHERE id = p_ordine_fase_id;
   BEGIN
-    INSERT INTO archivio_log(ordine_id, utente_id, azione, dettaglio)
+    INSERT INTO public.archivio_log(ordine_id, utente_id, azione, dettaglio)
   VALUES(v_fase.ordine_id, p_operatore_id, 'fase_completata',
          jsonb_build_object('ordine_fase_id', p_ordine_fase_id));
   EXCEPTION WHEN OTHERS THEN
@@ -992,28 +932,28 @@ ALTER FUNCTION public.completa_fase(p_ordine_fase_id uuid, p_operatore_id uuid, 
 
 CREATE FUNCTION public.completa_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_note text DEFAULT NULL::text, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
-  v_fase fasi_ordine_extra%ROWTYPE;
+  v_fase public.fasi_ordine_extra%ROWTYPE;
   v_durata numeric;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  SELECT * INTO v_fase FROM fasi_ordine_extra WHERE id = p_fase_extra_id;
+  SELECT * INTO v_fase FROM public.fasi_ordine_extra WHERE id = p_fase_extra_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
   IF v_fase.stato <> 'in_corso' THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_in_corso'); END IF;
   IF v_fase.operatore_id IS DISTINCT FROM p_operatore_id
-     AND NOT EXISTS (SELECT 1 FROM fasi_extra_operatori WHERE fasi_ordine_extra_id=p_fase_extra_id AND operatore_id=p_operatore_id)
-     AND NOT EXISTS (SELECT 1 FROM users WHERE id=p_operatore_id AND ruolo='responsabile') THEN
+     AND NOT EXISTS (SELECT 1 FROM public.fasi_extra_operatori WHERE fasi_ordine_extra_id=p_fase_extra_id AND operatore_id=p_operatore_id)
+     AND NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_operatore_id AND ruolo='responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
   v_durata := GREATEST(0, EXTRACT(EPOCH FROM (NOW() - v_fase.iniziata_il)) / 60);
-  UPDATE fasi_ordine_extra SET stato='completata', completata_il=NOW(), note_operatore=COALESCE(p_note, note_operatore),
+  UPDATE public.fasi_ordine_extra SET stato='completata', completata_il=NOW(), note_operatore=COALESCE(p_note, note_operatore),
     tempo_accumulato_minuti = COALESCE(tempo_accumulato_minuti, 0) + v_durata
   WHERE id=p_fase_extra_id;
   RETURN jsonb_build_object('ok', true);
@@ -1029,7 +969,7 @@ ALTER FUNCTION public.completa_fase_extra(p_fase_extra_id uuid, p_operatore_id u
 
 CREATE FUNCTION public.completa_fasi_batch(p_fase_id integer, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_count INT;
@@ -1037,7 +977,7 @@ DECLARE
   v_dettaglio jsonb;
   v_ordine_rappresentativo uuid;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
@@ -1046,7 +986,6 @@ BEGIN
   SELECT COUNT(*) INTO v_count FROM public.ordine_fasi
     WHERE fase_id=p_fase_id AND operatore_id=p_operatore_id AND stato='in_corso';
   IF v_count = 0 THEN RETURN json_build_object('ok', true, 'completate', 0); END IF;
-
   WITH aggiornate AS (
     UPDATE public.ordine_fasi SET stato='completata', completata_il=v_now,
       tempo_accumulato_minuti=COALESCE(tempo_accumulato_minuti,0)+GREATEST(0,EXTRACT(EPOCH FROM (v_now-iniziata_il))/60),
@@ -1058,15 +997,13 @@ BEGIN
          (array_agg(ordine_id))[1]
   INTO v_dettaglio, v_ordine_rappresentativo
   FROM aggiornate;
-
   BEGIN
-    INSERT INTO archivio_log (ordine_id, fase_id, utente_id, azione, dettaglio)
+    INSERT INTO public.archivio_log (ordine_id, fase_id, utente_id, azione, dettaglio)
     VALUES (v_ordine_rappresentativo, p_fase_id, p_operatore_id, 'fase_completata',
             jsonb_build_object('batch', true, 'conteggio', v_count, 'fasi', v_dettaglio));
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING 'log batch non scritto: %', SQLERRM;
   END;
-
   RETURN json_build_object('ok', true, 'completate', v_count);
 END;
 $$;
@@ -1080,7 +1017,7 @@ ALTER FUNCTION public.completa_fasi_batch(p_fase_id integer, p_operatore_id uuid
 
 CREATE FUNCTION public.completa_fasi_extra_batch(p_nome text, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_count INT;
@@ -1090,19 +1027,18 @@ DECLARE
   v_dettaglio jsonb;
   v_ordine_rappresentativo uuid;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN json_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
   SELECT COUNT(*), MIN(iniziata_il) INTO v_count, v_min_iniziata
-    FROM fasi_ordine_extra WHERE nome=p_nome AND operatore_id=p_operatore_id AND stato='in_corso';
+    FROM public.fasi_ordine_extra WHERE nome=p_nome AND operatore_id=p_operatore_id AND stato='in_corso';
   IF v_count = 0 THEN RETURN json_build_object('ok', false, 'errore', 'nessuna_fase_in_corso'); END IF;
   v_tempo_batch := CASE WHEN v_min_iniziata IS NOT NULL THEN EXTRACT(EPOCH FROM (v_now-v_min_iniziata))/60 ELSE NULL END;
-
   WITH aggiornate AS (
-    UPDATE fasi_ordine_extra SET stato='completata', completata_il=v_now, n_ordini_batch=v_count, tempo_accumulato_minuti=v_tempo_batch
+    UPDATE public.fasi_ordine_extra SET stato='completata', completata_il=v_now, n_ordini_batch=v_count, tempo_accumulato_minuti=v_tempo_batch
     WHERE nome=p_nome AND operatore_id=p_operatore_id AND stato='in_corso'
     RETURNING id, ordine_id
   )
@@ -1110,15 +1046,13 @@ BEGIN
          (array_agg(ordine_id))[1]
   INTO v_dettaglio, v_ordine_rappresentativo
   FROM aggiornate;
-
   BEGIN
-    INSERT INTO archivio_log (ordine_id, utente_id, azione, dettaglio)
+    INSERT INTO public.archivio_log (ordine_id, utente_id, azione, dettaglio)
     VALUES (v_ordine_rappresentativo, p_operatore_id, 'fase_completata',
             jsonb_build_object('batch', true, 'extra', true, 'nome', p_nome, 'conteggio', v_count, 'fasi', v_dettaglio));
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING 'log batch extra non scritto: %', SQLERRM;
   END;
-
   RETURN json_build_object('ok', true, 'completate', v_count);
 END;
 $$;
@@ -1132,19 +1066,19 @@ ALTER FUNCTION public.completa_fasi_extra_batch(p_nome text, p_operatore_id uuid
 
 CREATE FUNCTION public.conferma_ricezione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
-  v_fase   fasi_ordine_extra%ROWTYPE;
+  v_fase   public.fasi_ordine_extra%ROWTYPE;
   v_durata numeric;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF EXISTS (SELECT 1 FROM users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
+  IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  SELECT * INTO v_fase FROM fasi_ordine_extra WHERE id = p_fase_extra_id;
+  SELECT * INTO v_fase FROM public.fasi_ordine_extra WHERE id = p_fase_extra_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
   IF v_fase.tipo_gestione <> 'spedizione_esterna' THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'tipo_gestione_non_valido');
@@ -1155,15 +1089,15 @@ BEGIN
   IF v_fase.spedita_il IS NULL THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_ancora_spedita');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_operatore_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'responsabile') THEN
     IF v_fase.operatore_id IS NOT NULL
        AND v_fase.operatore_id IS DISTINCT FROM p_operatore_id
-       AND NOT EXISTS (SELECT 1 FROM fasi_extra_operatori WHERE fasi_ordine_extra_id = p_fase_extra_id AND operatore_id = p_operatore_id) THEN
+       AND NOT EXISTS (SELECT 1 FROM public.fasi_extra_operatori WHERE fasi_ordine_extra_id = p_fase_extra_id AND operatore_id = p_operatore_id) THEN
       RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
     END IF;
   END IF;
   v_durata := GREATEST(0, EXTRACT(EPOCH FROM (NOW() - v_fase.spedita_il)) / 60);
-  UPDATE fasi_ordine_extra
+  UPDATE public.fasi_ordine_extra
   SET stato = 'completata', completata_il = NOW(),
       tempo_accumulato_minuti = COALESCE(tempo_accumulato_minuti, 0) + v_durata,
       n_ordini_batch = 1
@@ -1181,19 +1115,19 @@ ALTER FUNCTION public.conferma_ricezione_extra(p_fase_extra_id uuid, p_operatore
 
 CREATE FUNCTION public.conferma_ricezione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
-DECLARE v_fase ordine_fasi%ROWTYPE; v_tg text; v_durata numeric;
+DECLARE v_fase public.ordine_fasi%ROWTYPE; v_tg text; v_durata numeric;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF EXISTS (SELECT 1 FROM users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
+  IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  SELECT * INTO v_fase FROM ordine_fasi WHERE id = p_ordine_fase_id FOR UPDATE;
+  SELECT * INTO v_fase FROM public.ordine_fasi WHERE id = p_ordine_fase_id FOR UPDATE;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
-  SELECT tipo_gestione INTO v_tg FROM fasi WHERE id = v_fase.fase_id;
+  SELECT tipo_gestione INTO v_tg FROM public.fasi WHERE id = v_fase.fase_id;
   IF v_tg = 'conferma_ricezione' THEN
     IF v_fase.stato <> 'in_attesa' THEN RETURN jsonb_build_object('ok', false, 'errore', 'stato_non_in_attesa', 'stato', v_fase.stato); END IF;
     v_durata := GREATEST(0, EXTRACT(EPOCH FROM (NOW() - COALESCE(v_fase.iniziata_il, NOW()))) / 60);
@@ -1204,10 +1138,10 @@ BEGIN
   ELSE
     RETURN jsonb_build_object('ok', false, 'errore', 'tipo_gestione_non_valido', 'tipo_gestione', v_tg);
   END IF;
-  UPDATE ordine_fasi SET stato='completata', completata_il=NOW(),
+  UPDATE public.ordine_fasi SET stato='completata', completata_il=NOW(),
     tempo_accumulato_minuti=COALESCE(tempo_accumulato_minuti,0)+v_durata, n_ordini_batch=1 WHERE id=p_ordine_fase_id;
   BEGIN
-    INSERT INTO archivio_log (ordine_id, fase_id, utente_id, azione, dettaglio)
+    INSERT INTO public.archivio_log (ordine_id, fase_id, utente_id, azione, dettaglio)
     VALUES (v_fase.ordine_id, v_fase.fase_id, p_operatore_id, 'fase_confermata_ricezione',
             jsonb_build_object('ordine_fase_id', p_ordine_fase_id, 'durata_min', v_durata));
   EXCEPTION WHEN OTHERS THEN
@@ -1226,15 +1160,14 @@ ALTER FUNCTION public.conferma_ricezione_fase(p_ordine_fase_id uuid, p_operatore
 
 CREATE FUNCTION public.confronto_operatori_per_fase() RETURNS TABLE(fase_id smallint, fase_nome text, operatore_id uuid, operatore_nome text, mediana_min numeric, campioni bigint)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   k_soglia_campioni int;
 BEGIN
   SELECT COALESCE(valore::int, 5) INTO k_soglia_campioni
-  FROM kpi_config WHERE chiave = 'soglia_campioni_op';
+  FROM public.kpi_config WHERE chiave = 'soglia_campioni_op';
   k_soglia_campioni := COALESCE(k_soglia_campioni, 5);
-
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'non_autenticato'; END IF;
   RETURN QUERY
   SELECT f.id::smallint, f.nome, u.id, (u.nome||' '||u.cognome)::text,
@@ -1246,9 +1179,9 @@ BEGIN
       ELSE NULL
     END,
     COUNT(*)::bigint
-  FROM ordine_fasi of2
-  JOIN ordini o ON o.id=of2.ordine_id
-  JOIN fasi f ON f.id=of2.fase_id
+  FROM public.ordine_fasi of2
+  JOIN public.ordini o ON o.id=of2.ordine_id
+  JOIN public.fasi f ON f.id=of2.fase_id
   JOIN public.users u ON u.id=of2.operatore_id
   WHERE of2.stato='completata' AND of2.tempo_accumulato_minuti>0
     AND of2.completata_il IS NOT NULL AND of2.fase_id IS NOT NULL
@@ -1268,15 +1201,14 @@ ALTER FUNCTION public.confronto_operatori_per_fase() OWNER TO postgres;
 
 CREATE FUNCTION public.confronto_operatori_per_fase_extra() RETURNS TABLE(catalogo_fase_extra_id uuid, fase_nome text, operatore_id uuid, operatore_nome text, mediana_min numeric, campioni bigint)
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   k_soglia_campioni int;
 BEGIN
   SELECT COALESCE(valore::int, 5) INTO k_soglia_campioni
-  FROM kpi_config WHERE chiave = 'soglia_campioni_op';
+  FROM public.kpi_config WHERE chiave = 'soglia_campioni_op';
   k_soglia_campioni := COALESCE(k_soglia_campioni, 5);
-
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'non_autenticato'; END IF;
   RETURN QUERY
   SELECT
@@ -1293,8 +1225,8 @@ BEGIN
       ELSE NULL
     END,
     COUNT(*)::bigint
-  FROM fasi_ordine_extra foe
-  JOIN catalogo_fasi_extra c ON c.id = foe.catalogo_fase_extra_id
+  FROM public.fasi_ordine_extra foe
+  JOIN public.catalogo_fasi_extra c ON c.id = foe.catalogo_fase_extra_id
   JOIN public.users        u ON u.id = foe.operatore_id
   WHERE foe.stato                       = 'completata'
     AND foe.tempo_accumulato_minuti     > 0
@@ -1317,11 +1249,11 @@ ALTER FUNCTION public.confronto_operatori_per_fase_extra() OWNER TO postgres;
 
 CREATE FUNCTION public.controlla_sessione(p_user_id uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
-DECLARE v_user users%ROWTYPE;
+DECLARE v_user public.users%ROWTYPE;
 BEGIN
-  SELECT * INTO v_user FROM users WHERE id = p_user_id;
+  SELECT * INTO v_user FROM public.users WHERE id = p_user_id;
   IF NOT FOUND THEN
     RETURN jsonb_build_object('valida', false, 'motivo', 'utente_non_trovato');
   END IF;
@@ -1329,7 +1261,7 @@ BEGIN
     RETURN jsonb_build_object('valida', false, 'motivo', 'disattivato');
   END IF;
   IF v_user.forzato_logout = true THEN
-    UPDATE users SET forzato_logout = false WHERE id = p_user_id;
+    UPDATE public.users SET forzato_logout = false WHERE id = p_user_id;
     RETURN jsonb_build_object('valida', false, 'motivo', 'forzato_logout');
   END IF;
   RETURN jsonb_build_object('valida', true);
@@ -1345,16 +1277,16 @@ ALTER FUNCTION public.controlla_sessione(p_user_id uuid) OWNER TO postgres;
 
 CREATE FUNCTION public.crea_fasi_extra(p_ordine_id uuid, p_fasi jsonb, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-  INSERT INTO fasi_ordine_extra(ordine_id, numero, nome, tipo_gestione, e_attesa_esterna, note_responsabile, catalogo_fase_extra_id)
+  INSERT INTO public.fasi_ordine_extra(ordine_id, numero, nome, tipo_gestione, e_attesa_esterna, note_responsabile, catalogo_fase_extra_id)
     SELECT
       p_ordine_id,
       (el->>'numero')::smallint,
@@ -1377,63 +1309,54 @@ ALTER FUNCTION public.crea_fasi_extra(p_ordine_id uuid, p_fasi jsonb, p_responsa
 
 CREATE FUNCTION public.crea_fasi_per_ordine() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_struttura   TEXT;
   v_tipo_prod   TEXT;
   v_materiale   TEXT;
-  v_stato       stato_fase;
+  v_stato       public.stato_fase;
   v_iniziata_il TIMESTAMPTZ;
   f             RECORD;
 BEGIN
   IF NEW.tipo = 'extra' THEN RETURN NEW; END IF;
-
   v_struttura := LOWER(COALESCE(NEW.struttura, ''));
   v_tipo_prod := LOWER(COALESCE(NEW.tipo_prodotto, ''));
   v_materiale := LOWER(COALESCE(NEW.materiale, ''));
-
   FOR f IN
     SELECT
       fa.id,
       fa.opzionale,
       fa.avvio_automatico,
-      ARRAY(SELECT ftp.tipo_prodotto_id FROM fase_tipi_prodotto ftp WHERE ftp.fase_id = fa.id) AS tipi_ids,
-      ARRAY(SELECT fm.materiale_valore   FROM fase_materiali     fm  WHERE fm.fase_id  = fa.id) AS mat_valori,
-      ARRAY(SELECT fs.struttura_valore   FROM fase_strutture     fs  WHERE fs.fase_id  = fa.id) AS strut_ids
-    FROM fasi fa
+      ARRAY(SELECT ftp.tipo_prodotto_id FROM public.fase_tipi_prodotto ftp WHERE ftp.fase_id = fa.id) AS tipi_ids,
+      ARRAY(SELECT fm.materiale_valore   FROM public.fase_materiali     fm  WHERE fm.fase_id  = fa.id) AS mat_valori,
+      ARRAY(SELECT fs.struttura_valore   FROM public.fase_strutture     fs  WHERE fs.fase_id  = fa.id) AS strut_ids
+    FROM public.fasi fa
     ORDER BY fa.posizione, fa.id
   LOOP
-    v_stato       := 'disponibile'::stato_fase;
+    v_stato       := 'disponibile'::public.stato_fase;
     v_iniziata_il := NULL;
-
     IF f.opzionale THEN
-      INSERT INTO ordine_fasi (ordine_id, fase_id, stato, iniziata_il)
-      VALUES (NEW.id, f.id, 'non_applicabile'::stato_fase, NULL);
+      INSERT INTO public.ordine_fasi (ordine_id, fase_id, stato, iniziata_il)
+      VALUES (NEW.id, f.id, 'non_applicabile'::public.stato_fase, NULL);
       CONTINUE;
     END IF;
-
     IF cardinality(f.tipi_ids) > 0 AND NOT (v_tipo_prod = ANY(f.tipi_ids)) THEN
-      v_stato := 'non_applicabile'::stato_fase;
+      v_stato := 'non_applicabile'::public.stato_fase;
     END IF;
     IF cardinality(f.mat_valori) > 0 AND NOT (v_materiale = ANY(f.mat_valori)) THEN
-      v_stato := 'non_applicabile'::stato_fase;
+      v_stato := 'non_applicabile'::public.stato_fase;
     END IF;
     IF cardinality(f.strut_ids) > 0 AND NOT (v_struttura = ANY(f.strut_ids)) THEN
-      v_stato := 'non_applicabile'::stato_fase;
+      v_stato := 'non_applicabile'::public.stato_fase;
     END IF;
-
-    -- Avvio automatico: se la fase è applicabile e ha avvio_automatico = true,
-    -- parte subito in in_attesa (senza presa in carico operatore)
     IF v_stato <> 'non_applicabile' AND COALESCE(f.avvio_automatico, false) THEN
-      v_stato       := 'in_attesa'::stato_fase;
+      v_stato       := 'in_attesa'::public.stato_fase;
       v_iniziata_il := NOW();
     END IF;
-
-    INSERT INTO ordine_fasi (ordine_id, fase_id, stato, iniziata_il)
+    INSERT INTO public.ordine_fasi (ordine_id, fase_id, stato, iniziata_il)
     VALUES (NEW.id, f.id, v_stato, v_iniziata_il);
   END LOOP;
-
   RETURN NEW;
 END;
 $$;
@@ -1447,11 +1370,11 @@ ALTER FUNCTION public.crea_fasi_per_ordine() OWNER TO postgres;
 
 CREATE FUNCTION public.crea_operatore(p_nome text, p_cognome text, p_pin text, p_ruolo public.ruolo_utente DEFAULT 'operatore'::public.ruolo_utente, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public', 'extensions'
+    SET search_path TO ''
     AS $_$
 DECLARE v_id UUID;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF p_responsabile_id IS NULL THEN RETURN jsonb_build_object('ok', false, 'errore', 'responsabile_id_obbligatorio'); END IF;
@@ -1474,14 +1397,14 @@ ALTER FUNCTION public.crea_operatore(p_nome text, p_cognome text, p_pin text, p_
 
 CREATE FUNCTION public.crea_scheda_kpi(p_nome text, p_criteri jsonb, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE v_ore numeric; v_giorni numeric; v_campioni integer; v_id uuid;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id=p_responsabile_id AND ruolo='responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_responsabile_id AND ruolo='responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
   IF p_nome IS NULL OR trim(p_nome) = '' THEN RETURN jsonb_build_object('ok', false, 'errore', 'nome_obbligatorio'); END IF;
@@ -1503,7 +1426,7 @@ ALTER FUNCTION public.crea_scheda_kpi(p_nome text, p_criteri jsonb, p_responsabi
 
 CREATE FUNCTION public.data_consegna_stimata(p_giorni_lavorativi_necessari numeric) RETURNS date
     LANGUAGE plpgsql STABLE SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_data   date := CURRENT_DATE;
@@ -1514,7 +1437,7 @@ BEGIN
   WHILE v_giorni < CEIL(p_giorni_lavorativi_necessari)::int AND v_limite > 0 LOOP
     v_data   := v_data + 1;
     v_limite := v_limite - 1;
-    IF e_giorno_lavorativo(v_data) THEN
+    IF public.e_giorno_lavorativo(v_data) THEN
       v_giorni := v_giorni + 1;
     END IF;
   END LOOP;
@@ -1531,10 +1454,10 @@ ALTER FUNCTION public.data_consegna_stimata(p_giorni_lavorativi_necessari numeri
 
 CREATE FUNCTION public.dettaglio_fase_completa(p_operatore_id uuid, p_session_token uuid, p_ord_fase_id uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   RETURN jsonb_build_object('ok', true, 'dati', jsonb_build_object(
@@ -1543,9 +1466,9 @@ BEGIN
         'users', CASE WHEN u.id IS NOT NULL THEN jsonb_build_object('nome', u.nome, 'cognome', u.cognome) ELSE NULL END,
         'fasi',  CASE WHEN f.id IS NOT NULL THEN jsonb_build_object('tipo_gestione', f.tipo_gestione) ELSE NULL END
       )
-      FROM ordine_fasi of
-      LEFT JOIN users u ON u.id = of.operatore_id
-      LEFT JOIN fasi f ON f.id = of.fase_id
+      FROM public.ordine_fasi of
+      LEFT JOIN public.users u ON u.id = of.operatore_id
+      LEFT JOIN public.fasi f ON f.id = of.fase_id
       WHERE of.id = p_ord_fase_id
     ),
     'collaboratori', (
@@ -1553,8 +1476,8 @@ BEGIN
         'operatore_id', ofo.operatore_id,
         'users', jsonb_build_object('nome', u.nome, 'cognome', u.cognome)
       )), '[]'::jsonb)
-      FROM ordine_fasi_operatori ofo
-      JOIN users u ON u.id = ofo.operatore_id
+      FROM public.ordine_fasi_operatori ofo
+      JOIN public.users u ON u.id = ofo.operatore_id
       WHERE ofo.ordine_fase_id = p_ord_fase_id
     )
   ));
@@ -1570,10 +1493,10 @@ ALTER FUNCTION public.dettaglio_fase_completa(p_operatore_id uuid, p_session_tok
 
 CREATE FUNCTION public.dettaglio_fase_extra_completa(p_operatore_id uuid, p_session_token uuid, p_fase_extra_id uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   RETURN jsonb_build_object('ok', true, 'dati', jsonb_build_object(
@@ -1581,8 +1504,8 @@ BEGIN
       SELECT to_jsonb(fe) || jsonb_build_object(
         'users', CASE WHEN u.id IS NOT NULL THEN jsonb_build_object('nome', u.nome, 'cognome', u.cognome) ELSE NULL END
       )
-      FROM fasi_ordine_extra fe
-      LEFT JOIN users u ON u.id = fe.operatore_id
+      FROM public.fasi_ordine_extra fe
+      LEFT JOIN public.users u ON u.id = fe.operatore_id
       WHERE fe.id = p_fase_extra_id
     ),
     'collaboratori', (
@@ -1590,8 +1513,8 @@ BEGIN
         'operatore_id', feo.operatore_id,
         'users', jsonb_build_object('nome', u.nome, 'cognome', u.cognome)
       )), '[]'::jsonb)
-      FROM fasi_extra_operatori feo
-      JOIN users u ON u.id = feo.operatore_id
+      FROM public.fasi_extra_operatori feo
+      JOIN public.users u ON u.id = feo.operatore_id
       WHERE feo.fasi_ordine_extra_id = p_fase_extra_id
     )
   ));
@@ -1607,10 +1530,10 @@ ALTER FUNCTION public.dettaglio_fase_extra_completa(p_operatore_id uuid, p_sessi
 
 CREATE FUNCTION public.dettaglio_ordine_fasi(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   RETURN jsonb_build_object('ok', true, 'dati', jsonb_build_object(
@@ -1620,8 +1543,8 @@ BEGIN
           'users', CASE WHEN u.id IS NOT NULL THEN jsonb_build_object('nome', u.nome, 'cognome', u.cognome) ELSE NULL END
         )
       ), '[]'::jsonb)
-      FROM ordine_fasi of
-      LEFT JOIN users u ON u.id = of.operatore_id
+      FROM public.ordine_fasi of
+      LEFT JOIN public.users u ON u.id = of.operatore_id
       WHERE of.ordine_id = p_ordine_id
     ),
     'fasi_extra', (
@@ -1630,8 +1553,8 @@ BEGIN
           'users', CASE WHEN u.id IS NOT NULL THEN jsonb_build_object('nome', u.nome, 'cognome', u.cognome) ELSE NULL END
         ) ORDER BY fe.numero
       ), '[]'::jsonb)
-      FROM fasi_ordine_extra fe
-      LEFT JOIN users u ON u.id = fe.operatore_id
+      FROM public.fasi_ordine_extra fe
+      LEFT JOIN public.users u ON u.id = fe.operatore_id
       WHERE fe.ordine_id = p_ordine_id
     )
   ));
@@ -1647,24 +1570,21 @@ ALTER FUNCTION public.dettaglio_ordine_fasi(p_operatore_id uuid, p_session_token
 
 CREATE FUNCTION public.dimensione_database(p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_db_bytes bigint;
   v_tabelle  jsonb;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RAISE EXCEPTION 'sessione_non_valida' USING ERRCODE = '42501';
   END IF;
-
   IF NOT EXISTS (
-    SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile'
+    SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile'
   ) THEN
     RAISE EXCEPTION 'Accesso non autorizzato';
   END IF;
-
   SELECT pg_database_size(current_database()) INTO v_db_bytes;
-
   SELECT jsonb_agg(r.t)
   INTO v_tabelle
   FROM (
@@ -1678,7 +1598,6 @@ BEGIN
     ORDER BY pg_total_relation_size((schemaname || '.' || tablename)::regclass) DESC
     LIMIT 8
   ) r;
-
   RETURN jsonb_build_object(
     'db_bytes',     v_db_bytes,
     'db_leggibile', pg_size_pretty(v_db_bytes),
@@ -1696,28 +1615,24 @@ ALTER FUNCTION public.dimensione_database(p_responsabile_id uuid, p_session_toke
 
 CREATE FUNCTION public.e_giorno_lavorativo(p_data date) RETURNS boolean
     LANGUAGE plpgsql STABLE SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_dow    int;
   v_sabato boolean;
 BEGIN
   v_dow := EXTRACT(DOW FROM p_data)::int;
-
   IF v_dow = 0 THEN RETURN false; END IF;
-
   IF v_dow = 6 THEN
-    SELECT COALESCE(sabato_lavorativo, false) INTO v_sabato FROM config_orario LIMIT 1;
+    SELECT COALESCE(sabato_lavorativo, false) INTO v_sabato FROM public.config_orario LIMIT 1;
     IF NOT v_sabato THEN RETURN false; END IF;
   END IF;
-
   IF EXISTS (
-    SELECT 1 FROM chiusure_aziendali
+    SELECT 1 FROM public.chiusure_aziendali
     WHERE p_data BETWEEN data_inizio AND data_fine
   ) THEN
     RETURN false;
   END IF;
-
   RETURN true;
 END;
 $$;
@@ -1731,7 +1646,7 @@ ALTER FUNCTION public.e_giorno_lavorativo(p_data date) OWNER TO postgres;
 
 CREATE FUNCTION public.e_responsabile() RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
   SELECT EXISTS (
     SELECT 1 FROM public.users
@@ -1751,22 +1666,20 @@ ALTER FUNCTION public.e_responsabile() OWNER TO postgres;
 
 CREATE FUNCTION public.elenco_foto_fase(p_user_id uuid, p_session_token uuid, p_ordine_fase_id uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_allegati jsonb;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_user_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_user_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
            'id', a.id, 'url_file', a.url_file, 'caricato_da', a.caricato_da
          )), '[]'::jsonb)
     INTO v_allegati
     FROM public.allegati a
     WHERE a.ordine_fase_id = p_ordine_fase_id;
-
   RETURN jsonb_build_object('ok', true, 'allegati', v_allegati);
 END;
 $$;
@@ -1780,33 +1693,29 @@ ALTER FUNCTION public.elenco_foto_fase(p_user_id uuid, p_session_token uuid, p_o
 
 CREATE FUNCTION public.elenco_foto_ordine_responsabile(p_ordine_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_allegati jsonb;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-
   IF NOT EXISTS (
-    SELECT 1 FROM users
+    SELECT 1 FROM public.users
     WHERE id = p_responsabile_id AND ruolo = 'responsabile' AND attivo = true AND eliminato IS DISTINCT FROM true
   ) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM ordini WHERE id = p_ordine_id) THEN
+  IF NOT EXISTS (SELECT 1 FROM public.ordini WHERE id = p_ordine_id) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'ordine_non_trovato');
   END IF;
-
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
            'id', a.id, 'url_file', a.url_file, 'ordine_fase_id', a.ordine_fase_id, 'caricato_da', a.caricato_da
          )), '[]'::jsonb)
     INTO v_allegati
-    FROM allegati a
-    WHERE a.ordine_fase_id IN (SELECT id FROM ordine_fasi WHERE ordine_id = p_ordine_id);
-
+    FROM public.allegati a
+    WHERE a.ordine_fase_id IN (SELECT id FROM public.ordine_fasi WHERE ordine_id = p_ordine_id);
   RETURN jsonb_build_object('ok', true, 'allegati', v_allegati);
 END;
 $$;
@@ -1820,13 +1729,13 @@ ALTER FUNCTION public.elenco_foto_ordine_responsabile(p_ordine_id uuid, p_respon
 
 CREATE FUNCTION public.elimina_allegati(p_allegato_ids uuid[], p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_is_responsabile BOOLEAN; v_allegato RECORD; v_autorizzato BOOLEAN;
   v_eliminati uuid[] := '{}'; v_url_eliminati text[] := '{}'; v_rifiutati uuid[] := '{}';
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
@@ -1860,11 +1769,11 @@ ALTER FUNCTION public.elimina_allegati(p_allegato_ids uuid[], p_operatore_id uui
 
 CREATE FUNCTION public.elimina_allegati_fasi(p_fase_ids uuid[], p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE v_urls text[];
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_responsabile_id AND ruolo='responsabile') THEN
@@ -1885,23 +1794,19 @@ ALTER FUNCTION public.elimina_allegati_fasi(p_fase_ids uuid[], p_responsabile_id
 
 CREATE FUNCTION public.elimina_chiusura_aziendale(p_chiusura_id uuid, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE((SELECT valida_sessione(p_responsabile_id, p_session_token)), false) THEN
+  IF NOT COALESCE((SELECT public.valida_sessione(p_responsabile_id, p_session_token)), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-
-  DELETE FROM chiusure_aziendali WHERE id = p_chiusura_id;
-
+  DELETE FROM public.chiusure_aziendali WHERE id = p_chiusura_id;
   IF NOT FOUND THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'chiusura_non_trovata');
   END IF;
-
   RETURN jsonb_build_object('ok', true);
 END;
 $$;
@@ -1915,19 +1820,18 @@ ALTER FUNCTION public.elimina_chiusura_aziendale(p_chiusura_id uuid, p_responsab
 
 CREATE FUNCTION public.elimina_fase_custom_ordine(p_ordine_fase_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
-  v_row ordine_fasi%ROWTYPE;
+  v_row public.ordine_fasi%ROWTYPE;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-
-  SELECT * INTO v_row FROM ordine_fasi WHERE id = p_ordine_fase_id;
+  SELECT * INTO v_row FROM public.ordine_fasi WHERE id = p_ordine_fase_id;
   IF NOT FOUND THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_trovata');
   END IF;
@@ -1937,17 +1841,14 @@ BEGIN
   IF v_row.stato = 'completata' THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'fase_completata_non_eliminabile');
   END IF;
-
-  DELETE FROM ordine_fasi WHERE id = p_ordine_fase_id;
-
+  DELETE FROM public.ordine_fasi WHERE id = p_ordine_fase_id;
   BEGIN
-    INSERT INTO archivio_log (ordine_id, utente_id, azione, dettaglio)
+    INSERT INTO public.archivio_log (ordine_id, utente_id, azione, dettaglio)
   VALUES (v_row.ordine_id, p_responsabile_id, 'fase_eliminata',
     jsonb_build_object('nome', COALESCE(v_row.nome_custom, '?')));
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING 'log non scritto: %', SQLERRM;
   END;
-
   RETURN jsonb_build_object('ok', true);
 END;
 $$;
@@ -1961,23 +1862,23 @@ ALTER FUNCTION public.elimina_fase_custom_ordine(p_ordine_fase_id uuid, p_respon
 
 CREATE FUNCTION public.elimina_fase_extra(p_fase_extra_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
-DECLARE v_fase fasi_ordine_extra%ROWTYPE;
+DECLARE v_fase public.fasi_ordine_extra%ROWTYPE;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id=p_responsabile_id AND ruolo='responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_responsabile_id AND ruolo='responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-  SELECT * INTO v_fase FROM fasi_ordine_extra WHERE id = p_fase_extra_id;
+  SELECT * INTO v_fase FROM public.fasi_ordine_extra WHERE id = p_fase_extra_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
   IF v_fase.stato = 'completata' THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'fase_completata_non_eliminabile',
       'messaggio', 'La fase è già completata e non può essere eliminata per preservare lo storico.');
   END IF;
-  DELETE FROM fasi_ordine_extra WHERE id = p_fase_extra_id;
+  DELETE FROM public.fasi_ordine_extra WHERE id = p_fase_extra_id;
   RETURN jsonb_build_object('ok', true);
 END;
 $$;
@@ -1991,16 +1892,16 @@ ALTER FUNCTION public.elimina_fase_extra(p_fase_extra_id uuid, p_responsabile_id
 
 CREATE FUNCTION public.elimina_macchina(p_id uuid, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida'); END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato'); END IF;
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida'); END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato'); END IF;
   IF EXISTS (
-    SELECT 1 FROM fase_macchine fm JOIN ordine_fasi of2 ON of2.fase_id=fm.fase_id JOIN ordini o ON o.id=of2.ordine_id
+    SELECT 1 FROM public.fase_macchine fm JOIN public.ordine_fasi of2 ON of2.fase_id=fm.fase_id JOIN public.ordini o ON o.id=of2.ordine_id
     WHERE fm.macchina_id=p_id AND o.stato NOT IN ('spedito') AND NOT COALESCE(o.eliminato,false) AND of2.stato NOT IN ('completata','non_applicabile')
   ) THEN RETURN jsonb_build_object('ok', false, 'errore', 'macchina_in_uso'); END IF;
-  DELETE FROM macchine WHERE id=p_id;
+  DELETE FROM public.macchine WHERE id=p_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'macchina_non_trovata'); END IF;
   RETURN jsonb_build_object('ok', true);
 END;
@@ -2015,12 +1916,12 @@ ALTER FUNCTION public.elimina_macchina(p_id uuid, p_responsabile_id uuid, p_sess
 
 CREATE FUNCTION public.elimina_manutenzione_macchina(p_id uuid, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida'); END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato'); END IF;
-  DELETE FROM manutenzioni_macchina WHERE id=p_id;
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida'); END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato'); END IF;
+  DELETE FROM public.manutenzioni_macchina WHERE id=p_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'manutenzione_non_trovata'); END IF;
   RETURN jsonb_build_object('ok', true);
 END;
@@ -2035,10 +1936,10 @@ ALTER FUNCTION public.elimina_manutenzione_macchina(p_id uuid, p_responsabile_id
 
 CREATE FUNCTION public.elimina_operatore(p_operatore_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_responsabile_id AND ruolo='responsabile' AND attivo=TRUE AND eliminato IS DISTINCT FROM TRUE) THEN
@@ -2047,7 +1948,6 @@ BEGIN
   IF p_operatore_id = p_responsabile_id THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'auto_operazione_non_consentita');
   END IF;
-
   UPDATE public.users SET attivo = false, eliminato = true WHERE id = p_operatore_id;
   IF NOT FOUND THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'utente_non_trovato');
@@ -2065,13 +1965,13 @@ ALTER FUNCTION public.elimina_operatore(p_operatore_id uuid, p_responsabile_id u
 
 CREATE FUNCTION public.elimina_scheda_kpi(p_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id=p_responsabile_id AND ruolo='responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_responsabile_id AND ruolo='responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
   DELETE FROM public.kpi_schede WHERE id=p_id;
@@ -2089,11 +1989,11 @@ ALTER FUNCTION public.elimina_scheda_kpi(p_id uuid, p_responsabile_id uuid, p_se
 
 CREATE FUNCTION public.elimina_tipo_prodotto(p_id text, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE v_in_uso INT;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_responsabile_id AND ruolo='responsabile') THEN
@@ -2101,7 +2001,6 @@ BEGIN
   END IF;
   SELECT COUNT(*) INTO v_in_uso FROM public.ordini WHERE tipo_prodotto=p_id AND stato NOT IN ('spedito') AND eliminato IS NOT TRUE;
   IF v_in_uso > 0 THEN RETURN json_build_object('ok', false, 'errore', 'tipo_in_uso', 'ordini', v_in_uso); END IF;
-  -- fase_tipi_prodotto: CASCADE ON DELETE gestisce la pulizia automaticamente
   DELETE FROM public.tipi_prodotto WHERE id=p_id;
   RETURN json_build_object('ok', true);
 END;
@@ -2116,26 +2015,26 @@ ALTER FUNCTION public.elimina_tipo_prodotto(p_id text, p_responsabile_id uuid, p
 
 CREATE FUNCTION public.fasi_avanzamento_ordini(p_operatore_id uuid, p_session_token uuid, p_std_ids uuid[] DEFAULT '{}'::uuid[], p_extra_ids uuid[] DEFAULT '{}'::uuid[], p_solo_aperti_ids uuid[] DEFAULT '{}'::uuid[]) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   RETURN jsonb_build_object('ok', true, 'dati', jsonb_build_object(
     'disponibili_ordine_ids', (
       SELECT COALESCE(jsonb_agg(DISTINCT of.ordine_id), '[]'::jsonb)
-      FROM ordine_fasi of
+      FROM public.ordine_fasi of
       WHERE of.stato = 'disponibile' AND of.ordine_id = ANY(p_solo_aperti_ids)
     ),
     'std', (
       SELECT COALESCE(jsonb_agg(jsonb_build_object('ordine_id', of.ordine_id, 'stato', of.stato, 'fase_id', of.fase_id)), '[]'::jsonb)
-      FROM ordine_fasi of
+      FROM public.ordine_fasi of
       WHERE of.ordine_id = ANY(p_std_ids)
     ),
     'extra', (
       SELECT COALESCE(jsonb_agg(jsonb_build_object('ordine_id', fe.ordine_id, 'stato', fe.stato)), '[]'::jsonb)
-      FROM fasi_ordine_extra fe
+      FROM public.fasi_ordine_extra fe
       WHERE fe.ordine_id = ANY(p_extra_ids)
     )
   ));
@@ -2151,15 +2050,15 @@ ALTER FUNCTION public.fasi_avanzamento_ordini(p_operatore_id uuid, p_session_tok
 
 CREATE FUNCTION public.fasi_dipendenze_stato(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid, p_fase_ids smallint[]) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   RETURN jsonb_build_object('ok', true, 'dati', (
     SELECT COALESCE(jsonb_agg(jsonb_build_object('fase_id', of.fase_id, 'stato', of.stato)), '[]'::jsonb)
-    FROM ordine_fasi of
+    FROM public.ordine_fasi of
     WHERE of.ordine_id = p_ordine_id AND of.fase_id = ANY(p_fase_ids)
   ));
 END;
@@ -2174,7 +2073,7 @@ ALTER FUNCTION public.fasi_dipendenze_stato(p_operatore_id uuid, p_session_token
 
 CREATE FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_result jsonb;
@@ -2196,15 +2095,14 @@ BEGIN
     )
   )
   INTO v_result
-  FROM ordine_fasi_operatori j
-  JOIN ordine_fasi f  ON f.id  = j.ordine_fase_id
-  JOIN ordini      o  ON o.id  = f.ordine_id
-  LEFT JOIN fasi   fa ON fa.id = f.fase_id
-  LEFT JOIN users  u  ON u.id  = f.operatore_id
+  FROM public.ordine_fasi_operatori j
+  JOIN public.ordine_fasi f  ON f.id  = j.ordine_fase_id
+  JOIN public.ordini      o  ON o.id  = f.ordine_id
+  LEFT JOIN public.fasi   fa ON fa.id = f.fase_id
+  LEFT JOIN public.users  u  ON u.id  = f.operatore_id
   WHERE j.operatore_id  = p_operatore_id
     AND f.stato         = 'in_corso'
     AND j.aggiunto_il  >= f.iniziata_il;
-
   RETURN COALESCE(v_result, '[]'::jsonb);
 END;
 $$;
@@ -2218,15 +2116,15 @@ ALTER FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid) OWNER TO p
 
 CREATE FUNCTION public.fasi_stato_ordine(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   RETURN jsonb_build_object('ok', true, 'dati', (
     SELECT COALESCE(jsonb_agg(jsonb_build_object('stato', of.stato)), '[]'::jsonb)
-    FROM ordine_fasi of
+    FROM public.ordine_fasi of
     WHERE of.ordine_id = p_ordine_id
   ));
 END;
@@ -2241,20 +2139,20 @@ ALTER FUNCTION public.fasi_stato_ordine(p_operatore_id uuid, p_session_token uui
 
 CREATE FUNCTION public.forza_completa_fase_extra(p_fase_extra_id uuid, p_responsabile_id uuid, p_note text DEFAULT NULL::text, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
-DECLARE v_fase fasi_ordine_extra%ROWTYPE;
+DECLARE v_fase public.fasi_ordine_extra%ROWTYPE;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-  SELECT * INTO v_fase FROM fasi_ordine_extra WHERE id = p_fase_extra_id;
+  SELECT * INTO v_fase FROM public.fasi_ordine_extra WHERE id = p_fase_extra_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
   IF v_fase.stato = 'completata' THEN RETURN jsonb_build_object('ok', false, 'errore', 'gia_completata'); END IF;
-  UPDATE fasi_ordine_extra
+  UPDATE public.fasi_ordine_extra
     SET stato = 'completata',
         completata_il = NOW(),
         note_operatore = COALESCE(p_note, note_operatore),
@@ -2277,10 +2175,10 @@ ALTER FUNCTION public.forza_completa_fase_extra(p_fase_extra_id uuid, p_responsa
 
 CREATE FUNCTION public.forza_logout_operatore(p_operatore_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_responsabile_id AND ruolo='responsabile' AND attivo=TRUE AND eliminato IS DISTINCT FROM TRUE) THEN
@@ -2289,7 +2187,6 @@ BEGIN
   IF p_operatore_id = p_responsabile_id THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'auto_operazione_non_consentita');
   END IF;
-
   UPDATE public.users SET forzato_logout = true WHERE id = p_operatore_id;
   IF NOT FOUND THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'utente_non_trovato');
@@ -2307,11 +2204,11 @@ ALTER FUNCTION public.forza_logout_operatore(p_operatore_id uuid, p_responsabile
 
 CREATE FUNCTION public.fotocamera_interna_attiva() RETURNS boolean
     LANGUAGE plpgsql STABLE SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE v_valore text;
 BEGIN
-  SELECT valore INTO v_valore FROM config_sistema WHERE chiave = 'fotocamera_interna_attiva';
+  SELECT valore INTO v_valore FROM public.config_sistema WHERE chiave = 'fotocamera_interna_attiva';
   RETURN COALESCE(v_valore = 'true', false);
 END;
 $$;
@@ -2325,11 +2222,11 @@ ALTER FUNCTION public.fotocamera_interna_attiva() OWNER TO postgres;
 
 CREATE FUNCTION public.giorni_lavorativi_disponibili(p_da date, p_a date) RETURNS integer
     LANGUAGE sql STABLE SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
   SELECT COUNT(*)::integer
   FROM generate_series(p_da, p_a, '1 day'::interval) gs(g)
-  WHERE e_giorno_lavorativo(gs.g::date);
+  WHERE public.e_giorno_lavorativo(gs.g::date);
 $$;
 
 
@@ -2341,26 +2238,26 @@ ALTER FUNCTION public.giorni_lavorativi_disponibili(p_da date, p_a date) OWNER T
 
 CREATE FUNCTION public.imposta_catalogo_fase_extra(p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid, p_id uuid DEFAULT NULL::uuid, p_nome text DEFAULT NULL::text, p_descrizione text DEFAULT NULL::text, p_tipo_gestione text DEFAULT 'standard'::text, p_e_attesa_esterna boolean DEFAULT false, p_attiva boolean DEFAULT true) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE v_new_id uuid;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
   IF p_nome IS NULL OR trim(p_nome) = '' THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'nome_obbligatorio');
   END IF;
   IF p_id IS NULL THEN
-    INSERT INTO catalogo_fasi_extra(nome, descrizione, tipo_gestione, e_attesa_esterna, attiva)
+    INSERT INTO public.catalogo_fasi_extra(nome, descrizione, tipo_gestione, e_attesa_esterna, attiva)
     VALUES (trim(p_nome), p_descrizione, p_tipo_gestione, p_e_attesa_esterna, p_attiva)
     RETURNING id INTO v_new_id;
     RETURN jsonb_build_object('ok', true, 'id', v_new_id);
   ELSE
-    UPDATE catalogo_fasi_extra
+    UPDATE public.catalogo_fasi_extra
     SET nome = trim(p_nome), descrizione = p_descrizione,
         tipo_gestione = p_tipo_gestione, e_attesa_esterna = p_e_attesa_esterna, attiva = p_attiva
     WHERE id = p_id;
@@ -2379,27 +2276,23 @@ ALTER FUNCTION public.imposta_catalogo_fase_extra(p_responsabile_id uuid, p_sess
 
 CREATE FUNCTION public.imposta_chiusura_aziendale(p_data_inizio date, p_data_fine date, p_descrizione text DEFAULT NULL::text, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_id uuid;
 BEGIN
-  IF NOT COALESCE((SELECT valida_sessione(p_responsabile_id, p_session_token)), false) THEN
+  IF NOT COALESCE((SELECT public.valida_sessione(p_responsabile_id, p_session_token)), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-
   IF p_data_fine < p_data_inizio THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'data_fine_precedente_inizio');
   END IF;
-
-  INSERT INTO chiusure_aziendali (data_inizio, data_fine, descrizione)
+  INSERT INTO public.chiusure_aziendali (data_inizio, data_fine, descrizione)
   VALUES (p_data_inizio, p_data_fine, p_descrizione)
   RETURNING id INTO v_id;
-
   RETURN jsonb_build_object('ok', true, 'id', v_id);
 END;
 $$;
@@ -2413,18 +2306,18 @@ ALTER FUNCTION public.imposta_chiusura_aziendale(p_data_inizio date, p_data_fine
 
 CREATE FUNCTION public.imposta_competenze_fase(p_fase_id smallint, p_operatori_ordinati uuid[], p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-  DELETE FROM competenze_operatore_fase WHERE fase_id = p_fase_id;
+  DELETE FROM public.competenze_operatore_fase WHERE fase_id = p_fase_id;
   IF p_operatori_ordinati IS NOT NULL AND array_length(p_operatori_ordinati, 1) > 0 THEN
-    INSERT INTO competenze_operatore_fase (operatore_id, fase_id, priorita)
+    INSERT INTO public.competenze_operatore_fase (operatore_id, fase_id, priorita)
     SELECT op_id, p_fase_id, ordinale::smallint
     FROM unnest(p_operatori_ordinati) WITH ORDINALITY AS t(op_id, ordinale);
   END IF;
@@ -2442,23 +2335,21 @@ ALTER FUNCTION public.imposta_competenze_fase(p_fase_id smallint, p_operatori_or
 
 CREATE FUNCTION public.imposta_competenze_macchina(p_macchina_id uuid, p_operatori_ordinati uuid[] DEFAULT NULL::uuid[], p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-
-  DELETE FROM competenze_operatore_macchina WHERE macchina_id = p_macchina_id;
+  DELETE FROM public.competenze_operatore_macchina WHERE macchina_id = p_macchina_id;
   IF p_operatori_ordinati IS NOT NULL AND array_length(p_operatori_ordinati, 1) > 0 THEN
-    INSERT INTO competenze_operatore_macchina (operatore_id, macchina_id, priorita)
+    INSERT INTO public.competenze_operatore_macchina (operatore_id, macchina_id, priorita)
     SELECT op_id, p_macchina_id, ordinale::integer
     FROM unnest(p_operatori_ordinati) WITH ORDINALITY AS t(op_id, ordinale);
   END IF;
-
   RETURN jsonb_build_object('ok', true, 'n_competenti', COALESCE(array_length(p_operatori_ordinati, 1), 0));
 END;
 $$;
@@ -2472,31 +2363,28 @@ ALTER FUNCTION public.imposta_competenze_macchina(p_macchina_id uuid, p_operator
 
 CREATE FUNCTION public.imposta_competenze_per_catalogo_fase_extra(p_responsabile_id uuid, p_catalogo_fase_extra_id uuid, p_operatori_ordinati uuid[], p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM catalogo_fasi_extra WHERE id = p_catalogo_fase_extra_id) THEN
+  IF NOT EXISTS (SELECT 1 FROM public.catalogo_fasi_extra WHERE id = p_catalogo_fase_extra_id) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'catalogo_non_trovato');
   END IF;
-
-  DELETE FROM competenze_operatore_fase_extra WHERE catalogo_fase_extra_id = p_catalogo_fase_extra_id;
-
+  DELETE FROM public.competenze_operatore_fase_extra WHERE catalogo_fase_extra_id = p_catalogo_fase_extra_id;
   IF p_operatori_ordinati IS NOT NULL AND array_length(p_operatori_ordinati, 1) > 0 THEN
-    INSERT INTO competenze_operatore_fase_extra (operatore_id, catalogo_fase_extra_id, priorita)
+    INSERT INTO public.competenze_operatore_fase_extra (operatore_id, catalogo_fase_extra_id, priorita)
     SELECT unnest_op, p_catalogo_fase_extra_id, ordinale
     FROM (
       SELECT u AS unnest_op, row_number() OVER () AS ordinale
       FROM unnest(p_operatori_ordinati) AS u
     ) t
-    WHERE EXISTS (SELECT 1 FROM users WHERE id = unnest_op AND ruolo = 'operatore');
+    WHERE EXISTS (SELECT 1 FROM public.users WHERE id = unnest_op AND ruolo = 'operatore');
   END IF;
-
   RETURN jsonb_build_object('ok', true);
 END;
 $$;
@@ -2510,32 +2398,30 @@ ALTER FUNCTION public.imposta_competenze_per_catalogo_fase_extra(p_responsabile_
 
 CREATE FUNCTION public.imposta_dipendenze_fase(p_fase_id smallint, p_dipende_da_ids smallint[], p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_dep smallint;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-
   IF p_fase_id = ANY(COALESCE(p_dipende_da_ids, ARRAY[]::smallint[])) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'dipendenza_circolare');
   END IF;
-
   FOREACH v_dep IN ARRAY COALESCE(p_dipende_da_ids, ARRAY[]::smallint[])
   LOOP
     IF EXISTS (
       WITH RECURSIVE reach AS (
         SELECT fd.dipende_da_fase_id AS nxt
-        FROM fase_dipendenze fd
+        FROM public.fase_dipendenze fd
         WHERE fd.fase_id = v_dep
         UNION ALL
         SELECT fd2.dipende_da_fase_id
-        FROM fase_dipendenze fd2
+        FROM public.fase_dipendenze fd2
         JOIN reach r ON fd2.fase_id = r.nxt
       )
       SELECT 1 FROM reach WHERE nxt = p_fase_id
@@ -2543,14 +2429,11 @@ BEGIN
       RETURN jsonb_build_object('ok', false, 'errore', 'dipendenza_circolare');
     END IF;
   END LOOP;
-
-  DELETE FROM fase_dipendenze WHERE fase_id = p_fase_id;
-
+  DELETE FROM public.fase_dipendenze WHERE fase_id = p_fase_id;
   IF array_length(COALESCE(p_dipende_da_ids, ARRAY[]::smallint[]), 1) > 0 THEN
-    INSERT INTO fase_dipendenze (fase_id, dipende_da_fase_id)
+    INSERT INTO public.fase_dipendenze (fase_id, dipende_da_fase_id)
     SELECT p_fase_id, unnest(p_dipende_da_ids);
   END IF;
-
   RETURN jsonb_build_object('ok', true);
 END;
 $$;
@@ -2564,16 +2447,16 @@ ALTER FUNCTION public.imposta_dipendenze_fase(p_fase_id smallint, p_dipende_da_i
 
 CREATE FUNCTION public.imposta_disponibilita_giornaliera(p_operatore_id uuid, p_data date, p_ore numeric, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-  INSERT INTO disponibilita_giornaliera(operatore_id, data, ore) VALUES (p_operatore_id, p_data, p_ore)
+  INSERT INTO public.disponibilita_giornaliera(operatore_id, data, ore) VALUES (p_operatore_id, p_data, p_ore)
   ON CONFLICT (operatore_id, data) DO UPDATE SET ore = EXCLUDED.ore;
   RETURN jsonb_build_object('ok', true, 'operatore_id', p_operatore_id, 'data', p_data, 'ore', p_ore);
 END;
@@ -2588,26 +2471,26 @@ ALTER FUNCTION public.imposta_disponibilita_giornaliera(p_operatore_id uuid, p_d
 
 CREATE FUNCTION public.imposta_fase_ordine(p_ordine_id uuid, p_fase_id smallint, p_attiva boolean, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
-DECLARE v_riga ordine_fasi%ROWTYPE; v_tg text; v_stato stato_fase;
+DECLARE v_riga public.ordine_fasi%ROWTYPE; v_tg text; v_stato public.stato_fase;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id=p_responsabile_id AND ruolo='responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_responsabile_id AND ruolo='responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-  SELECT tipo_gestione INTO v_tg FROM fasi WHERE id=p_fase_id;
+  SELECT tipo_gestione INTO v_tg FROM public.fasi WHERE id=p_fase_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_catalogo_non_trovata'); END IF;
-  SELECT * INTO v_riga FROM ordine_fasi WHERE ordine_id=p_ordine_id AND fase_id=p_fase_id;
+  SELECT * INTO v_riga FROM public.ordine_fasi WHERE ordine_id=p_ordine_id AND fase_id=p_fase_id;
   IF p_attiva THEN
     IF v_tg = 'conferma_ricezione' THEN v_stato := 'in_attesa'; ELSE v_stato := 'disponibile'; END IF;
     IF NOT FOUND THEN
-      INSERT INTO ordine_fasi (ordine_id, fase_id, stato, iniziata_il)
+      INSERT INTO public.ordine_fasi (ordine_id, fase_id, stato, iniziata_il)
         VALUES (p_ordine_id, p_fase_id, v_stato, CASE WHEN v_tg='conferma_ricezione' THEN NOW() ELSE NULL END);
     ELSIF v_riga.stato = 'non_applicabile' THEN
-      UPDATE ordine_fasi SET stato=v_stato,
+      UPDATE public.ordine_fasi SET stato=v_stato,
         iniziata_il=CASE WHEN v_tg='conferma_ricezione' THEN COALESCE(v_riga.iniziata_il,NOW()) ELSE v_riga.iniziata_il END
         WHERE id=v_riga.id;
     END IF;
@@ -2617,7 +2500,7 @@ BEGIN
     IF v_riga.stato = 'in_corso' THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_in_corso', 'messaggio', 'La fase è in corso e non può essere disattivata.'); END IF;
     IF v_riga.stato = 'completata' THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_completata', 'messaggio', 'La fase è già completata e non può essere disattivata.'); END IF;
     IF v_riga.spedita_il IS NOT NULL THEN RETURN jsonb_build_object('ok', false, 'errore', 'spedizione_avviata', 'messaggio', 'Il pezzo è già stato spedito al fornitore, impossibile disattivare.'); END IF;
-    UPDATE ordine_fasi SET stato='non_applicabile', iniziata_il=NULL, spedita_il=NULL WHERE id=v_riga.id;
+    UPDATE public.ordine_fasi SET stato='non_applicabile', iniziata_il=NULL, spedita_il=NULL WHERE id=v_riga.id;
     RETURN jsonb_build_object('ok', true);
   END IF;
 END;
@@ -2632,22 +2515,20 @@ ALTER FUNCTION public.imposta_fase_ordine(p_ordine_id uuid, p_fase_id smallint, 
 
 CREATE FUNCTION public.imposta_fasi_macchina(p_macchina_id uuid, p_fase_ids smallint[] DEFAULT NULL::smallint[], p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-
-  DELETE FROM fase_macchine WHERE macchina_id = p_macchina_id;
+  DELETE FROM public.fase_macchine WHERE macchina_id = p_macchina_id;
   IF p_fase_ids IS NOT NULL AND array_length(p_fase_ids, 1) > 0 THEN
-    INSERT INTO fase_macchine (fase_id, macchina_id)
+    INSERT INTO public.fase_macchine (fase_id, macchina_id)
     SELECT unnest(p_fase_ids), p_macchina_id;
   END IF;
-
   RETURN jsonb_build_object('ok', true, 'n_fasi', COALESCE(array_length(p_fase_ids, 1), 0));
 END;
 $$;
@@ -2661,23 +2542,23 @@ ALTER FUNCTION public.imposta_fasi_macchina(p_macchina_id uuid, p_fase_ids small
 
 CREATE FUNCTION public.imposta_macchina(p_nome text, p_stato text DEFAULT 'attiva'::text, p_ore_default numeric DEFAULT 8.0, p_id uuid DEFAULT NULL::uuid, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE v_id uuid;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
   IF p_stato NOT IN ('attiva', 'manutenzione', 'fuori_uso') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'stato_non_valido');
   END IF;
   IF p_id IS NULL THEN
-    INSERT INTO macchine (nome, stato, ore_default) VALUES (p_nome, p_stato, p_ore_default) RETURNING id INTO v_id;
+    INSERT INTO public.macchine (nome, stato, ore_default) VALUES (p_nome, p_stato, p_ore_default) RETURNING id INTO v_id;
   ELSE
-    UPDATE macchine SET nome=p_nome, stato=p_stato, ore_default=p_ore_default, aggiornato_il=now() WHERE id=p_id RETURNING id INTO v_id;
+    UPDATE public.macchine SET nome=p_nome, stato=p_stato, ore_default=p_ore_default, aggiornato_il=now() WHERE id=p_id RETURNING id INTO v_id;
     IF v_id IS NULL THEN RETURN jsonb_build_object('ok', false, 'errore', 'macchina_non_trovata'); END IF;
   END IF;
   RETURN jsonb_build_object('ok', true, 'id', v_id);
@@ -2693,28 +2574,24 @@ ALTER FUNCTION public.imposta_macchina(p_nome text, p_stato text, p_ore_default 
 
 CREATE FUNCTION public.imposta_macchine_fase_extra(p_responsabile_id uuid, p_catalogo_fase_extra_id uuid, p_macchine_ids jsonb, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-
   IF p_macchine_ids IS NOT NULL AND jsonb_typeof(p_macchine_ids) NOT IN ('array', 'null') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'formato_macchine_non_valido');
   END IF;
-
-  DELETE FROM catalogo_fase_extra_macchine WHERE catalogo_fase_extra_id = p_catalogo_fase_extra_id;
-
+  DELETE FROM public.catalogo_fase_extra_macchine WHERE catalogo_fase_extra_id = p_catalogo_fase_extra_id;
   IF p_macchine_ids IS NOT NULL AND jsonb_typeof(p_macchine_ids) = 'array' AND jsonb_array_length(p_macchine_ids) > 0 THEN
-    INSERT INTO catalogo_fase_extra_macchine(catalogo_fase_extra_id, macchina_id)
+    INSERT INTO public.catalogo_fase_extra_macchine(catalogo_fase_extra_id, macchina_id)
     SELECT p_catalogo_fase_extra_id, (el #>> '{}')::uuid
     FROM jsonb_array_elements(p_macchine_ids) AS el;
   END IF;
-
   RETURN jsonb_build_object('ok', true);
 END;
 $$;
@@ -2728,14 +2605,14 @@ ALTER FUNCTION public.imposta_macchine_fase_extra(p_responsabile_id uuid, p_cata
 
 CREATE FUNCTION public.imposta_manutenzione_macchina(p_macchina_id uuid, p_data_inizio date, p_data_fine date, p_descrizione text DEFAULT NULL::text, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE v_id uuid;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida'); END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato'); END IF;
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida'); END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato'); END IF;
   IF p_data_fine < p_data_inizio THEN RETURN jsonb_build_object('ok', false, 'errore', 'data_fine_precedente_inizio'); END IF;
-  INSERT INTO manutenzioni_macchina (macchina_id, data_inizio, data_fine, descrizione) VALUES (p_macchina_id, p_data_inizio, p_data_fine, p_descrizione) RETURNING id INTO v_id;
+  INSERT INTO public.manutenzioni_macchina (macchina_id, data_inizio, data_fine, descrizione) VALUES (p_macchina_id, p_data_inizio, p_data_fine, p_descrizione) RETURNING id INTO v_id;
   RETURN jsonb_build_object('ok', true, 'id', v_id);
 END;
 $$;
@@ -2749,47 +2626,39 @@ ALTER FUNCTION public.imposta_manutenzione_macchina(p_macchina_id uuid, p_data_i
 
 CREATE FUNCTION public.imposta_permesso_periodo(p_operatore_id uuid, p_data_inizio date, p_data_fine date, p_ore numeric, p_motivo text DEFAULT NULL::text, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_giorni int;
   v_data   date;
 BEGIN
-  IF NOT COALESCE((SELECT valida_sessione(p_responsabile_id, p_session_token)), false) THEN
+  IF NOT COALESCE((SELECT public.valida_sessione(p_responsabile_id, p_session_token)), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-
   IF p_data_fine < p_data_inizio THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'data_fine_precedente_inizio');
   END IF;
-
   v_giorni := (p_data_fine - p_data_inizio) + 1;
   IF v_giorni > 90 THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'periodo_troppo_lungo', 'max_giorni', 90, 'richiesti', v_giorni);
   END IF;
-
   IF p_ore < 0 THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'ore_negative');
   END IF;
-
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_operatore_id AND attivo = true) THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND attivo = true) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'operatore_non_trovato');
   END IF;
-
   v_data := p_data_inizio;
   WHILE v_data <= p_data_fine LOOP
-    INSERT INTO disponibilita_giornaliera (operatore_id, data, ore, motivo)
+    INSERT INTO public.disponibilita_giornaliera (operatore_id, data, ore, motivo)
     VALUES (p_operatore_id, v_data, p_ore, p_motivo)
     ON CONFLICT (operatore_id, data)
     DO UPDATE SET ore = EXCLUDED.ore, motivo = EXCLUDED.motivo;
-
     v_data := v_data + 1;
   END LOOP;
-
   RETURN jsonb_build_object('ok', true, 'giorni_aggiornati', v_giorni);
 END;
 $$;
@@ -2803,10 +2672,10 @@ ALTER FUNCTION public.imposta_permesso_periodo(p_operatore_id uuid, p_data_inizi
 
 CREATE FUNCTION public.imposta_stato_operatore(p_operatore_id uuid, p_attivo boolean, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_responsabile_id AND ruolo='responsabile' AND attivo=TRUE AND eliminato IS DISTINCT FROM TRUE) THEN
@@ -2815,7 +2684,6 @@ BEGIN
   IF p_operatore_id = p_responsabile_id THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'auto_operazione_non_consentita');
   END IF;
-
   UPDATE public.users SET attivo = p_attivo WHERE id = p_operatore_id;
   IF NOT FOUND THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'utente_non_trovato');
@@ -2881,10 +2749,10 @@ ALTER FUNCTION public.in_orario_lavoro(p_momento timestamp with time zone) OWNER
 
 CREATE FUNCTION public.lista_operatori_login(p_solo_sola_lettura boolean DEFAULT false) RETURNS TABLE(id uuid, nome text, cognome text, ruolo text)
     LANGUAGE sql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
   SELECT u.id, u.nome, u.cognome, u.ruolo::text
-  FROM users u
+  FROM public.users u
   WHERE u.attivo = true
     AND COALESCE(u.eliminato, false) = false
     AND (
@@ -2903,7 +2771,7 @@ ALTER FUNCTION public.lista_operatori_login(p_solo_sola_lettura boolean) OWNER T
 
 CREATE FUNCTION public.lista_priorita_giornaliera() RETURNS TABLE(id uuid, codice text, cliente text, priorita text, scadenza date, ore_rimaste numeric, giorni_scadenza integer, rapporto_critico numeric, a_rischio boolean, giorni_stima_consegna numeric)
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_soglia         numeric;
@@ -2912,15 +2780,15 @@ DECLARE
   v_fallback_extra numeric;
   v_default_extra  numeric;
   v_fallback_ext   numeric := 2880;
-  v_config         config_orario%ROWTYPE;
+  v_config         public.config_orario%ROWTYPE;
 BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'non_autenticato'; END IF;
 
-  SELECT COALESCE(MAX(valore), 1)    INTO v_soglia       FROM kpi_config WHERE chiave = 'soglia_rischio_giorni';
-  SELECT COALESCE(MAX(valore), 30)   INTO v_default_extra FROM kpi_config WHERE chiave = 'durata_default_fase_extra_minuti';
-  SELECT COALESCE(MAX(valore), 0.90) INTO v_margine      FROM kpi_config WHERE chiave = 'margine_capacita';
+  SELECT COALESCE(MAX(valore), 1)    INTO v_soglia       FROM public.kpi_config WHERE chiave = 'soglia_rischio_giorni';
+  SELECT COALESCE(MAX(valore), 30)   INTO v_default_extra FROM public.kpi_config WHERE chiave = 'durata_default_fase_extra_minuti';
+  SELECT COALESCE(MAX(valore), 0.90) INTO v_margine      FROM public.kpi_config WHERE chiave = 'margine_capacita';
 
-  SELECT * INTO v_config FROM config_orario LIMIT 1;
+  SELECT * INTO v_config FROM public.config_orario LIMIT 1;
 
   v_min_giorno := GREATEST(60, (
     CASE
@@ -2936,7 +2804,7 @@ BEGIN
   SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (
     ORDER BY tempo_accumulato_minuti::numeric / GREATEST(n_ordini_batch,1)
   ) INTO v_fallback_extra
-  FROM fasi_ordine_extra
+  FROM public.fasi_ordine_extra
   WHERE stato = 'completata' AND tempo_accumulato_minuti > 0
     AND NOT COALESCE(e_attesa_esterna, false);
   v_fallback_extra := COALESCE(v_fallback_extra, v_default_extra);
@@ -2948,9 +2816,9 @@ BEGIN
       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY
         of2.tempo_accumulato_minuti::numeric / GREATEST(of2.n_ordini_batch,1) / GREATEST(o.quantita,1)
       ) AS med_min
-    FROM ordine_fasi of2
-    JOIN ordini o ON o.id = of2.ordine_id
-    JOIN fasi f   ON f.id = of2.fase_id
+    FROM public.ordine_fasi of2
+    JOIN public.ordini o ON o.id = of2.ordine_id
+    JOIN public.fasi f   ON f.id = of2.fase_id
     WHERE of2.stato = 'completata'
       AND of2.tempo_accumulato_minuti > 0
       AND of2.fase_id IS NOT NULL
@@ -2962,7 +2830,7 @@ BEGIN
       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY
         tempo_accumulato_minuti::numeric / GREATEST(n_ordini_batch,1)
       ) AS med_min
-    FROM fasi_ordine_extra
+    FROM public.fasi_ordine_extra
     WHERE stato = 'completata' AND tempo_accumulato_minuti > 0
       AND NOT COALESCE(e_attesa_esterna, false)
     GROUP BY lower(nome)
@@ -2973,8 +2841,8 @@ BEGIN
       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY
         of2.tempo_accumulato_minuti::numeric / GREATEST(of2.n_ordini_batch,1)
       ) AS med_min
-    FROM ordine_fasi of2
-    JOIN fasi f ON f.id = of2.fase_id
+    FROM public.ordine_fasi of2
+    JOIN public.fasi f ON f.id = of2.fase_id
     WHERE of2.stato = 'completata'
       AND of2.tempo_accumulato_minuti > 0
       AND COALESCE(f.e_attesa_esterna, false) = true
@@ -2985,7 +2853,7 @@ BEGIN
       PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY
         tempo_accumulato_minuti::numeric / GREATEST(n_ordini_batch,1)
       ) AS med_min
-    FROM fasi_ordine_extra
+    FROM public.fasi_ordine_extra
     WHERE stato = 'completata' AND tempo_accumulato_minuti > 0
       AND COALESCE(e_attesa_esterna, false) = true
     GROUP BY lower(nome)
@@ -2996,8 +2864,8 @@ BEGIN
         WHEN 'in_corso' THEN COALESCE(m.med_min,0) * 0.5
         ELSE                  COALESCE(m.med_min,0)
       END) AS min_rim
-    FROM ordine_fasi of2
-    JOIN fasi f ON f.id = of2.fase_id
+    FROM public.ordine_fasi of2
+    JOIN public.fasi f ON f.id = of2.fase_id
     LEFT JOIN mediane_std m ON m.fase_id = of2.fase_id
     WHERE of2.stato IN ('disponibile','in_corso')
       AND NOT COALESCE(f.e_attesa_esterna, false)
@@ -3009,7 +2877,7 @@ BEGIN
         WHEN 'in_corso' THEN COALESCE(me.med_min, v_fallback_extra) * 0.5
         ELSE                  COALESCE(me.med_min, v_fallback_extra)
       END) AS min_rim
-    FROM fasi_ordine_extra foe
+    FROM public.fasi_ordine_extra foe
     LEFT JOIN mediane_extra me ON me.nome_lower = lower(foe.nome)
     WHERE foe.stato IN ('disponibile','in_corso')
       AND NOT COALESCE(foe.e_attesa_esterna, false)
@@ -3030,8 +2898,8 @@ BEGIN
         WHEN 'in_attesa' THEN COALESCE(me.med_min, v_fallback_ext) * 0.5
         ELSE                  COALESCE(me.med_min, v_fallback_ext)
       END) AS min_ext
-    FROM ordine_fasi of2
-    JOIN fasi f ON f.id = of2.fase_id
+    FROM public.ordine_fasi of2
+    JOIN public.fasi f ON f.id = of2.fase_id
     LEFT JOIN mediane_ext_std me ON me.fase_id = of2.fase_id
     WHERE of2.stato IN ('disponibile','in_attesa')
       AND COALESCE(f.e_attesa_esterna, false) = true
@@ -3043,7 +2911,7 @@ BEGIN
         WHEN 'in_attesa' THEN COALESCE(mee.med_min, v_fallback_ext) * 0.5
         ELSE                  COALESCE(mee.med_min, v_fallback_ext)
       END) AS min_ext
-    FROM fasi_ordine_extra foe
+    FROM public.fasi_ordine_extra foe
     LEFT JOIN mediane_ext_extra mee ON mee.nome_lower = lower(foe.nome)
     WHERE foe.stato IN ('disponibile','in_attesa')
       AND COALESCE(foe.e_attesa_esterna, false) = true
@@ -3062,9 +2930,9 @@ BEGIN
     SELECT o.id,
       CASE
         WHEN o.scadenza < CURRENT_DATE THEN -1
-        ELSE giorni_lavorativi_disponibili(CURRENT_DATE, o.scadenza)
+        ELSE public.giorni_lavorativi_disponibili(CURRENT_DATE, o.scadenza)
       END AS gld
-    FROM ordini o
+    FROM public.ordini o
     WHERE o.stato IN ('aperto','attesa_spedizione')
       AND COALESCE(o.eliminato, false) = false
       AND o.scadenza IS NOT NULL
@@ -3098,8 +2966,8 @@ BEGIN
       COALESCE(b.min_rim, 0)::numeric / v_min_giorno
       + COALESCE(be.min_ext, 0)::numeric / 1440.0
     )::numeric, 1) AS giorni_stima_consegna
-  FROM ordini o
-  LEFT JOIN priorita_ordine_config p ON p.id = o.priorita
+  FROM public.ordini o
+  LEFT JOIN public.priorita_ordine_config p ON p.id = o.priorita
   LEFT JOIN backlog b    ON b.ordine_id = o.id
   LEFT JOIN backlog_ext be ON be.ordine_id = o.id
   LEFT JOIN gld          ON gld.id = o.id
@@ -3119,13 +2987,13 @@ ALTER FUNCTION public.lista_priorita_giornaliera() OWNER TO postgres;
 
 CREATE FUNCTION public.lista_schede_kpi() RETURNS TABLE(id uuid, nome text, criteri jsonb, ore_interne_iniziali numeric, giorni_calendario_iniziali numeric, n_campioni_iniziali integer, ore_interne_correnti numeric, giorni_calendario_correnti numeric, n_campioni_correnti integer, var_ore_pct numeric, var_giorni_pct numeric, creata_il timestamp with time zone, creata_da uuid)
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_rec     record;
   v_curr    record;
 BEGIN
-  IF NOT e_responsabile() THEN
+  IF NOT public.e_responsabile() THEN
     RAISE EXCEPTION 'non_autorizzato' USING ERRCODE = '42501';
   END IF;
 
@@ -3169,17 +3037,17 @@ ALTER FUNCTION public.lista_schede_kpi() OWNER TO postgres;
 
 CREATE FUNCTION public.metti_in_attesa(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
-DECLARE v_fase ordine_fasi%ROWTYPE;
+DECLARE v_fase public.ordine_fasi%ROWTYPE;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  SELECT * INTO v_fase FROM ordine_fasi WHERE id = p_ordine_fase_id FOR UPDATE;
+  SELECT * INTO v_fase FROM public.ordine_fasi WHERE id = p_ordine_fase_id FOR UPDATE;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'Fase non trovata'); END IF;
   IF v_fase.stato <> 'in_corso' THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'La fase non è in corso');
@@ -3187,10 +3055,10 @@ BEGIN
   IF v_fase.operatore_id IS DISTINCT FROM p_operatore_id THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'Non sei l''operatore assegnato a questa fase');
   END IF;
-  IF EXISTS (SELECT 1 FROM ordini WHERE id = v_fase.ordine_id AND stato = 'sospeso') THEN
+  IF EXISTS (SELECT 1 FROM public.ordini WHERE id = v_fase.ordine_id AND stato = 'sospeso') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'Ordine sospeso');
   END IF;
-  UPDATE ordine_fasi SET
+  UPDATE public.ordine_fasi SET
     stato = 'in_attesa',
     tempo_accumulato_minuti = COALESCE(tempo_accumulato_minuti, 0) +
       CASE WHEN v_fase.iniziata_il IS NOT NULL
@@ -3199,7 +3067,7 @@ BEGIN
     iniziata_il = NULL
   WHERE id = p_ordine_fase_id;
   BEGIN
-    INSERT INTO archivio_log (ordine_id, fase_id, utente_id, azione, dettaglio)
+    INSERT INTO public.archivio_log (ordine_id, fase_id, utente_id, azione, dettaglio)
   VALUES (v_fase.ordine_id, v_fase.fase_id, p_operatore_id, 'fase_messa_in_attesa',
           jsonb_build_object('ordine_fase_id', p_ordine_fase_id));
   EXCEPTION WHEN OTHERS THEN
@@ -3218,10 +3086,10 @@ ALTER FUNCTION public.metti_in_attesa(p_ordine_fase_id uuid, p_operatore_id uuid
 
 CREATE FUNCTION public.mie_fasi_in_corso(p_operatore_id uuid, p_session_token uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   RETURN jsonb_build_object('ok', true, 'dati', jsonb_build_object(
@@ -3232,9 +3100,9 @@ BEGIN
           'fasi',   CASE WHEN f.id IS NOT NULL THEN jsonb_build_object('nome', f.nome) ELSE NULL END
         )
       ), '[]'::jsonb)
-      FROM ordine_fasi of
-      JOIN ordini o ON o.id = of.ordine_id
-      LEFT JOIN fasi f ON f.id = of.fase_id
+      FROM public.ordine_fasi of
+      JOIN public.ordini o ON o.id = of.ordine_id
+      LEFT JOIN public.fasi f ON f.id = of.fase_id
       WHERE of.operatore_id = p_operatore_id
         AND of.stato IN ('in_corso', 'in_attesa', 'bloccata')
     ),
@@ -3244,8 +3112,8 @@ BEGIN
           'ordini', jsonb_build_object('codice', o.codice, 'cliente', o.cliente, 'stato', o.stato)
         )
       ), '[]'::jsonb)
-      FROM fasi_ordine_extra fe
-      JOIN ordini o ON o.id = fe.ordine_id
+      FROM public.fasi_ordine_extra fe
+      JOIN public.ordini o ON o.id = fe.ordine_id
       WHERE fe.operatore_id = p_operatore_id
         AND fe.stato IN ('in_corso', 'in_attesa')
     )
@@ -3262,14 +3130,14 @@ ALTER FUNCTION public.mie_fasi_in_corso(p_operatore_id uuid, p_session_token uui
 
 CREATE FUNCTION public.modifica_chiusura_aziendale(p_id uuid, p_data_inizio date, p_data_fine date, p_descrizione text DEFAULT NULL::text, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE((SELECT valida_sessione(p_responsabile_id, p_session_token)), false) THEN
+  IF NOT COALESCE((SELECT public.valida_sessione(p_responsabile_id, p_session_token)), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
 
@@ -3277,7 +3145,7 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'errore', 'data_fine_precedente_inizio');
   END IF;
 
-  UPDATE chiusure_aziendali
+  UPDATE public.chiusure_aziendali
   SET data_inizio  = p_data_inizio,
       data_fine    = p_data_fine,
       descrizione  = p_descrizione
@@ -3300,24 +3168,24 @@ ALTER FUNCTION public.modifica_chiusura_aziendale(p_id uuid, p_data_inizio date,
 
 CREATE FUNCTION public.notifiche_operatore(p_operatore_id uuid, p_session_token uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   RETURN jsonb_build_object('ok', true, 'dati', jsonb_build_object(
     'lista', (
       SELECT COALESCE(jsonb_agg(to_jsonb(n) ORDER BY n.creata_il DESC), '[]'::jsonb)
       FROM (
-        SELECT * FROM notifiche
+        SELECT * FROM public.notifiche
         WHERE destinatario_id = p_operatore_id
         ORDER BY creata_il DESC
         LIMIT 30
       ) n
     ),
     'non_lette', (
-      SELECT COUNT(*) FROM notifiche
+      SELECT COUNT(*) FROM public.notifiche
       WHERE destinatario_id = p_operatore_id AND letta = false
     )
   ));
@@ -3333,15 +3201,15 @@ ALTER FUNCTION public.notifiche_operatore(p_operatore_id uuid, p_session_token u
 
 CREATE FUNCTION public.ordini_attivi(p_operatore_id uuid, p_session_token uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   RETURN jsonb_build_object('ok', true, 'dati', (
     SELECT COALESCE(jsonb_agg(to_jsonb(o)), '[]'::jsonb)
-    FROM ordini o
+    FROM public.ordini o
     WHERE o.stato IN ('aperto', 'sospeso', 'attesa_spedizione')
       AND COALESCE(o.eliminato, false) = false
   ));
@@ -3357,16 +3225,16 @@ ALTER FUNCTION public.ordini_attivi(p_operatore_id uuid, p_session_token uuid) O
 
 CREATE FUNCTION public.pausa_tutte_fasi(p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN json_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  UPDATE ordine_fasi SET
+  UPDATE public.ordine_fasi SET
     stato = 'in_attesa',
     tempo_accumulato_minuti = COALESCE(tempo_accumulato_minuti, 0) +
       CASE WHEN iniziata_il IS NOT NULL
@@ -3374,7 +3242,7 @@ BEGIN
            ELSE 0 END,
     iniziata_il = NULL
   WHERE operatore_id = p_operatore_id AND stato = 'in_corso';
-  UPDATE fasi_ordine_extra SET
+  UPDATE public.fasi_ordine_extra SET
     stato = 'in_attesa',
     tempo_accumulato_minuti = COALESCE(tempo_accumulato_minuti, 0) +
       CASE WHEN iniziata_il IS NOT NULL
@@ -3395,7 +3263,7 @@ ALTER FUNCTION public.pausa_tutte_fasi(p_operatore_id uuid, p_session_token uuid
 
 CREATE FUNCTION public.piano_giornaliero_raggruppato(p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid, p_data date DEFAULT NULL::date) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_oggi               date;
@@ -3424,10 +3292,10 @@ DECLARE
   v_mac_nome      text;
   v_cfe_id        uuid;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
 
@@ -3437,11 +3305,11 @@ BEGIN
     COALESCE(MAX(valore) FILTER (WHERE chiave='soglia_campioni_gen'),             3)::int,
     COALESCE(MAX(valore) FILTER (WHERE chiave='durata_default_fase_extra_minuti'),30)
   INTO v_margine, v_k_soglia, v_k_soglia_gen, v_k_stima_fallback
-  FROM kpi_config
+  FROM public.kpi_config
   WHERE chiave IN ('margine_capacita','soglia_campioni_op','soglia_campioni_gen','durata_default_fase_extra_minuti');
 
   v_oggi := COALESCE(p_data, CURRENT_DATE);
-  SELECT descrizione INTO v_chiusura_desc FROM chiusure_aziendali WHERE v_oggi BETWEEN data_inizio AND data_fine LIMIT 1;
+  SELECT descrizione INTO v_chiusura_desc FROM public.chiusure_aziendali WHERE v_oggi BETWEEN data_inizio AND data_fine LIMIT 1;
   IF FOUND THEN
     RETURN jsonb_build_object('ok', true, 'data', v_oggi, 'chiuso', true, 'descrizione_chiusura', v_chiusura_desc);
   END IF;
@@ -3474,32 +3342,32 @@ BEGIN
 
   INSERT INTO _cap_r(op_id, op_nome, ore_disp, ore_usate)
   SELECT u.id, u.nome||' '||u.cognome, COALESCE(dg.ore, u.ore_default, 8.0)*v_margine, 0
-  FROM users u LEFT JOIN disponibilita_giornaliera dg ON dg.operatore_id=u.id AND dg.data=v_oggi
+  FROM public.users u LEFT JOIN public.disponibilita_giornaliera dg ON dg.operatore_id=u.id AND dg.data=v_oggi
   WHERE u.ruolo='operatore' AND u.attivo=true AND NOT COALESCE(u.eliminato,false) AND NOT COALESCE(u.escluso_pianificazione,false);
 
   INSERT INTO _maccap_r(macchina_id, macchina_nome, ore_disp, ore_usate)
-  SELECT m.id, m.nome, m.ore_default*v_margine, 0 FROM macchine m
-  WHERE m.stato='attiva' AND NOT EXISTS (SELECT 1 FROM manutenzioni_macchina mm WHERE mm.macchina_id=m.id AND v_oggi BETWEEN mm.data_inizio AND mm.data_fine);
+  SELECT m.id, m.nome, m.ore_default*v_margine, 0 FROM public.macchine m
+  WHERE m.stato='attiva' AND NOT EXISTS (SELECT 1 FROM public.manutenzioni_macchina mm WHERE mm.macchina_id=m.id AND v_oggi BETWEEN mm.data_inizio AND mm.data_fine);
 
   FOR v_ordine IN
     SELECT o.id, o.codice, o.cliente, o.scadenza, GREATEST(COALESCE(o.quantita,1),1) AS quantita, o.creato_il, o.stato
-    FROM ordini o WHERE o.stato NOT IN ('spedito') AND NOT COALESCE(o.eliminato,false) AND o.tipo='standard'
+    FROM public.ordini o WHERE o.stato NOT IN ('spedito') AND NOT COALESCE(o.eliminato,false) AND o.tipo='standard'
     ORDER BY o.scadenza NULLS LAST, o.id
   LOOP
     SELECT of2.fase_id, f.nome, f.posizione, COALESCE(f.e_attesa_esterna,false) AS e_attesa_esterna, of2.stato, of2.iniziata_il
-    INTO v_fase FROM ordine_fasi of2 JOIN fasi f ON f.id=of2.fase_id
+    INTO v_fase FROM public.ordine_fasi of2 JOIN public.fasi f ON f.id=of2.fase_id
     WHERE of2.ordine_id=v_ordine.id AND of2.stato IN ('disponibile','in_attesa')
       AND NOT EXISTS (
-        SELECT 1 FROM fase_dipendenze fd JOIN ordine_fasi dep_of ON dep_of.ordine_id=v_ordine.id AND dep_of.fase_id=fd.dipende_da_fase_id
+        SELECT 1 FROM public.fase_dipendenze fd JOIN public.ordine_fasi dep_of ON dep_of.ordine_id=v_ordine.id AND dep_of.fase_id=fd.dipende_da_fase_id
         WHERE fd.fase_id=of2.fase_id AND dep_of.stato NOT IN ('completata','non_applicabile')
       )
     ORDER BY f.posizione ASC, f.id ASC LIMIT 1;
     IF NOT FOUND THEN
       SELECT of2.fase_id, f.nome, f.posizione, false AS e_attesa_esterna, of2.stato, of2.iniziata_il
-      INTO v_fase FROM ordine_fasi of2 JOIN fasi f ON f.id=of2.fase_id
+      INTO v_fase FROM public.ordine_fasi of2 JOIN public.fasi f ON f.id=of2.fase_id
       WHERE of2.ordine_id=v_ordine.id AND of2.stato IN ('disponibile','in_attesa') AND NOT COALESCE(f.e_attesa_esterna,false)
         AND EXISTS (
-          SELECT 1 FROM fase_dipendenze fd JOIN ordine_fasi dep_of ON dep_of.ordine_id=v_ordine.id AND dep_of.fase_id=fd.dipende_da_fase_id
+          SELECT 1 FROM public.fase_dipendenze fd JOIN public.ordine_fasi dep_of ON dep_of.ordine_id=v_ordine.id AND dep_of.fase_id=fd.dipende_da_fase_id
           WHERE fd.fase_id=of2.fase_id AND dep_of.stato NOT IN ('completata','non_applicabile')
         )
       ORDER BY f.posizione ASC, f.id ASC LIMIT 1;
@@ -3508,15 +3376,15 @@ BEGIN
           v_fase.fase_id, v_fase.nome, v_fase.posizione, v_ordine.id, v_ordine.codice, v_ordine.cliente, v_ordine.scadenza,
           false, 'bloccata_dipendenze', NULL, NULL, NULL, 'In attesa di sblocco dipendenze', NULL, 0, false,
           (SELECT jsonb_agg(jsonb_build_object('fase_id',fd.dipende_da_fase_id,'nome',f_dep.nome))
-           FROM fase_dipendenze fd JOIN fasi f_dep ON f_dep.id=fd.dipende_da_fase_id
-           JOIN ordine_fasi dep_of ON dep_of.ordine_id=v_ordine.id AND dep_of.fase_id=fd.dipende_da_fase_id
+           FROM public.fase_dipendenze fd JOIN public.fasi f_dep ON f_dep.id=fd.dipende_da_fase_id
+           JOIN public.ordine_fasi dep_of ON dep_of.ordine_id=v_ordine.id AND dep_of.fase_id=fd.dipende_da_fase_id
            WHERE fd.fase_id=v_fase.fase_id AND dep_of.stato NOT IN ('completata','non_applicabile')),
           NULL, NULL, v_ordine.stato);
       END IF;
       CONTINUE;
     END IF;
     SELECT COALESCE(
-      (SELECT (MAX(of2.completata_il)::date < v_oggi) FROM ordine_fasi of2 JOIN fasi f2 ON f2.id=of2.fase_id
+      (SELECT (MAX(of2.completata_il)::date < v_oggi) FROM public.ordine_fasi of2 JOIN public.fasi f2 ON f2.id=of2.fase_id
        WHERE of2.ordine_id=v_ordine.id AND f2.posizione<v_fase.posizione AND of2.stato='completata'),
       (v_ordine.creato_il::date < v_oggi)
     ) INTO v_da_ieri;
@@ -3528,19 +3396,19 @@ BEGIN
       CONTINUE;
     END IF;
     SELECT CASE WHEN COUNT(*)>=v_k_soglia_gen THEN ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY of2.tempo_accumulato_minuti::numeric/GREATEST(of2.n_ordini_batch,1)/GREATEST(o2.quantita,1))::numeric,0) ELSE NULL END, COUNT(*)
-    INTO v_mediana_gen, v_n_camp_gen FROM ordine_fasi of2 JOIN ordini o2 ON o2.id=of2.ordine_id
+    INTO v_mediana_gen, v_n_camp_gen FROM public.ordine_fasi of2 JOIN public.ordini o2 ON o2.id=of2.ordine_id
     WHERE of2.fase_id=v_fase.fase_id AND of2.stato='completata' AND of2.tempo_accumulato_minuti>0 AND of2.completata_il IS NOT NULL;
-    SELECT EXISTS(SELECT 1 FROM competenze_operatore_fase WHERE fase_id=v_fase.fase_id) INTO v_ha_competenze;
-    SELECT EXISTS(SELECT 1 FROM fase_macchine WHERE fase_id=v_fase.fase_id) INTO v_ha_macchine;
+    SELECT EXISTS(SELECT 1 FROM public.competenze_operatore_fase WHERE fase_id=v_fase.fase_id) INTO v_ha_competenze;
+    SELECT EXISTS(SELECT 1 FROM public.fase_macchine WHERE fase_id=v_fase.fase_id) INTO v_ha_macchine;
     v_trovato := false;
     FOR v_comp IN
       SELECT cap.op_id AS operatore_id, c.priorita, cap.op_nome, (cap.ore_disp-cap.ore_usate) AS ore_libere
-      FROM _cap_r cap LEFT JOIN competenze_operatore_fase c ON c.operatore_id=cap.op_id AND c.fase_id=v_fase.fase_id
+      FROM _cap_r cap LEFT JOIN public.competenze_operatore_fase c ON c.operatore_id=cap.op_id AND c.fase_id=v_fase.fase_id
       WHERE (v_ha_competenze AND c.operatore_id IS NOT NULL) OR (NOT v_ha_competenze)
       ORDER BY c.priorita ASC NULLS LAST, (cap.ore_disp-cap.ore_usate) DESC
     LOOP
       SELECT CASE WHEN COUNT(*)>=v_k_soglia THEN ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY of2.tempo_accumulato_minuti::numeric/GREATEST(of2.n_ordini_batch,1)/GREATEST(o2.quantita,1))::numeric,0) ELSE NULL END, COUNT(*)
-      INTO v_mediana, v_n_camp FROM ordine_fasi of2 JOIN ordini o2 ON o2.id=of2.ordine_id
+      INTO v_mediana, v_n_camp FROM public.ordine_fasi of2 JOIN public.ordini o2 ON o2.id=of2.ordine_id
       WHERE of2.fase_id=v_fase.fase_id AND of2.operatore_id=v_comp.operatore_id AND of2.stato='completata' AND of2.tempo_accumulato_minuti>0 AND of2.completata_il IS NOT NULL;
       IF v_mediana IS NOT NULL THEN
         v_stima_ore := (v_mediana*v_ordine.quantita)/60.0;
@@ -3557,9 +3425,9 @@ BEGIN
       v_mac_id := NULL; v_mac_nome := NULL;
       IF v_ha_macchine THEN
         SELECT mac.macchina_id, mac.macchina_nome INTO v_mac_id, v_mac_nome FROM _maccap_r mac
-        WHERE mac.macchina_id IN (SELECT fm.macchina_id FROM fase_macchine fm WHERE fm.fase_id=v_fase.fase_id)
-          AND (NOT EXISTS (SELECT 1 FROM competenze_operatore_macchina com WHERE com.macchina_id=mac.macchina_id)
-               OR EXISTS  (SELECT 1 FROM competenze_operatore_macchina com WHERE com.macchina_id=mac.macchina_id AND com.operatore_id=v_comp.operatore_id))
+        WHERE mac.macchina_id IN (SELECT fm.macchina_id FROM public.fase_macchine fm WHERE fm.fase_id=v_fase.fase_id)
+          AND (NOT EXISTS (SELECT 1 FROM public.competenze_operatore_macchina com WHERE com.macchina_id=mac.macchina_id)
+               OR EXISTS  (SELECT 1 FROM public.competenze_operatore_macchina com WHERE com.macchina_id=mac.macchina_id AND com.operatore_id=v_comp.operatore_id))
           AND (mac.ore_disp-mac.ore_usate) >= v_stima_ore
         ORDER BY (mac.ore_disp-mac.ore_usate) DESC LIMIT 1;
         IF NOT FOUND THEN CONTINUE; END IF;
@@ -3577,7 +3445,7 @@ BEGIN
         v_fase.fase_id, v_fase.nome, v_fase.posizione, v_ordine.id, v_ordine.codice, v_ordine.cliente, v_ordine.scadenza,
         v_da_ieri, v_fase.stato, NULL, NULL, NULL,
         CASE
-          WHEN v_ha_macchine AND NOT EXISTS (SELECT 1 FROM _maccap_r WHERE macchina_id IN (SELECT macchina_id FROM fase_macchine WHERE fase_id=v_fase.fase_id))
+          WHEN v_ha_macchine AND NOT EXISTS (SELECT 1 FROM _maccap_r WHERE macchina_id IN (SELECT macchina_id FROM public.fase_macchine WHERE fase_id=v_fase.fase_id))
             THEN 'Macchine richieste in manutenzione o fuori uso — riassegna manualmente'
           WHEN v_ha_macchine THEN 'Nessuna macchina disponibile con capacità sufficiente, o operatori esauriti — riassegna manualmente'
           WHEN v_ha_competenze THEN 'Tutti gli operatori competenti sono a capacità piena — riassegna manualmente'
@@ -3589,13 +3457,13 @@ BEGIN
 
   FOR v_ordine IN
     SELECT o.id, o.codice, o.cliente, o.scadenza, GREATEST(COALESCE(o.quantita,1),1) AS quantita, o.creato_il, o.stato
-    FROM ordini o WHERE o.stato NOT IN ('spedito') AND NOT COALESCE(o.eliminato,false) AND o.tipo='extra'
+    FROM public.ordini o WHERE o.stato NOT IN ('spedito') AND NOT COALESCE(o.eliminato,false) AND o.tipo='extra'
     ORDER BY o.scadenza NULLS LAST, o.id
   LOOP
     SELECT foe.id, foe.nome, foe.stato, foe.iniziata_il, foe.tipo_gestione,
            foe.catalogo_fase_extra_id, foe.ore_stimate_manuali, foe.macchina_id, foe.numero
     INTO v_fase_extra
-    FROM fasi_ordine_extra foe
+    FROM public.fasi_ordine_extra foe
     WHERE foe.ordine_id = v_ordine.id AND foe.stato = 'disponibile'
     ORDER BY foe.numero ASC LIMIT 1;
     IF NOT FOUND THEN CONTINUE; END IF;
@@ -3620,23 +3488,23 @@ BEGIN
                THEN ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY foe2.tempo_accumulato_minuti::numeric/GREATEST(foe2.n_ordini_batch,1))::numeric,0)
                ELSE NULL END, COUNT(*)
       INTO v_mediana_gen, v_n_camp_gen
-      FROM fasi_ordine_extra foe2
+      FROM public.fasi_ordine_extra foe2
       WHERE foe2.catalogo_fase_extra_id=v_cfe_id AND foe2.stato='completata'
         AND foe2.tempo_accumulato_minuti>0 AND foe2.completata_il IS NOT NULL;
     END IF;
 
     v_ha_competenze := v_cfe_id IS NOT NULL AND EXISTS (
-      SELECT 1 FROM competenze_operatore_fase_extra WHERE catalogo_fase_extra_id=v_cfe_id
+      SELECT 1 FROM public.competenze_operatore_fase_extra WHERE catalogo_fase_extra_id=v_cfe_id
     );
     v_ha_macchine := v_cfe_id IS NOT NULL AND EXISTS (
-      SELECT 1 FROM catalogo_fase_extra_macchine WHERE catalogo_fase_extra_id=v_cfe_id
+      SELECT 1 FROM public.catalogo_fase_extra_macchine WHERE catalogo_fase_extra_id=v_cfe_id
     );
 
     v_trovato := false;
     FOR v_comp IN
       SELECT cap.op_id AS operatore_id, c.priorita, cap.op_nome
       FROM _cap_r cap
-      LEFT JOIN competenze_operatore_fase_extra c ON c.operatore_id=cap.op_id AND c.catalogo_fase_extra_id=v_cfe_id
+      LEFT JOIN public.competenze_operatore_fase_extra c ON c.operatore_id=cap.op_id AND c.catalogo_fase_extra_id=v_cfe_id
       WHERE (v_ha_competenze AND c.operatore_id IS NOT NULL) OR (NOT v_ha_competenze)
       ORDER BY c.priorita ASC NULLS LAST, (cap.ore_disp-cap.ore_usate) DESC
     LOOP
@@ -3646,7 +3514,7 @@ BEGIN
                  THEN ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY foe2.tempo_accumulato_minuti::numeric/GREATEST(foe2.n_ordini_batch,1))::numeric,0)
                  ELSE NULL END, COUNT(*)
         INTO v_mediana, v_n_camp
-        FROM fasi_ordine_extra foe2
+        FROM public.fasi_ordine_extra foe2
         WHERE foe2.catalogo_fase_extra_id=v_cfe_id AND foe2.operatore_id=v_comp.operatore_id
           AND foe2.stato='completata' AND foe2.tempo_accumulato_minuti>0 AND foe2.completata_il IS NOT NULL;
       END IF;
@@ -3666,9 +3534,9 @@ BEGIN
       v_mac_id := NULL; v_mac_nome := NULL;
       IF v_ha_macchine THEN
         SELECT mac.macchina_id, mac.macchina_nome INTO v_mac_id, v_mac_nome FROM _maccap_r mac
-        WHERE mac.macchina_id IN (SELECT cfem.macchina_id FROM catalogo_fase_extra_macchine cfem WHERE cfem.catalogo_fase_extra_id=v_cfe_id)
-          AND (NOT EXISTS (SELECT 1 FROM competenze_operatore_macchina com WHERE com.macchina_id=mac.macchina_id)
-               OR EXISTS  (SELECT 1 FROM competenze_operatore_macchina com WHERE com.macchina_id=mac.macchina_id AND com.operatore_id=v_comp.operatore_id))
+        WHERE mac.macchina_id IN (SELECT cfem.macchina_id FROM public.catalogo_fase_extra_macchine cfem WHERE cfem.catalogo_fase_extra_id=v_cfe_id)
+          AND (NOT EXISTS (SELECT 1 FROM public.competenze_operatore_macchina com WHERE com.macchina_id=mac.macchina_id)
+               OR EXISTS  (SELECT 1 FROM public.competenze_operatore_macchina com WHERE com.macchina_id=mac.macchina_id AND com.operatore_id=v_comp.operatore_id))
           AND (mac.ore_disp-mac.ore_usate) >= v_stima_ore
         ORDER BY (mac.ore_disp-mac.ore_usate) DESC LIMIT 1;
         IF NOT FOUND THEN CONTINUE; END IF;
@@ -3761,7 +3629,7 @@ ALTER FUNCTION public.piano_giornaliero_raggruppato(p_responsabile_id uuid, p_se
 
 CREATE FUNCTION public.piano_multi_giorno(p_giorni integer DEFAULT 5, p_responsabile_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_margine            numeric;
@@ -3769,7 +3637,7 @@ DECLARE
   v_k_soglia_gen       int;
   v_k_stima_fallback   numeric;
 
-  v_config      config_orario%ROWTYPE;
+  v_config      public.config_orario%ROWTYPE;
   v_data        date;
   v_dow         int;
   v_giorno_num  int     := 0;
@@ -3796,10 +3664,10 @@ DECLARE
   v_oltre       jsonb;
 BEGIN
   IF p_responsabile_id IS NOT NULL THEN
-    IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+    IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
       RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
     END IF;
-    IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+    IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
       RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
     END IF;
   END IF;
@@ -3810,10 +3678,10 @@ BEGIN
     COALESCE(MAX(valore) FILTER (WHERE chiave='soglia_campioni_gen'),             3)::int,
     COALESCE(MAX(valore) FILTER (WHERE chiave='durata_default_fase_extra_minuti'),30)
   INTO v_margine, v_k_soglia, v_k_soglia_gen, v_k_stima_fallback
-  FROM kpi_config
+  FROM public.kpi_config
   WHERE chiave IN ('margine_capacita','soglia_campioni_op','soglia_campioni_gen','durata_default_fase_extra_minuti');
 
-  SELECT * INTO v_config FROM config_orario LIMIT 1;
+  SELECT * INTO v_config FROM public.config_orario LIMIT 1;
 
   CREATE TEMP TABLE IF NOT EXISTS _sim_fasi (
     ordine_id uuid,
@@ -3830,8 +3698,8 @@ BEGIN
     CASE WHEN of2.stato IN ('completata','non_applicabile')
          THEN 'completata_sim'
          ELSE 'disponibile' END
-  FROM ordine_fasi of2
-  JOIN ordini o ON o.id = of2.ordine_id
+  FROM public.ordine_fasi of2
+  JOIN public.ordini o ON o.id = of2.ordine_id
   WHERE o.stato IN ('aperto','attesa_spedizione')
     AND NOT COALESCE(o.eliminato, false)
     AND o.tipo = 'standard'
@@ -3879,7 +3747,7 @@ BEGIN
 
     IF v_dow = 0 AND NOT COALESCE(v_config.domenica_lavorativa, false) THEN CONTINUE; END IF;
     IF v_dow = 6 AND NOT COALESCE(v_config.sabato_lavorativo, false) THEN CONTINUE; END IF;
-    SELECT descrizione INTO v_chiusura FROM chiusure_aziendali
+    SELECT descrizione INTO v_chiusura FROM public.chiusure_aziendali
      WHERE v_data BETWEEN data_inizio AND data_fine LIMIT 1;
     IF FOUND THEN CONTINUE; END IF;
 
@@ -3903,30 +3771,30 @@ BEGIN
     TRUNCATE _cap_sim;
     INSERT INTO _cap_sim (op_id, op_nome, ore_disp)
     SELECT u.id, u.nome || ' ' || u.cognome, COALESCE(dg.ore, v_ore_base, 8.0) * v_margine
-    FROM users u
-    LEFT JOIN disponibilita_giornaliera dg ON dg.operatore_id = u.id AND dg.data = v_data
+    FROM public.users u
+    LEFT JOIN public.disponibilita_giornaliera dg ON dg.operatore_id = u.id AND dg.data = v_data
     WHERE u.ruolo = 'operatore' AND u.attivo = true
       AND NOT COALESCE(u.eliminato, false) AND NOT COALESCE(u.escluso_pianificazione, false);
 
     TRUNCATE _maccap_sim;
     INSERT INTO _maccap_sim (macchina_id, macchina_nome, ore_disp)
-    SELECT m.id, m.nome, m.ore_default * v_margine FROM macchine m WHERE m.stato = 'attiva';
+    SELECT m.id, m.nome, m.ore_default * v_margine FROM public.macchine m WHERE m.stato = 'attiva';
 
     FOR v_ordine IN
       SELECT o.id, o.codice, o.cliente, o.scadenza, GREATEST(COALESCE(o.quantita, 1), 1) AS quantita
-      FROM ordini o
+      FROM public.ordini o
       WHERE o.stato IN ('aperto','attesa_spedizione') AND NOT COALESCE(o.eliminato, false) AND o.tipo = 'standard'
       ORDER BY o.scadenza NULLS LAST, o.id
     LOOP
       SELECT of2.fase_id, f.nome, f.posizione, COALESCE(f.e_attesa_esterna, false) AS e_attesa_esterna
       INTO v_fase
-      FROM ordine_fasi of2
-      JOIN fasi f ON f.id = of2.fase_id
+      FROM public.ordine_fasi of2
+      JOIN public.fasi f ON f.id = of2.fase_id
       JOIN _sim_fasi sf ON sf.ordine_id = of2.ordine_id AND sf.fase_id = of2.fase_id
       WHERE of2.ordine_id = v_ordine.id AND sf.stato_sim = 'disponibile'
         AND NOT COALESCE(f.e_attesa_esterna, false)
         AND NOT EXISTS (
-          SELECT 1 FROM fase_dipendenze fd
+          SELECT 1 FROM public.fase_dipendenze fd
           JOIN _sim_fasi dep_sf ON dep_sf.ordine_id = of2.ordine_id AND dep_sf.fase_id = fd.dipende_da_fase_id
           WHERE fd.fase_id = of2.fase_id AND dep_sf.stato_sim <> 'completata_sim'
         )
@@ -3939,20 +3807,20 @@ BEGIN
                     ORDER BY of2.tempo_accumulato_minuti::numeric / GREATEST(of2.n_ordini_batch,1) / GREATEST(o2.quantita,1)
                   )::numeric, 0) ELSE NULL END, COUNT(*)
       INTO v_mediana_gen, v_n_camp_gen
-      FROM ordine_fasi of2 JOIN ordini o2 ON o2.id = of2.ordine_id
+      FROM public.ordine_fasi of2 JOIN public.ordini o2 ON o2.id = of2.ordine_id
       WHERE of2.fase_id = v_fase.fase_id AND of2.stato = 'completata' AND of2.tempo_accumulato_minuti > 0;
 
       v_stima_inc := (v_n_camp_gen < v_k_soglia_gen);
 
-      SELECT EXISTS(SELECT 1 FROM competenze_operatore_fase WHERE fase_id = v_fase.fase_id) INTO v_ha_comp;
-      SELECT EXISTS(SELECT 1 FROM fase_macchine WHERE fase_id = v_fase.fase_id) INTO v_ha_mac;
+      SELECT EXISTS(SELECT 1 FROM public.competenze_operatore_fase WHERE fase_id = v_fase.fase_id) INTO v_ha_comp;
+      SELECT EXISTS(SELECT 1 FROM public.fase_macchine WHERE fase_id = v_fase.fase_id) INTO v_ha_mac;
 
       v_trovato := false;
 
       FOR v_comp IN
         SELECT cap.op_id, cap.op_nome, c.priorita
         FROM _cap_sim cap
-        LEFT JOIN competenze_operatore_fase c ON c.operatore_id = cap.op_id AND c.fase_id = v_fase.fase_id
+        LEFT JOIN public.competenze_operatore_fase c ON c.operatore_id = cap.op_id AND c.fase_id = v_fase.fase_id
         WHERE (v_ha_comp AND c.operatore_id IS NOT NULL) OR NOT v_ha_comp
         ORDER BY c.priorita ASC NULLS LAST, (cap.ore_disp - cap.ore_usate) DESC
       LOOP
@@ -3961,7 +3829,7 @@ BEGIN
                       ORDER BY of2.tempo_accumulato_minuti::numeric / GREATEST(of2.n_ordini_batch,1) / GREATEST(o2.quantita,1)
                     )::numeric, 0) ELSE NULL END, COUNT(*)
         INTO v_mediana, v_n_camp
-        FROM ordine_fasi of2 JOIN ordini o2 ON o2.id = of2.ordine_id
+        FROM public.ordine_fasi of2 JOIN public.ordini o2 ON o2.id = of2.ordine_id
         WHERE of2.fase_id = v_fase.fase_id AND of2.operatore_id = v_comp.op_id
           AND of2.stato = 'completata' AND of2.tempo_accumulato_minuti > 0;
 
@@ -3975,9 +3843,9 @@ BEGIN
         IF v_ha_mac THEN
           SELECT mac.macchina_id, mac.macchina_nome INTO v_mac_id, v_mac_nome
           FROM _maccap_sim mac
-          WHERE mac.macchina_id IN (SELECT fm.macchina_id FROM fase_macchine fm WHERE fm.fase_id = v_fase.fase_id)
-            AND (NOT EXISTS (SELECT 1 FROM competenze_operatore_macchina com WHERE com.macchina_id = mac.macchina_id)
-                 OR  EXISTS (SELECT 1 FROM competenze_operatore_macchina com WHERE com.macchina_id = mac.macchina_id AND com.operatore_id = v_comp.op_id))
+          WHERE mac.macchina_id IN (SELECT fm.macchina_id FROM public.fase_macchine fm WHERE fm.fase_id = v_fase.fase_id)
+            AND (NOT EXISTS (SELECT 1 FROM public.competenze_operatore_macchina com WHERE com.macchina_id = mac.macchina_id)
+                 OR  EXISTS (SELECT 1 FROM public.competenze_operatore_macchina com WHERE com.macchina_id = mac.macchina_id AND com.operatore_id = v_comp.op_id))
             AND (mac.ore_disp - mac.ore_usate) >= v_stima_ore
           ORDER BY (mac.ore_disp - mac.ore_usate) DESC LIMIT 1;
           IF NOT FOUND THEN CONTINUE; END IF;
@@ -4012,7 +3880,7 @@ BEGIN
     'ordine_id', o.id, 'codice', o.codice, 'cliente', o.cliente, 'scadenza', o.scadenza,
     'fase_id', sf.fase_id, 'fase_nome', f.nome
   ) ORDER BY o.scadenza NULLS LAST, o.cliente, o.codice) INTO v_oltre
-  FROM _sim_fasi sf JOIN ordini o ON o.id = sf.ordine_id JOIN fasi f ON f.id = sf.fase_id
+  FROM _sim_fasi sf JOIN public.ordini o ON o.id = sf.ordine_id JOIN public.fasi f ON f.id = sf.fase_id
   WHERE sf.stato_sim = 'disponibile';
 
   RETURN jsonb_build_object(
@@ -4032,20 +3900,20 @@ ALTER FUNCTION public.piano_multi_giorno(p_giorni integer, p_responsabile_id uui
 
 CREATE FUNCTION public.prendi_in_carico_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE v_stato TEXT;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN json_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  SELECT stato INTO v_stato FROM fasi_ordine_extra WHERE id = p_fase_extra_id;
+  SELECT stato INTO v_stato FROM public.fasi_ordine_extra WHERE id = p_fase_extra_id;
   IF v_stato != 'disponibile' THEN RETURN json_build_object('ok', false, 'errore', 'non_disponibile'); END IF;
-  UPDATE fasi_ordine_extra SET stato='in_corso', operatore_id=p_operatore_id, iniziata_il=NOW() WHERE id=p_fase_extra_id AND stato='disponibile';
-  INSERT INTO fasi_extra_operatori(fasi_ordine_extra_id, operatore_id) VALUES(p_fase_extra_id, p_operatore_id) ON CONFLICT DO NOTHING;
+  UPDATE public.fasi_ordine_extra SET stato='in_corso', operatore_id=p_operatore_id, iniziata_il=NOW() WHERE id=p_fase_extra_id AND stato='disponibile';
+  INSERT INTO public.fasi_extra_operatori(fasi_ordine_extra_id, operatore_id) VALUES(p_fase_extra_id, p_operatore_id) ON CONFLICT DO NOTHING;
   RETURN json_build_object('ok', true);
 END;
 $$;
@@ -4059,19 +3927,19 @@ ALTER FUNCTION public.prendi_in_carico_extra(p_fase_extra_id uuid, p_operatore_i
 
 CREATE FUNCTION public.prendi_in_carico_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
-  v_fase ordine_fasi%ROWTYPE;
+  v_fase public.ordine_fasi%ROWTYPE;
   v_deps_ns jsonb;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  SELECT * INTO v_fase FROM ordine_fasi WHERE id = p_ordine_fase_id FOR UPDATE;
+  SELECT * INTO v_fase FROM public.ordine_fasi WHERE id = p_ordine_fase_id FOR UPDATE;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'Fase non trovata'); END IF;
   IF v_fase.stato <> 'disponibile' THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'Fase non disponibile — già presa in carico o completata');
@@ -4083,9 +3951,9 @@ BEGIN
     'stato',   of2.stato
   ))
   INTO v_deps_ns
-  FROM fase_dipendenze fd
-  JOIN fasi f ON f.id = fd.dipende_da_fase_id
-  JOIN ordine_fasi of2
+  FROM public.fase_dipendenze fd
+  JOIN public.fasi f ON f.id = fd.dipende_da_fase_id
+  JOIN public.ordine_fasi of2
     ON of2.ordine_id = v_fase.ordine_id
    AND of2.fase_id  = fd.dipende_da_fase_id
   WHERE fd.fase_id = v_fase.fase_id
@@ -4099,16 +3967,16 @@ BEGIN
     );
   END IF;
 
-  IF EXISTS (SELECT 1 FROM ordini WHERE id = v_fase.ordine_id AND stato = 'sospeso') THEN
+  IF EXISTS (SELECT 1 FROM public.ordini WHERE id = v_fase.ordine_id AND stato = 'sospeso') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'Ordine sospeso');
   END IF;
-  UPDATE ordine_fasi
+  UPDATE public.ordine_fasi
      SET stato = 'in_corso', operatore_id = p_operatore_id, iniziata_il = NOW()
    WHERE id = p_ordine_fase_id;
-  INSERT INTO ordine_fasi_operatori(ordine_fase_id, operatore_id)
+  INSERT INTO public.ordine_fasi_operatori(ordine_fase_id, operatore_id)
     VALUES(p_ordine_fase_id, p_operatore_id) ON CONFLICT DO NOTHING;
   BEGIN
-    INSERT INTO archivio_log(ordine_id, fase_id, utente_id, azione, dettaglio)
+    INSERT INTO public.archivio_log(ordine_id, fase_id, utente_id, azione, dettaglio)
     VALUES(v_fase.ordine_id, v_fase.fase_id, p_operatore_id, 'fase_iniziata',
            jsonb_build_object('ordine_fase_id', p_ordine_fase_id));
   EXCEPTION WHEN OTHERS THEN
@@ -4127,21 +3995,21 @@ ALTER FUNCTION public.prendi_in_carico_fase(p_ordine_fase_id uuid, p_operatore_i
 
 CREATE FUNCTION public.riapri_fase_extra_resp(p_fase_extra_id uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE v_ordine_id uuid;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
 
-  SELECT ordine_id INTO v_ordine_id FROM fasi_ordine_extra WHERE id = p_fase_extra_id;
+  SELECT ordine_id INTO v_ordine_id FROM public.fasi_ordine_extra WHERE id = p_fase_extra_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
 
-  UPDATE fasi_ordine_extra
+  UPDATE public.fasi_ordine_extra
     SET stato = 'disponibile',
         operatore_id = NULL,
         iniziata_il = NULL,
@@ -4149,12 +4017,12 @@ BEGIN
     WHERE id = p_fase_extra_id;
 
   -- Se l'ordine era attesa_spedizione e ora ha fasi non completate, torna aperto
-  UPDATE ordini
+  UPDATE public.ordini
     SET stato = 'aperto', completato_il = NULL
     WHERE id = v_ordine_id
       AND stato = 'attesa_spedizione'
       AND EXISTS (
-        SELECT 1 FROM fasi_ordine_extra
+        SELECT 1 FROM public.fasi_ordine_extra
         WHERE ordine_id = v_ordine_id
           AND stato NOT IN ('completata')
       );
@@ -4172,13 +4040,13 @@ ALTER FUNCTION public.riapri_fase_extra_resp(p_fase_extra_id uuid, p_responsabil
 
 CREATE FUNCTION public.riapri_fase_operatore(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
-  v_fase            ordine_fasi%ROWTYPE;
+  v_fase            public.ordine_fasi%ROWTYPE;
   v_is_responsabile BOOLEAN := FALSE;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF p_operatore_id IS NULL THEN
@@ -4187,21 +4055,21 @@ BEGIN
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN json_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  SELECT * INTO v_fase FROM ordine_fasi WHERE id = p_ordine_fase_id AND stato = 'completata';
+  SELECT * INTO v_fase FROM public.ordine_fasi WHERE id = p_ordine_fase_id AND stato = 'completata';
   IF NOT FOUND THEN
     RETURN json_build_object('ok', false, 'errore', 'fase_non_trovata_o_non_completata');
   END IF;
-  SELECT EXISTS(SELECT 1 FROM users WHERE id = p_operatore_id AND ruolo = 'responsabile' AND attivo = TRUE)
+  SELECT EXISTS(SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'responsabile' AND attivo = TRUE)
     INTO v_is_responsabile;
   IF NOT v_is_responsabile AND v_fase.operatore_id IS DISTINCT FROM p_operatore_id THEN
     RETURN json_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-  UPDATE ordine_fasi
+  UPDATE public.ordine_fasi
   SET stato = 'disponibile', operatore_id = NULL, iniziata_il = NULL, completata_il = NULL
   WHERE id = p_ordine_fase_id;
-  DELETE FROM ordine_fasi_operatori WHERE ordine_fase_id = p_ordine_fase_id;
+  DELETE FROM public.ordine_fasi_operatori WHERE ordine_fase_id = p_ordine_fase_id;
   BEGIN
-    INSERT INTO archivio_log (ordine_id, fase_id, utente_id, azione, dettaglio)
+    INSERT INTO public.archivio_log (ordine_id, fase_id, utente_id, azione, dettaglio)
   VALUES (v_fase.ordine_id, v_fase.fase_id, p_operatore_id, 'fase_riaperta',
           jsonb_build_object('ordine_fase_id', p_ordine_fase_id));
   EXCEPTION WHEN OTHERS THEN
@@ -4220,30 +4088,30 @@ ALTER FUNCTION public.riapri_fase_operatore(p_ordine_fase_id uuid, p_operatore_i
 
 CREATE FUNCTION public.riassegna_fase(p_ordine_fase_id uuid, p_responsabile_id uuid, p_nuovo_operatore uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
-DECLARE v_fase ordine_fasi%ROWTYPE;
+DECLARE v_fase public.ordine_fasi%ROWTYPE;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id=p_responsabile_id AND ruolo='responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_responsabile_id AND ruolo='responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'Azione riservata al responsabile');
   END IF;
-  SELECT * INTO v_fase FROM ordine_fasi WHERE id=p_ordine_fase_id FOR UPDATE;
+  SELECT * INTO v_fase FROM public.ordine_fasi WHERE id=p_ordine_fase_id FOR UPDATE;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'Fase non trovata'); END IF;
-  UPDATE ordine_fasi SET operatore_id=p_nuovo_operatore, stato='in_corso', iniziata_il=COALESCE(v_fase.iniziata_il,NOW()) WHERE id=p_ordine_fase_id;
-  DELETE FROM ordine_fasi_operatori WHERE ordine_fase_id=p_ordine_fase_id;
-  INSERT INTO ordine_fasi_operatori(ordine_fase_id, operatore_id) VALUES(p_ordine_fase_id, p_nuovo_operatore) ON CONFLICT DO NOTHING;
+  UPDATE public.ordine_fasi SET operatore_id=p_nuovo_operatore, stato='in_corso', iniziata_il=COALESCE(v_fase.iniziata_il,NOW()) WHERE id=p_ordine_fase_id;
+  DELETE FROM public.ordine_fasi_operatori WHERE ordine_fase_id=p_ordine_fase_id;
+  INSERT INTO public.ordine_fasi_operatori(ordine_fase_id, operatore_id) VALUES(p_ordine_fase_id, p_nuovo_operatore) ON CONFLICT DO NOTHING;
   BEGIN
-    INSERT INTO archivio_log(ordine_id, fase_id, utente_id, azione, dettaglio)
+    INSERT INTO public.archivio_log(ordine_id, fase_id, utente_id, azione, dettaglio)
     VALUES(v_fase.ordine_id, v_fase.fase_id, p_responsabile_id, 'fase_riassegnata',
            jsonb_build_object('vecchio_operatore', v_fase.operatore_id, 'nuovo_operatore', p_nuovo_operatore));
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING 'log non scritto: %', SQLERRM;
   END;
-  INSERT INTO notifiche(destinatario_id, tipo, testo, ordine_id)
-    SELECT id, 'fase_riassegnata', 'Fase riassegnata a nuovo operatore', v_fase.ordine_id FROM users WHERE ruolo='responsabile';
+  INSERT INTO public.notifiche(destinatario_id, tipo, testo, ordine_id)
+    SELECT id, 'fase_riassegnata', 'Fase riassegnata a nuovo operatore', v_fase.ordine_id FROM public.users WHERE ruolo='responsabile';
   RETURN jsonb_build_object('ok', true);
 END;
 $$;
@@ -4257,16 +4125,16 @@ ALTER FUNCTION public.riassegna_fase(p_ordine_fase_id uuid, p_responsabile_id uu
 
 CREATE FUNCTION public.riassegna_fase_extra(p_fase_extra_id uuid, p_nuovo_op uuid, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id=p_responsabile_id AND ruolo='responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_responsabile_id AND ruolo='responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-  UPDATE fasi_ordine_extra SET operatore_id=p_nuovo_op WHERE id=p_fase_extra_id;
+  UPDATE public.fasi_ordine_extra SET operatore_id=p_nuovo_op WHERE id=p_fase_extra_id;
   RETURN jsonb_build_object('ok', true);
 END;
 $$;
@@ -4280,7 +4148,7 @@ ALTER FUNCTION public.riassegna_fase_extra(p_fase_extra_id uuid, p_nuovo_op uuid
 
 CREATE FUNCTION public.ricalcola_fase_su_ordini_esistenti(p_fase_id smallint, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_ord       RECORD;
@@ -4291,17 +4159,17 @@ DECLARE
   v_mat_ids   TEXT[];
   v_strut_ids TEXT[];
   v_applicabile  BOOLEAN;
-  v_riga      ordine_fasi%ROWTYPE;
+  v_riga      public.ordine_fasi%ROWTYPE;
   v_attivate  INT := 0;
   v_disattivate INT := 0;
   v_invariate INT := 0;
   v_saltate   INT := 0;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
 
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
 
@@ -4309,13 +4177,13 @@ BEGIN
     RETURN jsonb_build_object('ok', true, 'saltato', true, 'motivo', 'fase_con_regola_hardcoded');
   END IF;
 
-  SELECT ARRAY(SELECT tipo_prodotto_id FROM fase_tipi_prodotto WHERE fase_id = p_fase_id) INTO v_tipi_ids;
-  SELECT ARRAY(SELECT materiale_valore  FROM fase_materiali    WHERE fase_id = p_fase_id) INTO v_mat_ids;
-  SELECT ARRAY(SELECT struttura_valore  FROM fase_strutture    WHERE fase_id = p_fase_id) INTO v_strut_ids;
+  SELECT ARRAY(SELECT tipo_prodotto_id FROM public.fase_tipi_prodotto WHERE fase_id = p_fase_id) INTO v_tipi_ids;
+  SELECT ARRAY(SELECT materiale_valore  FROM public.fase_materiali    WHERE fase_id = p_fase_id) INTO v_mat_ids;
+  SELECT ARRAY(SELECT struttura_valore  FROM public.fase_strutture    WHERE fase_id = p_fase_id) INTO v_strut_ids;
 
   FOR v_ord IN
     SELECT o.id AS ordine_id, o.tipo_prodotto, o.materiale, o.struttura
-    FROM ordini o
+    FROM public.ordini o
     WHERE o.stato != 'spedito'
       AND (o.eliminato IS NULL OR o.eliminato = false)
       AND o.tipo != 'extra'
@@ -4329,14 +4197,14 @@ BEGIN
     IF cardinality(v_mat_ids)   > 0 AND NOT (v_materiale  = ANY(v_mat_ids))  THEN v_applicabile := false; END IF;
     IF cardinality(v_strut_ids) > 0 AND NOT (v_struttura  = ANY(v_strut_ids)) THEN v_applicabile := false; END IF;
 
-    SELECT * INTO v_riga FROM ordine_fasi
+    SELECT * INTO v_riga FROM public.ordine_fasi
     WHERE ordine_id = v_ord.ordine_id AND fase_id = p_fase_id;
 
     IF NOT FOUND THEN CONTINUE; END IF;
 
     IF v_applicabile THEN
       IF v_riga.stato = 'non_applicabile' THEN
-        UPDATE ordine_fasi SET stato = 'disponibile'
+        UPDATE public.ordine_fasi SET stato = 'disponibile'
         WHERE ordine_id = v_ord.ordine_id AND fase_id = p_fase_id;
         v_attivate := v_attivate + 1;
       ELSE
@@ -4346,7 +4214,7 @@ BEGIN
       IF v_riga.stato IN ('in_corso','completata','in_attesa') THEN
         v_saltate := v_saltate + 1;
       ELSIF v_riga.stato = 'disponibile' THEN
-        UPDATE ordine_fasi SET stato = 'non_applicabile'
+        UPDATE public.ordine_fasi SET stato = 'non_applicabile'
         WHERE ordine_id = v_ord.ordine_id AND fase_id = p_fase_id;
         v_disattivate := v_disattivate + 1;
       ELSE
@@ -4374,17 +4242,17 @@ ALTER FUNCTION public.ricalcola_fase_su_ordini_esistenti(p_fase_id smallint, p_r
 
 CREATE FUNCTION public.riepilogo_competenze_operatore(p_operatore_id uuid) RETURNS TABLE(fase_id smallint, fase_nome text, fase_posizione integer, priorita smallint)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT e_responsabile() THEN
+  IF NOT public.e_responsabile() THEN
     RAISE EXCEPTION 'non_autorizzato' USING ERRCODE = '42501';
   END IF;
 
   RETURN QUERY
   SELECT c.fase_id, f.nome, f.posizione, c.priorita
-  FROM   competenze_operatore_fase c
-  JOIN   fasi f ON f.id = c.fase_id
+  FROM   public.competenze_operatore_fase c
+  JOIN   public.fasi f ON f.id = c.fase_id
   WHERE  c.operatore_id = p_operatore_id
   ORDER  BY f.posizione, f.id;
 END;
@@ -4399,25 +4267,25 @@ ALTER FUNCTION public.riepilogo_competenze_operatore(p_operatore_id uuid) OWNER 
 
 CREATE FUNCTION public.rimuovi_collega_extra(p_fase_extra_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
-DECLARE v_fase fasi_ordine_extra%ROWTYPE;
+DECLARE v_fase public.fasi_ordine_extra%ROWTYPE;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_richiedente_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_richiedente_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_richiedente_id AND ruolo = 'sola_lettura') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  SELECT * INTO v_fase FROM fasi_ordine_extra WHERE id = p_fase_extra_id;
+  SELECT * INTO v_fase FROM public.fasi_ordine_extra WHERE id = p_fase_extra_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
   IF p_richiedente_id IS DISTINCT FROM p_collega_id
      AND v_fase.operatore_id IS DISTINCT FROM p_richiedente_id
-     AND NOT EXISTS (SELECT 1 FROM fasi_extra_operatori WHERE fasi_ordine_extra_id=p_fase_extra_id AND operatore_id=p_richiedente_id)
-     AND NOT EXISTS (SELECT 1 FROM users WHERE id=p_richiedente_id AND ruolo='responsabile') THEN
+     AND NOT EXISTS (SELECT 1 FROM public.fasi_extra_operatori WHERE fasi_ordine_extra_id=p_fase_extra_id AND operatore_id=p_richiedente_id)
+     AND NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_richiedente_id AND ruolo='responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-  DELETE FROM fasi_extra_operatori WHERE fasi_ordine_extra_id=p_fase_extra_id AND operatore_id=p_collega_id;
+  DELETE FROM public.fasi_extra_operatori WHERE fasi_ordine_extra_id=p_fase_extra_id AND operatore_id=p_collega_id;
   RETURN jsonb_build_object('ok', true);
 END;
 $$;
@@ -4431,27 +4299,27 @@ ALTER FUNCTION public.rimuovi_collega_extra(p_fase_extra_id uuid, p_collega_id u
 
 CREATE FUNCTION public.rimuovi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
-DECLARE v_fase ordine_fasi%ROWTYPE;
+DECLARE v_fase public.ordine_fasi%ROWTYPE;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_richiedente_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_richiedente_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_richiedente_id AND ruolo = 'sola_lettura') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  SELECT * INTO v_fase FROM ordine_fasi WHERE id = p_ordine_fase_id;
+  SELECT * INTO v_fase FROM public.ordine_fasi WHERE id = p_ordine_fase_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
   IF p_richiedente_id IS DISTINCT FROM p_collega_id
      AND v_fase.operatore_id IS DISTINCT FROM p_richiedente_id
-     AND NOT EXISTS (SELECT 1 FROM ordine_fasi_operatori WHERE ordine_fase_id=p_ordine_fase_id AND operatore_id=p_richiedente_id)
-     AND NOT EXISTS (SELECT 1 FROM users WHERE id=p_richiedente_id AND ruolo='responsabile') THEN
+     AND NOT EXISTS (SELECT 1 FROM public.ordine_fasi_operatori WHERE ordine_fase_id=p_ordine_fase_id AND operatore_id=p_richiedente_id)
+     AND NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_richiedente_id AND ruolo='responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-  DELETE FROM ordine_fasi_operatori WHERE ordine_fase_id=p_ordine_fase_id AND operatore_id=p_collega_id;
+  DELETE FROM public.ordine_fasi_operatori WHERE ordine_fase_id=p_ordine_fase_id AND operatore_id=p_collega_id;
   BEGIN
-    INSERT INTO archivio_log(ordine_id, utente_id, azione, dettaglio)
+    INSERT INTO public.archivio_log(ordine_id, utente_id, azione, dettaglio)
   VALUES(v_fase.ordine_id, p_richiedente_id, 'fase_annullata',
          jsonb_build_object('rimosso_da', p_richiedente_id, 'operatore_id', p_collega_id, 'ordine_fase_id', p_ordine_fase_id));
   EXCEPTION WHEN OTHERS THEN
@@ -4470,20 +4338,20 @@ ALTER FUNCTION public.rimuovi_collega_fase(p_ordine_fase_id uuid, p_collega_id u
 
 CREATE FUNCTION public.riprendi_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_forza boolean DEFAULT false, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
-DECLARE v_fase ordine_fasi%ROWTYPE; v_tg text;
+DECLARE v_fase public.ordine_fasi%ROWTYPE; v_tg text;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF EXISTS (SELECT 1 FROM users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
+  IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  SELECT * INTO v_fase FROM ordine_fasi WHERE id = p_ordine_fase_id FOR UPDATE;
+  SELECT * INTO v_fase FROM public.ordine_fasi WHERE id = p_ordine_fase_id FOR UPDATE;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
   IF v_fase.fase_id IS NOT NULL THEN
-    SELECT tipo_gestione INTO v_tg FROM fasi WHERE id = v_fase.fase_id;
+    SELECT tipo_gestione INTO v_tg FROM public.fasi WHERE id = v_fase.fase_id;
     IF v_tg IS DISTINCT FROM 'standard' THEN
       RETURN jsonb_build_object('ok', false, 'errore', 'usa_conferma_ricezione', 'tipo_gestione', v_tg, 'messaggio', 'Usa il pulsante specifico per questo tipo di fase');
     END IF;
@@ -4491,7 +4359,7 @@ BEGIN
   IF v_fase.stato NOT IN ('in_attesa','in_corso') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_riprendibile', 'stato', v_fase.stato);
   END IF;
-  UPDATE ordine_fasi SET stato='in_corso', operatore_id=p_operatore_id, iniziata_il=COALESCE(v_fase.iniziata_il, NOW()) WHERE id=p_ordine_fase_id;
+  UPDATE public.ordine_fasi SET stato='in_corso', operatore_id=p_operatore_id, iniziata_il=COALESCE(v_fase.iniziata_il, NOW()) WHERE id=p_ordine_fase_id;
   RETURN jsonb_build_object('ok', true);
 END;
 $$;
@@ -4505,17 +4373,17 @@ ALTER FUNCTION public.riprendi_fase(p_ordine_fase_id uuid, p_operatore_id uuid, 
 
 CREATE FUNCTION public.riprendi_tutte_fasi(p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN json_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  UPDATE ordine_fasi SET stato='in_corso', iniziata_il=NOW() WHERE operatore_id=p_operatore_id AND stato='in_attesa';
-  UPDATE fasi_ordine_extra SET stato='in_corso', iniziata_il=NOW() WHERE operatore_id=p_operatore_id AND stato='in_attesa';
+  UPDATE public.ordine_fasi SET stato='in_corso', iniziata_il=NOW() WHERE operatore_id=p_operatore_id AND stato='in_attesa';
+  UPDATE public.fasi_ordine_extra SET stato='in_corso', iniziata_il=NOW() WHERE operatore_id=p_operatore_id AND stato='in_attesa';
   RETURN json_build_object('ok', true);
 END;
 $$;
@@ -4529,24 +4397,24 @@ ALTER FUNCTION public.riprendi_tutte_fasi(p_operatore_id uuid, p_session_token u
 
 CREATE FUNCTION public.salva_allegato(p_ordine_fase_id uuid, p_url_file text, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
-DECLARE v_fase ordine_fasi%ROWTYPE;
+DECLARE v_fase public.ordine_fasi%ROWTYPE;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  SELECT * INTO v_fase FROM ordine_fasi WHERE id = p_ordine_fase_id;
+  SELECT * INTO v_fase FROM public.ordine_fasi WHERE id = p_ordine_fase_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
   IF v_fase.operatore_id IS DISTINCT FROM p_operatore_id
-     AND NOT EXISTS (SELECT 1 FROM ordine_fasi_operatori WHERE ordine_fase_id=p_ordine_fase_id AND operatore_id=p_operatore_id)
-     AND NOT EXISTS (SELECT 1 FROM users WHERE id=p_operatore_id AND ruolo='responsabile') THEN
+     AND NOT EXISTS (SELECT 1 FROM public.ordine_fasi_operatori WHERE ordine_fase_id=p_ordine_fase_id AND operatore_id=p_operatore_id)
+     AND NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_operatore_id AND ruolo='responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-  INSERT INTO allegati(ordine_fase_id, url_file, caricato_da) VALUES(p_ordine_fase_id, p_url_file, p_operatore_id);
+  INSERT INTO public.allegati(ordine_fase_id, url_file, caricato_da) VALUES(p_ordine_fase_id, p_url_file, p_operatore_id);
   RETURN jsonb_build_object('ok', true);
 END;
 $$;
@@ -4560,16 +4428,16 @@ ALTER FUNCTION public.salva_allegato(p_ordine_fase_id uuid, p_url_file text, p_o
 
 CREATE FUNCTION public.salva_nota_fase_extra(p_fase_extra_id uuid, p_note text, p_responsabile_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_responsabile_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id=p_responsabile_id AND ruolo='responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_responsabile_id AND ruolo='responsabile') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
-  UPDATE fasi_ordine_extra SET note_responsabile=p_note WHERE id=p_fase_extra_id;
+  UPDATE public.fasi_ordine_extra SET note_responsabile=p_note WHERE id=p_fase_extra_id;
   RETURN jsonb_build_object('ok', true);
 END;
 $$;
@@ -4583,12 +4451,12 @@ ALTER FUNCTION public.salva_nota_fase_extra(p_fase_extra_id uuid, p_note text, p
 
 CREATE FUNCTION public.salva_onesignal_id(p_user_id uuid, p_onesignal_id text, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_count INT;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_user_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_user_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'non_autorizzato');
   END IF;
 
@@ -4610,11 +4478,11 @@ ALTER FUNCTION public.salva_onesignal_id(p_user_id uuid, p_onesignal_id text, p_
 
 CREATE FUNCTION public.segna_notifiche_lette(p_utente_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS integer
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE v_count integer;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_utente_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_utente_id, p_session_token), false) THEN
     RAISE EXCEPTION 'sessione_non_valida';
   END IF;
 
@@ -4636,25 +4504,25 @@ ALTER FUNCTION public.segna_notifiche_lette(p_utente_id uuid, p_session_token uu
 
 CREATE FUNCTION public.segna_spedito(p_ordine_id uuid, p_utente_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
-DECLARE v_ordine ordini%ROWTYPE;
+DECLARE v_ordine public.ordini%ROWTYPE;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_utente_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_utente_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_utente_id AND ruolo = 'sola_lettura') THEN
     RETURN json_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  SELECT * INTO v_ordine FROM ordini WHERE id = p_ordine_id;
+  SELECT * INTO v_ordine FROM public.ordini WHERE id = p_ordine_id;
   IF NOT FOUND THEN RETURN json_build_object('ok', false, 'errore', 'Ordine non trovato'); END IF;
   IF v_ordine.stato = 'spedito' THEN RETURN json_build_object('ok', false, 'errore', 'Ordine già segnato come spedito'); END IF;
   IF v_ordine.stato NOT IN ('aperto', 'attesa_spedizione') THEN
     RETURN json_build_object('ok', false, 'errore', 'Impossibile spedire un ordine in stato: ' || v_ordine.stato);
   END IF;
-  UPDATE ordini SET stato='spedito', spedito_il=NOW() WHERE id=p_ordine_id;
+  UPDATE public.ordini SET stato='spedito', spedito_il=NOW() WHERE id=p_ordine_id;
   BEGIN
-    INSERT INTO archivio_log (ordine_id, utente_id, azione) VALUES (p_ordine_id, p_utente_id, 'ordine_spedito');
+    INSERT INTO public.archivio_log (ordine_id, utente_id, azione) VALUES (p_ordine_id, p_utente_id, 'ordine_spedito');
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING 'log non scritto: %', SQLERRM;
   END;
@@ -4671,29 +4539,29 @@ ALTER FUNCTION public.segna_spedito(p_ordine_id uuid, p_utente_id uuid, p_sessio
 
 CREATE FUNCTION public.segna_spedizione_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
-DECLARE v_fase fasi_ordine_extra%ROWTYPE;
+DECLARE v_fase public.fasi_ordine_extra%ROWTYPE;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF EXISTS (SELECT 1 FROM users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
+  IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  SELECT * INTO v_fase FROM fasi_ordine_extra WHERE id = p_fase_extra_id;
+  SELECT * INTO v_fase FROM public.fasi_ordine_extra WHERE id = p_fase_extra_id;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
   IF v_fase.tipo_gestione <> 'spedizione_esterna' THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'tipo_gestione_non_valido', 'tipo_gestione', v_fase.tipo_gestione);
   END IF;
   IF v_fase.stato <> 'disponibile' THEN RETURN jsonb_build_object('ok', false, 'errore', 'stato_non_disponibile', 'stato', v_fase.stato); END IF;
-  IF NOT EXISTS (SELECT 1 FROM users WHERE id=p_operatore_id AND ruolo='responsabile') THEN
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_operatore_id AND ruolo='responsabile') THEN
     IF v_fase.operatore_id IS NOT NULL AND v_fase.operatore_id IS DISTINCT FROM p_operatore_id
-       AND NOT EXISTS (SELECT 1 FROM fasi_extra_operatori WHERE fasi_ordine_extra_id=p_fase_extra_id AND operatore_id=p_operatore_id) THEN
+       AND NOT EXISTS (SELECT 1 FROM public.fasi_extra_operatori WHERE fasi_ordine_extra_id=p_fase_extra_id AND operatore_id=p_operatore_id) THEN
       RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
     END IF;
   END IF;
-  UPDATE fasi_ordine_extra SET stato='in_attesa', spedita_il=NOW() WHERE id=p_fase_extra_id;
+  UPDATE public.fasi_ordine_extra SET stato='in_attesa', spedita_il=NOW() WHERE id=p_fase_extra_id;
   RETURN jsonb_build_object('ok', true);
 END;
 $$;
@@ -4707,24 +4575,24 @@ ALTER FUNCTION public.segna_spedizione_extra(p_fase_extra_id uuid, p_operatore_i
 
 CREATE FUNCTION public.segna_spedizione_fase(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
-DECLARE v_fase ordine_fasi%ROWTYPE; v_tg text;
+DECLARE v_fase public.ordine_fasi%ROWTYPE; v_tg text;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
-  IF EXISTS (SELECT 1 FROM users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
+  IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  SELECT * INTO v_fase FROM ordine_fasi WHERE id = p_ordine_fase_id FOR UPDATE;
+  SELECT * INTO v_fase FROM public.ordine_fasi WHERE id = p_ordine_fase_id FOR UPDATE;
   IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
-  SELECT tipo_gestione INTO v_tg FROM fasi WHERE id = v_fase.fase_id;
+  SELECT tipo_gestione INTO v_tg FROM public.fasi WHERE id = v_fase.fase_id;
   IF v_tg IS DISTINCT FROM 'spedizione_esterna' THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'tipo_gestione_non_valido', 'tipo_gestione', v_tg);
   END IF;
   IF v_fase.stato <> 'disponibile' THEN RETURN jsonb_build_object('ok', false, 'errore', 'stato_non_disponibile', 'stato', v_fase.stato); END IF;
-  UPDATE ordine_fasi SET stato='in_attesa', spedita_il=NOW() WHERE id=p_ordine_fase_id;
+  UPDATE public.ordine_fasi SET stato='in_attesa', spedita_il=NOW() WHERE id=p_ordine_fase_id;
   RETURN jsonb_build_object('ok', true);
 END;
 $$;
@@ -4738,10 +4606,10 @@ ALTER FUNCTION public.segna_spedizione_fase(p_ordine_fase_id uuid, p_operatore_i
 
 CREATE FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[], p_operatore_id uuid DEFAULT NULL::uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS TABLE(ordine_id uuid, minuti_lavoro numeric, minuti_attesa_esterna numeric, n_operatori bigint)
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT (e_responsabile() OR COALESCE(valida_sessione(p_operatore_id, p_session_token), false)) THEN
+  IF NOT (public.e_responsabile() OR COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false)) THEN
     RAISE EXCEPTION 'sessione_non_valida' USING ERRCODE = '42501';
   END IF;
 
@@ -4753,8 +4621,8 @@ BEGIN
       (COALESCE(f.tipo_gestione, 'standard') <> 'standard'
        OR COALESCE(f.e_attesa_esterna, false)) AS is_attesa_esterna,
       of2.operatore_id
-    FROM ordine_fasi of2
-    LEFT JOIN fasi f ON f.id = of2.fase_id
+    FROM public.ordine_fasi of2
+    LEFT JOIN public.fasi f ON f.id = of2.fase_id
     WHERE of2.ordine_id = ANY(p_ordine_ids)
   ),
   fasi_extra AS (
@@ -4764,7 +4632,7 @@ BEGIN
       (COALESCE(foe.tipo_gestione, 'standard') <> 'standard'
        OR COALESCE(foe.e_attesa_esterna, false)) AS is_attesa_esterna,
       foe.operatore_id
-    FROM fasi_ordine_extra foe
+    FROM public.fasi_ordine_extra foe
     WHERE foe.ordine_id = ANY(p_ordine_ids)
   ),
   tempo AS (
@@ -4781,8 +4649,8 @@ BEGIN
   ),
   op_std AS (
     SELECT of2.ordine_id, of2.operatore_id AS op_id
-    FROM ordine_fasi of2
-    LEFT JOIN fasi f ON f.id = of2.fase_id
+    FROM public.ordine_fasi of2
+    LEFT JOIN public.fasi f ON f.id = of2.fase_id
     WHERE of2.ordine_id = ANY(p_ordine_ids)
       AND of2.operatore_id IS NOT NULL
       AND COALESCE(f.tipo_gestione, 'standard') = 'standard'
@@ -4790,16 +4658,16 @@ BEGIN
   ),
   op_std_jn AS (
     SELECT of2.ordine_id, ofo.operatore_id AS op_id
-    FROM ordine_fasi_operatori ofo
-    JOIN ordine_fasi of2 ON of2.id = ofo.ordine_fase_id
-    LEFT JOIN fasi f ON f.id = of2.fase_id
+    FROM public.ordine_fasi_operatori ofo
+    JOIN public.ordine_fasi of2 ON of2.id = ofo.ordine_fase_id
+    LEFT JOIN public.fasi f ON f.id = of2.fase_id
     WHERE of2.ordine_id = ANY(p_ordine_ids)
       AND COALESCE(f.tipo_gestione, 'standard') = 'standard'
       AND NOT COALESCE(f.e_attesa_esterna, false)
   ),
   op_extra AS (
     SELECT foe.ordine_id, foe.operatore_id AS op_id
-    FROM fasi_ordine_extra foe
+    FROM public.fasi_ordine_extra foe
     WHERE foe.ordine_id = ANY(p_ordine_ids)
       AND foe.operatore_id IS NOT NULL
       AND COALESCE(foe.tipo_gestione, 'standard') = 'standard'
@@ -4807,8 +4675,8 @@ BEGIN
   ),
   op_extra_jn AS (
     SELECT foe.ordine_id, feo.operatore_id AS op_id
-    FROM fasi_extra_operatori feo
-    JOIN fasi_ordine_extra foe ON foe.id = feo.fasi_ordine_extra_id
+    FROM public.fasi_extra_operatori feo
+    JOIN public.fasi_ordine_extra foe ON foe.id = feo.fasi_ordine_extra_id
     WHERE foe.ordine_id = ANY(p_ordine_ids)
       AND COALESCE(foe.tipo_gestione, 'standard') = 'standard'
       AND NOT COALESCE(foe.e_attesa_esterna, false)
@@ -4848,10 +4716,10 @@ ALTER FUNCTION public.statistiche_lavoro_ordini(p_ordine_ids uuid[], p_operatore
 
 CREATE FUNCTION public.storico_fasi_completate(p_operatore_id uuid, p_session_token uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   RETURN jsonb_build_object('ok', true, 'dati', (
@@ -4861,9 +4729,9 @@ BEGIN
         'ordini', jsonb_build_object('codice', o.codice, 'cliente', o.cliente),
         'fasi',   CASE WHEN f.id IS NOT NULL THEN jsonb_build_object('nome', f.nome) ELSE NULL END
       ) AS row_json
-      FROM ordine_fasi of
-      JOIN ordini o ON o.id = of.ordine_id
-      LEFT JOIN fasi f ON f.id = of.fase_id
+      FROM public.ordine_fasi of
+      JOIN public.ordini o ON o.id = of.ordine_id
+      LEFT JOIN public.fasi f ON f.id = of.fase_id
       WHERE of.operatore_id = p_operatore_id AND of.stato = 'completata'
       ORDER BY of.completata_il DESC
       LIMIT 30
@@ -4881,15 +4749,15 @@ ALTER FUNCTION public.storico_fasi_completate(p_operatore_id uuid, p_session_tok
 
 CREATE FUNCTION public.storico_ordini_periodo(p_operatore_id uuid, p_session_token uuid, p_dal timestamp with time zone, p_al timestamp with time zone) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   RETURN jsonb_build_object('ok', true, 'dati', (
     SELECT COALESCE(jsonb_agg(to_jsonb(o) ORDER BY o.spedito_il DESC NULLS LAST), '[]'::jsonb)
-    FROM ordini o
+    FROM public.ordini o
     WHERE (o.spedito_il >= p_dal AND o.spedito_il < p_al)
        OR (o.spedito_il IS NULL AND o.completato_il >= p_dal AND o.completato_il < p_al)
   ));
@@ -4924,10 +4792,10 @@ ALTER FUNCTION public.sync_e_attesa_esterna() OWNER TO postgres;
 
 CREATE FUNCTION public.tempo_medio_fasi_dati(p_operatore_id uuid, p_session_token uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   RETURN jsonb_build_object('ok', true, 'dati', (
@@ -4937,8 +4805,8 @@ BEGIN
       'n_ordini_batch', of.n_ordini_batch,
       'ordini', jsonb_build_object('quantita', o.quantita)
     )), '[]'::jsonb)
-    FROM ordine_fasi of
-    JOIN ordini o ON o.id = of.ordine_id
+    FROM public.ordine_fasi of
+    JOIN public.ordini o ON o.id = of.ordine_id
     WHERE of.stato = 'completata'
       AND of.tempo_accumulato_minuti > 0
       AND of.tempo_accumulato_minuti < 20000
@@ -4956,7 +4824,7 @@ ALTER FUNCTION public.tempo_medio_fasi_dati(p_operatore_id uuid, p_session_token
 
 CREATE FUNCTION public.trigger_push_notifica() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_url TEXT;
@@ -4974,8 +4842,8 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  SELECT valore INTO v_edge_base FROM config_sistema WHERE chiave = 'edge_functions_base_url' LIMIT 1;
-  SELECT valore INTO v_app_base  FROM config_sistema WHERE chiave = 'app_base_url'            LIMIT 1;
+  SELECT valore INTO v_edge_base FROM public.config_sistema WHERE chiave = 'edge_functions_base_url' LIMIT 1;
+  SELECT valore INTO v_app_base  FROM public.config_sistema WHERE chiave = 'app_base_url'            LIMIT 1;
 
   IF v_edge_base IS NULL THEN
     RAISE WARNING 'trigger_push_notifica: edge_functions_base_url non trovata in config_sistema';
@@ -5018,20 +4886,20 @@ ALTER FUNCTION public.trigger_push_notifica() OWNER TO postgres;
 
 CREATE FUNCTION public.unisciti_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS json
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE v_stato TEXT;
 BEGIN
-  IF NOT COALESCE(valida_sessione(p_operatore_id, p_session_token), false) THEN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN json_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
-  SELECT stato INTO v_stato FROM fasi_ordine_extra WHERE id = p_fase_extra_id;
+  SELECT stato INTO v_stato FROM public.fasi_ordine_extra WHERE id = p_fase_extra_id;
   IF v_stato IS NULL THEN RETURN json_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
   IF v_stato != 'in_corso' THEN RETURN json_build_object('ok', false, 'errore', 'fase_non_in_corso'); END IF;
-  INSERT INTO fasi_extra_operatori(fasi_ordine_extra_id, operatore_id) VALUES(p_fase_extra_id, p_operatore_id) ON CONFLICT DO NOTHING;
+  INSERT INTO public.fasi_extra_operatori(fasi_ordine_extra_id, operatore_id) VALUES(p_fase_extra_id, p_operatore_id) ON CONFLICT DO NOTHING;
   RETURN json_build_object('ok', true);
 END;
 $$;
@@ -5045,13 +4913,13 @@ ALTER FUNCTION public.unisciti_fase_extra(p_fase_extra_id uuid, p_operatore_id u
 
 CREATE FUNCTION public.valida_sessione(p_user_id uuid, p_session_token uuid) RETURNS boolean
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
-DECLARE v_user users%ROWTYPE;
+DECLARE v_user public.users%ROWTYPE;
 BEGIN
   IF p_user_id IS NULL THEN RETURN false; END IF;
 
-  SELECT * INTO v_user FROM users WHERE id = p_user_id;
+  SELECT * INTO v_user FROM public.users WHERE id = p_user_id;
   IF NOT FOUND THEN RETURN false; END IF;
 
   -- Controlli comuni a tutti i ruoli
@@ -5085,7 +4953,7 @@ ALTER FUNCTION public.valida_sessione(p_user_id uuid, p_session_token uuid) OWNE
 
 CREATE FUNCTION public.verifica_pin(p_user_id uuid, p_pin text) RETURNS json
     LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public'
+    SET search_path TO ''
     AS $$
 DECLARE
   v_user RECORD;
@@ -5724,21 +5592,6 @@ CREATE TABLE public.priorita_ordine_config (
 ALTER TABLE public.priorita_ordine_config OWNER TO postgres;
 
 --
--- Name: snapshot_backfill_fasi_eliminate_20260903; Type: TABLE; Schema: public; Owner: postgres
---
-
-CREATE TABLE public.snapshot_backfill_fasi_eliminate_20260903 (
-    id uuid NOT NULL,
-    tabella_origine text NOT NULL,
-    stato_precedente public.stato_fase NOT NULL,
-    momento timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT snapshot_backfill_fasi_eliminate_20260903_tabella_origine_check CHECK ((tabella_origine = ANY (ARRAY['ordine_fasi'::text, 'fasi_ordine_extra'::text])))
-);
-
-
-ALTER TABLE public.snapshot_backfill_fasi_eliminate_20260903 OWNER TO postgres;
-
---
 -- Name: tipi_prodotto; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -6110,14 +5963,6 @@ ALTER TABLE ONLY public.pin_tentativi
 
 ALTER TABLE ONLY public.priorita_ordine_config
     ADD CONSTRAINT priorita_ordine_config_pkey PRIMARY KEY (id);
-
-
---
--- Name: snapshot_backfill_fasi_eliminate_20260903 snapshot_backfill_fasi_eliminate_20260903_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
---
-
-ALTER TABLE ONLY public.snapshot_backfill_fasi_eliminate_20260903
-    ADD CONSTRAINT snapshot_backfill_fasi_eliminate_20260903_pkey PRIMARY KEY (id, tabella_origine);
 
 
 --
@@ -7297,12 +7142,6 @@ CREATE POLICY select_all ON public.fase_dipendenze FOR SELECT USING (true);
 
 
 --
--- Name: snapshot_backfill_fasi_eliminate_20260903; Type: ROW SECURITY; Schema: public; Owner: postgres
---
-
-ALTER TABLE public.snapshot_backfill_fasi_eliminate_20260903 ENABLE ROW LEVEL SECURITY;
-
---
 -- Name: tipi_prodotto; Type: ROW SECURITY; Schema: public; Owner: postgres
 --
 
@@ -8362,8 +8201,8 @@ GRANT ALL ON FUNCTION public.verifica_pin(p_user_id uuid, p_pin text) TO service
 -- Name: TABLE allegati; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.allegati TO anon;
-GRANT ALL ON TABLE public.allegati TO authenticated;
+GRANT MAINTAIN ON TABLE public.allegati TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.allegati TO authenticated;
 GRANT ALL ON TABLE public.allegati TO service_role;
 
 
@@ -8371,8 +8210,8 @@ GRANT ALL ON TABLE public.allegati TO service_role;
 -- Name: TABLE archivio_log; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.archivio_log TO anon;
-GRANT ALL ON TABLE public.archivio_log TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.archivio_log TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.archivio_log TO authenticated;
 GRANT ALL ON TABLE public.archivio_log TO service_role;
 
 
@@ -8380,8 +8219,8 @@ GRANT ALL ON TABLE public.archivio_log TO service_role;
 -- Name: TABLE attributi_prodotto_config; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.attributi_prodotto_config TO anon;
-GRANT ALL ON TABLE public.attributi_prodotto_config TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.attributi_prodotto_config TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.attributi_prodotto_config TO authenticated;
 GRANT ALL ON TABLE public.attributi_prodotto_config TO service_role;
 
 
@@ -8389,8 +8228,8 @@ GRANT ALL ON TABLE public.attributi_prodotto_config TO service_role;
 -- Name: TABLE catalogo_fase_extra_macchine; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.catalogo_fase_extra_macchine TO anon;
-GRANT ALL ON TABLE public.catalogo_fase_extra_macchine TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.catalogo_fase_extra_macchine TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.catalogo_fase_extra_macchine TO authenticated;
 GRANT ALL ON TABLE public.catalogo_fase_extra_macchine TO service_role;
 
 
@@ -8398,8 +8237,8 @@ GRANT ALL ON TABLE public.catalogo_fase_extra_macchine TO service_role;
 -- Name: TABLE catalogo_fasi_extra; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.catalogo_fasi_extra TO anon;
-GRANT ALL ON TABLE public.catalogo_fasi_extra TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.catalogo_fasi_extra TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.catalogo_fasi_extra TO authenticated;
 GRANT ALL ON TABLE public.catalogo_fasi_extra TO service_role;
 
 
@@ -8407,8 +8246,8 @@ GRANT ALL ON TABLE public.catalogo_fasi_extra TO service_role;
 -- Name: TABLE chiusure_aziendali; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.chiusure_aziendali TO anon;
-GRANT ALL ON TABLE public.chiusure_aziendali TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.chiusure_aziendali TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.chiusure_aziendali TO authenticated;
 GRANT ALL ON TABLE public.chiusure_aziendali TO service_role;
 
 
@@ -8416,8 +8255,8 @@ GRANT ALL ON TABLE public.chiusure_aziendali TO service_role;
 -- Name: TABLE competenze_operatore_fase; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.competenze_operatore_fase TO anon;
-GRANT ALL ON TABLE public.competenze_operatore_fase TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.competenze_operatore_fase TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.competenze_operatore_fase TO authenticated;
 GRANT ALL ON TABLE public.competenze_operatore_fase TO service_role;
 
 
@@ -8425,8 +8264,8 @@ GRANT ALL ON TABLE public.competenze_operatore_fase TO service_role;
 -- Name: TABLE competenze_operatore_fase_extra; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.competenze_operatore_fase_extra TO anon;
-GRANT ALL ON TABLE public.competenze_operatore_fase_extra TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.competenze_operatore_fase_extra TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.competenze_operatore_fase_extra TO authenticated;
 GRANT ALL ON TABLE public.competenze_operatore_fase_extra TO service_role;
 
 
@@ -8434,8 +8273,8 @@ GRANT ALL ON TABLE public.competenze_operatore_fase_extra TO service_role;
 -- Name: TABLE competenze_operatore_macchina; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.competenze_operatore_macchina TO anon;
-GRANT ALL ON TABLE public.competenze_operatore_macchina TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.competenze_operatore_macchina TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.competenze_operatore_macchina TO authenticated;
 GRANT ALL ON TABLE public.competenze_operatore_macchina TO service_role;
 
 
@@ -8443,8 +8282,8 @@ GRANT ALL ON TABLE public.competenze_operatore_macchina TO service_role;
 -- Name: TABLE config_orario; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.config_orario TO anon;
-GRANT ALL ON TABLE public.config_orario TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.config_orario TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.config_orario TO authenticated;
 GRANT ALL ON TABLE public.config_orario TO service_role;
 
 
@@ -8452,8 +8291,8 @@ GRANT ALL ON TABLE public.config_orario TO service_role;
 -- Name: TABLE config_sistema; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.config_sistema TO anon;
-GRANT ALL ON TABLE public.config_sistema TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.config_sistema TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.config_sistema TO authenticated;
 GRANT ALL ON TABLE public.config_sistema TO service_role;
 
 
@@ -8461,8 +8300,8 @@ GRANT ALL ON TABLE public.config_sistema TO service_role;
 -- Name: TABLE disponibilita_giornaliera; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.disponibilita_giornaliera TO anon;
-GRANT ALL ON TABLE public.disponibilita_giornaliera TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.disponibilita_giornaliera TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.disponibilita_giornaliera TO authenticated;
 GRANT ALL ON TABLE public.disponibilita_giornaliera TO service_role;
 
 
@@ -8470,8 +8309,8 @@ GRANT ALL ON TABLE public.disponibilita_giornaliera TO service_role;
 -- Name: TABLE fase_dipendenze; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.fase_dipendenze TO anon;
-GRANT ALL ON TABLE public.fase_dipendenze TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.fase_dipendenze TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.fase_dipendenze TO authenticated;
 GRANT ALL ON TABLE public.fase_dipendenze TO service_role;
 
 
@@ -8479,8 +8318,8 @@ GRANT ALL ON TABLE public.fase_dipendenze TO service_role;
 -- Name: TABLE fase_macchine; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.fase_macchine TO anon;
-GRANT ALL ON TABLE public.fase_macchine TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.fase_macchine TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.fase_macchine TO authenticated;
 GRANT ALL ON TABLE public.fase_macchine TO service_role;
 
 
@@ -8488,8 +8327,8 @@ GRANT ALL ON TABLE public.fase_macchine TO service_role;
 -- Name: TABLE fase_materiali; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.fase_materiali TO anon;
-GRANT ALL ON TABLE public.fase_materiali TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.fase_materiali TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.fase_materiali TO authenticated;
 GRANT ALL ON TABLE public.fase_materiali TO service_role;
 
 
@@ -8497,8 +8336,8 @@ GRANT ALL ON TABLE public.fase_materiali TO service_role;
 -- Name: TABLE fase_strutture; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.fase_strutture TO anon;
-GRANT ALL ON TABLE public.fase_strutture TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.fase_strutture TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.fase_strutture TO authenticated;
 GRANT ALL ON TABLE public.fase_strutture TO service_role;
 
 
@@ -8506,8 +8345,8 @@ GRANT ALL ON TABLE public.fase_strutture TO service_role;
 -- Name: TABLE fase_tipi_prodotto; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.fase_tipi_prodotto TO anon;
-GRANT ALL ON TABLE public.fase_tipi_prodotto TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.fase_tipi_prodotto TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.fase_tipi_prodotto TO authenticated;
 GRANT ALL ON TABLE public.fase_tipi_prodotto TO service_role;
 
 
@@ -8515,8 +8354,8 @@ GRANT ALL ON TABLE public.fase_tipi_prodotto TO service_role;
 -- Name: TABLE fasi; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.fasi TO anon;
-GRANT ALL ON TABLE public.fasi TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.fasi TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.fasi TO authenticated;
 GRANT ALL ON TABLE public.fasi TO service_role;
 
 
@@ -8524,8 +8363,8 @@ GRANT ALL ON TABLE public.fasi TO service_role;
 -- Name: TABLE fasi_extra_operatori; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.fasi_extra_operatori TO anon;
-GRANT ALL ON TABLE public.fasi_extra_operatori TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.fasi_extra_operatori TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.fasi_extra_operatori TO authenticated;
 GRANT ALL ON TABLE public.fasi_extra_operatori TO service_role;
 
 
@@ -8533,8 +8372,8 @@ GRANT ALL ON TABLE public.fasi_extra_operatori TO service_role;
 -- Name: TABLE fasi_ordine_extra; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.fasi_ordine_extra TO anon;
-GRANT ALL ON TABLE public.fasi_ordine_extra TO authenticated;
+GRANT MAINTAIN ON TABLE public.fasi_ordine_extra TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.fasi_ordine_extra TO authenticated;
 GRANT ALL ON TABLE public.fasi_ordine_extra TO service_role;
 
 
@@ -8563,8 +8402,8 @@ GRANT SELECT(ore_stimate_manuali),UPDATE(ore_stimate_manuali) ON TABLE public.fa
 -- Name: TABLE kpi_config; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.kpi_config TO anon;
-GRANT ALL ON TABLE public.kpi_config TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.kpi_config TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.kpi_config TO authenticated;
 GRANT ALL ON TABLE public.kpi_config TO service_role;
 
 
@@ -8572,8 +8411,8 @@ GRANT ALL ON TABLE public.kpi_config TO service_role;
 -- Name: TABLE kpi_schede; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.kpi_schede TO anon;
-GRANT ALL ON TABLE public.kpi_schede TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.kpi_schede TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.kpi_schede TO authenticated;
 GRANT ALL ON TABLE public.kpi_schede TO service_role;
 
 
@@ -8581,8 +8420,8 @@ GRANT ALL ON TABLE public.kpi_schede TO service_role;
 -- Name: TABLE macchine; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.macchine TO anon;
-GRANT ALL ON TABLE public.macchine TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.macchine TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.macchine TO authenticated;
 GRANT ALL ON TABLE public.macchine TO service_role;
 
 
@@ -8590,8 +8429,8 @@ GRANT ALL ON TABLE public.macchine TO service_role;
 -- Name: TABLE macro_fasi; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.macro_fasi TO anon;
-GRANT ALL ON TABLE public.macro_fasi TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.macro_fasi TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.macro_fasi TO authenticated;
 GRANT ALL ON TABLE public.macro_fasi TO service_role;
 
 
@@ -8608,8 +8447,8 @@ GRANT ALL ON SEQUENCE public.macro_fasi_id_seq TO service_role;
 -- Name: TABLE manutenzioni_macchina; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.manutenzioni_macchina TO anon;
-GRANT ALL ON TABLE public.manutenzioni_macchina TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.manutenzioni_macchina TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.manutenzioni_macchina TO authenticated;
 GRANT ALL ON TABLE public.manutenzioni_macchina TO service_role;
 
 
@@ -8617,8 +8456,8 @@ GRANT ALL ON TABLE public.manutenzioni_macchina TO service_role;
 -- Name: TABLE notifiche; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.notifiche TO anon;
-GRANT ALL ON TABLE public.notifiche TO authenticated;
+GRANT MAINTAIN ON TABLE public.notifiche TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.notifiche TO authenticated;
 GRANT ALL ON TABLE public.notifiche TO service_role;
 
 
@@ -8626,8 +8465,8 @@ GRANT ALL ON TABLE public.notifiche TO service_role;
 -- Name: TABLE notifiche_destinatari_config; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.notifiche_destinatari_config TO anon;
-GRANT ALL ON TABLE public.notifiche_destinatari_config TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.notifiche_destinatari_config TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.notifiche_destinatari_config TO authenticated;
 GRANT ALL ON TABLE public.notifiche_destinatari_config TO service_role;
 
 
@@ -8635,8 +8474,8 @@ GRANT ALL ON TABLE public.notifiche_destinatari_config TO service_role;
 -- Name: TABLE ordine_fasi; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.ordine_fasi TO anon;
-GRANT ALL ON TABLE public.ordine_fasi TO authenticated;
+GRANT MAINTAIN ON TABLE public.ordine_fasi TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.ordine_fasi TO authenticated;
 GRANT ALL ON TABLE public.ordine_fasi TO service_role;
 
 
@@ -8644,8 +8483,8 @@ GRANT ALL ON TABLE public.ordine_fasi TO service_role;
 -- Name: TABLE ordine_fasi_operatori; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.ordine_fasi_operatori TO anon;
-GRANT ALL ON TABLE public.ordine_fasi_operatori TO authenticated;
+GRANT MAINTAIN ON TABLE public.ordine_fasi_operatori TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.ordine_fasi_operatori TO authenticated;
 GRANT ALL ON TABLE public.ordine_fasi_operatori TO service_role;
 
 
@@ -8653,8 +8492,8 @@ GRANT ALL ON TABLE public.ordine_fasi_operatori TO service_role;
 -- Name: TABLE ordini; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.ordini TO anon;
-GRANT ALL ON TABLE public.ordini TO authenticated;
+GRANT MAINTAIN ON TABLE public.ordini TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.ordini TO authenticated;
 GRANT ALL ON TABLE public.ordini TO service_role;
 
 
@@ -8663,8 +8502,7 @@ GRANT ALL ON TABLE public.ordini TO service_role;
 --
 
 GRANT ALL(archiviato_il) ON TABLE public.ordini TO postgres;
-GRANT REFERENCES(archiviato_il) ON TABLE public.ordini TO anon;
-GRANT ALL(archiviato_il) ON TABLE public.ordini TO authenticated;
+GRANT SELECT(archiviato_il),INSERT(archiviato_il),UPDATE(archiviato_il) ON TABLE public.ordini TO authenticated;
 GRANT ALL(archiviato_il) ON TABLE public.ordini TO service_role;
 
 
@@ -8688,26 +8526,17 @@ GRANT ALL ON TABLE public.pin_tentativi TO service_role;
 -- Name: TABLE priorita_ordine_config; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.priorita_ordine_config TO anon;
-GRANT ALL ON TABLE public.priorita_ordine_config TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.priorita_ordine_config TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.priorita_ordine_config TO authenticated;
 GRANT ALL ON TABLE public.priorita_ordine_config TO service_role;
-
-
---
--- Name: TABLE snapshot_backfill_fasi_eliminate_20260903; Type: ACL; Schema: public; Owner: postgres
---
-
-GRANT ALL ON TABLE public.snapshot_backfill_fasi_eliminate_20260903 TO anon;
-GRANT ALL ON TABLE public.snapshot_backfill_fasi_eliminate_20260903 TO authenticated;
-GRANT ALL ON TABLE public.snapshot_backfill_fasi_eliminate_20260903 TO service_role;
 
 
 --
 -- Name: TABLE tipi_prodotto; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON TABLE public.tipi_prodotto TO anon;
-GRANT ALL ON TABLE public.tipi_prodotto TO authenticated;
+GRANT SELECT,MAINTAIN ON TABLE public.tipi_prodotto TO anon;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.tipi_prodotto TO authenticated;
 GRANT ALL ON TABLE public.tipi_prodotto TO service_role;
 
 
@@ -8715,7 +8544,7 @@ GRANT ALL ON TABLE public.tipi_prodotto TO service_role;
 -- Name: TABLE users; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE public.users TO authenticated;
+GRANT INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.users TO authenticated;
 GRANT ALL ON TABLE public.users TO service_role;
 
 
@@ -8867,5 +8696,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON T
 -- PostgreSQL database dump complete
 --
 
-\unrestrict V3WeNtX26YIPiSx5UZ9lLS3cekrhX6vDTK1DmyWaTlGXnExrn9etvcvcEOC2j5c
+\unrestrict q2YON8KHaF2Z9wdFq9SgWjVAVDB4GV9XdJ27koerheeaae9c1d8HH5rtKqHjwgM
 
