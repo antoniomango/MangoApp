@@ -47,6 +47,26 @@ const IS_PRODUZIONE = AMBIENTE === 'produzione';
 const APP_VERSION = 'mango-v25';
 
 // ═══════════════════════════════════════════════
+// SETTIMANA ISO 8601 — usata nel dettaglio ordine (operatore.html + responsabile.html)
+// ═══════════════════════════════════════════════
+// Numero di settimana ISO 8601 da una data 'YYYY-MM-DD': settimana che inizia di lunedì,
+// la settimana 1 dell'anno è quella che contiene il primo giovedì. Ritorna un intero, o
+// null se la data è assente/non valida (nessun placeholder da mostrare). Calcolo in UTC
+// per non dipendere dal fuso locale. Nessun campo nuovo nel DB: si calcola al volo.
+function settimanaIsoDaData(scadenza) {
+  if (!scadenza) return null;
+  const [y, m, d] = String(scadenza).split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const giornoLun0 = (dt.getUTCDay() + 6) % 7;       // lun=0 … dom=6
+  dt.setUTCDate(dt.getUTCDate() - giornoLun0 + 3);    // porta al giovedì della stessa settimana
+  const primoGiovedi = new Date(Date.UTC(dt.getUTCFullYear(), 0, 4));
+  const pgLun0 = (primoGiovedi.getUTCDay() + 6) % 7;
+  primoGiovedi.setUTCDate(primoGiovedi.getUTCDate() - pgLun0 + 3);
+  return 1 + Math.round((dt - primoGiovedi) / (7 * 24 * 3600 * 1000));
+}
+
+// ═══════════════════════════════════════════════
 // INDICATORE VISIVO — banda fissa quando non produzione
 // ═══════════════════════════════════════════════
 function mostraBandaAmbienteTest() {

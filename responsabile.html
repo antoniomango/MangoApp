@@ -3138,7 +3138,7 @@ async function renderDettaglioOrdine(id) {
     <div class="detail-field"><label>Materiale</label><span>${escapeHtml(ordine.materiale || '—')}</span></div>`}
     <div class="detail-field"><label>Priorità</label><span class="badge badge-${ordine.priorita}">${prioLabel(ordine.priorita)}</span></div>
     <div class="detail-field"><label>Stato</label><span class="badge badge-${ordine.stato}">${statoLabel(ordine.stato)}</span></div>
-    <div class="detail-field"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}${isLate ? ' ⚠️ In ritardo' : ''}</span></div>
+    <div class="detail-field"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}${ordine.scadenza ? ` · Settimana ${settimanaIsoDaData(ordine.scadenza)}` : ''}${isLate ? ' ⚠️ In ritardo' : ''}</span></div>
     <div class="detail-field"><label>Consegna stimata</label><span id="det-stima-consegna" style="color:var(--muted)">Calcolo…</span></div>
     <div class="detail-field"><label>Quantità</label><span>${ordine.quantita || 1}</span></div>
     <div class="detail-field"><label>Creato il</label><span>${formatDateTime(ordine.creato_il)}</span></div>
