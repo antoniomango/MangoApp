@@ -3087,26 +3087,23 @@ function renderOrdiniTable() {
     tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="icon">📋</div><p>Nessun ordine trovato</p></div></td></tr>';
     return;
   }
-  // Raggruppamento per settimana di scadenza (Senza scadenza → Scadute → settimane ISO
-  // 8601 dalla corrente in poi). Ordinamento interno: scadenza crescente (creato_il per
-  // "Senza scadenza"). Logica condivisa con operatore.html, definita in js/config.js.
-  const gruppi = raggruppaOrdiniPerScadenza(filtered);
-  const sepRow = (g) => {
-    // top:52px = altezza dell'header sticky della pagina (vedi `header { height: 52px }`),
-    // così il separatore si ferma appena sotto invece di scomparirci dietro.
-    const base = 'padding:7px 12px;font-size:12px;font-weight:700;letter-spacing:.03em;position:sticky;top:52px;z-index:5';
-    let s;
-    if (g.tipo === 'senza')         s = `${base};background:#EEF2FF;color:#3730A3`;
-    else if (g.tipo === 'scadute')  s = `${base};background:#FEE2E2;color:#991B1B`;
-    else if (g.isSettimanaCorrente) s = `${base};background:#16A34A;color:#fff`;
-    else                            s = `${base};color:var(--muted);background:var(--bg,#fafafa);border-top:2px solid var(--border)`;
-    const icona = g.tipo === 'senza' ? '📌' : g.tipo === 'scadute' ? '⚠️' : '📅';
-    const suffix = g.isSettimanaCorrente ? ' · questa settimana' : '';
-    return `<tr><td colspan="8" style="${s}">${icona} ${g.label}${suffix}</td></tr>`;
-  };
-  tbody.innerHTML = gruppi.map(g =>
-    sepRow(g) + g.ordini.map(o => ordineRow(o)).join('')
-  ).join('');
+  // attesa_spedizione → gruppo '0000-00' (in cima), poi per mese di scadenza
+  const meseKey = (o) => o.stato === 'attesa_spedizione' ? '0000-00' : (o.scadenza ? o.scadenza.substring(0, 7) : '9999-99');
+  let meseCorrente = null;
+  tbody.innerHTML = filtered.map(o => {
+    const meseDato = meseKey(o);
+    let sep = '';
+    if (meseDato !== meseCorrente) {
+      meseCorrente = meseDato;
+      const label = meseDato === '0000-00'
+        ? '📦 In attesa corriere'
+        : meseDato === '9999-99'
+          ? 'Senza scadenza'
+          : new Date(meseDato + '-02').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+      sep = `<tr><td colspan="8" style="padding:6px 12px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;background:var(--bg,#fafafa);border-top:2px solid var(--border)">📅 ${label}</td></tr>`;
+    }
+    return sep + ordineRow(o);
+  }).join('');
   loadAvanzamenti(filtered.map(o => o.id));
 }
 
@@ -4713,7 +4710,7 @@ async function salvaMacroFasi() {
 async function loadUfficio() {
   if (!macroFasiCache.length) await loadMacroFasi();
   const { data: ordini } = await sb.from('ordini')
-    .select('id, codice, cliente, scadenza, stato, priorita, creato_il')
+    .select('id, codice, cliente, scadenza, stato, priorita')
     .in('stato', ['aperto', 'attesa_spedizione', 'sospeso'])
     .neq('eliminato', true)
     .order('scadenza', { ascending: true, nullsFirst: false });
@@ -4753,7 +4750,7 @@ function renderUfficio(ordini, ordFasi) {
   const faseMacro = {};
   macroFasiCache.forEach(m => m.fasi.forEach(fid => { faseMacro[fid] = m.id; }));
 
-  const cardUfficio = (o) => {
+  el.innerHTML = ordini.map(o => {
     const fasi = fasiPerOrdine[o.id] || [];
     const applicabili = fasi.filter(f => f.stato !== 'non_applicabile');
     const completate = applicabili.filter(f => f.stato === 'completata').length;
@@ -4811,22 +4808,7 @@ function renderUfficio(ordini, ordFasi) {
           <div class="ufficio-totale-fill" style="width:${pctTot}%"></div>
         </div>
       </div>`;
-  };
-
-  // Stesso raggruppamento per settimana di scadenza della vista Ordini e della vista
-  // operatore — logica condivisa in js/config.js.
-  const gruppi = raggruppaOrdiniPerScadenza(ordini);
-  const sepGruppo = (g) => {
-    const base = 'padding:7px 12px;font-size:12px;font-weight:700;letter-spacing:.03em;position:sticky;top:52px;z-index:5;margin:4px 0 10px;border-radius:6px';
-    if (g.tipo === 'senza')
-      return `<div style="${base};background:#EEF2FF;color:#3730A3">📌 ${g.label}</div>`;
-    if (g.tipo === 'scadute')
-      return `<div style="${base};background:#FEE2E2;color:#991B1B">⚠️ ${g.label}</div>`;
-    if (g.isSettimanaCorrente)
-      return `<div style="${base};background:#16A34A;color:#fff;box-shadow:0 1px 4px rgba(22,163,74,.4)">📅 ${g.label} · questa settimana</div>`;
-    return `<div style="${base};color:var(--muted);background:var(--bg,#fafafa);border:1px solid var(--border)">📅 ${g.label}</div>`;
-  };
-  el.innerHTML = gruppi.map(g => sepGruppo(g) + g.ordini.map(cardUfficio).join('')).join('');
+  }).join('');
 }
 
 // ═══════════════════════════════════════════════
