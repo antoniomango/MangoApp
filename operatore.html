@@ -1071,37 +1071,12 @@ function filtraOrdini() {
   const fasiPerOrdine = window._fasiPerOrdine || {};
   const stimaPerOrdine = window._stimaPerOrdine || {};
 
-  // Ordina: attesa_spedizione prima, poi in ritardo > a rischio stima > scadenza vicina > resto
-  const urgenzaScore = (o) => {
-    if (o.stato === 'attesa_spedizione') return -1;
-    const s = stimaPerOrdine[o.id];
-    if (s?.isInRitardo) return 0;
-    if (s?.isRischio) return 1;
-    const oggi = new Date(); oggi.setHours(0,0,0,0);
-    if (o.scadenza) return 2 + Math.max(0, Math.floor((new Date(o.scadenza) - oggi) / 86400000));
-    return 999;
-  };
-  // attesa_spedizione → gruppo '0000-00' (in cima), poi per mese di scadenza
-  const meseKey = (o) => o.stato === 'attesa_spedizione' ? '0000-00' : (o.scadenza ? o.scadenza.substring(0, 7) : '9999-99');
-  const ordinati = [...filtrati].sort((a, b) => {
-    const mA = meseKey(a), mB = meseKey(b);
-    if (mA !== mB) return mA.localeCompare(mB);
-    return urgenzaScore(a) - urgenzaScore(b);
-  });
+  // Raggruppamento per settimana di scadenza (Senza scadenza → Scadute → settimane ISO
+  // dalla corrente in poi). Ordinamento interno: scadenza crescente (creato_il per
+  // "Senza scadenza"). Logica condivisa con responsabile.html, definita in js/config.js.
+  const gruppi = raggruppaOrdiniPerScadenza(filtrati);
 
-  let meseCorrente = null;
-  dispEl.innerHTML = legenda + ordinati.map(o => {
-    const meseDato = meseKey(o);
-    let sep = '';
-    if (meseDato !== meseCorrente) {
-      meseCorrente = meseDato;
-      const label = meseDato === '0000-00'
-        ? '📦 In attesa corriere'
-        : meseDato === '9999-99'
-          ? 'Senza scadenza'
-          : new Date(meseDato + '-02').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
-      sep = `<div style="padding:5px 4px 3px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:6px;border-bottom:1px solid var(--border)">📅 ${label}</div>`;
-    }
+  const cardOrdine = (o) => {
     const isAttesa = o.stato === 'attesa_spedizione';
     const isSosp = o.stato === 'sospeso';
     const extraStyle = isAttesa ? 'border-left:4px solid var(--ok);background:#F0FDF4'
@@ -1130,7 +1105,7 @@ function filtraOrdini() {
     } else if (!isAttesa && !isSosp && stima?.isInRitardo) {
       stimaBadge = `<span style="font-size:11px;font-weight:700;color:#EF4444">🔴 IN RITARDO</span>`;
     }
-    return sep + `
+    return `
     <div class="card card-row ${isSosp ? '' : (isAttesa ? '' : scadenzaClass(o.scadenza))}" style="${extraStyle}" onclick="openOrdineDetail('${o.id}')">
       <div class="row-main" style="width:100%">
         <div style="display:flex;justify-content:space-between;align-items:center">
@@ -1150,7 +1125,22 @@ function filtraOrdini() {
       </div>
       <span class="arrow">›</span>
     </div>`;
-  }).join('');
+  };
+
+  const sepGruppo = (g) => {
+    const base = 'padding:6px 6px 5px;font-size:12px;font-weight:700;letter-spacing:.03em;position:sticky;top:0;z-index:5;margin-top:8px';
+    if (g.tipo === 'senza')
+      return `<div style="${base};background:#EEF2FF;color:#3730A3;border-radius:4px">📌 ${g.label}</div>`;
+    if (g.tipo === 'scadute')
+      return `<div style="${base};background:#FEE2E2;color:#991B1B;border-radius:4px">⚠️ ${g.label}</div>`;
+    if (g.isSettimanaCorrente)
+      return `<div style="${base};background:#16A34A;color:#fff;border-radius:4px;box-shadow:0 1px 4px rgba(22,163,74,.4)">📅 ${g.label} · questa settimana</div>`;
+    return `<div style="${base};color:var(--muted);background:var(--bg);border-bottom:1px solid var(--border)">📅 ${g.label}</div>`;
+  };
+
+  dispEl.innerHTML = legenda + gruppi.map(g =>
+    sepGruppo(g) + g.ordini.map(cardOrdine).join('')
+  ).join('');
 }
 
 // ═══════════════════════════════════════════════
