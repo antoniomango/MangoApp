@@ -1,0 +1,52 @@
+{
+  "directoryListing": false,
+  "rewrites": [
+    { "source": "/backups/**", "destination": "/404.html" },
+    { "source": "/.git/**", "destination": "/404.html" },
+    { "source": "/.claude/**", "destination": "/404.html" },
+    { "source": "/pgsql/**", "destination": "/404.html" },
+    { "source": "/node_modules/**", "destination": "/404.html" },
+    { "source": "/test/**", "destination": "/404.html" },
+
+    { "source": "/deploy.zip", "destination": "/404.html" },
+    { "source": "/deploy_new.zip", "destination": "/404.html" },
+    { "source": "/deploy_v4.zip", "destination": "/404.html" },
+    { "source": "/deploy_v4_b64.txt", "destination": "/404.html" },
+    { "source": "/deploy_data.js", "destination": "/404.html" },
+    { "source": "/c1.txt", "destination": "/404.html" },
+    { "source": "/c2.txt", "destination": "/404.html" },
+
+    { "source": "/CLAUDE.md", "destination": "/404.html" },
+    { "source": "/brief-mango-cowork.md", "destination": "/404.html" },
+    { "source": "/frontend-analysis.md", "destination": "/404.html" },
+    { "source": "/PROMPT_MIGRAZIONE_NUOVO_PC.txt", "destination": "/404.html" },
+
+    { "source": "/migrazione_fix_delete.sql", "destination": "/404.html" },
+    { "source": "/migrazione_in_attesa.sql", "destination": "/404.html" },
+    { "source": "/migrazione_v2.sql", "destination": "/404.html" },
+    { "source": "/supabase_schema.sql", "destination": "/404.html" },
+
+    { "source": "/watchdog.log", "destination": "/404.html" },
+    { "source": "/package.json", "destination": "/404.html" },
+    { "source": "/package-lock.json", "destination": "/404.html" },
+
+    { "source": "/AVVIA_SETUP_ADMIN.vbs", "destination": "/404.html" },
+    { "source": "/AVVIA%20SERVER.bat", "destination": "/404.html" },
+    { "source": "/BACKUP_DATABASE.ps1", "destination": "/404.html" },
+    { "source": "/DOWNLOAD_PGDUMP.ps1", "destination": "/404.html" },
+    { "source": "/FIX_PGDUMP.ps1", "destination": "/404.html" },
+    { "source": "/INSTALLA_BACKUP.ps1", "destination": "/404.html" },
+    { "source": "/PUSH_GITHUB.bat", "destination": "/404.html" },
+    { "source": "/REGISTER_WATCHDOG.ps1", "destination": "/404.html" },
+    { "source": "/SETUP_BACKUP_ADMIN.bat", "destination": "/404.html" },
+    { "source": "/TEST_CONNESSIONE.ps1", "destination": "/404.html" },
+    { "source": "/UPGRADE_PGDUMP17.ps1", "destination": "/404.html" },
+    { "source": "/run_push.vbs", "destination": "/404.html" },
+    { "source": "/push_to_github.ps1", "destination": "/404.html" },
+    { "source": "/genera_pdf.mjs", "destination": "/404.html" },
+    { "source": "/WATCHDOG_SERVER.ps1", "destination": "/404.html" },
+
+    { "source": "/stato_progetto.html", "destination": "/404.html" },
+    { "source": "/stato_progetto.pdf", "destination": "/404.html" }
+  ]
+}
