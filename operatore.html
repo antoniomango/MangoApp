@@ -1744,7 +1744,10 @@ async function renderFaseDetail(ordFaseId, ordineId) {
         </div>
         <div class="form-group">
           <label>Foto (opzionale)</label>
-          <label class="upload-btn" onclick="onClickAllegaFoto('${ordFaseId}','${ordineId}')">📷 Scatta/allega foto (anche più di una)</label>
+          <div style="display:flex;gap:8px">
+            <label class="upload-btn" style="flex:1;width:auto;margin-bottom:0" onclick="apriFotocameraInterna('${ordFaseId}','${ordineId}')">📷 Scatta foto</label>
+            <label class="upload-btn" style="flex:1;width:auto;margin-bottom:0" onclick="_apriRipiegoInputFile()">🖼️ Allega da galleria</label>
+          </div>
           <input type="file" id="fase-foto-input" accept="image/*" multiple style="display:none" onchange="previewFaseFoto(this)">
           <div class="foto-preview" id="fase-foto-preview"></div>
         </div>
@@ -2218,11 +2221,10 @@ window.addEventListener('pagehide', _camStopTracks);
 // Componente usato solo per le foto di fase — la segnalazione NC (e con essa il secondo uso
 // di questo componente) è stata rimossa il 2026-09-01, vedi nota vault
 // 2026-09-01-rimozione-non-conformita.
-function onClickAllegaFoto(ordFaseId, ordineId) {
-  if (!fotocameraInternaAttiva) { _apriRipiegoInputFile(); return; }
-  apriFotocameraInterna(ordFaseId, ordineId);
-}
-
+// Due pulsanti distinti (2026-09-11): "Scatta foto" chiama sempre apriFotocameraInterna()
+// bypassando fotocameraInternaAttiva (scelta esplicita dell'operatore, col fallback su galleria
+// già gestito dentro apriFotocameraInterna in caso di getUserMedia negato/non supportato);
+// "Allega da galleria" chiama sempre _apriRipiegoInputFile(), indipendentemente dal flag.
 function _apriRipiegoInputFile() {
   document.getElementById('fase-foto-input')?.click();
 }
