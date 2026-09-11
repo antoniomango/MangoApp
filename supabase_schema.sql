@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict q2YON8KHaF2Z9wdFq9SgWjVAVDB4GV9XdJ27koerheeaae9c1d8HH5rtKqHjwgM
+\restrict mhx2woOdN4nCmPsBpviCVlrqhQYpVwM3jHcEM8uOgThaVl1DOuWZgwK4FQbgL7e
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -964,6 +964,68 @@ $$;
 ALTER FUNCTION public.completa_fase_extra(p_fase_extra_id uuid, p_operatore_id uuid, p_note text, p_session_token uuid) OWNER TO postgres;
 
 --
+-- Name: completa_fase_gruppo_spedizione(uuid, uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.completa_fase_gruppo_spedizione(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid, p_note_operatore text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_fase       public.ordine_fasi%ROWTYPE;
+  v_gruppo_id  uuid;
+  v_fratello   RECORD;
+  v_risultati  jsonb := '[]'::jsonb;
+  v_esito      text;
+  v_res        jsonb;
+BEGIN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'accesso_sola_lettura');
+  END IF;
+
+  SELECT * INTO v_fase FROM public.ordine_fasi WHERE id = p_ordine_fase_id;
+  IF NOT FOUND THEN RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
+
+  SELECT o.gruppo_spedizione_id INTO v_gruppo_id FROM public.ordini o WHERE o.id = v_fase.ordine_id;
+
+  IF v_gruppo_id IS NULL OR v_fase.fase_id IS NULL THEN
+    RETURN public.completa_fase(p_ordine_fase_id, p_operatore_id, p_note_operatore, p_session_token);
+  END IF;
+
+  FOR v_fratello IN
+    SELECT o.id AS ordine_id, o.codice, of2.id AS ordine_fase_id, of2.stato
+    FROM public.ordini o
+    LEFT JOIN public.ordine_fasi of2 ON of2.ordine_id = o.id AND of2.fase_id = v_fase.fase_id
+    WHERE o.gruppo_spedizione_id = v_gruppo_id
+      AND COALESCE(o.eliminato, false) = false
+    ORDER BY o.codice
+  LOOP
+    IF v_fratello.ordine_fase_id IS NULL THEN
+      v_esito := 'saltata_non_trovata';
+    ELSIF v_fratello.stato <> 'in_corso' THEN
+      v_esito := 'saltata_non_in_corso';
+    ELSE
+      v_res := public.completa_fase(v_fratello.ordine_fase_id, p_operatore_id, p_note_operatore, p_session_token);
+      IF COALESCE(v_res ->> 'ok', 'false') = 'true' THEN
+        v_esito := 'completata';
+      ELSE
+        v_esito := 'saltata_non_in_corso';
+      END IF;
+    END IF;
+    v_risultati := v_risultati || jsonb_build_object('ordine_id', v_fratello.ordine_id, 'codice', v_fratello.codice, 'esito', v_esito);
+  END LOOP;
+
+  RETURN jsonb_build_object('ok', true, 'risultati', v_risultati);
+END;
+$$;
+
+
+ALTER FUNCTION public.completa_fase_gruppo_spedizione(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid, p_note_operatore text) OWNER TO postgres;
+
+--
 -- Name: completa_fasi_batch(integer, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -1363,6 +1425,82 @@ $$;
 
 
 ALTER FUNCTION public.crea_fasi_per_ordine() OWNER TO postgres;
+
+--
+-- Name: crea_o_aggiorna_gruppo_spedizione(uuid, uuid, uuid[], uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.crea_o_aggiorna_gruppo_spedizione(p_responsabile_id uuid, p_session_token uuid, p_ordine_ids uuid[], p_gruppo_id uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_cliente       text;
+  v_gruppo_id     uuid;
+  v_gruppo_cliente text;
+  v_trovati       int;
+  v_eliminati     int;
+  v_n_clienti     int;
+BEGIN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
+  END IF;
+  IF p_ordine_ids IS NULL OR array_length(p_ordine_ids, 1) IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'nessun_ordine');
+  END IF;
+
+  SELECT count(*), count(*) FILTER (WHERE COALESCE(o.eliminato, false)), count(DISTINCT lower(trim(o.cliente)))
+  INTO v_trovati, v_eliminati, v_n_clienti
+  FROM public.ordini o WHERE o.id = ANY(p_ordine_ids);
+
+  IF v_trovati <> array_length(p_ordine_ids, 1) OR v_eliminati > 0 OR v_n_clienti <> 1 THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'clienti_diversi');
+  END IF;
+
+  SELECT cliente INTO v_cliente FROM public.ordini WHERE id = p_ordine_ids[1];
+
+  IF p_gruppo_id IS NULL THEN
+    INSERT INTO public.gruppi_spedizione (cliente, creato_da)
+    VALUES (v_cliente, p_responsabile_id)
+    RETURNING id INTO v_gruppo_id;
+  ELSE
+    SELECT cliente INTO v_gruppo_cliente FROM public.gruppi_spedizione WHERE id = p_gruppo_id;
+    IF NOT FOUND THEN
+      RETURN jsonb_build_object('ok', false, 'errore', 'gruppo_non_trovato');
+    END IF;
+    IF lower(trim(v_gruppo_cliente)) <> lower(trim(v_cliente)) THEN
+      RETURN jsonb_build_object('ok', false, 'errore', 'clienti_diversi');
+    END IF;
+    v_gruppo_id := p_gruppo_id;
+  END IF;
+
+  UPDATE public.ordini SET gruppo_spedizione_id = v_gruppo_id WHERE id = ANY(p_ordine_ids);
+
+  BEGIN
+    INSERT INTO public.archivio_log (ordine_id, utente_id, azione, dettaglio)
+    SELECT o.id, p_responsabile_id, 'ordine_modificato',
+           jsonb_build_object('motivo', 'gruppo_spedizione', 'gruppo_id', v_gruppo_id, 'cliente', v_cliente)
+    FROM public.ordini o WHERE o.id = ANY(p_ordine_ids);
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'log gruppo_spedizione non scritto: %', SQLERRM;
+  END;
+
+  RETURN jsonb_build_object(
+    'ok', true,
+    'gruppo_id', v_gruppo_id,
+    'ordini', (
+      SELECT COALESCE(jsonb_agg(jsonb_build_object('id', o.id, 'codice', o.codice) ORDER BY o.codice), '[]'::jsonb)
+      FROM public.ordini o WHERE o.gruppo_spedizione_id = v_gruppo_id
+    )
+  );
+END;
+$$;
+
+
+ALTER FUNCTION public.crea_o_aggiorna_gruppo_spedizione(p_responsabile_id uuid, p_session_token uuid, p_ordine_ids uuid[], p_gruppo_id uuid) OWNER TO postgres;
 
 --
 -- Name: crea_operatore(text, text, text, public.ruolo_utente, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
@@ -3220,6 +3358,41 @@ $$;
 ALTER FUNCTION public.ordini_attivi(p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
 
 --
+-- Name: ordini_stesso_cliente_aperti(uuid, uuid, text, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.ordini_stesso_cliente_aperti(p_responsabile_id uuid, p_session_token uuid, p_cliente text, p_ordine_id_escludi uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+BEGIN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
+  END IF;
+  IF p_cliente IS NULL OR trim(p_cliente) = '' THEN
+    RETURN jsonb_build_object('ok', true, 'dati', '[]'::jsonb);
+  END IF;
+
+  RETURN jsonb_build_object('ok', true, 'dati', (
+    SELECT COALESCE(jsonb_agg(jsonb_build_object(
+      'id', o.id, 'codice', o.codice, 'gruppo_spedizione_id', o.gruppo_spedizione_id
+    ) ORDER BY o.gruppo_spedizione_id NULLS LAST, o.codice), '[]'::jsonb)
+    FROM public.ordini o
+    WHERE o.cliente ILIKE p_cliente
+      AND o.stato = 'aperto'
+      AND COALESCE(o.eliminato, false) = false
+      AND (p_ordine_id_escludi IS NULL OR o.id <> p_ordine_id_escludi)
+  ));
+END;
+$$;
+
+
+ALTER FUNCTION public.ordini_stesso_cliente_aperti(p_responsabile_id uuid, p_session_token uuid, p_cliente text, p_ordine_id_escludi uuid) OWNER TO postgres;
+
+--
 -- Name: pausa_tutte_fasi(uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -4333,6 +4506,63 @@ $$;
 ALTER FUNCTION public.rimuovi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) OWNER TO postgres;
 
 --
+-- Name: rimuovi_ordine_da_gruppo_spedizione(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
+--
+
+CREATE FUNCTION public.rimuovi_ordine_da_gruppo_spedizione(p_responsabile_id uuid, p_session_token uuid, p_ordine_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+DECLARE
+  v_gruppo_id uuid;
+  v_rimasti   int;
+  v_ultimo_id uuid;
+  v_sciolto   boolean;
+BEGIN
+  IF NOT COALESCE(public.valida_sessione(p_responsabile_id, p_session_token), false) THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.users WHERE id = p_responsabile_id AND ruolo = 'responsabile') THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
+  END IF;
+
+  SELECT gruppo_spedizione_id INTO v_gruppo_id FROM public.ordini WHERE id = p_ordine_id;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'ordine_non_trovato');
+  END IF;
+  IF v_gruppo_id IS NULL THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'ordine_non_in_gruppo');
+  END IF;
+
+  UPDATE public.ordini SET gruppo_spedizione_id = NULL WHERE id = p_ordine_id;
+
+  SELECT count(*) INTO v_rimasti FROM public.ordini WHERE gruppo_spedizione_id = v_gruppo_id;
+  v_sciolto := v_rimasti <= 1;
+
+  IF v_sciolto THEN
+    IF v_rimasti = 1 THEN
+      SELECT id INTO v_ultimo_id FROM public.ordini WHERE gruppo_spedizione_id = v_gruppo_id;
+      UPDATE public.ordini SET gruppo_spedizione_id = NULL WHERE id = v_ultimo_id;
+    END IF;
+    DELETE FROM public.gruppi_spedizione WHERE id = v_gruppo_id;
+  END IF;
+
+  BEGIN
+    INSERT INTO public.archivio_log (ordine_id, utente_id, azione, dettaglio)
+    VALUES (p_ordine_id, p_responsabile_id, 'ordine_modificato',
+            jsonb_build_object('motivo', 'rimosso_da_gruppo_spedizione', 'gruppo_id', v_gruppo_id, 'gruppo_sciolto', v_sciolto));
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'log rimozione gruppo_spedizione non scritto: %', SQLERRM;
+  END;
+
+  RETURN jsonb_build_object('ok', true, 'gruppo_sciolto', v_sciolto);
+END;
+$$;
+
+
+ALTER FUNCTION public.rimuovi_ordine_da_gruppo_spedizione(p_responsabile_id uuid, p_session_token uuid, p_ordine_id uuid) OWNER TO postgres;
+
+--
 -- Name: riprendi_fase(uuid, uuid, boolean, uuid); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
@@ -5342,6 +5572,21 @@ CREATE TABLE public.fasi_ordine_extra (
 ALTER TABLE public.fasi_ordine_extra OWNER TO postgres;
 
 --
+-- Name: gruppi_spedizione; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.gruppi_spedizione (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    cliente text NOT NULL,
+    note text,
+    creato_da uuid,
+    creato_il timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE public.gruppi_spedizione OWNER TO postgres;
+
+--
 -- Name: kpi_config; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -5542,6 +5787,7 @@ CREATE TABLE public.ordini (
     quantita integer DEFAULT 1 NOT NULL,
     completato_il timestamp with time zone,
     archiviato_il timestamp with time zone,
+    gruppo_spedizione_id uuid,
     CONSTRAINT ordini_quantita_check CHECK ((quantita >= 1)),
     CONSTRAINT ordini_tipo_check CHECK ((tipo = ANY (ARRAY['standard'::text, 'extra'::text])))
 );
@@ -5846,6 +6092,14 @@ ALTER TABLE ONLY public.fasi
 
 
 --
+-- Name: gruppi_spedizione gruppi_spedizione_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.gruppi_spedizione
+    ADD CONSTRAINT gruppi_spedizione_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: kpi_config kpi_config_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -6127,6 +6381,13 @@ CREATE UNIQUE INDEX idx_ordini_codice_attivi ON public.ordini USING btree (codic
 --
 
 CREATE INDEX idx_ordini_creato_da ON public.ordini USING btree (creato_da);
+
+
+--
+-- Name: idx_ordini_gruppo_spedizione_id; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX idx_ordini_gruppo_spedizione_id ON public.ordini USING btree (gruppo_spedizione_id) WHERE (gruppo_spedizione_id IS NOT NULL);
 
 
 --
@@ -6484,6 +6745,14 @@ ALTER TABLE ONLY public.ordini
 
 
 --
+-- Name: gruppi_spedizione gruppi_spedizione_creato_da_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.gruppi_spedizione
+    ADD CONSTRAINT gruppi_spedizione_creato_da_fkey FOREIGN KEY (creato_da) REFERENCES public.users(id);
+
+
+--
 -- Name: kpi_schede kpi_schede_creata_da_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -6569,6 +6838,14 @@ ALTER TABLE ONLY public.ordine_fasi
 
 ALTER TABLE ONLY public.ordini
     ADD CONSTRAINT ordini_creato_da_fkey FOREIGN KEY (creato_da) REFERENCES public.users(id);
+
+
+--
+-- Name: ordini ordini_gruppo_spedizione_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.ordini
+    ADD CONSTRAINT ordini_gruppo_spedizione_id_fkey FOREIGN KEY (gruppo_spedizione_id) REFERENCES public.gruppi_spedizione(id) ON DELETE SET NULL;
 
 
 --
@@ -6871,6 +7148,12 @@ CREATE POLICY fasi_ordine_extra_select ON public.fasi_ordine_extra FOR SELECT TO
 
 CREATE POLICY fasi_write_responsabile ON public.fasi TO authenticated USING (( SELECT public.e_responsabile() AS e_responsabile)) WITH CHECK (( SELECT public.e_responsabile() AS e_responsabile));
 
+
+--
+-- Name: gruppi_spedizione; Type: ROW SECURITY; Schema: public; Owner: postgres
+--
+
+ALTER TABLE public.gruppi_spedizione ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: kpi_config; Type: ROW SECURITY; Schema: public; Owner: postgres
@@ -7369,6 +7652,16 @@ GRANT ALL ON FUNCTION public.completa_fase_extra(p_fase_extra_id uuid, p_operato
 
 
 --
+-- Name: FUNCTION completa_fase_gruppo_spedizione(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid, p_note_operatore text); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.completa_fase_gruppo_spedizione(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid, p_note_operatore text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.completa_fase_gruppo_spedizione(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid, p_note_operatore text) TO anon;
+GRANT ALL ON FUNCTION public.completa_fase_gruppo_spedizione(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid, p_note_operatore text) TO authenticated;
+GRANT ALL ON FUNCTION public.completa_fase_gruppo_spedizione(p_ordine_fase_id uuid, p_operatore_id uuid, p_session_token uuid, p_note_operatore text) TO service_role;
+
+
+--
 -- Name: FUNCTION completa_fasi_batch(p_fase_id integer, p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -7448,6 +7741,15 @@ REVOKE ALL ON FUNCTION public.crea_fasi_per_ordine() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.crea_fasi_per_ordine() TO anon;
 GRANT ALL ON FUNCTION public.crea_fasi_per_ordine() TO authenticated;
 GRANT ALL ON FUNCTION public.crea_fasi_per_ordine() TO service_role;
+
+
+--
+-- Name: FUNCTION crea_o_aggiorna_gruppo_spedizione(p_responsabile_id uuid, p_session_token uuid, p_ordine_ids uuid[], p_gruppo_id uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.crea_o_aggiorna_gruppo_spedizione(p_responsabile_id uuid, p_session_token uuid, p_ordine_ids uuid[], p_gruppo_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.crea_o_aggiorna_gruppo_spedizione(p_responsabile_id uuid, p_session_token uuid, p_ordine_ids uuid[], p_gruppo_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.crea_o_aggiorna_gruppo_spedizione(p_responsabile_id uuid, p_session_token uuid, p_ordine_ids uuid[], p_gruppo_id uuid) TO service_role;
 
 
 --
@@ -7918,6 +8220,15 @@ GRANT ALL ON FUNCTION public.ordini_attivi(p_operatore_id uuid, p_session_token 
 
 
 --
+-- Name: FUNCTION ordini_stesso_cliente_aperti(p_responsabile_id uuid, p_session_token uuid, p_cliente text, p_ordine_id_escludi uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.ordini_stesso_cliente_aperti(p_responsabile_id uuid, p_session_token uuid, p_cliente text, p_ordine_id_escludi uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.ordini_stesso_cliente_aperti(p_responsabile_id uuid, p_session_token uuid, p_cliente text, p_ordine_id_escludi uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.ordini_stesso_cliente_aperti(p_responsabile_id uuid, p_session_token uuid, p_cliente text, p_ordine_id_escludi uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION pausa_tutte_fasi(p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -8032,6 +8343,15 @@ GRANT ALL ON FUNCTION public.rimuovi_collega_extra(p_fase_extra_id uuid, p_colle
 GRANT ALL ON FUNCTION public.rimuovi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) TO anon;
 GRANT ALL ON FUNCTION public.rimuovi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.rimuovi_collega_fase(p_ordine_fase_id uuid, p_collega_id uuid, p_richiedente_id uuid, p_session_token uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION rimuovi_ordine_da_gruppo_spedizione(p_responsabile_id uuid, p_session_token uuid, p_ordine_id uuid); Type: ACL; Schema: public; Owner: postgres
+--
+
+REVOKE ALL ON FUNCTION public.rimuovi_ordine_da_gruppo_spedizione(p_responsabile_id uuid, p_session_token uuid, p_ordine_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.rimuovi_ordine_da_gruppo_spedizione(p_responsabile_id uuid, p_session_token uuid, p_ordine_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.rimuovi_ordine_da_gruppo_spedizione(p_responsabile_id uuid, p_session_token uuid, p_ordine_id uuid) TO service_role;
 
 
 --
@@ -8399,6 +8719,13 @@ GRANT SELECT(ore_stimate_manuali),UPDATE(ore_stimate_manuali) ON TABLE public.fa
 
 
 --
+-- Name: TABLE gruppi_spedizione; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.gruppi_spedizione TO service_role;
+
+
+--
 -- Name: TABLE kpi_config; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -8696,5 +9023,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON T
 -- PostgreSQL database dump complete
 --
 
-\unrestrict q2YON8KHaF2Z9wdFq9SgWjVAVDB4GV9XdJ27koerheeaae9c1d8HH5rtKqHjwgM
+\unrestrict mhx2woOdN4nCmPsBpviCVlrqhQYpVwM3jHcEM8uOgThaVl1DOuWZgwK4FQbgL7e
 

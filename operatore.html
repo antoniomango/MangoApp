@@ -212,6 +212,14 @@ textarea:focus { border-color: var(--wood); }
 #foto-cam-btn-scatta:active { background:#ccc; }
 #foto-cam-progress { display:none; color:#fff; text-align:center; padding:6px; background:#111; font-size:13px; flex:0 0 auto; }
 
+/* ── DIALOG SPEDIZIONE UNICA (completamento fase di gruppo) ── */
+#gruppo-fase-dialog { display:none; position:fixed; inset:0; z-index:9500; background:rgba(0,0,0,.5); align-items:center; justify-content:center; padding:20px; }
+#gruppo-fase-dialog.open { display:flex; }
+#gruppo-fase-dialog .box { background:var(--surface); border-radius:12px; padding:20px; max-width:380px; width:100%; }
+#gruppo-fase-dialog .box h4 { margin:0 0 10px; font-size:16px; }
+#gruppo-fase-dialog .box p { font-size:14px; color:var(--muted); margin:0 0 16px; }
+#gruppo-fase-dialog .box .btn { margin-bottom:8px; }
+
 /* ── ATTIVITÀ ── */
 .attivita-item { padding: 14px 16px; border-bottom: 1px solid var(--border); }
 .attivita-item:last-child { border-bottom: none; }
@@ -427,6 +435,17 @@ textarea:focus { border-color: var(--wood); }
   <div id="foto-cam-progress"></div>
 </div>
 
+<!-- SPEDIZIONE UNICA — dialog completamento fase di gruppo -->
+<div id="gruppo-fase-dialog">
+  <div class="box">
+    <h4>📦 Spedizione unica</h4>
+    <p id="gruppo-fase-dialog-testo"></p>
+    <button type="button" class="btn btn-primary" id="gruppo-fase-dialog-tutti">Tutti gli ordini</button>
+    <button type="button" class="btn btn-secondary" id="gruppo-fase-dialog-solo">Solo questo ordine</button>
+    <button type="button" class="btn btn-secondary" style="opacity:.75" id="gruppo-fase-dialog-annulla">Annulla</button>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -457,6 +476,7 @@ let isOnline = navigator.onLine;
 let fotocameraInternaAttiva = false;
 let currentOrdineId = null;
 let currentFaseDetId = null; // ordine_fasi.id
+let _faseDetCorrente = null; // riga ordine_fasi renderizzata da renderFaseDetail() — usata da completaFase()
 let faseMediaMinutiMap = {};
 let orarioConfig = null;
 let chiusureAziendaliCache = [];
@@ -1621,6 +1641,7 @@ async function renderFaseDetail(ordFaseId, ordineId) {
   if (!f) return;
 
   if (f.stato === 'non_applicabile') return;
+  _faseDetCorrente = f; // usata da completaFase() per il dialog "spedizione unica"
   const ordine = ordiniCache.find(o => o.id === ordineId);
   const isCustom = !f.fase_id;
   const nomeFase = isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id);
@@ -1877,8 +1898,53 @@ async function uniscitiAFase(ordFaseId, ordineId) {
   renderHome();
 }
 
+// Fasi finali di imballo/pedana per cui ha senso "spedizione unica": id fase 16
+// (Imballaggio Pronto Consegna) e 21 (Preparazione pedana), entrambe tipo_gestione='standard'.
+const FASI_GRUPPO_SPEDIZIONE = [16, 21];
+
+// Dialog "solo questo ordine / tutti gli ordini del gruppo" — risolve a 'solo', 'tutti' o
+// null (annullato, non completare nulla).
+function chiediModalitaCompletamentoGruppo(codiciFratelli) {
+  return new Promise(resolve => {
+    const dialog = document.getElementById('gruppo-fase-dialog');
+    const testo = document.getElementById('gruppo-fase-dialog-testo');
+    const btnTutti = document.getElementById('gruppo-fase-dialog-tutti');
+    const btnSolo = document.getElementById('gruppo-fase-dialog-solo');
+    const btnAnnulla = document.getElementById('gruppo-fase-dialog-annulla');
+    const n = codiciFratelli.length + 1;
+    testo.textContent = `Questo ordine fa parte di una spedizione unica con ${codiciFratelli.join(', ')}. Vuoi completare questa fase solo per questo ordine o per tutti e ${n}?`;
+    const chiudi = (esito) => {
+      dialog.classList.remove('open');
+      btnTutti.onclick = btnSolo.onclick = btnAnnulla.onclick = null;
+      resolve(esito);
+    };
+    btnTutti.onclick = () => chiudi('tutti');
+    btnSolo.onclick = () => chiudi('solo');
+    btnAnnulla.onclick = () => chiudi(null);
+    dialog.classList.add('open');
+  });
+}
+
 async function completaFase(ordFaseId, ordineId) {
   const note = document.getElementById('note-op')?.value.trim() || null;
+
+  // Spedizione unica: se questa è una fase 16/21 e l'ordine è raggruppato, chiedi all'operatore
+  // se completare solo questo ordine o tutti quelli della stessa spedizione. Solo online: la
+  // scelta richiede di conoscere i fratelli del gruppo, già disponibili in ordiniCache.
+  let modalitaGruppo = false;
+  if (isOnline && _faseDetCorrente?.id === ordFaseId && FASI_GRUPPO_SPEDIZIONE.includes(_faseDetCorrente.fase_id)) {
+    const ordine = ordiniCache.find(o => o.id === ordineId);
+    if (ordine?.gruppo_spedizione_id) {
+      const codiciFratelli = ordiniCache
+        .filter(o => o.gruppo_spedizione_id === ordine.gruppo_spedizione_id && o.id !== ordineId)
+        .map(o => o.codice || '—');
+      if (codiciFratelli.length) {
+        const scelta = await chiediModalitaCompletamentoGruppo(codiciFratelli);
+        if (!scelta) return; // annullato: non completare nulla
+        modalitaGruppo = scelta === 'tutti';
+      }
+    }
+  }
 
   // Blocca il bottone subito per evitare doppi click
   const btnCompleta = document.getElementById('btn-completa-fase');
@@ -1920,7 +1986,8 @@ async function completaFase(ordFaseId, ordineId) {
   if (btnCompleta) btnCompleta.textContent = 'Completamento...';
 
   if (isOnline) {
-    const { data } = await sb.rpc('completa_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_note_operatore: note, p_session_token: sessionToken });
+    const rpcName = modalitaGruppo ? 'completa_fase_gruppo_spedizione' : 'completa_fase';
+    const { data } = await sb.rpc(rpcName, { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_note_operatore: note, p_session_token: sessionToken });
     if (!data?.ok) {
       if (btnCompleta) { btnCompleta.disabled = false; btnCompleta.textContent = '✓ Segna come completata'; }
       const errori = {
@@ -1933,11 +2000,18 @@ async function completaFase(ordFaseId, ordineId) {
       toast(errori[data?.errore] || data?.errore || 'Errore completamento fase', 'err');
       return;
     }
+    if (modalitaGruppo && data.risultati) {
+      const etichette = { completata: 'completata', saltata_non_in_corso: 'saltata (non in corso)', saltata_non_trovata: 'saltata (fase non trovata)' };
+      const riepilogo = data.risultati.map(r => `${r.codice}: ${etichette[r.esito] || r.esito}`).join(' · ');
+      toast(riepilogo, data.risultati.every(r => r.esito === 'completata') ? 'ok' : 'err');
+    } else {
+      toast('Fase completata!', 'ok');
+    }
   } else {
     await queueAction({ type: 'completa_fase', ordFaseId, note });
     await updateQueueBadge();
+    toast('Fase completata!', 'ok');
   }
-  toast('Fase completata!', 'ok');
   await renderFaseDetail(ordFaseId, ordineId);
 }
 
