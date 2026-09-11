@@ -1063,6 +1063,15 @@ async function renderHome() {
 }
 
 
+// Spedizione unica: codici degli altri ordini nello stesso gruppo, da ordiniCache già in cache
+// (nessuna query aggiuntiva) — stessa logica di responsabile.html.
+function codiciFratelliGruppo(o) {
+  if (!o.gruppo_spedizione_id) return [];
+  return ordiniCache
+    .filter(x => x.gruppo_spedizione_id === o.gruppo_spedizione_id && x.id !== o.id)
+    .map(x => x.codice || '—');
+}
+
 function filtraOrdini() {
   const dispEl = document.getElementById('ordini-disponibili-list');
   const q = (document.getElementById('ordini-search')?.value || '').toLowerCase().trim();
@@ -1150,6 +1159,10 @@ function filtraOrdini() {
     } else if (!isAttesa && !isSosp && stima?.isInRitardo) {
       stimaBadge = `<span style="font-size:11px;font-weight:700;color:#EF4444">🔴 IN RITARDO</span>`;
     }
+    const fratelliGruppo = codiciFratelliGruppo(o);
+    const badgeGruppo = fratelliGruppo.length
+      ? `<div style="margin-top:2px;font-size:11px;color:var(--wood);font-weight:600">📦 Spedizione unica con ${escapeHtml(fratelliGruppo.join(', '))}</div>`
+      : '';
     return sep + `
     <div class="card card-row ${isSosp ? '' : (isAttesa ? '' : scadenzaClass(o.scadenza))}" style="${extraStyle}" onclick="openOrdineDetail('${o.id}')">
       <div class="row-main" style="width:100%">
@@ -1163,6 +1176,7 @@ function filtraOrdini() {
           : (o.scadenza ? `<div style="margin-top:3px">${scadenzaLabel(o.scadenza)}</div>` : '')}
         ${!hasDisp && !isAttesa && !isSosp ? '<div style="margin-top:2px;font-size:11px;color:var(--muted)">⬜ Nessuna fase disponibile</div>' : ''}
         ${stimaBadge ? `<div style="margin-top:2px">${stimaBadge}</div>` : ''}
+        ${badgeGruppo}
         <div class="ord-progress-wrap">
           <div class="ord-progress-fill ${isDone ? 'done' : ''}" style="width:${pct}%"></div>
         </div>
@@ -1190,6 +1204,7 @@ async function renderOrdineDetail(ordineId) {
   document.getElementById('ord-det-title').textContent = `${ordine.cliente} — ${ordine.codice || ''}`;
   const oggi = new Date().toISOString().split('T')[0];
   const isLate = ordine.scadenza && ordine.scadenza < oggi;
+  const fratelliGruppoDet = codiciFratelliGruppo(ordine);
   document.getElementById('ord-det-meta').innerHTML = `
     <div class="meta-item"><label>Struttura</label><span>${strutturaLabel(ordine.struttura)}</span></div>
     <div class="meta-item"><label>Tipo</label><span>${tipoProdLabel(ordine.tipo_prodotto)}</span></div>
@@ -1197,6 +1212,7 @@ async function renderOrdineDetail(ordineId) {
     <div class="meta-item"><label>Stato</label><span class="badge badge-${ordine.stato}">${ordine.stato}</span></div>
     <div class="meta-item"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}${ordine.scadenza ? ` · Settimana ${settimanaIsoDaData(ordine.scadenza)}` : ''}</span></div>
     <div class="meta-item" id="ord-stima-item"><label>Consegna stimata</label><span id="ord-stima-val" style="color:var(--muted)">—</span></div>
+    ${fratelliGruppoDet.length ? `<div class="meta-item" style="grid-column:1/-1"><label>📦 Spedizione unica</label><span style="color:var(--wood);font-weight:600">Insieme a ${escapeHtml(fratelliGruppoDet.join(', '))}</span></div>` : ''}
     ${ordine.note_generali ? `<div class="meta-item" style="grid-column:1/-1"><label>Note</label><span class="nota-ordine-testo">${escapeHtml(ordine.note_generali)}</span></div>` : ''}
   `;
 
