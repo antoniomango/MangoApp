@@ -8,7 +8,10 @@ $DB_PORT     = "5432"
 $DB_NAME     = "postgres"
 $DB_USER     = "postgres.mtpzfxnyfkzikzlkomwz"
 
-$BACKUP_DIR  = "C:\Users\RoverA\Desktop\MangoApp\backups"
+$BACKUP_DIR  = "C:\Users\RoverA\Desktop\MangoApp-Backups"
+# NB: cartella FUORI da MangoApp\ (che il webserver "serve" pubblica sulla WiFi locale) —
+# prima del 2026-09-11 i backup finivano dentro MangoApp\backups\, quindi erano scaricabili
+# da chiunque sulla stessa rete. Vedi nota d'incidente nel vault.
 $KEEP_DAYS   = 30
 
 # ── Password: MAI hardcoded qui (era in chiaro nel repository pubblico dal 2026-06-19 al 2026-08-03,
