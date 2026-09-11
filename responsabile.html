@@ -473,7 +473,18 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
             <h1>Dashboard</h1>
             <div class="sub" id="dash-subtitle">Panoramica produzione in tempo reale</div>
           </div>
-          <button class="btn btn-primary" onclick="openModalNuovoOrdine()">+ Nuovo Ordine</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary" id="btn-tog-raggruppa" style="width:auto" onclick="toggleModalitaRaggruppamento()">📦 Raggruppa per spedizione</button>
+            <button class="btn btn-primary" style="width:auto" onclick="openModalNuovoOrdine()">+ Nuovo Ordine</button>
+          </div>
+        </div>
+        <div id="raggruppa-toolbar" style="display:none;align-items:center;gap:12px;margin-bottom:14px;padding:10px 14px;background:var(--phase-bg,#EDE4D8);border:1px solid var(--border);border-radius:8px">
+          <strong id="raggruppa-count" style="font-size:13px">0 ordini selezionati</strong>
+          <span style="font-size:12px;color:var(--muted)">Seleziona 2+ ordini dello stesso cliente</span>
+          <div style="margin-left:auto;display:flex;gap:8px">
+            <button class="btn btn-primary" style="width:auto;padding:8px 16px" onclick="eseguiRaggruppamentoSpedizione()">📦 Raggruppa per spedizione</button>
+            <button class="btn btn-secondary" style="width:auto;padding:8px 16px" onclick="toggleModalitaRaggruppamento()">Annulla</button>
+          </div>
         </div>
         <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
           <div class="kpi-card"><div class="label">Ordini Aperti</div><div class="value" id="kpi-aperti">—</div></div>
@@ -1286,13 +1297,20 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       <div class="form-row">
         <div class="form-group">
           <label>Cliente *</label>
-          <input type="text" id="ord-cliente" placeholder="Nome cliente" list="clienti-list" autocomplete="off">
+          <input type="text" id="ord-cliente" placeholder="Nome cliente" list="clienti-list" autocomplete="off" onblur="checkClientiApertiSuggerimento()">
           <datalist id="clienti-list"></datalist>
         </div>
         <div class="form-group">
           <label>N° Ordine *</label>
           <input type="text" id="ord-codice" placeholder="es. L 115 B">
         </div>
+      </div>
+      <div id="suggerimento-gruppo-spedizione" style="display:none;margin:-4px 0 14px;padding:10px 12px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;font-size:13px">
+        <div id="suggerimento-gruppo-spedizione-testo" style="margin-bottom:6px"></div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500">
+          <input type="checkbox" id="suggerimento-gruppo-spedizione-check">
+          Includi anche questo ordine nella stessa spedizione
+        </label>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -1364,6 +1382,17 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       <button class="btn btn-secondary" onclick="closeModal('modal-ordine')">Annulla</button>
       <button class="btn btn-primary" onclick="creaOrdine()">Crea Ordine</button>
     </div>
+  </div>
+</div>
+
+<!-- Mini-pannello membri di una spedizione unica -->
+<div class="modal-overlay" id="modal-gruppo-spedizione">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-hdr">
+      <h3>📦 Spedizione unica</h3>
+      <button class="modal-close" onclick="closeModal('modal-gruppo-spedizione')">✕</button>
+    </div>
+    <div class="modal-body" id="modal-gruppo-spedizione-body"></div>
   </div>
 </div>
 
@@ -2885,14 +2914,124 @@ function renderDashboard() {
   renderOrdiniTable();
 }
 
+// ═══════════════════════════════════════════════
+// SPEDIZIONE UNICA — raggruppamento ordini stesso cliente
+// ═══════════════════════════════════════════════
+let modalitaRaggruppamento = false;
+let selezioneRaggruppamento = new Set();
+
+function toggleModalitaRaggruppamento() {
+  modalitaRaggruppamento = !modalitaRaggruppamento;
+  selezioneRaggruppamento.clear();
+  const toolbar = document.getElementById('raggruppa-toolbar');
+  const btn = document.getElementById('btn-tog-raggruppa');
+  if (toolbar) toolbar.style.display = modalitaRaggruppamento ? 'flex' : 'none';
+  if (btn) btn.textContent = modalitaRaggruppamento ? '✕ Annulla raggruppamento' : '📦 Raggruppa per spedizione';
+  aggiornaContatoreRaggruppamento();
+  renderOrdiniTable();
+}
+
+function toggleSelezioneOrdine(id) {
+  if (selezioneRaggruppamento.has(id)) selezioneRaggruppamento.delete(id);
+  else selezioneRaggruppamento.add(id);
+  aggiornaContatoreRaggruppamento();
+  renderOrdiniTable();
+}
+
+function aggiornaContatoreRaggruppamento() {
+  const el = document.getElementById('raggruppa-count');
+  if (!el) return;
+  const n = selezioneRaggruppamento.size;
+  el.textContent = `${n} ${n === 1 ? 'ordine selezionato' : 'ordini selezionati'}`;
+}
+
+// Codici degli altri ordini nello stesso gruppo — ricavati dalla lista ordini già in cache,
+// nessuna query aggiuntiva (ordiniCache copre già aperto/sospeso/attesa_spedizione).
+function codiciFratelliGruppo(o) {
+  if (!o.gruppo_spedizione_id) return [];
+  return ordiniCache
+    .filter(x => x.gruppo_spedizione_id === o.gruppo_spedizione_id && x.id !== o.id)
+    .map(x => x.codice || '—');
+}
+
+async function eseguiRaggruppamentoSpedizione() {
+  const ids = [...selezioneRaggruppamento];
+  if (ids.length < 2) { toast('Seleziona almeno 2 ordini da raggruppare', 'err'); return; }
+
+  // Se una parte della selezione appartiene già a una spedizione unica, riusa quel gruppo
+  // (chiamando la stessa RPC con p_gruppo_id valorizzato) invece di crearne uno nuovo che
+  // lascerebbe orfano il gruppo precedente.
+  const selObj = ids.map(id => ordiniCache.find(o => o.id === id)).filter(Boolean);
+  const gruppiEsistenti = [...new Set(selObj.map(o => o.gruppo_spedizione_id).filter(Boolean))];
+  if (gruppiEsistenti.length > 1) {
+    toast('Gli ordini selezionati appartengono già a spedizioni diverse: rimuovili da un gruppo prima di unirli', 'err');
+    return;
+  }
+
+  const { data, error } = await sb.rpc('crea_o_aggiorna_gruppo_spedizione', {
+    p_responsabile_id: currentUserRow.id,
+    p_session_token: null,
+    p_ordine_ids: ids,
+    p_gruppo_id: gruppiEsistenti[0] || null
+  });
+  if (error || !data?.ok) {
+    const msg = data?.errore === 'clienti_diversi'
+      ? 'Puoi raggruppare solo ordini dello stesso cliente'
+      : ('Errore: ' + (data?.errore || error?.message || 'sconosciuto'));
+    toast(msg, 'err');
+    return;
+  }
+  toast(`Spedizione unica aggiornata: ${data.ordini.map(x => x.codice).join(', ')}`, 'ok');
+  toggleModalitaRaggruppamento();
+  await loadOrdini();
+  renderOrdiniTable();
+}
+
+function apriPannelloGruppoSpedizione(gruppoId) {
+  const membri = ordiniCache.filter(o => o.gruppo_spedizione_id === gruppoId);
+  const body = document.getElementById('modal-gruppo-spedizione-body');
+  if (!body) return;
+  body.innerHTML = membri.length
+    ? membri.map(o => `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <div><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)">${escapeHtml(o.codice || '—')}</div></div>
+        <button class="btn btn-alert" style="width:auto;padding:6px 12px;font-size:12px" onclick="rimuoviDalGruppoSpedizione('${o.id}','${escapeJsAttr(o.codice || '')}')">Rimuovi dal gruppo</button>
+      </div>`).join('')
+    : '<p style="color:var(--muted)">Nessun ordine in questo gruppo.</p>';
+  document.getElementById('modal-gruppo-spedizione').classList.add('open');
+}
+
+async function rimuoviDalGruppoSpedizione(ordineId, codice) {
+  if (!confirm(`Rimuovere l'ordine ${codice || ''} dalla spedizione unica?`)) return;
+  const { data, error } = await sb.rpc('rimuovi_ordine_da_gruppo_spedizione', {
+    p_responsabile_id: currentUserRow.id,
+    p_session_token: null,
+    p_ordine_id: ordineId
+  });
+  if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || 'sconosciuto'), 'err'); return; }
+  toast(data.gruppo_sciolto ? 'Ordine rimosso — la spedizione unica è stata sciolta' : 'Ordine rimosso dalla spedizione unica', 'ok');
+  await loadOrdini();
+  closeModal('modal-gruppo-spedizione');
+  renderOrdiniTable();
+}
+
 function ordineRow(o, mini = false) {
   const scad = o.scadenza ? formatDate(o.scadenza) : '—';
   const isLate = o.scadenza && o.scadenza < new Date().toISOString().split('T')[0] && o.stato === 'aperto';
   const isAttesa = o.stato === 'attesa_spedizione';
   const isSosp = o.stato === 'sospeso';
   const rowClass = isAttesa ? 'style="background:#F0FDF4"' : isSosp ? 'style="background:#FFFBEB;opacity:0.85"' : '';
-  return `<tr class="clickable ${isSosp ? '' : scadenzaClass(o.scadenza)}" data-scad="${isSosp ? '' : scadenzaClass(o.scadenza)}" ${rowClass} onclick="openDettaglioOrdine('${o.id}')">
-    <td><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div></td>
+  const inSelMode = modalitaRaggruppamento && !mini;
+  const rowOnclick = inSelMode ? `toggleSelezioneOrdine('${o.id}')` : `openDettaglioOrdine('${o.id}')`;
+  const checkbox = inSelMode
+    ? `<input type="checkbox" ${selezioneRaggruppamento.has(o.id) ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer;flex-shrink:0;margin-top:2px" onclick="event.stopPropagation()" onchange="toggleSelezioneOrdine('${o.id}')">`
+    : '';
+  const fratelli = !mini ? codiciFratelliGruppo(o) : [];
+  const badgeGruppo = fratelli.length
+    ? `<div style="margin-top:4px;font-size:11px;color:var(--wood);cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="event.stopPropagation();apriPannelloGruppoSpedizione('${o.gruppo_spedizione_id}')">📦 Spedizione unica con ${escapeHtml(fratelli.join(', '))}</div>`
+    : '';
+  return `<tr class="clickable ${isSosp ? '' : scadenzaClass(o.scadenza)}" data-scad="${isSosp ? '' : scadenzaClass(o.scadenza)}" ${rowClass} onclick="${rowOnclick}">
+    <td><div style="display:flex;align-items:flex-start;gap:8px">${checkbox}<div><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div>${badgeGruppo}</div></div></td>
     <td>${o.tipo === 'extra' ? '<span style="font-weight:600;color:var(--wood)">Ordine Extra</span>' : `${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}`}</td>
     <td><span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span></td>
     <td style="text-align:center;font-weight:600">${o.quantita || 1}</td>
@@ -2900,11 +3039,11 @@ function ordineRow(o, mini = false) {
     <td><span class="badge badge-${o.stato}">${statoLabel(o.stato)}</span></td>
     <td id="prog-${o.id}" style="min-width:120px">—</td>
     <td>
-      ${o.stato === 'aperto'
+      ${inSelMode ? '' : (o.stato === 'aperto'
         ? `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();sospendi('${o.id}')">Sospendi</button>`
         : o.stato === 'attesa_spedizione'
           ? `<button class="btn btn-ok" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();segnaSpedito('${o.id}')">📦 Spedisci</button>`
-          : `<button class="btn btn-ok" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();riattiva('${o.id}')">Riattiva</button>`}
+          : `<button class="btn btn-ok" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();riattiva('${o.id}')">Riattiva</button>`)}
     </td>
   </tr>`;
 }
@@ -3633,6 +3772,44 @@ async function caricaClienti() {
   if (dl) dl.innerHTML = nomi.map(n => `<option value="${n}">`).join('');
 }
 
+// Spedizione unica: suggerimento in fase di creazione ordine, popolato da
+// checkClientiApertiSuggerimento() e consumato da creaOrdine().
+let _suggerimentoGruppoOrdiniIds = [];
+let _suggerimentoGruppoId = null;
+
+async function checkClientiApertiSuggerimento() {
+  const banner = document.getElementById('suggerimento-gruppo-spedizione');
+  const testo = document.getElementById('suggerimento-gruppo-spedizione-testo');
+  const check = document.getElementById('suggerimento-gruppo-spedizione-check');
+  _suggerimentoGruppoOrdiniIds = [];
+  _suggerimentoGruppoId = null;
+  if (banner) banner.style.display = 'none';
+  if (check) check.checked = false;
+
+  const cliente = document.getElementById('ord-cliente')?.value.trim();
+  if (!cliente) return;
+
+  const { data } = await sb.rpc('ordini_stesso_cliente_aperti', {
+    p_responsabile_id: currentUserRow.id,
+    p_session_token: null,
+    p_cliente: cliente,
+    p_ordine_id_escludi: null
+  });
+  if (!data?.ok || !data.dati?.length) return;
+
+  _suggerimentoGruppoOrdiniIds = data.dati.map(o => o.id);
+  // Se i suggeriti sono già tutti nello stesso gruppo esistente, riusalo; altrimenti (nessuno,
+  // o più gruppi diversi coinvolti — caso raro) se ne creerà uno nuovo che li unisce tutti.
+  const gruppiEsistenti = [...new Set(data.dati.map(o => o.gruppo_spedizione_id).filter(Boolean))];
+  _suggerimentoGruppoId = gruppiEsistenti.length === 1 ? gruppiEsistenti[0] : null;
+
+  const n = data.dati.length;
+  const codici = data.dati.map(o => o.codice || '—').join(', ');
+  const ordiniApertiLbl = n === 1 ? 'ordine aperto' : 'ordini aperti';
+  if (testo) testo.textContent = `Ci sono già ${n} ${ordiniApertiLbl} per ${cliente}: ${codici}. Vuoi includere anche questo nella stessa spedizione?`;
+  if (banner) banner.style.display = 'block';
+}
+
 function openModalNuovoOrdine() {
   caricaClienti();
   document.getElementById('ord-cliente').value = '';
@@ -3640,6 +3817,10 @@ function openModalNuovoOrdine() {
   document.getElementById('ord-note').value = '';
   document.getElementById('ord-scadenza').value = '';
   document.getElementById('extra-fasi-list').innerHTML = '';
+  document.getElementById('suggerimento-gruppo-spedizione').style.display = 'none';
+  document.getElementById('suggerimento-gruppo-spedizione-check').checked = false;
+  _suggerimentoGruppoOrdiniIds = [];
+  _suggerimentoGruppoId = null;
   const struEl = document.getElementById('ord-struttura');
   const tipoPEl = document.getElementById('ord-tipo-prodotto');
   const matEl = document.getElementById('ord-materiale');
@@ -3771,6 +3952,18 @@ async function creaOrdine() {
   await sb.from('archivio_log').insert({ ordine_id: newOrdine.id, utente_id: currentUserRow.id, azione: 'ordine_creato' });
   await inviaNotificaATutti('ordine_creato',
     `Nuovo ordine ${tipo === 'extra' ? 'extra' : 'standard'}: ${cliente} — ${codice}`, newOrdine.id);
+
+  // Spedizione unica: se il responsabile ha confermato il suggerimento mostrato dopo aver
+  // compilato il cliente, aggiunge il nuovo ordine (più quelli suggeriti) alla stessa spedizione.
+  if (document.getElementById('suggerimento-gruppo-spedizione-check')?.checked && _suggerimentoGruppoOrdiniIds.length) {
+    const { data: gData } = await sb.rpc('crea_o_aggiorna_gruppo_spedizione', {
+      p_responsabile_id: currentUserRow.id,
+      p_session_token: null,
+      p_ordine_ids: [newOrdine.id, ..._suggerimentoGruppoOrdiniIds],
+      p_gruppo_id: _suggerimentoGruppoId
+    });
+    if (!gData?.ok) toast('Ordine creato, ma non è stato possibile aggiungerlo alla spedizione unica: ' + (gData?.errore || ''), 'err');
+  }
 
   closeModal('modal-ordine');
   toast('Ordine creato con successo', 'ok');
