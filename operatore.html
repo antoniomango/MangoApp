@@ -13,6 +13,11 @@
 <!-- CSP via meta: frame-ancestors/report-uri/sandbox non hanno effetto qui (richiedono
      l'header HTTP reale, che GitHub Pages non permette di impostare) -- vedi vault. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.onesignal.com https://*.onesignal.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co; connect-src 'self' https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co wss://kpdlynvmsoctagwtzrxr.supabase.co wss://mtpzfxnyfkzikzlkomwz.supabase.co https://onesignal.com https://*.onesignal.com; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'">
+<!-- Audit Round 3, punto 10: X-Frame-Options/X-Content-Type-Options non hanno equivalente
+     meta tag (i browser li ignorano fuori da un vero header HTTP, non impostabile su GitHub
+     Pages) -- Referrer-Policy invece funziona anche via meta, riduce la fuga di URL interni
+     (es. ?ordine=<uuid>) verso risorse di terze parti. Vedi vault. -->
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js" integrity="sha384-JBR+x8blGwjDRO63aHCGiZMD4VNiTR4ZUGA+N6ZKLf3zNt1fK8IBpcgPaMrxqWBp" crossorigin="anonymous"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap');
@@ -921,12 +926,14 @@ async function renderHome() {
   let mieFasi = [];
   let mieFasiExtra = [];
   if (isOnline) {
-    const [{ data: mieFasiResp }, { data: comeCollega }] = await Promise.all([
+    const [{ data: mieFasiResp }, { data: comeCollegaResp }] = await Promise.all([
       sb.rpc('mie_fasi_in_corso', { p_operatore_id: currentUser.id, p_session_token: sessionToken }),
-      sb.rpc('fasi_in_corso_come_collega', { p_operatore_id: currentUser.id }),
+      // Audit Round 3, punto 5: ora richiede p_session_token come tutte le altre RPC operatore.
+      sb.rpc('fasi_in_corso_come_collega', { p_operatore_id: currentUser.id, p_session_token: sessionToken }),
     ]);
     const primarie = mieFasiResp?.ok ? mieFasiResp.dati.primarie : [];
     const extraInCorso = mieFasiResp?.ok ? mieFasiResp.dati.extra : [];
+    const comeCollega = comeCollegaResp?.ok ? comeCollegaResp.dati : [];
     const ids = new Set((primarie || []).map(f => f.id));
     const daCollega = (comeCollega || [])
       .filter(j => !ids.has(j.id))
@@ -1571,6 +1578,11 @@ async function riapriFaseExtraOp(faseExtraId, ordineId) {
 
 async function confermaRicezioneFase(ordFaseId, ordineId) {
   if (!confirm('Confermi la ricezione del materiale? La fase verrà chiusa.')) return;
+  // Secondo tap di conferma (Audit Round 3, punto 2): conferma_ricezione_fase() non ha (per
+  // scelta esplicita) alcun controllo di proprietà lato DB — chiunque abbia una sessione
+  // valida può chiuderla. Non è una misura di sicurezza (la RPC resta invariata), solo una
+  // protezione UX in più contro un tap accidentale su una fase che magari non stavi seguendo tu.
+  if (!confirm('Confermi di aver ricevuto davvero il materiale per questo pezzo?')) return;
   const { data, error } = await sb.rpc('conferma_ricezione_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   toast('Ricezione confermata!', 'ok');
@@ -1580,6 +1592,10 @@ async function confermaRicezioneFase(ordFaseId, ordineId) {
 
 async function segnaSpedizioneFase(ordFaseId, ordineId) {
   if (!confirm('Confermi la spedizione al fornitore? Verrà registrata la data di uscita.')) return;
+  // Secondo tap di conferma (Audit Round 3, punto 1): segna_spedizione_fase() resta
+  // deliberatamente una coda aperta, senza controllo di proprietà lato DB — vedi commento
+  // gemello in confermaRicezioneFase(). Solo UX, nessuna modifica alla RPC.
+  if (!confirm('Confermi di aver spedito questo pezzo?')) return;
   const { data, error } = await sb.rpc('segna_spedizione_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
   toast('Spedizione registrata!', 'ok');
@@ -2075,7 +2091,18 @@ async function riprendi(ordFaseId, ordineId, forza) {
     p_forza: forza,
     p_session_token: sessionToken
   });
-  if (!data?.ok) { toast(data?.errore || 'Errore', 'err'); return; }
+  if (!data?.ok) {
+    // fase_in_corso_da_altro_operatore: Audit Round 3, punto 3 — il subentro su una fase
+    // attiva di un collega non è più permesso, solo su una fase in_attesa.
+    const erroriRiprendi = {
+      fase_in_corso_da_altro_operatore: 'Questa fase è in corso con un altro operatore: non puoi subentrare mentre è attiva.',
+      non_riprendibile: 'Questa fase non può essere ripresa nel suo stato attuale.',
+      sessione_non_valida: 'Sessione scaduta, effettua di nuovo l\'accesso',
+      accesso_sola_lettura: 'Account in sola lettura, operazione non consentita',
+    };
+    toast(erroriRiprendi[data?.errore] || data?.errore || 'Errore', 'err');
+    return;
+  }
   toast('Fase ripresa!', 'ok');
   await renderFaseDetail(ordFaseId, ordineId);
   await renderOrdineDetail(ordineId);

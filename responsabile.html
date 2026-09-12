@@ -14,6 +14,11 @@
      l'header HTTP reale, che GitHub Pages non permette di impostare) -- vedi vault per la
      verifica completa (stessa limitazione strutturale documentata per HSTS). -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.onesignal.com https://*.onesignal.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co; connect-src 'self' https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co wss://kpdlynvmsoctagwtzrxr.supabase.co wss://mtpzfxnyfkzikzlkomwz.supabase.co https://onesignal.com https://*.onesignal.com; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'">
+<!-- Audit Round 3, punto 10: X-Frame-Options/X-Content-Type-Options non hanno equivalente
+     meta tag (i browser li ignorano fuori da un vero header HTTP, non impostabile su GitHub
+     Pages) -- Referrer-Policy invece funziona anche via meta, riduce la fuga di URL interni
+     verso risorse di terze parti. Vedi vault. -->
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js" integrity="sha384-JBR+x8blGwjDRO63aHCGiZMD4VNiTR4ZUGA+N6ZKLf3zNt1fK8IBpcgPaMrxqWBp" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>

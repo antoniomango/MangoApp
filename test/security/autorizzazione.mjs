@@ -1,11 +1,15 @@
-// Suite di test automatici di autorizzazione — A01/A12
+// Suite di test automatici di autorizzazione — A01/A17
 // ============================================================
-// Replica 12 casi concreti di bypass di autorizzazione (letture anon su tabelle private,
+// Replica casi concreti di bypass di autorizzazione (letture anon su tabelle private,
 // impersonazione di un altro operatore, RPC senza sessione, token scaduto/revocato riusato,
 // transizioni di stato non consentite, concorrenza su due richieste simultanee, accesso
-// diretto allo storage) contro mango-test-security. Ogni test fallisce esplicitamente
+// diretto allo storage, furto di lavoro attivo, reset di forzato_logout senza autenticazione,
+// lockout PIN progressivo) contro mango-test-security. Ogni test fallisce esplicitamente
 // (exit code 1, elenco dei casi falliti) se una policy o una RPC dovesse tornare permissiva
 // in futuro — eseguirla prima di ogni deploy importante su RLS/RPC/grant.
+//
+// A13-A17 aggiunti nell'Audit sicurezza Round 3 (2026-09-12), punti 3/4/5/6/9 — vedi vault
+// 2026-09-12-audit-sicurezza-round3.
 //
 // Va SOLO contro mango-test-security (kpdlynvmsoctagwtzrxr) — mai produzione: crea e cancella
 // fixture reali (ordine, fase, sessioni) e carica/cancella un file reale in storage.
@@ -83,6 +87,8 @@ async function headerAutorizzazione() {
   return { Authorization: `Bearer ${ANON_KEY}`, apikey: ANON_KEY };
 }
 
+let _pinHashOriginaleOp1 = null;
+
 async function setup() {
   await db.connect();
 
@@ -94,6 +100,17 @@ async function setup() {
     `UPDATE users SET session_token=$1, session_token_scadenza=now()+interval '1 hour', forzato_logout=false WHERE id=$2`,
     [T.op2Token, T.op2Id]
   );
+
+  // Fixture per A17 (lockout PIN progressivo): PIN di prova temporaneo su op1, pin_hash
+  // originale salvato per il ripristino in teardown().
+  const { rows: righePin } = await db.query(`SELECT pin_hash FROM users WHERE id=$1`, [T.op1Id]);
+  _pinHashOriginaleOp1 = righePin[0]?.pin_hash ?? null;
+  await db.query(
+    `UPDATE users SET pin_hash = extensions.crypt('9999', extensions.gen_salt('bf')),
+       pin_bloccato_fino = NULL, pin_blocchi_consecutivi = 0 WHERE id=$1`,
+    [T.op1Id]
+  );
+  await db.query(`DELETE FROM pin_tentativi WHERE user_id=$1`, [T.op1Id]);
 
   await db.query(
     `INSERT INTO ordini (id, codice, cliente, tipo, tipo_prodotto, struttura, materiale, quantita, stato)
@@ -138,9 +155,14 @@ async function teardown() {
     await db.query(`DELETE FROM ordine_fasi WHERE id=$1`, [T.faseId]);
     await db.query(`DELETE FROM ordini WHERE id=$1`, [T.ordineId]);
     await db.query(
-      `UPDATE users SET session_token=NULL, session_token_scadenza=NULL, forzato_logout=false WHERE id IN ($1,$2)`,
+      `UPDATE users SET session_token=NULL, session_token_scadenza=NULL, forzato_logout=false,
+         pin_bloccato_fino=NULL, pin_blocchi_consecutivi=0
+       WHERE id IN ($1,$2)`,
       [T.op1Id, T.op2Id]
     );
+    await db.query(`UPDATE users SET pin_hash=$2 WHERE id=$1`, [T.op1Id, _pinHashOriginaleOp1]);
+    await db.query(`DELETE FROM pin_tentativi WHERE user_id IN ($1,$2)`, [T.op1Id, T.op2Id]);
+    await db.query(`DELETE FROM notifiche WHERE tipo='sicurezza_pin_bloccato'`);
   } finally {
     await db.end();
   }
@@ -234,6 +256,63 @@ async function main() {
   {
     const { data, error } = await anon.storage.from('allegati-fasi').download(T.storagePath);
     record('A12', 'anon non scarica un file reale di storage.objects', !data && !!error, error?.message);
+  }
+
+  // A13 — furto di lavoro attivo: op2 non può subentrare su una fase in_corso di op1
+  // (Audit Round 3, punto 3 — prima chiunque poteva riassegnarsi silenziosamente una fase
+  // attiva di un collega, anche con p_forza=true)
+  {
+    await db.query(`UPDATE ordine_fasi SET stato='disponibile', operatore_id=NULL, iniziata_il=NULL WHERE id=$1`, [T.faseId]);
+    await db.query(`DELETE FROM ordine_fasi_operatori WHERE ordine_fase_id=$1`, [T.faseId]);
+    const preso = await anon.rpc('prendi_in_carico_fase', { p_ordine_fase_id: T.faseId, p_operatore_id: T.op1Id, p_session_token: T.op1Token });
+    const { data } = await anon.rpc('riprendi_fase', { p_ordine_fase_id: T.faseId, p_operatore_id: T.op2Id, p_forza: true, p_session_token: T.op2Token });
+    const bloccato = data?.ok === false && data?.errore === 'fase_in_corso_da_altro_operatore';
+    record('A13', 'riprendi_fase non permette il subentro su una fase in_corso di un collega', bloccato,
+      `presa_in_carico=${JSON.stringify(preso.data)} riprendi=${JSON.stringify(data)}`);
+  }
+
+  // A14 — controlla_sessione è di sola lettura: non deve mai azzerare forzato_logout
+  // (Audit Round 3, punto 4 — prima bastava conoscere lo user_id, senza alcuna prova di
+  // identità, per vanificare un logout forzato dal responsabile)
+  {
+    await db.query(`UPDATE users SET forzato_logout = true WHERE id=$1`, [T.op1Id]);
+    const r1 = await anon.rpc('controlla_sessione', { p_user_id: T.op1Id });
+    const r2 = await anon.rpc('controlla_sessione', { p_user_id: T.op1Id });
+    const { rows } = await db.query(`SELECT forzato_logout FROM users WHERE id=$1`, [T.op1Id]);
+    const invariato = r1.data?.valida === false && r2.data?.valida === false && rows[0].forzato_logout === true;
+    record('A14', 'controlla_sessione non azzera mai forzato_logout (sola lettura)', invariato,
+      `esito1=${JSON.stringify(r1.data)} esito2=${JSON.stringify(r2.data)} forzato_logout_db=${rows[0].forzato_logout}`);
+    await db.query(`UPDATE users SET forzato_logout = false WHERE id=$1`, [T.op1Id]);
+  }
+
+  // A15 — fasi_in_corso_come_collega richiede una sessione valida (Audit Round 3, punto 5 —
+  // prima nessun p_session_token in firma, EXECUTE concesso ad anon/authenticated/PUBLIC)
+  {
+    const { data } = await anon.rpc('fasi_in_corso_come_collega', { p_operatore_id: T.op1Id, p_session_token: '99999999-9999-9999-9999-999999999999' });
+    record('A15', 'fasi_in_corso_come_collega rifiuta un session_token inventato', data?.ok === false && data?.errore === 'sessione_non_valida', JSON.stringify(data));
+  }
+
+  // A16 — le 4 tabelle aperte ad anon/public (Audit Round 3, punto 6) non sono più leggibili
+  // direttamente: disponibilita_giornaliera, competenze_operatore_fase,
+  // competenze_operatore_macchina, fasi_extra_operatori
+  {
+    const tabelle = ['disponibilita_giornaliera', 'competenze_operatore_fase', 'competenze_operatore_macchina', 'fasi_extra_operatori'];
+    const esiti = await Promise.all(tabelle.map(t => anon.from(t).select('*').limit(1)));
+    const tutteBloccate = esiti.every(e => !!e.error && e.error.code === '42501');
+    record('A16', 'anon non legge più le 4 tabelle competenze/disponibilità/fasi_extra_operatori',
+      tutteBloccate, esiti.map((e, i) => `${tabelle[i]}:${e.error?.code}`).join(' '));
+  }
+
+  // A17 — lockout progressivo: durante il blocco viene rifiutato anche il PIN corretto
+  // (Audit Round 3, punto 9 — dimostra che il blocco impedisce del tutto la verifica, non è
+  // solo un contatore che si può aggirare ritentando con il PIN giusto)
+  {
+    for (let i = 0; i < 5; i++) await anon.rpc('verifica_pin', { p_user_id: T.op1Id, p_pin: '0000' });
+    const dopoCinqueFalliti = await anon.rpc('verifica_pin', { p_user_id: T.op1Id, p_pin: '0000' });
+    const conPinCorretto = await anon.rpc('verifica_pin', { p_user_id: T.op1Id, p_pin: '9999' });
+    const bloccato = dopoCinqueFalliti.data?.errore === 'troppi_tentativi' && conPinCorretto.data?.errore === 'troppi_tentativi';
+    record('A17', 'verifica_pin blocca anche il PIN corretto durante il lockout progressivo', bloccato,
+      `dopo_5_falliti=${JSON.stringify(dopoCinqueFalliti.data)} con_pin_corretto=${JSON.stringify(conPinCorretto.data)}`);
   }
 
   await teardown();

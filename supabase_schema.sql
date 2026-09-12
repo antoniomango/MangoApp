@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict mhx2woOdN4nCmPsBpviCVlrqhQYpVwM3jHcEM8uOgThaVl1DOuWZgwK4FQbgL7e
+\restrict bxgzhHtkmChtHfohtqRHTf5bjU5hBcPfTuBX1yJqRBgMZS6UlfkhwvkgGrgMvQz
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -1323,7 +1323,6 @@ BEGIN
     RETURN jsonb_build_object('valida', false, 'motivo', 'disattivato');
   END IF;
   IF v_user.forzato_logout = true THEN
-    UPDATE public.users SET forzato_logout = false WHERE id = p_user_id;
     RETURN jsonb_build_object('valida', false, 'motivo', 'forzato_logout');
   END IF;
   RETURN jsonb_build_object('valida', true);
@@ -2206,16 +2205,20 @@ $$;
 ALTER FUNCTION public.fasi_dipendenze_stato(p_operatore_id uuid, p_session_token uuid, p_ordine_id uuid, p_fase_ids smallint[]) OWNER TO postgres;
 
 --
--- Name: fasi_in_corso_come_collega(uuid); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: fasi_in_corso_come_collega(uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid) RETURNS jsonb
+CREATE FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid, p_session_token uuid DEFAULT NULL::uuid) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
 DECLARE
   v_result jsonb;
 BEGIN
+  IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
+  END IF;
+
   SELECT jsonb_agg(
     jsonb_build_object(
       'id',            f.id,
@@ -2241,12 +2244,13 @@ BEGIN
   WHERE j.operatore_id  = p_operatore_id
     AND f.stato         = 'in_corso'
     AND j.aggiunto_il  >= f.iniziata_il;
-  RETURN COALESCE(v_result, '[]'::jsonb);
+
+  RETURN jsonb_build_object('ok', true, 'dati', COALESCE(v_result, '[]'::jsonb));
 END;
 $$;
 
 
-ALTER FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid) OWNER TO postgres;
+ALTER FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid, p_session_token uuid) OWNER TO postgres;
 
 --
 -- Name: fasi_stato_ordine(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: postgres
@@ -4586,9 +4590,30 @@ BEGIN
       RETURN jsonb_build_object('ok', false, 'errore', 'usa_conferma_ricezione', 'tipo_gestione', v_tg, 'messaggio', 'Usa il pulsante specifico per questo tipo di fase');
     END IF;
   END IF;
-  IF v_fase.stato NOT IN ('in_attesa','in_corso') THEN
+
+  IF v_fase.stato = 'in_corso' THEN
+    RETURN jsonb_build_object('ok', false, 'errore', 'fase_in_corso_da_altro_operatore', 'stato', v_fase.stato,
+      'messaggio', 'Questa fase è attualmente in corso con un altro operatore: non puoi subentrare mentre è attiva.');
+  END IF;
+  IF v_fase.stato <> 'in_attesa' THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'non_riprendibile', 'stato', v_fase.stato);
   END IF;
+
+  IF v_fase.operatore_id IS NOT NULL AND v_fase.operatore_id IS DISTINCT FROM p_operatore_id THEN
+    BEGIN
+      INSERT INTO public.archivio_log(ordine_id, fase_id, utente_id, azione, dettaglio)
+      VALUES (v_fase.ordine_id, v_fase.fase_id, p_operatore_id, 'fase_riassegnata',
+        jsonb_build_object(
+          'ordine_fase_id', p_ordine_fase_id,
+          'operatore_precedente', v_fase.operatore_id,
+          'operatore_nuovo', p_operatore_id,
+          'minuti_accumulati_da_precedente', COALESCE(v_fase.tempo_accumulato_minuti, 0)
+        ));
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING 'log fase_riassegnata non scritto: %', SQLERRM;
+    END;
+  END IF;
+
   UPDATE public.ordine_fasi SET stato='in_corso', operatore_id=p_operatore_id, iniziata_il=COALESCE(v_fase.iniziata_il, NOW()) WHERE id=p_ordine_fase_id;
   RETURN jsonb_build_object('ok', true);
 END;
@@ -5189,23 +5214,11 @@ DECLARE
   v_user RECORD;
   v_tentativi INT;
   v_token UUID;
+  v_blocchi INT;
+  v_durata_minuti INT;
+  v_bloccato_fino TIMESTAMPTZ;
 BEGIN
-  -- Rate limit: conta fallimenti ultimi 15 minuti
-  SELECT COUNT(*) INTO v_tentativi
-  FROM public.pin_tentativi
-  WHERE user_id = p_user_id
-    AND tentato_il > now() - INTERVAL '15 minutes';
-
-  IF v_tentativi >= 5 THEN
-    RETURN json_build_object(
-      'ok', false,
-      'errore', 'troppi_tentativi',
-      'messaggio', 'Accesso bloccato per 15 minuti dopo troppi tentativi errati'
-    );
-  END IF;
-
-  -- Carica utente (seleziona solo campi necessari)
-  SELECT id, nome, cognome, ruolo, attivo, pin_hash
+  SELECT id, nome, cognome, ruolo, attivo, pin_hash, pin_bloccato_fino
   INTO v_user
   FROM public.users
   WHERE id = p_user_id AND attivo = TRUE;
@@ -5214,17 +5227,22 @@ BEGIN
     RETURN json_build_object('ok', false, 'errore', 'utente_non_trovato');
   END IF;
 
-  -- Verifica PIN tramite bcrypt (solo pin_hash, legacy rimosso)
+  IF v_user.pin_bloccato_fino IS NOT NULL AND v_user.pin_bloccato_fino > now() THEN
+    RETURN json_build_object('ok', false, 'errore', 'troppi_tentativi',
+      'bloccato_fino', v_user.pin_bloccato_fino,
+      'messaggio', 'Accesso bloccato per troppi tentativi errati. Riprova più tardi.');
+  END IF;
+
   IF v_user.pin_hash IS NOT NULL AND extensions.crypt(p_pin, v_user.pin_hash) = v_user.pin_hash THEN
-    -- Successo: pulisce i tentativi falliti
     DELETE FROM public.pin_tentativi WHERE user_id = p_user_id;
-    -- Genera session_token valido 24h
     v_token := gen_random_uuid();
     UPDATE public.users
       SET session_token = v_token,
-          session_token_scadenza = now() + INTERVAL '24 hours'
+          session_token_scadenza = now() + INTERVAL '24 hours',
+          forzato_logout = false,
+          pin_bloccato_fino = NULL,
+          pin_blocchi_consecutivi = 0
       WHERE id = p_user_id;
-    -- Restituisce SOLO campi necessari, mai pin_hash
     RETURN json_build_object(
       'ok', true,
       'session_token', v_token::text,
@@ -5238,8 +5256,41 @@ BEGIN
     );
   END IF;
 
-  -- Fallimento: registra tentativo
   INSERT INTO public.pin_tentativi(user_id) VALUES (p_user_id);
+
+  SELECT COUNT(*) INTO v_tentativi
+  FROM public.pin_tentativi
+  WHERE user_id = p_user_id
+    AND tentato_il > now() - INTERVAL '15 minutes';
+
+  IF v_tentativi >= 5 THEN
+    UPDATE public.users
+      SET pin_blocchi_consecutivi = pin_blocchi_consecutivi + 1
+      WHERE id = p_user_id
+      RETURNING pin_blocchi_consecutivi INTO v_blocchi;
+
+    v_durata_minuti := LEAST(15 * (2 ^ (v_blocchi - 1))::int, 1440);
+    v_bloccato_fino := now() + (v_durata_minuti || ' minutes')::interval;
+
+    UPDATE public.users SET pin_bloccato_fino = v_bloccato_fino WHERE id = p_user_id;
+
+    IF v_blocchi >= 3 THEN
+      BEGIN
+        INSERT INTO public.notifiche (destinatario_id, tipo, testo)
+        SELECT r.id, 'sicurezza_pin_bloccato',
+          'Attenzione: ' || v_user.nome || ' ' || v_user.cognome || ' ha accumulato ' || v_blocchi ||
+          ' blocchi PIN consecutivi (bloccato fino alle ' || to_char(v_bloccato_fino, 'HH24:MI') ||
+          ') — possibile tentativo di accesso non autorizzato.'
+        FROM public.users r WHERE r.ruolo = 'responsabile' AND r.attivo = true;
+      EXCEPTION WHEN OTHERS THEN
+        RAISE WARNING 'alert blocchi pin non scritto: %', SQLERRM;
+      END;
+    END IF;
+
+    RETURN json_build_object('ok', false, 'errore', 'troppi_tentativi',
+      'bloccato_fino', v_bloccato_fino,
+      'messaggio', format('Accesso bloccato per %s minuti dopo troppi tentativi errati', v_durata_minuti));
+  END IF;
 
   RETURN json_build_object('ok', false, 'errore', 'pin_errato');
 END;
@@ -5870,6 +5921,8 @@ CREATE TABLE public.users (
     forzato_logout boolean DEFAULT false,
     ore_default numeric(4,1) DEFAULT 8.0 NOT NULL,
     escluso_pianificazione boolean DEFAULT false NOT NULL,
+    pin_bloccato_fino timestamp with time zone,
+    pin_blocchi_consecutivi integer DEFAULT 0 NOT NULL,
     CONSTRAINT chk_responsabile_email CHECK (((ruolo <> 'responsabile'::public.ruolo_utente) OR (email IS NOT NULL)))
 );
 
@@ -6988,7 +7041,7 @@ CREATE POLICY chiusure_select ON public.chiusure_aziendali FOR SELECT USING (tru
 -- Name: competenze_operatore_macchina comp_op_mac_sel; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY comp_op_mac_sel ON public.competenze_operatore_macchina FOR SELECT USING (true);
+CREATE POLICY comp_op_mac_sel ON public.competenze_operatore_macchina FOR SELECT TO authenticated USING (true);
 
 
 --
@@ -7120,7 +7173,7 @@ ALTER TABLE public.fasi ENABLE ROW LEVEL SECURITY;
 -- Name: fasi_extra_operatori fasi_extra_op_select; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY fasi_extra_op_select ON public.fasi_extra_operatori FOR SELECT TO authenticated, anon USING (true);
+CREATE POLICY fasi_extra_op_select ON public.fasi_extra_operatori FOR SELECT TO authenticated USING (true);
 
 
 --
@@ -7205,14 +7258,14 @@ CREATE POLICY lettura_autenticati ON public.attributi_prodotto_config FOR SELECT
 -- Name: competenze_operatore_fase lettura_autenticati; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY lettura_autenticati ON public.competenze_operatore_fase FOR SELECT USING (true);
+CREATE POLICY lettura_autenticati ON public.competenze_operatore_fase FOR SELECT TO authenticated USING (true);
 
 
 --
 -- Name: disponibilita_giornaliera lettura_autenticati; Type: POLICY; Schema: public; Owner: postgres
 --
 
-CREATE POLICY lettura_autenticati ON public.disponibilita_giornaliera FOR SELECT USING (true);
+CREATE POLICY lettura_autenticati ON public.disponibilita_giornaliera FOR SELECT TO authenticated USING (true);
 
 
 --
@@ -7960,12 +8013,13 @@ GRANT ALL ON FUNCTION public.fasi_dipendenze_stato(p_operatore_id uuid, p_sessio
 
 
 --
--- Name: FUNCTION fasi_in_corso_come_collega(p_operatore_id uuid); Type: ACL; Schema: public; Owner: postgres
+-- Name: FUNCTION fasi_in_corso_come_collega(p_operatore_id uuid, p_session_token uuid); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid) TO anon;
-GRANT ALL ON FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid) TO authenticated;
-GRANT ALL ON FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid) TO service_role;
+REVOKE ALL ON FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid, p_session_token uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid, p_session_token uuid) TO anon;
+GRANT ALL ON FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid, p_session_token uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fasi_in_corso_come_collega(p_operatore_id uuid, p_session_token uuid) TO service_role;
 
 
 --
@@ -8575,7 +8629,6 @@ GRANT ALL ON TABLE public.chiusure_aziendali TO service_role;
 -- Name: TABLE competenze_operatore_fase; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,MAINTAIN ON TABLE public.competenze_operatore_fase TO anon;
 GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.competenze_operatore_fase TO authenticated;
 GRANT ALL ON TABLE public.competenze_operatore_fase TO service_role;
 
@@ -8593,7 +8646,6 @@ GRANT ALL ON TABLE public.competenze_operatore_fase_extra TO service_role;
 -- Name: TABLE competenze_operatore_macchina; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,MAINTAIN ON TABLE public.competenze_operatore_macchina TO anon;
 GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.competenze_operatore_macchina TO authenticated;
 GRANT ALL ON TABLE public.competenze_operatore_macchina TO service_role;
 
@@ -8620,7 +8672,6 @@ GRANT ALL ON TABLE public.config_sistema TO service_role;
 -- Name: TABLE disponibilita_giornaliera; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,MAINTAIN ON TABLE public.disponibilita_giornaliera TO anon;
 GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.disponibilita_giornaliera TO authenticated;
 GRANT ALL ON TABLE public.disponibilita_giornaliera TO service_role;
 
@@ -8683,7 +8734,6 @@ GRANT ALL ON TABLE public.fasi TO service_role;
 -- Name: TABLE fasi_extra_operatori; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT SELECT,MAINTAIN ON TABLE public.fasi_extra_operatori TO anon;
 GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.fasi_extra_operatori TO authenticated;
 GRANT ALL ON TABLE public.fasi_extra_operatori TO service_role;
 
@@ -8871,7 +8921,7 @@ GRANT ALL ON TABLE public.tipi_prodotto TO service_role;
 -- Name: TABLE users; Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.users TO authenticated;
+GRANT SELECT,INSERT,DELETE,MAINTAIN,UPDATE ON TABLE public.users TO authenticated;
 GRANT ALL ON TABLE public.users TO service_role;
 
 
@@ -8960,6 +9010,20 @@ GRANT SELECT(escluso_pianificazione) ON TABLE public.users TO authenticated;
 
 
 --
+-- Name: COLUMN users.pin_bloccato_fino; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT REFERENCES(pin_bloccato_fino) ON TABLE public.users TO authenticated;
+
+
+--
+-- Name: COLUMN users.pin_blocchi_consecutivi; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT REFERENCES(pin_blocchi_consecutivi) ON TABLE public.users TO authenticated;
+
+
+--
 -- Name: DEFAULT PRIVILEGES FOR SEQUENCES; Type: DEFAULT ACL; Schema: public; Owner: postgres
 --
 
@@ -9023,5 +9087,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON T
 -- PostgreSQL database dump complete
 --
 
-\unrestrict mhx2woOdN4nCmPsBpviCVlrqhQYpVwM3jHcEM8uOgThaVl1DOuWZgwK4FQbgL7e
+\unrestrict bxgzhHtkmChtHfohtqRHTf5bjU5hBcPfTuBX1yJqRBgMZS6UlfkhwvkgGrgMvQz
 
