@@ -584,6 +584,67 @@ async function cacheGet(key) {
   });
 }
 
+// Come cacheGet, ma senza applicare i 24h di CACHE_TTL_MS — serve a leggere il timestamp reale
+// dell'ultimo salvataggio (es. per SESSIONE_OFFLINE_TTL_MS sotto, una finestra più stretta e
+// specifica per la sicurezza del login, indipendente dalla scadenza generica dei dati in cache).
+async function cacheGetRaw(key) {
+  return new Promise((resolve) => {
+    const tx = db.transaction('cache', 'readonly');
+    const req = tx.objectStore('cache').get(key);
+    req.onsuccess = () => resolve(req.result || null);
+  });
+}
+
+// ═══════════════════════════════════════════════
+// LOGIN OFFLINE — finestra di validità + verifica del PIN contro un hash locale
+// ═══════════════════════════════════════════════
+// Verifica 3 (2026-09-14, pentest ChatGPT, confermata leggendo doLoginPin()): offline, il PIN
+// digitato non veniva mai confrontato con nulla — bastava che l'utente selezionato combaciasse
+// con `current-user` in cache, qualunque valore nei campi PIN. Due mitigazioni, scelte da
+// Antonio (nessuna delle due basta da sola, il PIN a 4 cifre resta comunque un limite
+// intrinseco — 10.000 combinazioni sono bruteforzabili offline da chi ha accesso fisico al
+// device e sa estrarre i dati da IndexedDB, con o senza queste protezioni):
+//  1. SESSIONE_OFFLINE_TTL_MS: un accesso senza una vera riconferma del PIN (online o offline
+//     con hash valido) più vecchio di questa soglia non basta più a riprendere l'app da soli —
+//     va rifatto il login. Deliberatamente più stretta di CACHE_TTL_MS (24h, per i dati di sola
+//     lettura sopra): qui si tratta della sessione dell'operatore, non di un elenco nomi.
+//  2. Hash locale del PIN (PBKDF2-SHA256, MAI il pin_hash bcrypt reale — quello non lascia mai
+//     il server): salvato ad ogni login online riuscito, verificato offline al posto del
+//     controllo "combacia con la cache" che non provava nulla.
+const SESSIONE_OFFLINE_TTL_MS = 4 * 60 * 60 * 1000; // 4 ore dall'ultima verifica PIN riuscita
+const PIN_HASH_ITERAZIONI = 100000;
+
+async function _pinHashLocale(pin, saltB64) {
+  const enc = new TextEncoder();
+  const saltBytes = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(pin), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: saltBytes, iterations: PIN_HASH_ITERAZIONI, hash: 'SHA-256' },
+    keyMaterial, 256
+  );
+  return btoa(String.fromCharCode(...new Uint8Array(bits)));
+}
+
+async function _salvaPinHashLocale(userId, pin) {
+  const saltBytes = crypto.getRandomValues(new Uint8Array(16));
+  const saltB64 = btoa(String.fromCharCode(...saltBytes));
+  const hash = await _pinHashLocale(pin, saltB64);
+  await cacheSet('pin-hash-locale-' + userId, { hash, salt: saltB64 });
+}
+
+async function _verificaPinHashLocale(userId, pin) {
+  const record = await cacheGet('pin-hash-locale-' + userId);
+  if (!record) return false;
+  const hash = await _pinHashLocale(pin, record.salt);
+  return hash === record.hash;
+}
+
+// Vera solo se esiste un login (online o offline con hash) più recente di SESSIONE_OFFLINE_TTL_MS.
+async function _sessioneOfflineFresca() {
+  const raw = await cacheGetRaw('current-user');
+  return !!(raw && raw.value && (Date.now() - raw.ts) <= SESSIONE_OFFLINE_TTL_MS);
+}
+
 // Rimuove le voci di cache scadute e le azioni in coda ormai stantie (fallite ripetutamente
 // da più di QUEUE_STALE_MS) — eseguita una volta all'avvio, non ad ogni singola lettura.
 async function pulisciDatiOfflineScaduti() {
@@ -713,14 +774,16 @@ async function doLoginPin() {
     currentUser = data.user;
     await cacheSet('current-user', currentUser);
     await cacheSet('current-pin-hash', null); // non salviamo PIN in chiaro
+    await _salvaPinHashLocale(userId, pin); // hash locale per un eventuale login offline, vedi sopra
     if (data.session_token) { sessionToken = data.session_token; await cacheSet('current-session-token', data.session_token); }
   } else {
     const cached = await cacheGet('current-user');
-    if (cached && cached.id === userId) {
-      currentUser = cached;
-    } else {
+    if (!cached || cached.id !== userId) {
       showErr('Impossibile verificare il PIN offline. Connettiti per il primo accesso.'); return;
     }
+    if (!(await _verificaPinHashLocale(userId, pin))) { showErr('PIN errato'); return; }
+    currentUser = cached;
+    await cacheSet('current-user', currentUser); // rinnova la finestra SESSIONE_OFFLINE_TTL_MS
   }
   if (currentUser?.ruolo === 'sola_lettura') {
     localStorage.setItem('ufficio-user', JSON.stringify(currentUser));
@@ -870,7 +933,18 @@ let _pollingTimer = null;
 function avviaPollingAggiornamenti() {
   if (_pollingTimer) return;
   _pollingTimer = setInterval(async () => {
-    if (!isOnline || !currentUser) return;
+    if (!currentUser) return;
+    if (!isOnline) {
+      // App rimasta aperta offline oltre SESSIONE_OFFLINE_TTL_MS: torna al login anche senza
+      // una riapertura — non solo a chi riavvia l'app, vedi start().
+      if (!(await _sessioneOfflineFresca())) {
+        currentUser = null;
+        document.getElementById('app-screen').style.display = 'none';
+        document.getElementById('login-screen').style.display = 'flex';
+        loadLoginUsers();
+      }
+      return;
+    }
     await loadOrdini();
     if (currentOrdineId) await renderOrdineDetail(currentOrdineId);
     renderHome();
@@ -2735,7 +2809,10 @@ async function start() {
     return;
   }
   const cached = await cacheGet('current-user');
-  if (cached) {
+  if (cached && (isOnline || await _sessioneOfflineFresca())) {
+    // Online: sessione scaduta o forzata rilevata comunque da showApp() via controlla_sessione,
+    // e da ogni RPC via valida_sessione. Offline: solo entro SESSIONE_OFFLINE_TTL_MS dall'ultimo
+    // login vero — oltre, richiede di rifare il login (con hash locale, vedi doLoginPin()).
     currentUser = cached;
     showApp();
   } else {
