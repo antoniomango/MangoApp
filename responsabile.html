@@ -480,6 +480,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           </div>
           <div style="display:flex;gap:8px">
             <button class="btn btn-secondary" id="btn-tog-raggruppa" style="width:auto" onclick="toggleModalitaRaggruppamento()">📦 Raggruppa per spedizione</button>
+            <button class="btn btn-secondary" id="btn-tog-sped-multi" style="width:auto" onclick="toggleModalitaSpedizioneMultipla()">🚚 Spedisci multipli</button>
             <button class="btn btn-primary" style="width:auto" onclick="openModalNuovoOrdine()">+ Nuovo Ordine</button>
           </div>
         </div>
@@ -489,6 +490,14 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           <div style="margin-left:auto;display:flex;gap:8px">
             <button class="btn btn-primary" style="width:auto;padding:8px 16px" onclick="eseguiRaggruppamentoSpedizione()">📦 Raggruppa per spedizione</button>
             <button class="btn btn-secondary" style="width:auto;padding:8px 16px" onclick="toggleModalitaRaggruppamento()">Annulla</button>
+          </div>
+        </div>
+        <div id="sped-multi-toolbar" style="display:none;align-items:center;gap:12px;margin-bottom:14px;padding:10px 14px;background:var(--phase-bg,#EDE4D8);border:1px solid var(--border);border-radius:8px">
+          <strong id="sped-multi-count" style="font-size:13px">0 ordini selezionati</strong>
+          <span style="font-size:12px;color:var(--muted)">Seleziona gli ordini "In attesa corriere" da segnare come spediti</span>
+          <div style="margin-left:auto;display:flex;gap:8px">
+            <button class="btn btn-primary" style="width:auto;padding:8px 16px" onclick="eseguiSpedizioneMultipla()">🚚 Spedisci selezionati</button>
+            <button class="btn btn-secondary" style="width:auto;padding:8px 16px" onclick="toggleModalitaSpedizioneMultipla()">Annulla</button>
           </div>
         </div>
         <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
@@ -2925,9 +2934,23 @@ function renderDashboard() {
 let modalitaRaggruppamento = false;
 let selezioneRaggruppamento = new Set();
 
+// Le due modalità di selezione (raggruppamento e spedizione multipla) sono mutuamente
+// esclusive — la stessa riga/checkbox nella tabella non può servire a due scopi insieme.
+// Disattiva SOLO l'altra modalità (mai la propria: nessuna ricorsione fra i due toggle).
+function disattivaModalitaSpedizioneMultipla() {
+  if (!modalitaSpedizioneMultipla) return;
+  modalitaSpedizioneMultipla = false;
+  selezioneSpedizioneMultipla.clear();
+  const toolbar = document.getElementById('sped-multi-toolbar');
+  const btn = document.getElementById('btn-tog-sped-multi');
+  if (toolbar) toolbar.style.display = 'none';
+  if (btn) btn.textContent = '🚚 Spedisci multipli';
+}
+
 function toggleModalitaRaggruppamento() {
   modalitaRaggruppamento = !modalitaRaggruppamento;
   selezioneRaggruppamento.clear();
+  if (modalitaRaggruppamento) disattivaModalitaSpedizioneMultipla();
   const toolbar = document.getElementById('raggruppa-toolbar');
   const btn = document.getElementById('btn-tog-raggruppa');
   if (toolbar) toolbar.style.display = modalitaRaggruppamento ? 'flex' : 'none';
@@ -2992,6 +3015,86 @@ async function eseguiRaggruppamentoSpedizione() {
   renderOrdiniTable();
 }
 
+// ═══════════════════════════════════════════════
+// SPEDIZIONE MULTIPLA — seleziona più ordini "in attesa corriere" e segnali spediti in blocco
+// ═══════════════════════════════════════════════
+// Nessuna RPC nuova: chiama segna_spedito() (già usata dal pulsante singolo) in sequenza per
+// ogni ordine selezionato — non in parallelo, così un errore su un ordine (es. qualcuno lo
+// sospende mentre si sta selezionando) è attribuibile a quello specifico ordine, non confuso
+// con gli altri. Modalità separata da "Raggruppa per spedizione" sopra: scopo diverso
+// (raggruppare più ordini in UNA spedizione fisica vs. segnare più ordini spediti in blocco),
+// mutuamente esclusiva con quella per non sovraccaricare lo stesso checkbox di riga.
+let modalitaSpedizioneMultipla = false;
+let selezioneSpedizioneMultipla = new Set();
+
+function disattivaModalitaRaggruppamento() {
+  if (!modalitaRaggruppamento) return;
+  modalitaRaggruppamento = false;
+  selezioneRaggruppamento.clear();
+  const toolbar = document.getElementById('raggruppa-toolbar');
+  const btn = document.getElementById('btn-tog-raggruppa');
+  if (toolbar) toolbar.style.display = 'none';
+  if (btn) btn.textContent = '📦 Raggruppa per spedizione';
+}
+
+function toggleModalitaSpedizioneMultipla() {
+  modalitaSpedizioneMultipla = !modalitaSpedizioneMultipla;
+  selezioneSpedizioneMultipla.clear();
+  if (modalitaSpedizioneMultipla) disattivaModalitaRaggruppamento();
+  const toolbar = document.getElementById('sped-multi-toolbar');
+  const btn = document.getElementById('btn-tog-sped-multi');
+  if (toolbar) toolbar.style.display = modalitaSpedizioneMultipla ? 'flex' : 'none';
+  if (btn) btn.textContent = modalitaSpedizioneMultipla ? '✕ Annulla selezione' : '🚚 Spedisci multipli';
+  aggiornaContatoreSpedizioneMultipla();
+  renderOrdiniTable();
+}
+
+function toggleSelezioneSpedizioneMultipla(id) {
+  if (selezioneSpedizioneMultipla.has(id)) selezioneSpedizioneMultipla.delete(id);
+  else selezioneSpedizioneMultipla.add(id);
+  aggiornaContatoreSpedizioneMultipla();
+  renderOrdiniTable();
+}
+
+function aggiornaContatoreSpedizioneMultipla() {
+  const el = document.getElementById('sped-multi-count');
+  if (!el) return;
+  const n = selezioneSpedizioneMultipla.size;
+  el.textContent = `${n} ${n === 1 ? 'ordine selezionato' : 'ordini selezionati'}`;
+}
+
+async function eseguiSpedizioneMultipla() {
+  const ids = [...selezioneSpedizioneMultipla];
+  if (!ids.length) { toast('Seleziona almeno un ordine da spedire', 'err'); return; }
+  if (!confirm(`Segnare come spediti ${ids.length} ${ids.length === 1 ? 'ordine' : 'ordini'}? L'azione è irreversibile.`)) return;
+
+  let successi = 0;
+  const errori = [];
+  // Sequenziale, non Promise.all: se un ordine fallisce (es. qualcuno lo sospende mentre lo si
+  // seleziona) l'errore resta attribuibile a quello specifico ordine, e non rischia di far
+  // fallire in modo indistinto anche le chiamate sugli altri ordini della selezione.
+  for (const id of ids) {
+    const codice = ordiniCache.find(o => o.id === id)?.codice || id;
+    const { data, error } = await sb.rpc('segna_spedito', { p_ordine_id: id, p_utente_id: currentUserRow.id });
+    if (error || !data?.ok) {
+      errori.push(`${codice}: ${data?.errore || error?.message || 'errore sconosciuto'}`);
+    } else {
+      successi++;
+    }
+  }
+
+  if (errori.length) {
+    toast(`${successi} ${successi === 1 ? 'ordine spedito' : 'ordini spediti'}, ${errori.length} error${errori.length === 1 ? 'e' : 'i'}: ${errori.join(' — ')}`, 'err');
+  } else {
+    toast(`${successi} ${successi === 1 ? 'ordine spedito' : 'ordini spediti'}, 0 errori`, 'ok');
+  }
+
+  toggleModalitaSpedizioneMultipla();
+  await loadOrdini();
+  renderDashboard();
+  renderOrdiniTable();
+}
+
 function apriPannelloGruppoSpedizione(gruppoId) {
   const membri = ordiniCache.filter(o => o.gruppo_spedizione_id === gruppoId);
   const body = document.getElementById('modal-gruppo-spedizione-body');
@@ -3026,11 +3129,19 @@ function ordineRow(o, mini = false) {
   const isAttesa = o.stato === 'attesa_spedizione';
   const isSosp = o.stato === 'sospeso';
   const rowClass = isAttesa ? 'style="background:#F0FDF4"' : isSosp ? 'style="background:#FFFBEB;opacity:0.85"' : '';
-  const inSelMode = modalitaRaggruppamento && !mini;
-  const rowOnclick = inSelMode ? `toggleSelezioneOrdine('${o.id}')` : `openDettaglioOrdine('${o.id}')`;
-  const checkbox = inSelMode
+  const inSelModeRagg = modalitaRaggruppamento && !mini;
+  // Nel modo "spedisci multipli" solo le righe già "in attesa corriere" sono selezionabili —
+  // le altre restano cliccabili come sempre (apre il dettaglio), non hanno una checkbox.
+  const inSelModeSpedRiga = modalitaSpedizioneMultipla && !mini && isAttesa;
+  const nascondiAzioni = inSelModeRagg || (modalitaSpedizioneMultipla && !mini);
+  const rowOnclick = inSelModeRagg ? `toggleSelezioneOrdine('${o.id}')`
+    : inSelModeSpedRiga ? `toggleSelezioneSpedizioneMultipla('${o.id}')`
+    : `openDettaglioOrdine('${o.id}')`;
+  const checkbox = inSelModeRagg
     ? `<input type="checkbox" ${selezioneRaggruppamento.has(o.id) ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer;flex-shrink:0;margin-top:2px" onclick="event.stopPropagation()" onchange="toggleSelezioneOrdine('${o.id}')">`
-    : '';
+    : inSelModeSpedRiga
+      ? `<input type="checkbox" ${selezioneSpedizioneMultipla.has(o.id) ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer;flex-shrink:0;margin-top:2px" onclick="event.stopPropagation()" onchange="toggleSelezioneSpedizioneMultipla('${o.id}')">`
+      : '';
   const fratelli = !mini ? codiciFratelliGruppo(o) : [];
   const badgeGruppo = fratelli.length
     ? `<div style="margin-top:4px;font-size:11px;color:var(--wood);cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="event.stopPropagation();apriPannelloGruppoSpedizione('${o.gruppo_spedizione_id}')">📦 Spedizione unica con ${escapeHtml(fratelli.join(', '))}</div>`
@@ -3044,7 +3155,7 @@ function ordineRow(o, mini = false) {
     <td><span class="badge badge-${o.stato}">${statoLabel(o.stato)}</span></td>
     <td id="prog-${o.id}" style="min-width:120px">—</td>
     <td>
-      ${inSelMode ? '' : (o.stato === 'aperto'
+      ${nascondiAzioni ? '' : (o.stato === 'aperto'
         ? `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();sospendi('${o.id}')">Sospendi</button>`
         : o.stato === 'attesa_spedizione'
           ? `<button class="btn btn-ok" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();segnaSpedito('${o.id}')">📦 Spedisci</button>`

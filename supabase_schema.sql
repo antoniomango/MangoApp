@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict te8jpaSRfsIknhSXpXKb7m3Ixr7F80dNVQ05SbPhtdehzTJZBoCEgcaCy7FyoM0
+\restrict Nxvyg0JQgvctxRNclKWahpSi60mhvcCbNGwUcO51NWGUMVJ6zKLwIuW9bHqMeUa
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -808,22 +808,22 @@ ALTER FUNCTION public.check_lock_fase() OWNER TO postgres;
 CREATE FUNCTION public.check_ordine_completato() RETURNS trigger
     LANGUAGE plpgsql
     SET search_path TO 'public'
-    AS $$
-BEGIN
-  IF NEW.stato IN ('completata', 'non_applicabile', 'in_attesa') THEN
-    IF NOT EXISTS (
-      SELECT 1 FROM ordine_fasi
-      WHERE ordine_id = NEW.ordine_id
-      AND stato IN ('disponibile', 'in_corso')
-    ) THEN
-      UPDATE ordini
-      SET stato = 'attesa_spedizione', completato_il = NOW()
-      WHERE id = NEW.ordine_id
-      AND stato NOT IN ('spedito', 'attesa_spedizione', 'sospeso');
-    END IF;
-  END IF;
-  RETURN NEW;
-END;
+    AS $$
+BEGIN
+  IF NEW.stato IN ('completata', 'non_applicabile', 'in_attesa') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM ordine_fasi
+      WHERE ordine_id = NEW.ordine_id
+      AND stato IN ('disponibile', 'in_corso', 'in_attesa')
+    ) THEN
+      UPDATE ordini
+      SET stato = 'attesa_spedizione', completato_il = NOW()
+      WHERE id = NEW.ordine_id
+      AND stato NOT IN ('spedito', 'attesa_spedizione', 'sospeso');
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
 $$;
 
 
@@ -9095,5 +9095,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON T
 -- PostgreSQL database dump complete
 --
 
-\unrestrict te8jpaSRfsIknhSXpXKb7m3Ixr7F80dNVQ05SbPhtdehzTJZBoCEgcaCy7FyoM0
+\unrestrict Nxvyg0JQgvctxRNclKWahpSi60mhvcCbNGwUcO51NWGUMVJ6zKLwIuW9bHqMeUa
 
