@@ -406,6 +406,13 @@ textarea:focus { border-color: var(--wood); }
     </div>
   </div>
 
+  <!-- BARRA SPEDIZIONE MULTIPLA (Home) -->
+  <div id="op-sped-multi-bar" style="display:none;position:fixed;left:0;right:0;bottom:var(--navh);z-index:99;background:var(--ink);color:#fff;padding:10px 16px;align-items:center;gap:10px;box-shadow:0 -2px 10px rgba(0,0,0,0.25)">
+    <strong id="op-sped-multi-count" style="font-size:13px;flex:1">0 selezionati</strong>
+    <button type="button" class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px" onclick="toggleModalitaSpedizioneMultiplaOp()">Annulla</button>
+    <button type="button" class="btn btn-ok" style="width:auto;padding:8px 14px;font-size:13px" onclick="eseguiSpedizioneMultiplaOp()">🚚 Spedisci</button>
+  </div>
+
   <!-- BOTTOM NAV -->
   <div class="bottom-nav">
     <div class="nav-tab active" id="tab-home" onclick="showScreen('home')">
@@ -958,6 +965,7 @@ function avviaPollingAggiornamenti() {
 // NAVIGAZIONE
 // ═══════════════════════════════════════════════
 function showScreen(name) {
+  if (name !== 'home') annullaSpedizioneMultiplaOp();
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('screen-' + name)?.classList.add('active');
@@ -1153,6 +1161,82 @@ function codiciFratelliGruppo(o) {
     .map(x => x.codice || '—');
 }
 
+// ═══════════════════════════════════════════════
+// SPEDIZIONE MULTIPLA (Home) — seleziona più ordini "in attesa corriere" e spedisci in blocco
+// ═══════════════════════════════════════════════
+// Riusa segna_spedito() (stessa RPC del pulsante singolo, riga ~2305), chiamata in sequenza —
+// nessuna RPC nuova, stesso pattern già in responsabile.html ("🚚 Spedisci multipli"). Qui
+// l'app è un flusso a schede (un ordine alla volta), non una tabella: niente checkbox globali
+// su ogni riga né una nuova schermata dedicata — il tocco entra dal gruppo "📦 In attesa
+// corriere" già in cima alla Home (filtraOrdini()), l'unico punto dove questi ordini sono già
+// raggruppati visivamente. Attivare la modalità mostra una checkbox SOLO su quelle card (le
+// altre restano toccabili come sempre, aprono il dettaglio) e una barra fissa in fondo, sopra
+// la bottom-nav, con il riepilogo della selezione.
+let modalitaSpedizioneMultiplaOp = false;
+let selezioneSpedizioneMultiplaOp = new Set();
+
+function annullaSpedizioneMultiplaOp() {
+  if (!modalitaSpedizioneMultiplaOp) return;
+  modalitaSpedizioneMultiplaOp = false;
+  selezioneSpedizioneMultiplaOp.clear();
+  aggiornaBarraSpedMultiOp();
+}
+
+function toggleModalitaSpedizioneMultiplaOp() {
+  modalitaSpedizioneMultiplaOp = !modalitaSpedizioneMultiplaOp;
+  selezioneSpedizioneMultiplaOp.clear();
+  aggiornaBarraSpedMultiOp();
+  filtraOrdini();
+}
+
+function toggleSelezioneSpedMultiOp(id) {
+  if (selezioneSpedizioneMultiplaOp.has(id)) selezioneSpedizioneMultiplaOp.delete(id);
+  else selezioneSpedizioneMultiplaOp.add(id);
+  aggiornaBarraSpedMultiOp();
+  filtraOrdini();
+}
+
+function aggiornaBarraSpedMultiOp() {
+  const bar = document.getElementById('op-sped-multi-bar');
+  if (!bar) return;
+  bar.style.display = modalitaSpedizioneMultiplaOp ? 'flex' : 'none';
+  const n = selezioneSpedizioneMultiplaOp.size;
+  const countEl = document.getElementById('op-sped-multi-count');
+  if (countEl) countEl.textContent = `${n} ${n === 1 ? 'selezionato' : 'selezionati'}`;
+}
+
+async function eseguiSpedizioneMultiplaOp() {
+  if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
+  const ids = [...selezioneSpedizioneMultiplaOp];
+  if (!ids.length) { toast('Seleziona almeno un ordine da spedire', 'err'); return; }
+  if (!confirm(`Segnare come spediti ${ids.length} ${ids.length === 1 ? 'ordine' : 'ordini'}? L'azione è irreversibile.`)) return;
+
+  let successi = 0;
+  const errori = [];
+  // Sequenziale, non Promise.all: un errore su un ordine (es. sospeso nel frattempo da
+  // responsabile.html) resta attribuibile a quello specifico ordine — stesso pattern di
+  // eseguiSpedizioneMultipla() in responsabile.html.
+  for (const id of ids) {
+    const codice = ordiniCache.find(o => o.id === id)?.codice || id;
+    const { data, error } = await sb.rpc('segna_spedito', { p_ordine_id: id, p_utente_id: currentUser.id, p_session_token: sessionToken });
+    if (error || !data?.ok) {
+      errori.push(`${codice}: ${data?.errore || error?.message || 'errore sconosciuto'}`);
+    } else {
+      successi++;
+    }
+  }
+
+  if (errori.length) {
+    toast(`${successi} ${successi === 1 ? 'ordine spedito' : 'ordini spediti'}, ${errori.length} error${errori.length === 1 ? 'e' : 'i'}: ${errori.join(' — ')}`, 'err');
+  } else {
+    toast(`${successi} ${successi === 1 ? 'ordine spedito' : 'ordini spediti'}, 0 errori`, 'ok');
+  }
+
+  annullaSpedizioneMultiplaOp();
+  await loadOrdini();
+  renderHome();
+}
+
 function filtraOrdini() {
   const dispEl = document.getElementById('ordini-disponibili-list');
   const q = (document.getElementById('ordini-search')?.value || '').toLowerCase().trim();
@@ -1210,7 +1294,12 @@ function filtraOrdini() {
         : meseDato === '9999-99'
           ? 'Senza scadenza'
           : new Date(meseDato + '-02').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
-      sep = `<div style="padding:5px 4px 3px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:6px;border-bottom:1px solid var(--border)">📅 ${label}</div>`;
+      const azioneSelMultipla = meseDato === '0000-00'
+        ? `<span onclick="event.stopPropagation();toggleModalitaSpedizioneMultiplaOp()" style="cursor:pointer;text-decoration:underline;text-underline-offset:2px;color:var(--wood-lt);text-transform:none;letter-spacing:normal;font-weight:600">${modalitaSpedizioneMultiplaOp ? '✕ Annulla' : '☑ Seleziona più ordini'}</span>`
+        : '';
+      sep = `<div style="padding:5px 4px 3px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:6px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <span>📅 ${label}</span>${azioneSelMultipla}
+      </div>`;
     }
     const isAttesa = o.stato === 'attesa_spedizione';
     const isSosp = o.stato === 'sospeso';
@@ -1244,8 +1333,15 @@ function filtraOrdini() {
     const badgeGruppo = fratelliGruppo.length
       ? `<div style="margin-top:2px;font-size:11px;color:var(--wood);font-weight:600">📦 Spedizione unica con ${escapeHtml(fratelliGruppo.join(', '))}</div>`
       : '';
+    // Spedizione multipla: solo le card "in attesa corriere" diventano selezionabili quando la
+    // modalità è attiva — le altre restano toccabili come sempre (aprono il dettaglio).
+    const inSelModeOp = modalitaSpedizioneMultiplaOp && isAttesa;
+    const cardOnclick = inSelModeOp ? `toggleSelezioneSpedMultiOp('${o.id}')` : `openOrdineDetail('${o.id}')`;
+    const arrowOCheckbox = inSelModeOp
+      ? `<input type="checkbox" ${selezioneSpedizioneMultiplaOp.has(o.id) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="toggleSelezioneSpedMultiOp('${o.id}')" style="width:22px;height:22px;cursor:pointer;flex-shrink:0">`
+      : '<span class="arrow">›</span>';
     return sep + `
-    <div class="card card-row ${isSosp ? '' : (isAttesa ? '' : scadenzaClass(o.scadenza))}" style="${extraStyle}" onclick="openOrdineDetail('${o.id}')">
+    <div class="card card-row ${isSosp ? '' : (isAttesa ? '' : scadenzaClass(o.scadenza))}" style="${extraStyle}" onclick="${cardOnclick}">
       <div class="row-main" style="width:100%">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div class="row-title">${escapeHtml(o.cliente)} — ${escapeHtml(o.codice || '')}</div>
@@ -1263,7 +1359,7 @@ function filtraOrdini() {
         </div>
         <div style="font-size:11px;color:var(--muted);margin-top:2px">${pct}% completato</div>
       </div>
-      <span class="arrow">›</span>
+      ${arrowOCheckbox}
     </div>`;
   }).join('');
 }
@@ -1272,6 +1368,7 @@ function filtraOrdini() {
 // DETTAGLIO ORDINE
 // ═══════════════════════════════════════════════
 async function openOrdineDetail(ordineId) {
+  annullaSpedizioneMultiplaOp();
   currentOrdineId = ordineId;
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-ordine').classList.add('active');
