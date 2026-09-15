@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict bxgzhHtkmChtHfohtqRHTf5bjU5hBcPfTuBX1yJqRBgMZS6UlfkhwvkgGrgMvQz
+\restrict te8jpaSRfsIknhSXpXKb7m3Ixr7F80dNVQ05SbPhtdehzTJZBoCEgcaCy7FyoM0
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -305,6 +305,7 @@ CREATE FUNCTION public.aggiungi_collega_extra(p_fase_extra_id uuid, p_operatore_
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
+DECLARE v_stato TEXT;
 BEGIN
   IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -312,6 +313,9 @@ BEGIN
   IF EXISTS (SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'sola_lettura') THEN
     RETURN json_build_object('ok', false, 'errore', 'accesso_sola_lettura');
   END IF;
+  SELECT stato INTO v_stato FROM public.fasi_ordine_extra WHERE id = p_fase_extra_id;
+  IF v_stato IS NULL THEN RETURN json_build_object('ok', false, 'errore', 'fase_non_trovata'); END IF;
+  IF v_stato != 'in_corso' THEN RETURN json_build_object('ok', false, 'errore', 'fase_non_in_corso'); END IF;
   INSERT INTO public.fasi_extra_operatori(fasi_ordine_extra_id, operatore_id) VALUES(p_fase_extra_id, p_operatore_id) ON CONFLICT DO NOTHING;
   RETURN json_build_object('ok', true);
 END;
@@ -343,6 +347,10 @@ BEGIN
        AND NOT EXISTS (SELECT 1 FROM public.ordine_fasi_operatori WHERE ordine_fase_id=p_ordine_fase_id AND operatore_id=p_richiedente_id)
        AND NOT EXISTS (SELECT 1 FROM public.users WHERE id=p_richiedente_id AND ruolo='responsabile') THEN
       RETURN jsonb_build_object('ok', false, 'errore', 'non_autorizzato');
+    END IF;
+  ELSE
+    IF v_fase.stato != 'in_corso' THEN
+      RETURN jsonb_build_object('ok', false, 'errore', 'fase_non_in_corso');
     END IF;
   END IF;
   INSERT INTO public.ordine_fasi_operatori(ordine_fase_id, operatore_id)
@@ -9087,5 +9095,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON T
 -- PostgreSQL database dump complete
 --
 
-\unrestrict bxgzhHtkmChtHfohtqRHTf5bjU5hBcPfTuBX1yJqRBgMZS6UlfkhwvkgGrgMvQz
+\unrestrict te8jpaSRfsIknhSXpXKb7m3Ixr7F80dNVQ05SbPhtdehzTJZBoCEgcaCy7FyoM0
 

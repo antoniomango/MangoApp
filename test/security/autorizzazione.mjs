@@ -1,15 +1,17 @@
-// Suite di test automatici di autorizzazione — A01/A17
+// Suite di test automatici di autorizzazione — A01/A18
 // ============================================================
 // Replica casi concreti di bypass di autorizzazione (letture anon su tabelle private,
 // impersonazione di un altro operatore, RPC senza sessione, token scaduto/revocato riusato,
 // transizioni di stato non consentite, concorrenza su due richieste simultanee, accesso
 // diretto allo storage, furto di lavoro attivo, reset di forzato_logout senza autenticazione,
-// lockout PIN progressivo) contro mango-test-security. Ogni test fallisce esplicitamente
-// (exit code 1, elenco dei casi falliti) se una policy o una RPC dovesse tornare permissiva
-// in futuro — eseguirla prima di ogni deploy importante su RLS/RPC/grant.
+// lockout PIN progressivo, autounione su fase non in_corso) contro mango-test-security. Ogni
+// test fallisce esplicitamente (exit code 1, elenco dei casi falliti) se una policy o una RPC
+// dovesse tornare permissiva in futuro — eseguirla prima di ogni deploy importante su
+// RLS/RPC/grant.
 //
 // A13-A17 aggiunti nell'Audit sicurezza Round 3 (2026-09-12), punti 3/4/5/6/9 — vedi vault
-// 2026-09-12-audit-sicurezza-round3.
+// 2026-09-12-audit-sicurezza-round3. A18 aggiunto il 2026-09-15 (pentest ChatGPT — vedi vault
+// 2026-09-15-fix-autounione-fase-non-in-corso).
 //
 // Va SOLO contro mango-test-security (kpdlynvmsoctagwtzrxr) — mai produzione: crea e cancella
 // fixture reali (ordine, fase, sessioni) e carica/cancella un file reale in storage.
@@ -73,6 +75,7 @@ const T = {
   op2Token: '22222222-2222-2222-2222-222222222222',
   ordineId: '77777777-0000-0000-0000-000000000001',
   faseId: '77777777-0000-0000-0000-000000000002',
+  faseExtraId: '77777777-0000-0000-0000-000000000003', // per A18, fasi_ordine_extra
   storagePath: null, // assegnato in setup(), dopo un upload reale
 };
 
@@ -126,6 +129,16 @@ async function setup() {
   );
   await db.query(`DELETE FROM ordine_fasi_operatori WHERE ordine_fase_id=$1`, [T.faseId]);
 
+  // Fixture per A18 (autounione su fase extra non in_corso): 'disponibile', mai in_corso,
+  // op2 non ha mai avuto alcuna relazione con questa fase.
+  await db.query(
+    `INSERT INTO fasi_ordine_extra (id, ordine_id, numero, nome, stato)
+     VALUES ($1,$2,99,'TEST-A18 extra','disponibile')
+     ON CONFLICT (id) DO UPDATE SET stato='disponibile', operatore_id=NULL, iniziata_il=NULL, completata_il=NULL`,
+    [T.faseExtraId, T.ordineId]
+  );
+  await db.query(`DELETE FROM fasi_extra_operatori WHERE fasi_ordine_extra_id=$1`, [T.faseExtraId]);
+
   // Upload reale (stesso percorso di produzione: allegato-upload + uploadToSignedUrl) per A12 —
   // un download() su un path reale è una verifica più rigorosa di list() su un bucket
   // potenzialmente vuoto (list() non dà errore esplicito su un bucket senza risultati).
@@ -150,9 +163,11 @@ async function teardown() {
       // non incide sui dati reali.
     }
     await db.query(`DELETE FROM ordine_fasi_operatori WHERE ordine_fase_id=$1`, [T.faseId]);
+    await db.query(`DELETE FROM fasi_extra_operatori WHERE fasi_ordine_extra_id=$1`, [T.faseExtraId]);
     await db.query(`DELETE FROM archivio_log WHERE ordine_id=$1`, [T.ordineId]);
     await db.query(`DELETE FROM allegati WHERE ordine_fase_id=$1`, [T.faseId]);
     await db.query(`DELETE FROM ordine_fasi WHERE id=$1`, [T.faseId]);
+    await db.query(`DELETE FROM fasi_ordine_extra WHERE id=$1`, [T.faseExtraId]);
     await db.query(`DELETE FROM ordini WHERE id=$1`, [T.ordineId]);
     await db.query(
       `UPDATE users SET session_token=NULL, session_token_scadenza=NULL, forzato_logout=false,
@@ -313,6 +328,31 @@ async function main() {
     const bloccato = dopoCinqueFalliti.data?.errore === 'troppi_tentativi' && conPinCorretto.data?.errore === 'troppi_tentativi';
     record('A17', 'verifica_pin blocca anche il PIN corretto durante il lockout progressivo', bloccato,
       `dopo_5_falliti=${JSON.stringify(dopoCinqueFalliti.data)} con_pin_corretto=${JSON.stringify(conPinCorretto.data)}`);
+  }
+
+  // A18 — autounione (p_collega_id = p_richiedente_id) rifiutata su una fase NON in_corso, per
+  // un'operatrice senza alcuna relazione precedente con quella fase (bug reale, pentest ChatGPT
+  // 2026-09-15 — nessuno dei casi A01-A17 copriva questo percorso: aggiungi_collega_fase/
+  // aggiungi_collega_extra controllavano l'autorizzazione solo quando qualcuno aggiungeva UN
+  // COLLEGA DIVERSO da sé, mai quando si autoiscriveva. Prima del fix op2 diventava collega di
+  // T.faseId/T.faseExtraId (entrambe 'disponibile', mai lavorate da op2) con un solo RPC.
+  {
+    // T.faseId potrebbe essere rimasta 'in_corso' da A13 (prendi_in_carico_fase non annullato
+    // a fine test) — riportata esplicitamente a 'disponibile', la precondizione che questo
+    // caso vuole verificare, invece di assumere lo stato lasciato da un test precedente.
+    await db.query(`UPDATE ordine_fasi SET stato='disponibile', operatore_id=NULL, iniziata_il=NULL WHERE id=$1`, [T.faseId]);
+    await db.query(`DELETE FROM ordine_fasi_operatori WHERE ordine_fase_id=$1`, [T.faseId]);
+    const rFase = await anon.rpc('aggiungi_collega_fase', {
+      p_ordine_fase_id: T.faseId, p_collega_id: T.op2Id, p_richiedente_id: T.op2Id, p_session_token: T.op2Token,
+    });
+    const bloccatoFase = rFase.data?.ok === false && rFase.data?.errore === 'fase_non_in_corso';
+    record('A18a', 'aggiungi_collega_fase rifiuta l\'autounione su una fase non in_corso', bloccatoFase, JSON.stringify(rFase.data));
+
+    const rExtra = await anon.rpc('aggiungi_collega_extra', {
+      p_fase_extra_id: T.faseExtraId, p_operatore_id: T.op2Id, p_session_token: T.op2Token,
+    });
+    const bloccatoExtra = rExtra.data?.ok === false && rExtra.data?.errore === 'fase_non_in_corso';
+    record('A18b', 'aggiungi_collega_extra rifiuta l\'autounione su una fase extra non in_corso', bloccatoExtra, JSON.stringify(rExtra.data));
   }
 
   await teardown();

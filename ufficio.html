@@ -797,6 +797,17 @@ function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// Alias per coerenza con operatore.html/responsabile.html (pentest ChatGPT, 2026-09-15): quei
+// due file definiscono escapeHtml() con lo stesso identico escaping di esc() qui sopra --
+// nessuna doppia implementazione, solo due nomi storicamente diversi per la stessa cosa.
+// Nessun caso concretamente sfruttabile trovato nei punti che usano innerHTML in questo file
+// (esc() già copre tutti), ma il file crescerà -- meglio avere qui la stessa rete di sicurezza.
+function escapeHtml(str) { return esc(str); }
+// Per testo libero (nomi operatore/cliente) usato come argomento dentro onclick="fn('${...}')":
+// escapeHtml/esc da solo non basta, un apice singolo nel dato termina prematuramente la
+// stringa JS letterale nell'attributo -- vedi il commento gemello in operatore.html.
+function escapeJsAttr(str) { return escapeHtml(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
+
 init();
 </script>
 <script>
