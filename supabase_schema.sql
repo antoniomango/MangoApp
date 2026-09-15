@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 16NOvnwq7pTwMunE7le1SKgDsjFzd8SbZMA8yFFeQzjosVdGIJkWlhdC57CuseX
+\restrict s8wAn9c28O4RZOlSNGpSwul4rJpQ6ToHn24U1ovMM6AZdSyH0wb71qDedcHWWui
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -4229,7 +4229,6 @@ CREATE FUNCTION public.riapri_fase_operatore(p_ordine_fase_id uuid, p_operatore_
     AS $$
 DECLARE
   v_fase            public.ordine_fasi%ROWTYPE;
-  v_is_responsabile BOOLEAN := FALSE;
 BEGIN
   IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -4244,11 +4243,6 @@ BEGIN
   IF NOT FOUND THEN
     RETURN json_build_object('ok', false, 'errore', 'fase_non_trovata_o_non_completata');
   END IF;
-  SELECT EXISTS(SELECT 1 FROM public.users WHERE id = p_operatore_id AND ruolo = 'responsabile' AND attivo = TRUE)
-    INTO v_is_responsabile;
-  IF NOT v_is_responsabile AND v_fase.operatore_id IS DISTINCT FROM p_operatore_id THEN
-    RETURN json_build_object('ok', false, 'errore', 'non_autorizzato');
-  END IF;
   UPDATE public.ordine_fasi
   SET stato = 'disponibile', operatore_id = NULL, iniziata_il = NULL, completata_il = NULL
   WHERE id = p_ordine_fase_id;
@@ -4256,7 +4250,7 @@ BEGIN
   BEGIN
     INSERT INTO public.archivio_log (ordine_id, fase_id, utente_id, azione, dettaglio)
   VALUES (v_fase.ordine_id, v_fase.fase_id, p_operatore_id, 'fase_riaperta',
-          jsonb_build_object('ordine_fase_id', p_ordine_fase_id));
+          jsonb_build_object('ordine_fase_id', p_ordine_fase_id, 'operatore_precedente', v_fase.operatore_id));
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING 'log non scritto: %', SQLERRM;
   END;
@@ -9095,5 +9089,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON T
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 16NOvnwq7pTwMunE7le1SKgDsjFzd8SbZMA8yFFeQzjosVdGIJkWlhdC57CuseX
+\unrestrict s8wAn9c28O4RZOlSNGpSwul4rJpQ6ToHn24U1ovMM6AZdSyH0wb71qDedcHWWui
 
