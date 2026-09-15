@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict Nxvyg0JQgvctxRNclKWahpSi60mhvcCbNGwUcO51NWGUMVJ6zKLwIuW9bHqMeUa
+\restrict 16NOvnwq7pTwMunE7le1SKgDsjFzd8SbZMA8yFFeQzjosVdGIJkWlhdC57CuseX
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -841,7 +841,7 @@ BEGIN
   IF NEW.stato = 'completata' THEN
     IF NOT EXISTS (
       SELECT 1 FROM public.fasi_ordine_extra
-      WHERE ordine_id = NEW.ordine_id AND stato IN ('disponibile', 'in_corso')
+      WHERE ordine_id = NEW.ordine_id AND stato IN ('disponibile', 'in_corso', 'in_attesa')
     ) THEN
       UPDATE public.ordini
       SET stato = 'attesa_spedizione', completato_il = NOW()
@@ -9095,5 +9095,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON T
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Nxvyg0JQgvctxRNclKWahpSi60mhvcCbNGwUcO51NWGUMVJ6zKLwIuW9bHqMeUa
+\unrestrict 16NOvnwq7pTwMunE7le1SKgDsjFzd8SbZMA8yFFeQzjosVdGIJkWlhdC57CuseX
 
