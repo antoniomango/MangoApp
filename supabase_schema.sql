@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict s8wAn9c28O4RZOlSNGpSwul4rJpQ6ToHn24U1ovMM6AZdSyH0wb71qDedcHWWui
+\restrict Z00qG4V6QREMMp11zCPdaHovz8uofImcieDp8veQJSEd8IEgeH8nLlqvkYQ7d6i
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -4228,7 +4228,8 @@ CREATE FUNCTION public.riapri_fase_operatore(p_ordine_fase_id uuid, p_operatore_
     SET search_path TO ''
     AS $$
 DECLARE
-  v_fase            public.ordine_fasi%ROWTYPE;
+  v_fase          public.ordine_fasi%ROWTYPE;
+  v_tipo_gestione text;
 BEGIN
   IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN json_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -4243,14 +4244,24 @@ BEGIN
   IF NOT FOUND THEN
     RETURN json_build_object('ok', false, 'errore', 'fase_non_trovata_o_non_completata');
   END IF;
-  UPDATE public.ordine_fasi
-  SET stato = 'disponibile', operatore_id = NULL, iniziata_il = NULL, completata_il = NULL
-  WHERE id = p_ordine_fase_id;
+
+  SELECT tipo_gestione INTO v_tipo_gestione FROM public.fasi WHERE id = v_fase.fase_id;
+
+  IF v_tipo_gestione IN ('conferma_ricezione', 'spedizione_esterna') THEN
+    UPDATE public.ordine_fasi
+    SET stato = 'in_attesa', operatore_id = NULL, completata_il = NULL, tempo_accumulato_minuti = 0
+    WHERE id = p_ordine_fase_id;
+  ELSE
+    UPDATE public.ordine_fasi
+    SET stato = 'disponibile', operatore_id = NULL, iniziata_il = NULL, completata_il = NULL
+    WHERE id = p_ordine_fase_id;
+  END IF;
+
   DELETE FROM public.ordine_fasi_operatori WHERE ordine_fase_id = p_ordine_fase_id;
   BEGIN
     INSERT INTO public.archivio_log (ordine_id, fase_id, utente_id, azione, dettaglio)
   VALUES (v_fase.ordine_id, v_fase.fase_id, p_operatore_id, 'fase_riaperta',
-          jsonb_build_object('ordine_fase_id', p_ordine_fase_id, 'operatore_precedente', v_fase.operatore_id));
+          jsonb_build_object('ordine_fase_id', p_ordine_fase_id, 'operatore_precedente', v_fase.operatore_id, 'tipo_gestione', v_tipo_gestione));
   EXCEPTION WHEN OTHERS THEN
     RAISE WARNING 'log non scritto: %', SQLERRM;
   END;
@@ -9089,5 +9100,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON T
 -- PostgreSQL database dump complete
 --
 
-\unrestrict s8wAn9c28O4RZOlSNGpSwul4rJpQ6ToHn24U1ovMM6AZdSyH0wb71qDedcHWWui
+\unrestrict Z00qG4V6QREMMp11zCPdaHovz8uofImcieDp8veQJSEd8IEgeH8nLlqvkYQ7d6i
 
