@@ -6858,20 +6858,54 @@ function buildEtaFromFasi(ordiniList, fasiMap) {
 
   const eta = {};
 
-  // Critical path interno (con attesa in coda)
+  // Mappa fase_id -> dipendenze reali (fase_dipendenze, caricate in loadFasi() dentro `fasi`)
+  const dipendenzeMap = {};
+  fasi.forEach(f => { dipendenzeMap[f.id] = f.dipendenze || []; });
+
+  // Critical path interno: somma (attesa in coda + durata) lungo le dipendenze reali tra le
+  // fasi rimanenti dello stesso ordine — non un massimo globale su tutte le fasi (un pezzo
+  // deve passarle in sequenza se dipendono l'una dall'altra). Fasi senza una dipendenza reale
+  // tra loro restano parallele: l'ETA finale è il massimo tra i "rami" che confluiscono,
+  // esattamente come nel ramo bloccante più lungo, non un massimo su tutte le 17 fasi.
   ordiniList.forEach(o => {
+    const fasiRimanenti = (fasiMap[o.id] || [])
+      .filter(f => !f.esterna && (f.stato === 'disponibile' || f.stato === 'in_corso'));
+    const idsRimanenti = new Set(fasiRimanenti.map(f => parseInt(f.fase_id)));
+
+    // Costo proprio di ciascuna fase (attesa in coda + durata) — logica invariata rispetto a prima.
+    const costo = {};
+    fasiRimanenti.forEach(f => {
+      const fid = parseInt(f.fase_id);
+      const queue = faseQueue[fid];
+      if (!queue) return;
+      const pos = queue.findIndex(i => i.ordine_id === o.id);
+      if (pos < 0) return;
+      const attesa = queue.slice(0, pos).reduce((s, i) => s + i.minuti, 0);
+      costo[fid] = attesa + queue[pos].minuti;
+    });
+
+    // Finish-time per fase = costo proprio + il massimo tra le dipendenze dirette ancora
+    // rimanenti (0 se una dipendenza non è tra le fasi rimanenti: già completata/non applicabile,
+    // quindi non contribuisce altra attesa). Guardia anti-ciclo difensiva: fase_dipendenze è
+    // dati editabili da UI, un ciclo non dovrebbe esistere ma non deve mai appendere il browser.
+    const finish = {};
+    const inCorsoCalcolo = new Set();
+    function calcolaFinish(fid) {
+      if (finish[fid] !== undefined) return finish[fid];
+      if (!(fid in costo)) return 0;
+      if (inCorsoCalcolo.has(fid)) return 0; // ciclo rilevato, tronca invece di appendere
+      inCorsoCalcolo.add(fid);
+      const preds = (dipendenzeMap[fid] || []).filter(d => idsRimanenti.has(d));
+      const maxPred = preds.reduce((m, d) => Math.max(m, calcolaFinish(d)), 0);
+      inCorsoCalcolo.delete(fid);
+      finish[fid] = maxPred + costo[fid];
+      return finish[fid];
+    }
+
     let maxMin = 0;
-    (fasiMap[o.id] || [])
-      .filter(f => !f.esterna && (f.stato === 'disponibile' || f.stato === 'in_corso'))
-      .forEach(f => {
-        const fid = parseInt(f.fase_id);
-        const queue = faseQueue[fid];
-        if (!queue) return;
-        const pos = queue.findIndex(i => i.ordine_id === o.id);
-        if (pos < 0) return;
-        const attesa = queue.slice(0, pos).reduce((s, i) => s + i.minuti, 0);
-        maxMin = Math.max(maxMin, attesa + queue[pos].minuti);
-      });
+    fasiRimanenti.forEach(f => {
+      maxMin = Math.max(maxMin, calcolaFinish(parseInt(f.fase_id)));
+    });
     if (maxMin > 0) eta[o.id] = maxMin;
   });
 
