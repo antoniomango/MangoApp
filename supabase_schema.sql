@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict Z00qG4V6QREMMp11zCPdaHovz8uofImcieDp8veQJSEd8IEgeH8nLlqvkYQ7d6i
+\restrict TBhRlIjgQ9v7lapLj9TtIeV7vCkCsVLfYEScJBGb6PegSIjs52UFQgzrwbpoWUv
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.6
@@ -2197,12 +2197,24 @@ CREATE FUNCTION public.fasi_dipendenze_stato(p_operatore_id uuid, p_session_toke
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO ''
     AS $$
+DECLARE
+  v_quantita integer;
+  v_soglia numeric;
 BEGIN
   IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
   END IF;
+
+  SELECT COALESCE(quantita,1) INTO v_quantita FROM public.ordini WHERE id = p_ordine_id;
+  SELECT valore INTO v_soglia FROM public.kpi_config WHERE chiave = 'soglia_quantita_svincolo_dipendenze';
+  v_soglia := COALESCE(v_soglia, 2);
+
   RETURN jsonb_build_object('ok', true, 'dati', (
-    SELECT COALESCE(jsonb_agg(jsonb_build_object('fase_id', of.fase_id, 'stato', of.stato)), '[]'::jsonb)
+    SELECT COALESCE(jsonb_agg(jsonb_build_object(
+      'fase_id', of.fase_id,
+      'stato', of.stato,
+      'soddisfatta', (of.stato IN ('completata','non_applicabile')) OR (v_quantita > v_soglia AND of.stato <> 'disponibile')
+    )), '[]'::jsonb)
     FROM public.ordine_fasi of
     WHERE of.ordine_id = p_ordine_id AND of.fase_id = ANY(p_fase_ids)
   ));
@@ -3456,6 +3468,7 @@ DECLARE
   v_k_soglia           int;
   v_k_soglia_gen       int;
   v_k_stima_fallback   numeric;
+  v_soglia_svincolo numeric;
   v_chiusura_desc text;
   v_ordine        record;
   v_fase          record;
@@ -3488,10 +3501,11 @@ BEGIN
     COALESCE(MAX(valore) FILTER (WHERE chiave='margine_capacita'),                0.90),
     COALESCE(MAX(valore) FILTER (WHERE chiave='soglia_campioni_op'),              5)::int,
     COALESCE(MAX(valore) FILTER (WHERE chiave='soglia_campioni_gen'),             3)::int,
-    COALESCE(MAX(valore) FILTER (WHERE chiave='durata_default_fase_extra_minuti'),30)
-  INTO v_margine, v_k_soglia, v_k_soglia_gen, v_k_stima_fallback
+    COALESCE(MAX(valore) FILTER (WHERE chiave='durata_default_fase_extra_minuti'),30),
+    COALESCE(MAX(valore) FILTER (WHERE chiave='soglia_quantita_svincolo_dipendenze'), 2)
+  INTO v_margine, v_k_soglia, v_k_soglia_gen, v_k_stima_fallback, v_soglia_svincolo
   FROM public.kpi_config
-  WHERE chiave IN ('margine_capacita','soglia_campioni_op','soglia_campioni_gen','durata_default_fase_extra_minuti');
+  WHERE chiave IN ('margine_capacita','soglia_campioni_op','soglia_campioni_gen','durata_default_fase_extra_minuti','soglia_quantita_svincolo_dipendenze');
 
   v_oggi := COALESCE(p_data, CURRENT_DATE);
   SELECT descrizione INTO v_chiusura_desc FROM public.chiusure_aziendali WHERE v_oggi BETWEEN data_inizio AND data_fine LIMIT 1;
@@ -3544,7 +3558,11 @@ BEGIN
     WHERE of2.ordine_id=v_ordine.id AND of2.stato IN ('disponibile','in_attesa')
       AND NOT EXISTS (
         SELECT 1 FROM public.fase_dipendenze fd JOIN public.ordine_fasi dep_of ON dep_of.ordine_id=v_ordine.id AND dep_of.fase_id=fd.dipende_da_fase_id
-        WHERE fd.fase_id=of2.fase_id AND dep_of.stato NOT IN ('completata','non_applicabile')
+        WHERE fd.fase_id=of2.fase_id
+          AND NOT (
+            dep_of.stato IN ('completata','non_applicabile')
+            OR (v_ordine.quantita > v_soglia_svincolo AND dep_of.stato <> 'disponibile')
+          )
       )
     ORDER BY f.posizione ASC, f.id ASC LIMIT 1;
     IF NOT FOUND THEN
@@ -3553,7 +3571,11 @@ BEGIN
       WHERE of2.ordine_id=v_ordine.id AND of2.stato IN ('disponibile','in_attesa') AND NOT COALESCE(f.e_attesa_esterna,false)
         AND EXISTS (
           SELECT 1 FROM public.fase_dipendenze fd JOIN public.ordine_fasi dep_of ON dep_of.ordine_id=v_ordine.id AND dep_of.fase_id=fd.dipende_da_fase_id
-          WHERE fd.fase_id=of2.fase_id AND dep_of.stato NOT IN ('completata','non_applicabile')
+          WHERE fd.fase_id=of2.fase_id
+            AND NOT (
+              dep_of.stato IN ('completata','non_applicabile')
+              OR (v_ordine.quantita > v_soglia_svincolo AND dep_of.stato <> 'disponibile')
+            )
         )
       ORDER BY f.posizione ASC, f.id ASC LIMIT 1;
       IF FOUND THEN
@@ -3563,7 +3585,11 @@ BEGIN
           (SELECT jsonb_agg(jsonb_build_object('fase_id',fd.dipende_da_fase_id,'nome',f_dep.nome))
            FROM public.fase_dipendenze fd JOIN public.fasi f_dep ON f_dep.id=fd.dipende_da_fase_id
            JOIN public.ordine_fasi dep_of ON dep_of.ordine_id=v_ordine.id AND dep_of.fase_id=fd.dipende_da_fase_id
-           WHERE fd.fase_id=v_fase.fase_id AND dep_of.stato NOT IN ('completata','non_applicabile')),
+           WHERE fd.fase_id=v_fase.fase_id
+             AND NOT (
+               dep_of.stato IN ('completata','non_applicabile')
+               OR (v_ordine.quantita > v_soglia_svincolo AND dep_of.stato <> 'disponibile')
+             )),
           NULL, NULL, v_ordine.stato);
       END IF;
       CONTINUE;
@@ -4117,6 +4143,8 @@ CREATE FUNCTION public.prendi_in_carico_fase(p_ordine_fase_id uuid, p_operatore_
 DECLARE
   v_fase public.ordine_fasi%ROWTYPE;
   v_deps_ns jsonb;
+  v_quantita integer;
+  v_soglia numeric;
 BEGIN
   IF NOT COALESCE(public.valida_sessione(p_operatore_id, p_session_token), false) THEN
     RETURN jsonb_build_object('ok', false, 'errore', 'sessione_non_valida');
@@ -4130,6 +4158,10 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'errore', 'Fase non disponibile — già presa in carico o completata');
   END IF;
 
+  SELECT COALESCE(quantita,1) INTO v_quantita FROM public.ordini WHERE id = v_fase.ordine_id;
+  SELECT valore INTO v_soglia FROM public.kpi_config WHERE chiave = 'soglia_quantita_svincolo_dipendenze';
+  v_soglia := COALESCE(v_soglia, 2);
+
   SELECT jsonb_agg(jsonb_build_object(
     'fase_id', fd.dipende_da_fase_id,
     'nome',    f.nome,
@@ -4142,7 +4174,10 @@ BEGIN
     ON of2.ordine_id = v_fase.ordine_id
    AND of2.fase_id  = fd.dipende_da_fase_id
   WHERE fd.fase_id = v_fase.fase_id
-    AND of2.stato NOT IN ('completata', 'non_applicabile');
+    AND NOT (
+      of2.stato IN ('completata', 'non_applicabile')
+      OR (v_quantita > v_soglia AND of2.stato <> 'disponibile')
+    );
 
   IF v_deps_ns IS NOT NULL THEN
     RETURN jsonb_build_object(
@@ -9100,5 +9135,5 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON T
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Z00qG4V6QREMMp11zCPdaHovz8uofImcieDp8veQJSEd8IEgeH8nLlqvkYQ7d6i
+\unrestrict TBhRlIjgQ9v7lapLj9TtIeV7vCkCsVLfYEScJBGb6PegSIjs52UFQgzrwbpoWUv
 
