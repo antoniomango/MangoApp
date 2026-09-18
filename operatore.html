@@ -1476,6 +1476,35 @@ async function renderOrdineDetail(ordineId) {
     }
 
     const struttura = ordine?.struttura || '';
+
+    // Svincolo anticipato dipendenze (soglia quantità): recupera dal backend, per ogni fase
+    // disponibile con dipendenze, il flag autoritativo 'soddisfatta' (tiene conto della soglia
+    // configurata in kpi_config). Offline non è possibile verificarlo dal vivo: si mantiene il
+    // criterio storico e prudenziale (richiede completata/non_applicabile) come fallback sicuro.
+    const _depFaseIdsSet = new Set();
+    ordFasi.forEach(f => {
+      if (!f.fase_id || f.stato !== 'disponibile') return;
+      const fm = fasi.find(x => x.id === f.fase_id);
+      (fm?.dipendenze || []).forEach(d => _depFaseIdsSet.add(d));
+    });
+    const _depFaseIds = [...(_depFaseIdsSet)];
+    let _soddisfattaMap = {};
+    if (isOnline && _depFaseIds.length > 0) {
+      const { data: depRespList } = await sb.rpc('fasi_dipendenze_stato', {
+        p_operatore_id: currentUser.id, p_session_token: sessionToken,
+        p_ordine_id: ordineId, p_fase_ids: _depFaseIds
+      });
+      if (depRespList?.ok) {
+        (depRespList.dati || []).forEach(d => { _soddisfattaMap[d.fase_id] = d.soddisfatta; });
+      }
+    }
+    const _depNonSoddisfatta = (depId, depOf) => {
+      if (isOnline && Object.prototype.hasOwnProperty.call(_soddisfattaMap, depId)) {
+        return !_soddisfattaMap[depId];
+      }
+      return !['completata', 'non_applicabile'].includes(depOf.stato);
+    };
+
     el.innerHTML = ordFasi.map(f => {
       const isCustom = !f.fase_id;
       const nomeFase = escapeHtml(isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id));
@@ -1484,12 +1513,12 @@ async function renderOrdineDetail(ordineId) {
       const isNA = f.stato === 'non_applicabile';
       const est = !isCustom && isEsterna(f.fase_id);
       const cnc = !isCustom && isCNC(f.fase_id);
-      // Calcola se fase è bloccata da dipendenze non soddisfatte
+      // Calcola se fase è bloccata da dipendenze non soddisfatte (tiene conto della soglia quantità)
       const faseMaster = !isCustom && fasi.find(fm => fm.id === f.fase_id);
       const isBloccata = !isNA && f.stato === 'disponibile' && faseMaster &&
         (faseMaster.dipendenze || []).some(depId => {
           const depOf = ordFasi.find(of => of.fase_id === depId);
-          return depOf && !['completata', 'non_applicabile'].includes(depOf.stato);
+          return depOf && _depNonSoddisfatta(depId, depOf);
         });
       const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '▶' : f.stato === 'in_attesa' ? '⏸' : isNA ? '—' : isBloccata ? '🔒' : isCustom ? '★' : f.fase_id;
       const clickAttr = isNA ? '' : `onclick="openFaseDetail('${f.id}', '${ordineId}')"`;
@@ -1501,7 +1530,7 @@ async function renderOrdineDetail(ordineId) {
       if (isNA) subLabel = 'Non applicabile';
       else if (isBloccata) {
         const blockantiNomi = (faseMaster.dipendenze || [])
-          .filter(depId => { const d = ordFasi.find(of => of.fase_id === depId); return d && !['completata', 'non_applicabile'].includes(d.stato); })
+          .filter(depId => { const d = ordFasi.find(of => of.fase_id === depId); return d && _depNonSoddisfatta(depId, d); })
           .map(depId => { const fm = fasi.find(fm => fm.id === depId); return escapeHtml(fm ? fm.nome : depId); });
         subLabel = 'Attende: ' + blockantiNomi.join(', ');
       } else if (opNome) subLabel = opNome + (isMia ? ' (tu)' : '');
@@ -1909,7 +1938,8 @@ async function renderFaseDetail(ordFaseId, ordineId) {
       const _depIds = _faseMaster.dipendenze;
       const { data: depResp } = await sb.rpc('fasi_dipendenze_stato', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_id: ordineId, p_fase_ids: _depIds });
       const _depFasi = depResp?.ok ? depResp.dati : [];
-      _depBloccanti = (_depFasi || []).filter(df => !['completata', 'non_applicabile'].includes(df.stato))
+      _depBloccanti = (_depFasi || [])
+        .filter(df => (typeof df.soddisfatta === 'boolean') ? !df.soddisfatta : !['completata', 'non_applicabile'].includes(df.stato))
         .map(df => { const fm = fasi.find(fm => fm.id === df.fase_id); return fm ? fm.nome : df.fase_id; });
     }
   }
