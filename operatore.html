@@ -1103,10 +1103,10 @@ async function renderHome() {
   // Coda per fase_id: stessa fase → stesso operatore la fa in sequenza; scadenza prima = priorità
   const faseQueue = {};
   aperti.forEach(o => {
-    const fasi = (fasiPerOrdine[o.id] || []).filter(f => f.stato === 'disponibile' || f.stato === 'in_corso');
+    const fasiRimanenti = (fasiPerOrdine[o.id] || []).filter(f => f.stato === 'disponibile' || f.stato === 'in_corso');
     const q = o.quantita || 1;
     const scad = o.scadenza || '9999-12-31';
-    fasi.forEach(f => {
+    fasiRimanenti.forEach(f => {
       const fase_id = parseInt(f.fase_id);
       const media = faseMediaMinutiMap[fase_id];
       if (!media) return;
@@ -1117,19 +1117,48 @@ async function renderHome() {
   });
   Object.values(faseQueue).forEach(q => q.sort((a, b) => a.scad.localeCompare(b.scad)));
 
-  // ETA = critical path: max tra le fasi rimanenti di (attesa in coda + tempo proprio)
-  // Fasi diverse → operatori diversi → parallele → si prende il massimo
+  // Mappa fase_id -> dipendenze reali (fase_dipendenze, caricate in loadFasi() dentro `fasi`)
+  const dipendenzeMap = {};
+  fasi.forEach(f => { dipendenzeMap[f.id] = f.dipendenze || []; });
+
+  // ETA = critical path: somma (attesa in coda + tempo proprio) lungo le dipendenze reali tra
+  // le fasi rimanenti dello stesso ordine — non un massimo globale su tutte le fasi (un pezzo
+  // deve passarle in sequenza se dipendono l'una dall'altra). Fasi senza una dipendenza reale
+  // tra loro restano parallele: si prende il massimo solo tra i "rami" che confluiscono.
   aperti.forEach(o => {
-    const fasi = (fasiPerOrdine[o.id] || []).filter(f => f.stato === 'disponibile' || f.stato === 'in_corso');
-    let maxMinuti = 0;
-    fasi.forEach(f => {
+    const fasiRimanenti = (fasiPerOrdine[o.id] || []).filter(f => f.stato === 'disponibile' || f.stato === 'in_corso');
+    const idsRimanenti = new Set(fasiRimanenti.map(f => parseInt(f.fase_id)));
+
+    const costo = {};
+    fasiRimanenti.forEach(f => {
       const fase_id = parseInt(f.fase_id);
       const queue = faseQueue[fase_id];
       if (!queue) return;
       const myPos = queue.findIndex(item => item.ordine_id === o.id);
       if (myPos < 0) return;
       const attesa = queue.slice(0, myPos).reduce((s, i) => s + i.minuti, 0);
-      maxMinuti = Math.max(maxMinuti, attesa + queue[myPos].minuti);
+      costo[fase_id] = attesa + queue[myPos].minuti;
+    });
+
+    // Finish-time per fase = costo proprio + il massimo tra le dipendenze dirette ancora
+    // rimanenti (0 se già completata/non applicabile). Guardia anti-ciclo difensiva.
+    const finish = {};
+    const inCorsoCalcolo = new Set();
+    function calcolaFinish(fid) {
+      if (finish[fid] !== undefined) return finish[fid];
+      if (!(fid in costo)) return 0;
+      if (inCorsoCalcolo.has(fid)) return 0;
+      inCorsoCalcolo.add(fid);
+      const preds = (dipendenzeMap[fid] || []).filter(d => idsRimanenti.has(d));
+      const maxPred = preds.reduce((m, d) => Math.max(m, calcolaFinish(d)), 0);
+      inCorsoCalcolo.delete(fid);
+      finish[fid] = maxPred + costo[fid];
+      return finish[fid];
+    }
+
+    let maxMinuti = 0;
+    fasiRimanenti.forEach(f => {
+      maxMinuti = Math.max(maxMinuti, calcolaFinish(parseInt(f.fase_id)));
     });
 
     const oggi = new Date().toISOString().split('T')[0];
