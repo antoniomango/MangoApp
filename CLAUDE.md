@@ -16,6 +16,25 @@ Questo file viene letto automaticamente da Claude Code all'inizio di ogni sessio
 - **Privilegi per colonna**: quando aggiungi una colonna a una tabella con privilegi per colonna già ristretti (es. `users`), concedi esplicitamente `GRANT SELECT` (e altri pertinenti) agli stessi ruoli delle colonne esistenti. Un bug reale ha rotto l'intera lista operatori per questo motivo.
 - Non toccare le regole di business esistenti (es. dipendenze tra fasi, criteri fase_materiali/fase_strutture) senza che il prompt lo richieda esplicitamente.
 
+## Grant espliciti sulle nuove tabelle (dal 2026-09-23)
+
+Sui progetti mango-produzione (mtpzfxnyfkzikzlkomwz) e mango-test-security (kpdlynvmsoctagwtzrxr) sono stati revocati i default privileges di `anon` sulle nuove tabelle e sequenze dello schema public (migrazione `default_privileges_no_anon_nuove_tabelle`). Dal 30 ottobre 2026 Supabase applicherà comunque un comportamento analogo a tutti i progetti.
+
+Conseguenze operative per ogni migrazione che crea una tabella in public:
+1. `anon` NON riceve alcun grant diretto. Gli operatori (PIN + session_token) accedono ai dati solo tramite RPC SECURITY DEFINER con valida_sessione(): le RPC girano coi privilegi del proprietario e non hanno bisogno di grant sulla tabella.
+2. Eccezione: grant SELECT ad `anon` solo per tabelle di puro catalogo/configurazione senza dati personali o operativi, e solo dopo decisione esplicita di Antonio, da scrivere nel commento della migrazione.
+3. `authenticated` riceve di default SELECT/INSERT/UPDATE/DELETE. Se la tabella non viene letta/scritta direttamente da responsabile.html, revoca esplicitamente quello che non serve. In ogni caso abilita sempre la RLS con policy che usano e_responsabile() o auth.uid(): mai USING(true).
+4. Se una edge function usa la tabella con service role, il grant a service_role è già presente di default: non serve aggiungerlo.
+5. Nella stessa migrazione: ALTER TABLE ... ENABLE ROW LEVEL SECURITY, le policy, gli eventuali grant/revoke. Mai in una migrazione separata successiva.
+6. Le tabelle TEMP create dentro le funzioni (es. piano_multi_giorno, piano_giornaliero_raggruppato) non sono interessate.
+7. Invariato per le funzioni: ogni nuova RPC solo-responsabile deve avere REVOKE EXECUTE FROM PUBLIC, anon e GRANT EXECUTE TO authenticated nella stessa migrazione, e va verificato che non resti un vecchio overload con firma diversa.
+
+Dopo ogni migrazione che crea una tabella, verifica con:
+```sql
+SELECT grantee, string_agg(privilege_type, ',') FROM information_schema.role_table_grants WHERE table_schema='public' AND table_name='<nome_tabella>' GROUP BY grantee;
+```
+e riporta l'output nel report, così Antonio può riverificarlo su Supabase.
+
 ## Test-first
 
 - Testa ogni scenario sul progetto Supabase di **test** (`kpdlynvmsoctagwtzrxr`) prima di toccare **produzione** (`mtpzfxnyfkzikzlkomwz`). L'app è in uso quotidiano attivo, non deve mai essere interrotta.
