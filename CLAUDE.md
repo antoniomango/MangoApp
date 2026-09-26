@@ -111,6 +111,17 @@ Regole permanenti:
 - Autenticazione custom (PIN + session token) invariata, nessuna dipendenza dai meccanismi hosted-only di Supabase Auth.
 - Migrazioni sempre pulite e ripetibili da zero.
 
+## Server locale — permanente disattivato (dal 2026-09-26)
+
+- Tutti usano la PWA pubblicata su GitHub Pages. Il server locale permanente (`npx serve .` sulla
+  porta 3000, riavviato ogni 5 minuti dall'attività pianificata **"MangoApp Watchdog Server"** →
+  `WATCHDOG_SERVER.ps1`) è **disattivato**: esponeva l'app sulla WiFi aziendale e serviva qualunque
+  branch fosse attivo nella cartella. L'attività è solo *disabilitata*, non eliminata; gli script
+  (`WATCHDOG_SERVER.ps1`, `REGISTER_WATCHDOG.ps1`, `AVVIA SERVER.bat`) restano per il futuro
+  self-hosting.
+- Per le prove in locale: avvia `npx.cmd serve . --listen 3000` **solo durante il test**, poi
+  chiudilo. Non riattivare il watchdog senza una decisione esplicita di Antonio.
+
 ## Vault Obsidian — obbligatorio ad ogni modifica rilevante
 
 - Per ogni cambiamento rilevante (nuova feature, schema, fix di sicurezza, logica importante — non i fix di una riga), aggiorna le note corrispondenti in "MangoApp-Vault" (cartella sibling al repository, fuori da `docs/`).
