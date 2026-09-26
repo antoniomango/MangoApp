@@ -1,86 +1,32 @@
 /* css/tema.css — unico punto dei colori di MangoApp.
  *
  * Nessun colore va scritto a mano nelle pagine: CSS, attributi style e stringhe JS che generano
- * HTML usano solo var(--token). Il colore principale è UNO solo (--accent): cambiandolo qui cambia
- * in tutta l'app.
+ * HTML usano solo var(--token). Il colore principale è UNO solo per tema (--accent): cambiandolo
+ * qui cambia in tutta l'app.
  *
- * Token base (richiesti): --bg --surface --surface-2 --fill --border --border-strong --ink --ink-2
- * --muted --accent --on-accent --ok/--ok-bg/--on-ok --warn/--warn-bg/--on-warn
- * --alert/--alert-bg/--on-alert --info/--info-bg/--on-info --phase-bg --overlay --shadow.
+ * Token base: --bg --surface --surface-2 --fill --border --border-strong --ink --ink-2 --muted
+ * --accent --on-accent --ok/--ok-bg/--on-ok --warn/--warn-bg/--on-warn --alert/--alert-bg/--on-alert
+ * --info/--info-bg/--on-info --phase-bg --overlay --shadow.
  *
  * Token estesi: varianti che nell'interfaccia hanno un significato proprio (priorità urgente,
- * fase in attesa esterna, ordine extra, spedito/chiuso, fase bloccata/CNC, lavorazione esterna,
- * scala delle scadenze...) e che quindi NON devono collassare su un token base.
+ * fase in attesa, ordine extra, spedito/chiuso, fase bloccata/CNC, lavorazione esterna, scala
+ * delle scadenze...) e che quindi NON devono collassare su un token base.
+ *   -strong = pieno/indicatore   -soft = sfondo dei badge   -bg = sfondo dei riquadri
+ *   -line   = bordo              -ink  = testo su -soft/-bg  on-X = testo su fondo pieno X
+ *   --alert-pulse = secondo estremo del lampeggio della nota ordine (operatore.html)
  *
- * Fase 1 (questo stato): valori = palette storica beige/legno, aspetto invariato.
+ * Temi: il tema effettivo è in <html data-theme="light|dark">, impostato da js/tema.js (preferenza
+ * per dispositivo: chiaro / scuro / automatico). Senza JS vale la media query prefers-color-scheme.
+ * I valori scuri compaiono DUE volte (data-theme="dark" e fallback senza JS): vanno tenuti
+ * identici — cambiali sempre insieme.
  */
 
+/* ── costanti comuni a tutti i temi ─────────────────── */
 :root {
-  /* ── base ─────────────────────────────────────────── */
-  --bg:            #F2EDE6;
-  --surface:       #FDFAF6;
-  --surface-2:     #F9F9F7;
-  --fill:          #F3F4F6;
-  --border:        #D9CFC4;
-  --border-strong: #D9CFC4;
-  --ink:           #1C1714;
-  --ink-2:         #374151;
-  --muted:         #7A6E65;
-  --accent:        #8B5E3C;
-  --accent-2:      #C4926A;   /* bordo al passaggio del mouse, voce di navigazione attiva */
-  --on-accent:     #FFFFFF;
-  --phase-bg:      #EDE4D8;
+  --radius-card: 14px;
+  --radius-ctl:  10px;
 
-  /* ── stati: base ───────────────────────────────────── */
-  --ok:        #3A7D44;  --ok-bg:    #F0FDF4;  --on-ok:    #FFFFFF;
-  --warn:      #C27B00;  --warn-bg:  #FFFBEB;  --on-warn:  #FFFFFF;
-  --alert:     #B03A2E;  --alert-bg: #FEF2F2;  --on-alert: #FFFFFF;
-  --info:      #2563EB;  --info-bg:  #EFF6FF;  --on-info:  #FFFFFF;
-
-  /* ── stati: varianti (strong = pieno/indicatore, soft = sfondo badge, line = bordo, ink = testo su soft/bg) */
-  --ok-strong:    #16A34A;  --ok-soft:    #D1FAE5;  --ok-line:    #86EFAC;  --ok-ink:    #065F46;
-  --warn-strong:  #F59E0B;  --warn-soft:  #FEF3C7;  --warn-line:  #FDE68A;  --warn-ink:  #92400E;  --warn-ink-2:  #B45309;
-  --alert-strong: #EF4444;  --alert-soft: #FEE2E2;  --alert-line: #FECACA;  --alert-ink: #991B1B;  --alert-ink-2: #B91C1C;
-  --info-strong:  #3B82F6;  --info-soft:  #DBEAFE;  --info-line:  #93C5FD;  --info-ink:  #1E40AF;
-
-  /* priorità "urgente" (giallo, distinto da sospeso/ambra e da extra urgente/rosso) */
-  --urgente-bg:  #FEF9C3;  --urgente-ink: #713F12;
-  /* fase in attesa (arancio) e ordine extra */
-  --attesa-bg:   #FFF7ED;  --attesa-line: #FDBA74;  --attesa-ink: #C2410C;
-  --extra:       #F97316;  --extra-soft:  #FED7AA;  --extra-ink:  #9A3412;
-  /* spedito / chiuso / catalogo fasi (indaco) */
-  --indigo:      #4F46E5;  --indigo-soft: #E0E7FF;  --indigo-bg: #EEF2FF;  --indigo-line: #C7D2FE;  --indigo-ink: #3730A3;
-  /* fase bloccata / CNC / macchine (viola) */
-  --violet:      #7C3AED;  --violet-soft: #EDE9FE;  --violet-bg: #FAF5FF;  --violet-line: #E9D5FF;  --violet-line-2: #C4B5FD;  --violet-ink: #5B21B6;  --on-violet: #FFFFFF;
-  /* lavorazione esterna / competenze / eccezioni disponibilità (azzurro) */
-  --ext:         #0369A1;  --ext-bg:      #F0F9FF;  --ext-line:  #BAE6FD;  --on-ext: #FFFFFF;
-  --pink-soft:   #FCE7F3;
-  /* neutri "inattivo / non applicabile" */
-  --neutral:     #6B7280;  --neutral-soft: #E5E7EB;  --neutral-bg: #F5F5F5;  --neutral-line: #E0E0E0;  --neutral-solid: #9E9E9E;  --on-neutral: #FFFFFF;
-
-  /* ── intestazione, barra di navigazione, sfondo login ─ */
-  --chrome-bg:     #1C1714;
-  --chrome-ink:    #F2EDE6;
-  --chrome-muted:  #9E9189;
-  --chrome-faint:  #6B6460;
-  --chrome-fill:   rgba(255,255,255,0.1);
-  --chrome-active: var(--accent-2);
-
-  /* ── superficie invertita (toast, barre flottanti) ─── */
-  --inverse:    #1C1714;
-  --on-inverse: #FFFFFF;
-
-  /* ── velature e ombre ──────────────────────────────── */
-  --overlay:      rgba(28,23,20,0.65);
-  --overlay-soft: rgba(0,0,0,0.5);
-  --shadow:       0 4px 16px rgba(0,0,0,0.08);
-  --shadow-lg:    0 24px 80px rgba(0,0,0,0.3);
-  --shadow-xl:    0 20px 60px rgba(0,0,0,0.4);
-  --shadow-float: 0 4px 20px rgba(0,0,0,0.4);
-  --shadow-bar:   0 -2px 10px rgba(0,0,0,0.25);
-  --spinner-track: rgba(255,255,255,0.3);
-
-  /* ── fotocamera e foto: sempre scuri, identici in ogni tema ── */
+  /* fotocamera e foto: sempre scuri, identici in ogni tema */
   --media-bg:     #000000;
   --media-bar:    #111111;
   --media-ink:    #FFFFFF;
@@ -90,5 +36,192 @@
   --scrim:        rgba(0,0,0,0.45);
   --scrim-strong: rgba(0,0,0,0.6);
   --scrim-max:    rgba(0,0,0,0.85);
-
 }
+
+/* ── TEMA CHIARO (predefinito) ─────────────────────── */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg:            #F2F2F7;
+  --surface:       #FFFFFF;
+  --surface-2:     #F7F7FA;
+  --fill:          #EDEDF2;
+  --border:        #E5E5EA;
+  --border-strong: #D1D1D6;
+  --ink:           #1C1C1E;
+  --ink-2:         #3A3A3C;
+  --muted:         #66666A;
+  --accent:        #1C1C1E;
+  --accent-2:      #AEAEB2;
+  --on-accent:     #FFFFFF;
+  --phase-bg:      #EDEDF2;
+
+  --ok:    #1E7B34;  --ok-bg:    #E8F5EC;  --on-ok:    #FFFFFF;
+  --warn:  #B25000;  --warn-bg:  #FFF3E5;  --on-warn:  #FFFFFF;
+  --alert: #D70015;  --alert-bg: #FDECEE;  --on-alert: #FFFFFF;
+  --info:  #0A64D6;  --info-bg:  #E8F0FC;  --on-info:  #FFFFFF;
+
+  --ok-strong:    var(--ok);     --ok-soft:    #D3EEDB;  --ok-line:    #A6D8B2;  --ok-ink:    #1A6B2E;
+  --warn-strong:  var(--warn);   --warn-soft:  #FFEDD1;  --warn-line:  #F2C98C;  --warn-ink:  #8A3E00;  --warn-ink-2:  var(--warn);
+  --alert-strong: var(--alert);  --alert-soft: #FAD6DA;  --alert-line: #F2B2B9;  --alert-ink: #A8000F;  --alert-ink-2: var(--alert);  --alert-pulse: var(--alert);
+  --info-strong:  var(--info);   --info-soft:  #D4E3FA;  --info-line:  #A8C5F0;  --info-ink:  #0850AB;
+
+  --urgente-bg:  #FFF4B8;  --urgente-ink: #5C4600;
+  --attesa-bg:   #FFEBDF;  --attesa-line: #F5B895;  --attesa-ink: #B23C00;
+  --extra:       #C24400;  --extra-soft:  #FFDCC7;  --extra-ink:  #8C2F00;
+  --indigo:      #4B48C8;  --indigo-soft: #E3E3FA;  --indigo-bg: #F0F0FC;  --indigo-line: #C6C5F0;  --indigo-ink: #34329A;
+  --violet:      #8438B0;  --violet-soft: #F1E4F8;  --violet-bg: #F8F1FC;  --violet-line: #E2CCF0;  --violet-line-2: #CDA8E3;  --violet-ink: #6A2A8C;  --on-violet: #FFFFFF;
+  --ext:         #00698F;  --ext-bg:      #E4F3F9;  --ext-line:  #A6D6EA;  --on-ext: #FFFFFF;
+  --pink-soft:   #FBE3EE;
+  --neutral:     #5F5F63;  --neutral-soft: #EBEBF0;  --neutral-bg: #F7F7FA;  --neutral-line: #E5E5EA;  --neutral-solid: #5F5F63;  --on-neutral: #FFFFFF;
+
+  /* intestazione e barra di navigazione: chiare come le card, separate da un filo */
+  --chrome-bg:     var(--surface);
+  --chrome-ink:    var(--ink);
+  --chrome-muted:  var(--muted);
+  --chrome-faint:  var(--muted);
+  --chrome-fill:   var(--fill);
+  --chrome-active: var(--accent);
+
+  --inverse:    #1C1C1E;
+  --on-inverse: #FFFFFF;
+
+  --overlay:      rgba(0,0,0,0.4);
+  --overlay-soft: var(--overlay);
+  --shadow:       0 1px 2px rgba(0,0,0,0.06);
+  --shadow-lg:    0 12px 40px rgba(0,0,0,0.16);
+  --shadow-xl:    var(--shadow-lg);
+  --shadow-float: 0 4px 16px rgba(0,0,0,0.14);
+  --shadow-bar:   0 -1px 0 var(--border);
+  --spinner-track: rgba(255,255,255,0.35);
+}
+
+/* ── TEMA SCURO (scelto esplicitamente) ────────────── */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg:            #000000;
+  --surface:       #1C1C1E;
+  --surface-2:     #242426;
+  --fill:          #2C2C2E;
+  --border:        #38383A;
+  --border-strong: #48484A;
+  --ink:           #F5F5F7;
+  --ink-2:         #D1D1D6;
+  --muted:         #A1A1A6;
+  --accent:        #F5F5F7;
+  --accent-2:      #636366;
+  --on-accent:     #000000;
+  --phase-bg:      #2C2C2E;
+
+  --ok:    #30D158;  --ok-bg:    rgba(48,209,88,0.16);   --on-ok:    #000000;
+  --warn:  #FF9F0A;  --warn-bg:  rgba(255,159,10,0.16);  --on-warn:  #000000;
+  --alert: #FF453A;  --alert-bg: rgba(255,69,58,0.10);   --on-alert: #000000;
+  --info:  #64A8FF;  --info-bg:  rgba(10,132,255,0.18);  --on-info:  #000000;
+
+  --ok-strong:    var(--ok);     --ok-soft:    rgba(48,209,88,0.24);   --ok-line:    rgba(48,209,88,0.42);   --ok-ink:    #4CE07A;
+  --warn-strong:  var(--warn);   --warn-soft:  rgba(255,159,10,0.24);  --warn-line:  rgba(255,159,10,0.42);  --warn-ink:  #FFB84D;  --warn-ink-2:  var(--warn);
+  --alert-strong: var(--alert);  --alert-soft: rgba(255,69,58,0.24);   --alert-line: rgba(255,69,58,0.45);   --alert-ink: #FF7A72;  --alert-ink-2: var(--alert-ink);  --alert-pulse: #FFA8A2;
+  --info-strong:  var(--info);   --info-soft:  rgba(10,132,255,0.26);  --info-line:  rgba(10,132,255,0.5);   --info-ink:  #8DC0FF;
+
+  --urgente-bg:  rgba(255,214,10,0.2);   --urgente-ink: #FFD83D;
+  --attesa-bg:   rgba(255,110,40,0.18);  --attesa-line: rgba(255,110,40,0.45);  --attesa-ink: #FF8F57;
+  --extra:       #FF8F57;  --extra-soft:  rgba(255,110,40,0.26);  --extra-ink:  #FFAA80;
+  --indigo:      #8E8CFF;  --indigo-soft: rgba(94,92,230,0.3);   --indigo-bg: rgba(94,92,230,0.16);  --indigo-line: rgba(94,92,230,0.5);  --indigo-ink: #B0AEFF;
+  --violet:      #C77DF3;  --violet-soft: rgba(191,90,242,0.22); --violet-bg: rgba(191,90,242,0.13); --violet-line: rgba(191,90,242,0.38); --violet-line-2: rgba(191,90,242,0.55); --violet-ink: #DDA8FA;  --on-violet: #000000;
+  --ext:         #4CC4E6;  --ext-bg:      rgba(76,196,230,0.14); --ext-line:  rgba(76,196,230,0.42);  --on-ext: #000000;
+  --pink-soft:   rgba(255,55,95,0.22);
+  --neutral:     #AEAEB2;  --neutral-soft: #3A3A3C;  --neutral-bg: #242426;  --neutral-line: #38383A;  --neutral-solid: #636366;  --on-neutral: #FFFFFF;
+
+  --chrome-bg:     var(--surface);
+  --chrome-ink:    var(--ink);
+  --chrome-muted:  var(--muted);
+  --chrome-faint:  var(--muted);
+  --chrome-fill:   var(--fill);
+  --chrome-active: var(--accent);
+
+  --inverse:    #F5F5F7;
+  --on-inverse: #000000;
+
+  --overlay:      rgba(0,0,0,0.6);
+  --overlay-soft: var(--overlay);
+  --shadow:       none;
+  --shadow-lg:    0 12px 40px rgba(0,0,0,0.6);
+  --shadow-xl:    var(--shadow-lg);
+  --shadow-float: 0 4px 16px rgba(0,0,0,0.6);
+  --shadow-bar:   0 -1px 0 var(--border);
+  --spinner-track: rgba(0,0,0,0.3);
+}
+
+/* ── TEMA SCURO senza JS: segue il dispositivo (valori IDENTICI al blocco sopra) ── */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --bg:            #000000;
+    --surface:       #1C1C1E;
+    --surface-2:     #242426;
+    --fill:          #2C2C2E;
+    --border:        #38383A;
+    --border-strong: #48484A;
+    --ink:           #F5F5F7;
+    --ink-2:         #D1D1D6;
+    --muted:         #A1A1A6;
+    --accent:        #F5F5F7;
+    --accent-2:      #636366;
+    --on-accent:     #000000;
+    --phase-bg:      #2C2C2E;
+
+    --ok:    #30D158;  --ok-bg:    rgba(48,209,88,0.16);   --on-ok:    #000000;
+    --warn:  #FF9F0A;  --warn-bg:  rgba(255,159,10,0.16);  --on-warn:  #000000;
+    --alert: #FF453A;  --alert-bg: rgba(255,69,58,0.10);   --on-alert: #000000;
+    --info:  #64A8FF;  --info-bg:  rgba(10,132,255,0.18);  --on-info:  #000000;
+
+    --ok-strong:    var(--ok);     --ok-soft:    rgba(48,209,88,0.24);   --ok-line:    rgba(48,209,88,0.42);   --ok-ink:    #4CE07A;
+    --warn-strong:  var(--warn);   --warn-soft:  rgba(255,159,10,0.24);  --warn-line:  rgba(255,159,10,0.42);  --warn-ink:  #FFB84D;  --warn-ink-2:  var(--warn);
+    --alert-strong: var(--alert);  --alert-soft: rgba(255,69,58,0.24);   --alert-line: rgba(255,69,58,0.45);   --alert-ink: #FF7A72;  --alert-ink-2: var(--alert-ink);  --alert-pulse: #FFA8A2;
+    --info-strong:  var(--info);   --info-soft:  rgba(10,132,255,0.26);  --info-line:  rgba(10,132,255,0.5);   --info-ink:  #8DC0FF;
+
+    --urgente-bg:  rgba(255,214,10,0.2);   --urgente-ink: #FFD83D;
+    --attesa-bg:   rgba(255,110,40,0.18);  --attesa-line: rgba(255,110,40,0.45);  --attesa-ink: #FF8F57;
+    --extra:       #FF8F57;  --extra-soft:  rgba(255,110,40,0.26);  --extra-ink:  #FFAA80;
+    --indigo:      #8E8CFF;  --indigo-soft: rgba(94,92,230,0.3);   --indigo-bg: rgba(94,92,230,0.16);  --indigo-line: rgba(94,92,230,0.5);  --indigo-ink: #B0AEFF;
+    --violet:      #C77DF3;  --violet-soft: rgba(191,90,242,0.22); --violet-bg: rgba(191,90,242,0.13); --violet-line: rgba(191,90,242,0.38); --violet-line-2: rgba(191,90,242,0.55); --violet-ink: #DDA8FA;  --on-violet: #000000;
+    --ext:         #4CC4E6;  --ext-bg:      rgba(76,196,230,0.14); --ext-line:  rgba(76,196,230,0.42);  --on-ext: #000000;
+    --pink-soft:   rgba(255,55,95,0.22);
+    --neutral:     #AEAEB2;  --neutral-soft: #3A3A3C;  --neutral-bg: #242426;  --neutral-line: #38383A;  --neutral-solid: #636366;  --on-neutral: #FFFFFF;
+
+    --chrome-bg:     var(--surface);
+    --chrome-ink:    var(--ink);
+    --chrome-muted:  var(--muted);
+    --chrome-faint:  var(--muted);
+    --chrome-fill:   var(--fill);
+    --chrome-active: var(--accent);
+
+    --inverse:    #F5F5F7;
+    --on-inverse: #000000;
+
+    --overlay:      rgba(0,0,0,0.6);
+    --overlay-soft: var(--overlay);
+    --shadow:       none;
+    --shadow-lg:    0 12px 40px rgba(0,0,0,0.6);
+    --shadow-xl:    var(--shadow-lg);
+    --shadow-float: 0 4px 16px rgba(0,0,0,0.6);
+    --shadow-bar:   0 -1px 0 var(--border);
+    --spinner-track: rgba(0,0,0,0.3);
+  }
+}
+
+/* ── Selettore tema (controllo segmentato, montato da js/tema.js) ── */
+.tema-seg {
+  display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--radius-ctl);
+  background: var(--fill); border: 1px solid var(--border);
+}
+.tema-seg button {
+  min-height: 44px; min-width: 44px; padding: 0 14px; border: none; border-radius: 8px;
+  background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+}
+.tema-seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.tema-seg button:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
