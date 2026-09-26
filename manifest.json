@@ -4,8 +4,8 @@
   "description": "Gestione produzione Mango Semilavorati in Legno",
   "start_url": "/MangoApp/operatore.html",
   "display": "standalone",
-  "background_color": "#111111",
-  "theme_color": "#111111",
+  "background_color": "#F2F2F7",
+  "theme_color": "#F2F2F7",
   "orientation": "portrait",
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },

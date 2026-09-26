@@ -1,0 +1,253 @@
+/* css/tema.css — unico punto dei colori di MangoApp.
+ *
+ * Nessun colore va scritto a mano nelle pagine: CSS, attributi style e stringhe JS che generano
+ * HTML usano solo var(--token). Il colore principale è UNO solo per tema (--accent): cambiandolo
+ * qui cambia in tutta l'app.
+ *
+ * Token base: --bg --surface --surface-2 --fill --border --border-strong --ink --ink-2 --muted
+ * --accent --on-accent --ok/--ok-bg/--on-ok --warn/--warn-bg/--on-warn --alert/--alert-bg/--on-alert
+ * --info/--info-bg/--on-info --phase-bg --overlay --shadow.
+ *
+ * Token estesi: varianti che nell'interfaccia hanno un significato proprio (priorità urgente,
+ * fase in attesa, ordine extra, spedito/chiuso, fase bloccata/CNC, lavorazione esterna, scala
+ * delle scadenze...) e che quindi NON devono collassare su un token base.
+ *   -strong = pieno/indicatore   -soft = sfondo dei badge   -bg = sfondo dei riquadri
+ *   -line   = bordo              -ink  = testo su -soft/-bg  on-X = testo su fondo pieno X
+ *   --alert-pulse = secondo estremo del lampeggio della nota ordine (operatore.html)
+ *
+ * Temi: il tema effettivo è in <html data-theme="light|dark">, impostato da js/tema.js (preferenza
+ * per dispositivo: chiaro / scuro / automatico). Senza JS vale la media query prefers-color-scheme.
+ * I valori scuri compaiono DUE volte (data-theme="dark" e fallback senza JS): vanno tenuti
+ * identici — cambiali sempre insieme.
+ */
+
+/* ── Font locali (Geist / Geist Mono, SIL OFL 1.1 — vedi fonts/OFL-Geist.txt) ── */
+@font-face {
+  font-family: 'Geist';
+  src: url('../fonts/Geist-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('../fonts/GeistMono-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── costanti comuni a tutti i temi ─────────────────── */
+:root {
+  --font-sans: 'Geist', -apple-system, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --radius-card: 14px;
+  --radius-ctl:  10px;
+
+  /* fotocamera e foto: sempre scuri, identici in ogni tema */
+  --media-bg:     #000000;
+  --media-bar:    #111111;
+  --media-ink:    #FFFFFF;
+  --media-line:   #444444;
+  --media-ring:   #999999;
+  --media-press:  #CCCCCC;
+  --scrim:        rgba(0,0,0,0.45);
+  --scrim-strong: rgba(0,0,0,0.6);
+  --scrim-max:    rgba(0,0,0,0.85);
+}
+
+/* ── TEMA CHIARO (predefinito) ─────────────────────── */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg:            #F2F2F7;
+  --surface:       #FFFFFF;
+  --surface-2:     #F7F7FA;
+  --fill:          #EDEDF2;
+  --border:        #E5E5EA;
+  --border-strong: #D1D1D6;
+  --ink:           #1C1C1E;
+  --ink-2:         #3A3A3C;
+  --muted:         #66666A;
+  --accent:        #1C1C1E;
+  --accent-2:      #AEAEB2;
+  --on-accent:     #FFFFFF;
+  --phase-bg:      #EDEDF2;
+
+  --ok:    #1E7B34;  --ok-bg:    #E8F5EC;  --on-ok:    #FFFFFF;
+  --warn:  #B25000;  --warn-bg:  #FFF3E5;  --on-warn:  #FFFFFF;
+  --alert: #D70015;  --alert-bg: #FDECEE;  --on-alert: #FFFFFF;
+  --info:  #0A64D6;  --info-bg:  #E8F0FC;  --on-info:  #FFFFFF;
+
+  --ok-strong:    var(--ok);     --ok-soft:    #D3EEDB;  --ok-line:    #A6D8B2;  --ok-ink:    #1A6B2E;
+  --warn-strong:  var(--warn);   --warn-soft:  #FFEDD1;  --warn-line:  #F2C98C;  --warn-ink:  #8A3E00;  --warn-ink-2:  var(--warn);
+  --alert-strong: var(--alert);  --alert-soft: #FAD6DA;  --alert-line: #F2B2B9;  --alert-ink: #A8000F;  --alert-ink-2: var(--alert);  --alert-pulse: var(--alert);
+  --info-strong:  var(--info);   --info-soft:  #D4E3FA;  --info-line:  #A8C5F0;  --info-ink:  #0850AB;
+
+  --urgente-bg:  #FFF4B8;  --urgente-ink: #5C4600;
+  --attesa-bg:   #FFEBDF;  --attesa-line: #F5B895;  --attesa-ink: #B23C00;
+  --extra:       #C24400;  --extra-soft:  #FFDCC7;  --extra-ink:  #8C2F00;
+  --indigo:      #4B48C8;  --indigo-soft: #E3E3FA;  --indigo-bg: #F0F0FC;  --indigo-line: #C6C5F0;  --indigo-ink: #34329A;
+  --violet:      #8438B0;  --violet-soft: #F1E4F8;  --violet-bg: #F8F1FC;  --violet-line: #E2CCF0;  --violet-line-2: #CDA8E3;  --violet-ink: #6A2A8C;  --on-violet: #FFFFFF;
+  --ext:         #00698F;  --ext-bg:      #E4F3F9;  --ext-line:  #A6D6EA;  --on-ext: #FFFFFF;
+  --pink-soft:   #FBE3EE;
+  --neutral:     #5F5F63;  --neutral-soft: #EBEBF0;  --neutral-bg: #F7F7FA;  --neutral-line: #E5E5EA;  --neutral-solid: #5F5F63;  --on-neutral: #FFFFFF;
+
+  /* intestazione e barra di navigazione: chiare come le card, separate da un filo */
+  --chrome-bg:     var(--surface);
+  --chrome-ink:    var(--ink);
+  --chrome-muted:  var(--muted);
+  --chrome-faint:  var(--muted);
+  --chrome-fill:   var(--fill);
+  --chrome-active: var(--accent);
+
+  --inverse:    #1C1C1E;
+  --on-inverse: #FFFFFF;
+
+  --overlay:      rgba(0,0,0,0.4);
+  --overlay-soft: var(--overlay);
+  --shadow:       0 1px 2px rgba(0,0,0,0.06);
+  --shadow-lg:    0 12px 40px rgba(0,0,0,0.16);
+  --shadow-xl:    var(--shadow-lg);
+  --shadow-float: 0 4px 16px rgba(0,0,0,0.14);
+  --shadow-bar:   0 -1px 0 var(--border);
+  --spinner-track: rgba(255,255,255,0.35);
+}
+
+/* ── TEMA SCURO (scelto esplicitamente) ────────────── */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --bg:            #000000;
+  --surface:       #1C1C1E;
+  --surface-2:     #242426;
+  --fill:          #2C2C2E;
+  --border:        #38383A;
+  --border-strong: #48484A;
+  --ink:           #F5F5F7;
+  --ink-2:         #D1D1D6;
+  --muted:         #A1A1A6;
+  --accent:        #F5F5F7;
+  --accent-2:      #636366;
+  --on-accent:     #000000;
+  --phase-bg:      #2C2C2E;
+
+  --ok:    #30D158;  --ok-bg:    rgba(48,209,88,0.16);   --on-ok:    #000000;
+  --warn:  #FF9F0A;  --warn-bg:  rgba(255,159,10,0.16);  --on-warn:  #000000;
+  --alert: #FF453A;  --alert-bg: rgba(255,69,58,0.10);   --on-alert: #000000;
+  --info:  #64A8FF;  --info-bg:  rgba(10,132,255,0.18);  --on-info:  #000000;
+
+  --ok-strong:    var(--ok);     --ok-soft:    rgba(48,209,88,0.24);   --ok-line:    rgba(48,209,88,0.42);   --ok-ink:    #4CE07A;
+  --warn-strong:  var(--warn);   --warn-soft:  rgba(255,159,10,0.24);  --warn-line:  rgba(255,159,10,0.42);  --warn-ink:  #FFB84D;  --warn-ink-2:  var(--warn);
+  --alert-strong: var(--alert);  --alert-soft: rgba(255,69,58,0.24);   --alert-line: rgba(255,69,58,0.45);   --alert-ink: #FF7A72;  --alert-ink-2: var(--alert-ink);  --alert-pulse: #FFA8A2;
+  --info-strong:  var(--info);   --info-soft:  rgba(10,132,255,0.26);  --info-line:  rgba(10,132,255,0.5);   --info-ink:  #8DC0FF;
+
+  --urgente-bg:  rgba(255,214,10,0.2);   --urgente-ink: #FFD83D;
+  --attesa-bg:   rgba(255,110,40,0.18);  --attesa-line: rgba(255,110,40,0.45);  --attesa-ink: #FF8F57;
+  --extra:       #FF8F57;  --extra-soft:  rgba(255,110,40,0.26);  --extra-ink:  #FFAA80;
+  --indigo:      #8E8CFF;  --indigo-soft: rgba(94,92,230,0.3);   --indigo-bg: rgba(94,92,230,0.16);  --indigo-line: rgba(94,92,230,0.5);  --indigo-ink: #B0AEFF;
+  --violet:      #C77DF3;  --violet-soft: rgba(191,90,242,0.22); --violet-bg: rgba(191,90,242,0.13); --violet-line: rgba(191,90,242,0.38); --violet-line-2: rgba(191,90,242,0.55); --violet-ink: #DDA8FA;  --on-violet: #000000;
+  --ext:         #4CC4E6;  --ext-bg:      rgba(76,196,230,0.14); --ext-line:  rgba(76,196,230,0.42);  --on-ext: #000000;
+  --pink-soft:   rgba(255,55,95,0.22);
+  --neutral:     #AEAEB2;  --neutral-soft: #3A3A3C;  --neutral-bg: #242426;  --neutral-line: #38383A;  --neutral-solid: #636366;  --on-neutral: #FFFFFF;
+
+  --chrome-bg:     var(--surface);
+  --chrome-ink:    var(--ink);
+  --chrome-muted:  var(--muted);
+  --chrome-faint:  var(--muted);
+  --chrome-fill:   var(--fill);
+  --chrome-active: var(--accent);
+
+  --inverse:    #F5F5F7;
+  --on-inverse: #000000;
+
+  --overlay:      rgba(0,0,0,0.6);
+  --overlay-soft: var(--overlay);
+  --shadow:       none;
+  --shadow-lg:    0 12px 40px rgba(0,0,0,0.6);
+  --shadow-xl:    var(--shadow-lg);
+  --shadow-float: 0 4px 16px rgba(0,0,0,0.6);
+  --shadow-bar:   0 -1px 0 var(--border);
+  --spinner-track: rgba(0,0,0,0.3);
+}
+
+/* ── TEMA SCURO senza JS: segue il dispositivo (valori IDENTICI al blocco sopra) ── */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --bg:            #000000;
+    --surface:       #1C1C1E;
+    --surface-2:     #242426;
+    --fill:          #2C2C2E;
+    --border:        #38383A;
+    --border-strong: #48484A;
+    --ink:           #F5F5F7;
+    --ink-2:         #D1D1D6;
+    --muted:         #A1A1A6;
+    --accent:        #F5F5F7;
+    --accent-2:      #636366;
+    --on-accent:     #000000;
+    --phase-bg:      #2C2C2E;
+
+    --ok:    #30D158;  --ok-bg:    rgba(48,209,88,0.16);   --on-ok:    #000000;
+    --warn:  #FF9F0A;  --warn-bg:  rgba(255,159,10,0.16);  --on-warn:  #000000;
+    --alert: #FF453A;  --alert-bg: rgba(255,69,58,0.10);   --on-alert: #000000;
+    --info:  #64A8FF;  --info-bg:  rgba(10,132,255,0.18);  --on-info:  #000000;
+
+    --ok-strong:    var(--ok);     --ok-soft:    rgba(48,209,88,0.24);   --ok-line:    rgba(48,209,88,0.42);   --ok-ink:    #4CE07A;
+    --warn-strong:  var(--warn);   --warn-soft:  rgba(255,159,10,0.24);  --warn-line:  rgba(255,159,10,0.42);  --warn-ink:  #FFB84D;  --warn-ink-2:  var(--warn);
+    --alert-strong: var(--alert);  --alert-soft: rgba(255,69,58,0.24);   --alert-line: rgba(255,69,58,0.45);   --alert-ink: #FF7A72;  --alert-ink-2: var(--alert-ink);  --alert-pulse: #FFA8A2;
+    --info-strong:  var(--info);   --info-soft:  rgba(10,132,255,0.26);  --info-line:  rgba(10,132,255,0.5);   --info-ink:  #8DC0FF;
+
+    --urgente-bg:  rgba(255,214,10,0.2);   --urgente-ink: #FFD83D;
+    --attesa-bg:   rgba(255,110,40,0.18);  --attesa-line: rgba(255,110,40,0.45);  --attesa-ink: #FF8F57;
+    --extra:       #FF8F57;  --extra-soft:  rgba(255,110,40,0.26);  --extra-ink:  #FFAA80;
+    --indigo:      #8E8CFF;  --indigo-soft: rgba(94,92,230,0.3);   --indigo-bg: rgba(94,92,230,0.16);  --indigo-line: rgba(94,92,230,0.5);  --indigo-ink: #B0AEFF;
+    --violet:      #C77DF3;  --violet-soft: rgba(191,90,242,0.22); --violet-bg: rgba(191,90,242,0.13); --violet-line: rgba(191,90,242,0.38); --violet-line-2: rgba(191,90,242,0.55); --violet-ink: #DDA8FA;  --on-violet: #000000;
+    --ext:         #4CC4E6;  --ext-bg:      rgba(76,196,230,0.14); --ext-line:  rgba(76,196,230,0.42);  --on-ext: #000000;
+    --pink-soft:   rgba(255,55,95,0.22);
+    --neutral:     #AEAEB2;  --neutral-soft: #3A3A3C;  --neutral-bg: #242426;  --neutral-line: #38383A;  --neutral-solid: #636366;  --on-neutral: #FFFFFF;
+
+    --chrome-bg:     var(--surface);
+    --chrome-ink:    var(--ink);
+    --chrome-muted:  var(--muted);
+    --chrome-faint:  var(--muted);
+    --chrome-fill:   var(--fill);
+    --chrome-active: var(--accent);
+
+    --inverse:    #F5F5F7;
+    --on-inverse: #000000;
+
+    --overlay:      rgba(0,0,0,0.6);
+    --overlay-soft: var(--overlay);
+    --shadow:       none;
+    --shadow-lg:    0 12px 40px rgba(0,0,0,0.6);
+    --shadow-xl:    var(--shadow-lg);
+    --shadow-float: 0 4px 16px rgba(0,0,0,0.6);
+    --shadow-bar:   0 -1px 0 var(--border);
+    --spinner-track: rgba(0,0,0,0.3);
+  }
+}
+
+/* ── Selettore tema (controllo segmentato, montato da js/tema.js) ── */
+.tema-seg {
+  display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--radius-ctl);
+  background: var(--fill); border: 1px solid var(--border);
+}
+.tema-seg button {
+  min-height: 44px; min-width: 44px; padding: 0 14px; border: none; border-radius: 8px;
+  background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer;
+}
+.tema-seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.tema-seg button:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
+
+/* ── Icone SVG (js/icone.js riempie i segnaposto <i data-ic="nome"></i>) ── */
+i[data-ic] {
+  display: inline-flex; width: 1.25em; height: 1.25em; vertical-align: -0.25em;
+  flex-shrink: 0; font-style: normal; line-height: 1;
+}
+i[data-ic] > svg { width: 100%; height: 100%; display: block; }
