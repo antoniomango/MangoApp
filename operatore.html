@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Mango">
-<meta name="theme-color" content="#111111">
+<meta name="theme-color" content="#F2F2F7">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Mango — Operatore</title>
@@ -18,6 +18,7 @@
      Pages) -- Referrer-Policy invece funziona anche via meta, riduce la fuga di URL interni
      (es. ?ordine=<uuid>) verso risorse di terze parti. Vedi vault. -->
 <meta name="referrer" content="strict-origin-when-cross-origin">
+<script src="js/tema.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js" integrity="sha384-JBR+x8blGwjDRO63aHCGiZMD4VNiTR4ZUGA+N6ZKLf3zNt1fK8IBpcgPaMrxqWBp" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="css/tema.css">
 <style>
@@ -36,17 +37,17 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
 /* ── LOGIN ── */
 #login-screen {
   height: 100vh; display: flex; align-items: center; justify-content: center;
-  flex-direction: column; background: var(--chrome-bg); padding: 24px;
+  flex-direction: column; background: var(--bg); padding: 24px;
 }
 .login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 40px; }
 .logo-mark { width: 40px; height: 40px; background: var(--accent); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
 .login-logo span { font-family: 'DM Mono', monospace; font-size: 20px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--chrome-ink); }
-.login-card { background: var(--surface); border-radius: 16px; padding: 28px; width: 100%; max-width: 360px; }
+.login-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); box-shadow: var(--shadow); padding: 28px; width: 100%; max-width: 360px; }
 .login-card h2 { font-size: 20px; font-weight: 600; margin-bottom: 20px; }
 .form-group { margin-bottom: 16px; }
 .form-group label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
 .form-group select, .form-group input {
-  width: 100%; padding: 13px 14px; border: 1px solid var(--border); border-radius: 8px;
+  width: 100%; padding: 13px 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-ctl);
   background: var(--bg); color: var(--ink); font-family: 'Inter', sans-serif; font-size: 16px;
   outline: none; -webkit-appearance: none; appearance: none;
 }
@@ -55,13 +56,13 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
   display: flex; gap: 10px; justify-content: center;
 }
 .pin-digit {
-  width: 56px; height: 56px; border: 2px solid var(--border); border-radius: 10px;
+  width: 56px; height: 56px; border: 1px solid var(--border-strong); border-radius: var(--radius-ctl);
   text-align: center; font-size: 22px; font-family: 'DM Mono', monospace;
   background: var(--bg); color: var(--ink); outline: none;
   -webkit-text-security: disc;
 }
 .pin-digit:focus { border-color: var(--accent); }
-.btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px; border-radius: 10px; border: none; cursor: pointer; font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600; transition: opacity 0.15s; }
+.btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 44px; padding: 14px; border-radius: var(--radius-ctl); border: none; cursor: pointer; font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600; transition: opacity 0.15s; }
 .btn:active { opacity: 0.75; }
 .btn:disabled { opacity: 0.5; }
 .btn-primary { background: var(--accent); color: var(--on-accent); }
@@ -75,11 +76,11 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
 .app-header {
   background: var(--chrome-bg); color: var(--chrome-ink);
   padding: 0 16px; height: 52px; display: flex; align-items: center; justify-content: space-between;
-  flex-shrink: 0;
+  flex-shrink: 0; border-bottom: 1px solid var(--border);
 }
 .app-header .logo-sm { font-family: 'DM Mono', monospace; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
 .app-header .logo-mark-sm { width: 22px; height: 22px; background: var(--accent); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
-.user-chip { background: var(--chrome-fill); padding: 5px 10px; border-radius: 20px; font-size: 12px; display: flex; align-items: center; gap: 6px; }
+.user-chip { background: var(--chrome-fill); color: var(--chrome-ink); border: none; font: inherit; cursor: pointer; min-height: 32px; padding: 5px 10px; border-radius: 20px; font-size: 12px; display: flex; align-items: center; gap: 6px; }
 .online-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
 .offline-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warn); }
 
@@ -89,7 +90,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
 .bottom-nav {
   height: var(--navh); background: var(--chrome-bg); position: fixed; bottom: 0; left: 0; right: 0;
   display: flex; align-items: center; justify-content: space-around; z-index: 100;
-  border-top: 1px solid var(--chrome-fill);
+  border-top: 1px solid var(--border);
 }
 .nav-tab { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 20px; cursor: pointer; color: var(--chrome-faint); transition: color 0.15s; }
 .nav-tab.active { color: var(--chrome-active); }
@@ -102,7 +103,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
 
 /* ── CARDS ── */
 .page-title { font-size: 20px; font-weight: 600; margin-bottom: 16px; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); margin-bottom: 12px; overflow: hidden; }
 .card-hdr { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
 .card-hdr h3 { font-size: 14px; font-weight: 600; }
 .card-body { padding: 14px 16px; }
@@ -152,7 +153,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
 .meta-item span { font-size: 14px; font-weight: 500; }
 
 /* ── AZIONE FASE ── */
-.azione-box { background: var(--surface); border: 2px solid var(--accent); border-radius: 12px; padding: 16px; margin-top: 12px; }
+.azione-box { background: var(--surface); border: 1.5px solid var(--accent); border-radius: var(--radius-card); padding: 16px; margin-top: 12px; }
 .azione-box h4 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
 .note-box { background: var(--phase-bg); border-radius: 8px; padding: 12px; font-size: 13px; margin-bottom: 12px; }
 .note-box strong { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); display: block; margin-bottom: 6px; }
@@ -163,11 +164,12 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
    (mai verso il trasparente/opacity — un testo che sfuma per metà ciclo smetterebbe di
    essere letto). Riquadro, bordo, sfondo, dimensione e spaziatura restano fermi: l'unica
    proprietà animata è "color", quindi nessun reflow/spostamento di layout durante il ciclo.
-   Contrasto verificato (WCAG): #991B1B ≥7.1:1 e #C0392B ≥4.67:1 su entrambi gli sfondi dove
-   compare (nota-box #FFFBEB e sfondo pagina #F2EDE6) — sempre sopra la soglia AA (4.5:1). */
+   Colori: --alert-ink e --alert-pulse (css/tema.css). Contrasto verificato (WCAG) in entrambi i
+   temi su entrambi gli sfondi dove compare (nota-box --warn-bg e sfondo pagina --bg): sempre
+   sopra la soglia AA (4.5:1) — vedi nota vault sul sistema dei temi. */
 @keyframes notaOrdinePulse {
   0%, 100% { color: var(--alert-ink); }
-  50%      { color: var(--alert); }
+  50%      { color: var(--alert-pulse); }
 }
 .nota-ordine-testo {
   animation: notaOrdinePulse 2s ease-in-out infinite;
@@ -175,7 +177,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
 @media (prefers-reduced-motion: reduce) {
   .nota-ordine-testo { animation: none; color: var(--alert-ink); }
 }
-textarea { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-family: 'Inter', sans-serif; font-size: 14px; background: var(--bg); color: var(--ink); resize: vertical; outline: none; min-height: 80px; }
+textarea { width: 100%; padding: 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-ctl); font-family: 'Inter', sans-serif; font-size: 14px; background: var(--bg); color: var(--ink); resize: vertical; outline: none; min-height: 80px; }
 textarea:focus { border-color: var(--accent); }
 .upload-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; border: 2px dashed var(--border); border-radius: 8px; background: var(--phase-bg); color: var(--muted); font-size: 14px; cursor: pointer; margin-bottom: 12px; }
 .upload-btn:active { background: var(--border); }
@@ -210,7 +212,7 @@ textarea:focus { border-color: var(--accent); }
 /* ── DIALOG SPEDIZIONE UNICA (completamento fase di gruppo) ── */
 #gruppo-fase-dialog { display:none; position:fixed; inset:0; z-index:9500; background:var(--overlay-soft); align-items:center; justify-content:center; padding:20px; }
 #gruppo-fase-dialog.open { display:flex; }
-#gruppo-fase-dialog .box { background:var(--surface); border-radius:12px; padding:20px; max-width:380px; width:100%; }
+#gruppo-fase-dialog .box { background:var(--surface); border-radius:var(--radius-card); padding:20px; max-width:380px; width:100%; }
 #gruppo-fase-dialog .box h4 { margin:0 0 10px; font-size:16px; }
 #gruppo-fase-dialog .box p { font-size:14px; color:var(--muted); margin:0 0 16px; }
 #gruppo-fase-dialog .box .btn { margin-bottom:8px; }
@@ -233,7 +235,7 @@ textarea:focus { border-color: var(--accent); }
 .progress-bar-wrap { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin: 6px 0 4px; }
 .progress-bar-fill { height: 100%; border-radius: 4px; background: var(--accent); transition: width 0.3s; }
 .progress-bar-fill.done { background: var(--ok); }
-.av-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; }
+.av-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 14px 16px; margin-bottom: 10px; }
 .av-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
 .av-title { font-size: 14px; font-weight: 600; }
 .av-meta { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
@@ -256,6 +258,9 @@ textarea:focus { border-color: var(--accent); }
 .ord-progress-fill.done { background:var(--ok-strong); }
 .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
 .empty-state .icon { font-size: 36px; margin-bottom: 10px; }
+.profilo-panel { position: fixed; top: 52px; right: 12px; z-index: 150; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); box-shadow: var(--shadow-lg); padding: 14px 16px; }
+.profilo-panel[hidden] { display: none; }
+.profilo-panel .section-title { margin: 0 0 10px; }
 .queue-badge { background: var(--warn); color: var(--on-warn); border-radius: 12px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
 </style>
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
@@ -299,12 +304,18 @@ textarea:focus { border-color: var(--accent); }
       Mango
     </div>
     <div style="display:flex;align-items:center;gap:10px">
-      <div class="user-chip">
+      <button type="button" class="user-chip" id="user-chip" aria-haspopup="true" aria-expanded="false" aria-controls="pannello-profilo" onclick="toggleProfilo()">
         <div class="online-dot" id="conn-dot"></div>
         <span id="user-chip-name"></span>
-      </div>
+      </button>
       <button onclick="doLogout()" style="background:none;border:none;color:var(--chrome-muted);font-size:12px;cursor:pointer">esci</button>
     </div>
+  </div>
+
+  <!-- Pannello profilo: preferenze personali del dispositivo (solo grafica, nessun dato sul server) -->
+  <div class="profilo-panel" id="pannello-profilo" hidden>
+    <div class="section-title">Aspetto</div>
+    <div id="tema-selettore-op"></div>
   </div>
 
   <div class="app-content">
@@ -789,6 +800,17 @@ async function doLoginPin() {
   }
   showApp();
 }
+
+function toggleProfilo(forza) {
+  const p = document.getElementById('pannello-profilo');
+  const apri = forza !== undefined ? forza : p.hidden;
+  p.hidden = !apri;
+  document.getElementById('user-chip').setAttribute('aria-expanded', apri ? 'true' : 'false');
+}
+document.addEventListener('click', e => {
+  const p = document.getElementById('pannello-profilo');
+  if (p && !p.hidden && !p.contains(e.target) && !e.target.closest('#user-chip')) toggleProfilo(false);
+});
 
 function showErr(msg) {
   document.getElementById('login-err').textContent = msg;
@@ -2966,6 +2988,7 @@ async function start() {
   }
 }
 
+MangoTema.montaSelettore(document.getElementById('tema-selettore-op'));
 start();
 </script>
 <script>

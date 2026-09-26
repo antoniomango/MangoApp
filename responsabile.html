@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Mango">
-<meta name="theme-color" content="#111111">
+<meta name="theme-color" content="#F2F2F7">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Mango — Responsabile</title>
@@ -19,6 +19,7 @@
      Pages) -- Referrer-Policy invece funziona anche via meta, riduce la fuga di URL interni
      verso risorse di terze parti. Vedi vault. -->
 <meta name="referrer" content="strict-origin-when-cross-origin">
+<script src="js/tema.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js" integrity="sha384-JBR+x8blGwjDRO63aHCGiZMD4VNiTR4ZUGA+N6ZKLf3zNt1fK8IBpcgPaMrxqWBp" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
@@ -37,11 +38,12 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--chrome-bg);
+  background: var(--bg);
 }
 .login-card {
   background: var(--surface);
-  border-radius: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
   padding: 48px;
   width: 380px;
   box-shadow: var(--shadow-xl);
@@ -54,14 +56,14 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
 .form-group { margin-bottom: 16px; }
 .form-group label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
 .form-group input, .form-group select, .form-group textarea {
-  width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-ctl);
   background: var(--bg); color: var(--ink); font-family: 'Inter', sans-serif; font-size: 14px;
   outline: none; transition: border-color 0.15s;
 }
 .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); }
 .btn {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 9px 18px; border-radius: 6px; border: none; cursor: pointer;
+  padding: 9px 18px; border-radius: var(--radius-ctl); border: none; cursor: pointer;
   font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500; transition: opacity 0.15s;
 }
 .btn:hover { opacity: 0.85; }
@@ -70,7 +72,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
 .btn-secondary { background: var(--phase-bg); color: var(--ink); border: 1px solid var(--border); }
 .btn-danger { background: var(--alert); color: var(--on-alert); }
 .btn-ok { background: var(--ok); color: var(--on-ok); }
-.btn-full { width: 100%; justify-content: center; padding: 12px; }
+.btn-full { width: 100%; justify-content: center; padding: 12px; min-height: 44px; }
 .err-msg { color: var(--alert); font-size: 12px; margin-top: 12px; display: none; }
 
 /* ── HEADER ── */
@@ -79,6 +81,7 @@ header {
   background: var(--chrome-bg); color: var(--chrome-ink);
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 28px; height: 52px; position: sticky; top: 0; z-index: 100;
+  border-bottom: 1px solid var(--border);
 }
 .logo { font-family: 'DM Mono', monospace; font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; display: flex; align-items: center; gap: 10px; }
 .logo .logo-mark { width: 26px; height: 26px; }
@@ -128,7 +131,7 @@ main { padding: 28px; overflow-y: auto; max-height: calc(100vh - 52px); }
 
 /* ── KPI CARDS ── */
 .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
-.kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; }
+.kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 18px 20px; }
 .kpi-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-family: 'DM Mono', monospace; margin-bottom: 8px; }
 .kpi-card .value { font-size: 32px; font-weight: 600; font-family: 'DM Mono', monospace; }
 .kpi-card.warn .value { color: var(--warn); }
@@ -136,7 +139,7 @@ main { padding: 28px; overflow-y: auto; max-height: calc(100vh - 52px); }
 .kpi-card.ok .value { color: var(--ok); }
 
 /* ── TABLE ── */
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); overflow: hidden; margin-bottom: 20px; }
 .card-hdr { padding: 14px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
 .card-hdr h3 { font-size: 14px; font-weight: 600; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -167,7 +170,7 @@ tr:hover td { background: var(--phase-bg); }
 
 /* ── KPI ── */
 .kpi-card {
-  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card);
   padding: 18px 20px; display: flex; flex-direction: column; gap: 4px;
 }
 .kpi-card .kpi-label { font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
@@ -191,7 +194,7 @@ tr:hover td { background: var(--phase-bg); }
 
 /* ── FILTRI ── */
 .filters { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
-.filters input, .filters select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; outline: none; }
+.filters input, .filters select { padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-ctl); background: var(--surface); color: var(--ink); font-family: 'Inter', sans-serif; font-size: 13px; outline: none; }
 .filters input:focus, .filters select:focus { border-color: var(--accent); }
 
 /* ── MODALE ── */
@@ -200,7 +203,7 @@ tr:hover td { background: var(--phase-bg); }
   display: none; align-items: center; justify-content: center; padding: 20px;
 }
 .modal-overlay.open { display: flex; }
-.modal { background: var(--surface); border-radius: 12px; max-width: 620px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg); }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); max-width: 620px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow-lg); }
 .modal-hdr { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
 .modal-hdr h3 { font-size: 16px; font-weight: 600; }
 .modal-close { background: none; border: none; cursor: pointer; font-size: 20px; color: var(--muted); line-height: 1; }
@@ -257,7 +260,7 @@ tr:hover td { background: var(--phase-bg); }
 
 /* ── OPERATORI ── */
 .ops-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-.op-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+.op-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 18px; }
 .op-card .op-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
 .op-card .op-role { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-family: 'DM Mono', monospace; }
 .op-card .op-status { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 12px; color: var(--muted); }
@@ -265,7 +268,7 @@ tr:hover td { background: var(--phase-bg); }
 .inactive { opacity: 0.5; }
 
 /* ── UFFICIO / MACRO FASI ── */
-.ufficio-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px 22px; margin-bottom:14px; }
+.ufficio-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-card); padding:20px 22px; margin-bottom:14px; }
 .ufficio-card-hdr { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:16px; }
 .ufficio-card-title { font-size:15px; font-weight:700; color:var(--ink); }
 .ufficio-card-sub { font-size:12px; color:var(--muted); margin-top:2px; }
@@ -275,7 +278,7 @@ tr:hover td { background: var(--phase-bg); }
 .ufficio-macro-fill { height:100%; border-radius:99px; transition:width .4s; }
 .ufficio-totale-track { background:var(--phase-bg); border-radius:99px; height:14px; overflow:hidden; margin-top:14px; }
 .ufficio-totale-fill { height:100%; border-radius:99px; background:var(--accent); transition:width .4s; }
-.macro-cfg-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:18px 20px; }
+.macro-cfg-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-card); padding:18px 20px; }
 .macro-cfg-hdr { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
 .macro-fasi-check { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:6px; }
 .macro-fasi-check label { display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer; padding:4px 6px; border-radius:6px; }
@@ -315,7 +318,7 @@ tr:hover td { background: var(--phase-bg); }
 /* ── TOAST ── */
 .toast {
   position: fixed; bottom: 28px; right: 28px; z-index: 300;
-  background: var(--inverse); color: var(--on-inverse); padding: 12px 20px; border-radius: 8px;
+  background: var(--inverse); color: var(--on-inverse); padding: 12px 20px; border-radius: var(--radius-ctl);
   font-size: 13px; opacity: 0; transform: translateY(10px);
   transition: all 0.25s; pointer-events: none; max-width: 320px;
 }
@@ -453,6 +456,9 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       </div>
       <div class="nav-item" onclick="showSection('notif-config')" id="nav-notif-config">
         <span class="icon">🔔</span> Destinatari Notifiche
+      </div>
+      <div class="nav-item" onclick="showSection('aspetto')" id="nav-aspetto">
+        <span class="icon">🌓</span> Aspetto
       </div>
       </div><!-- /nav-impostazioni-items -->
     </nav>
@@ -1262,6 +1268,16 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <div id="notif-config-body">Caricamento…</div>
       </section>
 
+      <section class="section" id="sec-aspetto">
+        <div class="page-hdr">
+          <div>
+            <h1>Aspetto</h1>
+            <div class="sub">Tema chiaro, scuro o automatico (segue il dispositivo). La scelta vale solo per questo dispositivo.</div>
+          </div>
+        </div>
+        <div class="card" style="padding:20px"><div id="tema-selettore-resp"></div></div>
+      </section>
+
       <!-- PRIORITÀ -->
       <section class="section" id="sec-priorita-config">
         <div class="page-hdr">
@@ -1764,6 +1780,8 @@ let riassegnaOrdFaseId = null;
 // ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
+MangoTema.montaSelettore(document.getElementById('tema-selettore-resp'));
+
 async function init() {
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
@@ -2114,7 +2132,7 @@ function setupRealtime() {
 // ═══════════════════════════════════════════════
 // NAVIGAZIONE
 // ═══════════════════════════════════════════════
-const IMPOSTAZIONI_SECTIONS = ['fasi-config','tipi-prodotto-config','strutture-config','materiali-config','priorita-config','macro-config','orario-config','kpi-config','macchine-config','fasi-extra-config','notif-config'];
+const IMPOSTAZIONI_SECTIONS = ['fasi-config','tipi-prodotto-config','strutture-config','materiali-config','priorita-config','macro-config','orario-config','kpi-config','macchine-config','fasi-extra-config','notif-config','aspetto'];
 
 function toggleImpostazioni(force) {
   const el  = document.getElementById('impostazioni-items');

@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Mango">
-<meta name="theme-color" content="#1C1714">
+<meta name="theme-color" content="#F2F2F7">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Mango — Ufficio</title>
@@ -18,6 +18,7 @@
      Pages) -- Referrer-Policy invece funziona anche via meta, riduce la fuga di URL interni
      verso risorse di terze parti. Vedi vault. -->
 <meta name="referrer" content="strict-origin-when-cross-origin">
+<script src="js/tema.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js" integrity="sha384-JBR+x8blGwjDRO63aHCGiZMD4VNiTR4ZUGA+N6ZKLf3zNt1fK8IBpcgPaMrxqWBp" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="css/tema.css">
 <style>
@@ -30,10 +31,10 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
 /* ── LOGIN ── */
 #login-screen {
   min-height: 100vh; display: flex; align-items: center; justify-content: center;
-  background: var(--chrome-bg);
+  background: var(--bg);
 }
 .login-card {
-  background: var(--surface); border-radius: 12px; padding: 40px 36px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 40px 36px;
   width: 360px; box-shadow: var(--shadow-xl);
 }
 .login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
@@ -44,18 +45,18 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
 .login-card p { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
 .form-group { margin-bottom: 14px; }
 .form-group label { display: block; font-size: 11px; font-weight: 500; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
-.form-group select { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--ink); font-family: 'Inter', sans-serif; font-size: 14px; outline: none; }
+.form-group select { width: 100%; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-ctl); background: var(--bg); color: var(--ink); font-family: 'Inter', sans-serif; font-size: 14px; outline: none; }
 .form-group select:focus { border-color: var(--accent); }
 .pin-row { display: flex; gap: 10px; justify-content: center; margin: 18px 0; }
 .pin-row input {
   width: 56px; height: 56px; text-align: center; font-size: 22px; font-weight: 700;
-  border: 2px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--ink);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-ctl); background: var(--bg); color: var(--ink);
   font-family: 'DM Mono', monospace; outline: none;
 }
 .pin-row input:focus { border-color: var(--accent); }
 .btn-login {
   width: 100%; padding: 13px; background: var(--accent); color: var(--on-accent); border: none;
-  border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;
+  border-radius: var(--radius-ctl); min-height: 44px; font-size: 15px; font-weight: 600; cursor: pointer;
   font-family: 'Inter', sans-serif;
 }
 .btn-login:hover { opacity: 0.88; }
@@ -67,6 +68,7 @@ header {
   background: var(--chrome-bg); color: var(--chrome-ink);
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 24px; height: 52px; position: sticky; top: 0; z-index: 100;
+  border-bottom: 1px solid var(--border);
 }
 .logo { font-family: 'DM Mono', monospace; font-size: 14px; letter-spacing: 0.12em; text-transform: uppercase; display: flex; align-items: center; gap: 10px; color: var(--chrome-ink); }
 .logo .logo-mark { width: 26px; height: 26px; }
@@ -81,7 +83,7 @@ header {
 /* ── SEARCH ── */
 .search-wrap { margin-bottom: 18px; }
 .search-wrap input {
-  width: 100%; padding: 10px 14px 10px 38px; border: 1px solid var(--border); border-radius: 8px;
+  width: 100%; padding: 10px 14px 10px 38px; border: 1px solid var(--border-strong); border-radius: var(--radius-ctl);
   background: var(--surface); color: var(--ink); font-family: 'Inter', sans-serif; font-size: 14px;
   outline: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237A6E65' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: 12px center;
@@ -95,7 +97,7 @@ header {
 
 /* ── CARD ORDINE ── */
 .ord-card {
-  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card);
   padding: 18px 20px; margin-bottom: 14px; cursor: pointer;
   transition: box-shadow 0.15s, border-color 0.15s;
 }
@@ -130,9 +132,9 @@ header {
 .refresh-info { text-align: center; font-size: 11px; color: var(--muted); padding: 8px 0 20px; }
 
 /* ── TABS VISTA ── */
-.view-tabs { display: flex; gap: 4px; margin-bottom: 18px; }
+.view-tabs { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-bottom: 18px; }
 .view-tab {
-  padding: 7px 16px; border-radius: 8px; border: 1px solid var(--border);
+  padding: 7px 16px; min-height: 44px; border-radius: var(--radius-ctl); border: 1px solid var(--border);
   background: var(--surface); color: var(--muted); font-family: 'Inter', sans-serif;
   font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s;
 }
@@ -142,7 +144,7 @@ header {
 /* ── STORICO ── */
 #storico-view { display: none; max-width: 720px; margin: 0 auto; padding: 20px 16px 40px; }
 .stor-card {
-  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card);
   padding: 16px 20px; margin-bottom: 12px; cursor: pointer;
   transition: box-shadow 0.15s, border-color 0.15s;
 }
@@ -159,7 +161,7 @@ header {
   margin-bottom: 20px; padding: 6px 0;
 }
 .detail-back:hover { opacity: 0.75; }
-.detail-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+.detail-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 24px; margin-bottom: 16px; }
 .detail-cliente { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
 .detail-codice  { font-family: 'DM Mono', monospace; font-size: 15px; font-weight: 500; color: var(--ink); margin-bottom: 16px; }
 .detail-meta    { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-bottom: 16px; }
@@ -228,6 +230,7 @@ header {
     <div class="view-tabs">
       <button class="view-tab active">Produzione</button>
       <button class="view-tab" onclick="mostraStorico()">📦 Storico</button>
+      <div id="tema-selettore-uff" style="margin-left:auto"></div>
     </div>
     <div class="search-wrap">
       <input type="text" id="ufficio-search" placeholder="Cerca cliente o codice…" oninput="applicaFiltro()" autocomplete="off">
@@ -295,6 +298,8 @@ let dettaglioSorgente = 'lista'; // 'lista' | 'storico'
 let refreshTimer      = null;
 
 // ── LOGIN ──
+MangoTema.montaSelettore(document.getElementById('tema-selettore-uff'));
+
 async function init() {
   const saved = localStorage.getItem('ufficio-user');
   const savedToken = localStorage.getItem('ufficio-session-token');
