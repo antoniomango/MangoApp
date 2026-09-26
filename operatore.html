@@ -829,9 +829,10 @@ async function showApp() {
   if (navigator.onLine && currentUser?.id) {
     const { data: check } = await sb.rpc('controlla_sessione', { p_user_id: currentUser.id });
     if (check?.valida === false) {
-      await cacheDelete('current-user');
-      await cacheDelete('current-session-token');
+      await cacheSet('current-user', null);
+      await cacheSet('current-session-token', null);
       currentUser = null;
+      sessionToken = null;
       document.getElementById('login-screen').style.display = 'flex';
       return;
     }
@@ -861,7 +862,7 @@ async function showApp() {
   const deepOrdineId = params.get('ordine');
   if (deepOrdineId) {
     history.replaceState({}, '', 'operatore.html');
-    const ordine = ordini.find(o => o.id === deepOrdineId);
+    const ordine = ordiniCache.find(o => o.id === deepOrdineId);
     if (ordine) {
       await renderOrdineDetail(deepOrdineId);
       showScreen('ordine');
