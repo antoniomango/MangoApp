@@ -12,21 +12,20 @@
 <title>Mango — Ufficio</title>
 <!-- CSP via meta: frame-ancestors/report-uri/sandbox non hanno effetto qui (richiedono
      l'header HTTP reale, che GitHub Pages non permette di impostare) -- vedi vault. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co; connect-src 'self' https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co wss://kpdlynvmsoctagwtzrxr.supabase.co wss://mtpzfxnyfkzikzlkomwz.supabase.co; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co; connect-src 'self' https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co wss://kpdlynvmsoctagwtzrxr.supabase.co wss://mtpzfxnyfkzikzlkomwz.supabase.co; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'">
 <!-- Audit Round 3, punto 10: X-Frame-Options/X-Content-Type-Options non hanno equivalente
      meta tag (i browser li ignorano fuori da un vero header HTTP, non impostabile su GitHub
      Pages) -- Referrer-Policy invece funziona anche via meta, riduce la fuga di URL interni
      verso risorse di terze parti. Vedi vault. -->
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <script src="js/tema.js"></script>
+<script src="js/icone.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js" integrity="sha384-JBR+x8blGwjDRO63aHCGiZMD4VNiTR4ZUGA+N6ZKLf3zNt1fK8IBpcgPaMrxqWBp" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="css/tema.css">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap');
-
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink); min-height: 100vh; font-size: 14px; }
+body { font-family: var(--font-sans); background: var(--bg); color: var(--ink); min-height: 100vh; font-size: 14px; }
 
 /* ── LOGIN ── */
 #login-screen {
@@ -40,24 +39,24 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
 .login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
 .logo-mark { background: var(--accent); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); flex-shrink: 0; }
 .login-logo .logo-mark { width: 36px; height: 36px; }
-.login-logo span { font-family: 'DM Mono', monospace; font-size: 17px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink); }
+.login-logo span { font-family: var(--font-mono); font-size: 17px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink); }
 .login-card h2 { font-size: 20px; font-weight: 600; margin-bottom: 6px; }
 .login-card p { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
 .form-group { margin-bottom: 14px; }
 .form-group label { display: block; font-size: 11px; font-weight: 500; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
-.form-group select { width: 100%; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-ctl); background: var(--bg); color: var(--ink); font-family: 'Inter', sans-serif; font-size: 14px; outline: none; }
+.form-group select { width: 100%; padding: 10px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-ctl); background: var(--bg); color: var(--ink); font-family: var(--font-sans); font-size: 14px; outline: none; }
 .form-group select:focus { border-color: var(--accent); }
 .pin-row { display: flex; gap: 10px; justify-content: center; margin: 18px 0; }
 .pin-row input {
   width: 56px; height: 56px; text-align: center; font-size: 22px; font-weight: 700;
   border: 1px solid var(--border-strong); border-radius: var(--radius-ctl); background: var(--bg); color: var(--ink);
-  font-family: 'DM Mono', monospace; outline: none;
+  font-family: var(--font-mono); outline: none;
 }
 .pin-row input:focus { border-color: var(--accent); }
 .btn-login {
   width: 100%; padding: 13px; background: var(--accent); color: var(--on-accent); border: none;
   border-radius: var(--radius-ctl); min-height: 44px; font-size: 15px; font-weight: 600; cursor: pointer;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-sans);
 }
 .btn-login:hover { opacity: 0.88; }
 .err { color: var(--alert); font-size: 12px; text-align: center; margin-top: 10px; min-height: 18px; }
@@ -70,9 +69,9 @@ header {
   padding: 0 24px; height: 52px; position: sticky; top: 0; z-index: 100;
   border-bottom: 1px solid var(--border);
 }
-.logo { font-family: 'DM Mono', monospace; font-size: 14px; letter-spacing: 0.12em; text-transform: uppercase; display: flex; align-items: center; gap: 10px; color: var(--chrome-ink); }
+.logo { font-family: var(--font-mono); font-size: 14px; letter-spacing: 0.12em; text-transform: uppercase; display: flex; align-items: center; gap: 10px; color: var(--chrome-ink); }
 .logo .logo-mark { width: 26px; height: 26px; }
-.header-right { display: flex; align-items: center; gap: 16px; font-size: 12px; color: var(--chrome-muted); font-family: 'DM Mono', monospace; }
+.header-right { display: flex; align-items: center; gap: 16px; font-size: 12px; color: var(--chrome-muted); font-family: var(--font-mono); }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); display: inline-block; margin-right: 4px; }
 .header-right .esci-link { cursor: pointer; text-decoration: underline; }
 .header-right .esci-link:hover { color: var(--chrome-ink); }
@@ -81,12 +80,12 @@ header {
 #lista-view { max-width: 720px; margin: 0 auto; padding: 20px 16px 40px; }
 
 /* ── SEARCH ── */
-.search-wrap { margin-bottom: 18px; }
+.search-wrap { margin-bottom: 18px; position: relative; }
+.search-wrap i[data-ic] { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--muted); pointer-events: none; }
 .search-wrap input {
   width: 100%; padding: 10px 14px 10px 38px; border: 1px solid var(--border-strong); border-radius: var(--radius-ctl);
-  background: var(--surface); color: var(--ink); font-family: 'Inter', sans-serif; font-size: 14px;
-  outline: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237A6E65' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: 12px center;
+  background: var(--surface); color: var(--ink); font-family: var(--font-sans); font-size: 14px;
+  outline: none;
 }
 .search-wrap input:focus { border-color: var(--accent-2); }
 
@@ -106,8 +105,8 @@ header {
 .ord-card.ritardo { border-left: 4px solid var(--alert); }
 .ord-hdr { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
 .ord-cliente { font-size: 16px; font-weight: 600; }
-.ord-codice { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; color: var(--ink); margin-top: 3px; }
-.ord-pct { font-size: 26px; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--muted); flex-shrink: 0; }
+.ord-codice { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--ink); margin-top: 3px; }
+.ord-pct { font-size: 26px; font-weight: 700; font-family: var(--font-mono); color: var(--muted); flex-shrink: 0; }
 .ord-pct.done { color: var(--ok); }
 .ord-info { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
 .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 99px; }
@@ -135,7 +134,7 @@ header {
 .view-tabs { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-bottom: 18px; }
 .view-tab {
   padding: 7px 16px; min-height: 44px; border-radius: var(--radius-ctl); border: 1px solid var(--border);
-  background: var(--surface); color: var(--muted); font-family: 'Inter', sans-serif;
+  background: var(--surface); color: var(--muted); font-family: var(--font-sans);
   font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s;
 }
 .view-tab:hover { color: var(--ink); border-color: var(--accent-2); }
@@ -150,7 +149,7 @@ header {
 }
 .stor-card:hover { box-shadow: var(--shadow); border-color: var(--accent-2); }
 .stor-hdr { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; gap: 12px; }
-.stor-data { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); text-align: right; flex-shrink: 0; white-space: nowrap; }
+.stor-data { font-family: var(--font-mono); font-size: 12px; color: var(--muted); text-align: right; flex-shrink: 0; white-space: nowrap; }
 .badge-spedito { background: var(--ok-soft); color: var(--ok-ink); }
 
 /* ── DETTAGLIO ── */
@@ -163,7 +162,7 @@ header {
 .detail-back:hover { opacity: 0.75; }
 .detail-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 24px; margin-bottom: 16px; }
 .detail-cliente { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
-.detail-codice  { font-family: 'DM Mono', monospace; font-size: 15px; font-weight: 500; color: var(--ink); margin-bottom: 16px; }
+.detail-codice  { font-family: var(--font-mono); font-size: 15px; font-weight: 500; color: var(--ink); margin-bottom: 16px; }
 .detail-meta    { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-bottom: 16px; }
 .detail-meta-item { display: flex; flex-direction: column; gap: 2px; }
 .detail-meta-label { font-size: 10px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
@@ -229,10 +228,11 @@ header {
   <div id="lista-view">
     <div class="view-tabs">
       <button class="view-tab active">Produzione</button>
-      <button class="view-tab" onclick="mostraStorico()">📦 Storico</button>
+      <button class="view-tab" onclick="mostraStorico()"><i data-ic="pacco"></i> Storico</button>
       <div id="tema-selettore-uff" style="margin-left:auto"></div>
     </div>
     <div class="search-wrap">
+      <i data-ic="cerca"></i>
       <input type="text" id="ufficio-search" placeholder="Cerca cliente o codice…" oninput="applicaFiltro()" autocomplete="off">
     </div>
     <div id="main-content"><div class="empty">Caricamento ordini…</div></div>
@@ -243,9 +243,10 @@ header {
   <div id="storico-view">
     <div class="view-tabs">
       <button class="view-tab" onclick="tornaListaDaStorico()">Produzione</button>
-      <button class="view-tab active">📦 Storico</button>
+      <button class="view-tab active"><i data-ic="pacco"></i> Storico</button>
     </div>
     <div class="search-wrap">
+      <i data-ic="cerca"></i>
       <input type="text" id="storico-search" placeholder="Cerca cliente o codice…" oninput="applicaFiltroStorico()" autocomplete="off">
     </div>
     <div id="storico-content"><div class="empty">Caricamento…</div></div>
@@ -449,7 +450,7 @@ function renderLista() {
   const labelQ = filtrati.length !== 1
     ? (searchQuery ? 'ordini trovati' : 'ordini attivi')
     : (searchQuery ? 'ordine trovato' : 'ordine attivo');
-  const intestazione = `<div class="data-oggi">📅 <strong>${esc(oggiLabel.charAt(0).toUpperCase()+oggiLabel.slice(1))}</strong> <span>— ${filtrati.length} ${labelQ}</span></div>`;
+  const intestazione = `<div class="data-oggi"><i data-ic="calendario"></i> <strong>${esc(oggiLabel.charAt(0).toUpperCase()+oggiLabel.slice(1))}</strong> <span>— ${filtrati.length} ${labelQ}</span></div>`;
 
   el.innerHTML = intestazione + filtrati.map(o => cardHtml(o, fasiMap, fasiExtraMap, oggi)).join('');
 }
@@ -492,13 +493,13 @@ function cardHtml(o, fasiMap, fasiExtraMap, oggi) {
 
   const badge = isAttesa
     ? `<span class="badge badge-attesa">✓ Pronto per spedizione</span>`
-    : isSosp  ? `<span class="badge badge-sospeso">⏸ Sospeso</span>`
-    : inRitardo ? `<span class="badge badge-ritardo">⚠ In ritardo</span>`
+    : isSosp  ? `<span class="badge badge-sospeso"><i data-ic="pausa"></i> Sospeso</span>`
+    : inRitardo ? `<span class="badge badge-ritardo"><i data-ic="avviso"></i> In ritardo</span>`
     : `<span class="badge badge-aperto">In produzione</span>`;
   const extraBadge = isExtra ? `<span class="badge badge-extra">Extra</span>` : '';
 
   const scadHtml = o.scadenza
-    ? `<span class="scad ${inRitardo ? 'late' : ''}">Consegna: <strong>${formatData(o.scadenza)}</strong>${inRitardo ? ' ⚠ In ritardo' : ''}</span>`
+    ? `<span class="scad ${inRitardo ? 'late' : ''}">Consegna: <strong>${formatData(o.scadenza)}</strong>${inRitardo ? ' <i data-ic="avviso"></i> In ritardo' : ''}</span>`
     : `<span class="scad">Nessuna data di consegna</span>`;
 
   return `<div class="ord-card ${isAttesa ? 'attesa' : inRitardo ? 'ritardo' : ''}" onclick="apriDettaglio('${esc(o.id)}')">
@@ -572,7 +573,7 @@ function renderStorico() {
     return;
   }
 
-  const intestazione = `<div class="data-oggi">📦 <strong>${filtrati.length} ${filtrati.length !== 1 ? 'ordini' : 'ordine'} spediti nel ${anno}</strong>${storicoQuery ? ` <span>— filtro: "${esc(storicoQuery)}"</span>` : ''}</div>`;
+  const intestazione = `<div class="data-oggi"><i data-ic="pacco"></i> <strong>${filtrati.length} ${filtrati.length !== 1 ? 'ordini' : 'ordine'} spediti nel ${anno}</strong>${storicoQuery ? ` <span>— filtro: "${esc(storicoQuery)}"</span>` : ''}</div>`;
   el.innerHTML = intestazione + filtrati.map(o => storCardHtml(o)).join('');
 }
 
@@ -649,8 +650,8 @@ function renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine, stats) {
   const statoBadge = isSpedito
     ? `<span class="badge badge-spedito">✓ Spedito</span>`
     : isAttesa  ? `<span class="badge badge-attesa">✓ Pronto per spedizione</span>`
-    : isSosp    ? `<span class="badge badge-sospeso">⏸ Sospeso</span>`
-    : inRitardo ? `<span class="badge badge-ritardo">⚠ In ritardo</span>`
+    : isSosp    ? `<span class="badge badge-sospeso"><i data-ic="pausa"></i> Sospeso</span>`
+    : inRitardo ? `<span class="badge badge-ritardo"><i data-ic="avviso"></i> In ritardo</span>`
     : `<span class="badge badge-aperto">In produzione</span>`;
   const extraBadge = isExtra ? ` <span class="badge badge-extra">Ordine Extra</span>` : '';
 

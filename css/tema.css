@@ -21,8 +21,27 @@
  * identici — cambiali sempre insieme.
  */
 
+/* ── Font locali (Geist / Geist Mono, SIL OFL 1.1 — vedi fonts/OFL-Geist.txt) ── */
+@font-face {
+  font-family: 'Geist';
+  src: url('../fonts/Geist-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('../fonts/GeistMono-Variable.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ── costanti comuni a tutti i temi ─────────────────── */
 :root {
+  --font-sans: 'Geist', -apple-system, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
   --radius-card: 14px;
   --radius-ctl:  10px;
 
@@ -225,3 +244,10 @@
 }
 .tema-seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
 .tema-seg button:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
+
+/* ── Icone SVG (js/icone.js riempie i segnaposto <i data-ic="nome"></i>) ── */
+i[data-ic] {
+  display: inline-flex; width: 1.25em; height: 1.25em; vertical-align: -0.25em;
+  flex-shrink: 0; font-style: normal; line-height: 1;
+}
+i[data-ic] > svg { width: 100%; height: 100%; display: block; }
