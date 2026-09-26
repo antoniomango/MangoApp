@@ -1,4 +1,4 @@
-const CACHE = 'mango-v27';
+const CACHE = 'mango-v28';
 const ASSETS = [
   '/MangoApp/operatore.html',
   '/MangoApp/responsabile.html',
@@ -6,7 +6,13 @@ const ASSETS = [
   '/MangoApp/manifest.json',
   '/MangoApp/icon-192.png',
   '/MangoApp/icon-512.png',
-  '/MangoApp/js/config.js'
+  '/MangoApp/js/config.js',
+  '/MangoApp/js/tema.js',
+  '/MangoApp/js/icone.js',
+  '/MangoApp/css/tema.css',
+  '/MangoApp/fonts/Geist-Variable.woff2',
+  '/MangoApp/fonts/GeistMono-Variable.woff2',
+  '/MangoApp/fonts/OFL-Geist.txt'
 ];
 
 self.addEventListener('install', e => {
