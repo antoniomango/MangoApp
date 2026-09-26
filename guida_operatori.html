@@ -1,15 +1,17 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="it" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <title>Mango SRL — Guida Operatori</title>
+<link rel="stylesheet" href="css/tema.css">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+  /* documento da stampare: resta sempre in bianco e nero (data-theme="light" fisso),
+     da tema.css prende solo i font locali */
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
     font-size: 11pt;
     color: #000;
     background: #fff;
@@ -37,7 +39,7 @@
     margin-bottom: 24px;
   }
   .cover h1 {
-    font-family: 'DM Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 28pt;
     letter-spacing: 0.15em;
     text-transform: uppercase;
@@ -101,7 +103,7 @@
 
   .badge {
     display: inline-block; padding: 1px 7px; border-radius: 3px;
-    font-size: 8.5pt; font-weight: 700; font-family: 'DM Mono', monospace;
+    font-size: 8.5pt; font-weight: 700; font-family: var(--font-mono);
     vertical-align: middle; border: 1.5px solid #000; background: #fff; color: #000;
   }
 
@@ -112,7 +114,7 @@
   }
   .fase-table td { padding: 5px 10px; border: 1px solid #ccc; }
   .fase-table tr:nth-child(even) td { background: #f5f5f5; }
-  .fase-table .num { font-family: 'DM Mono', monospace; color: #555; text-align: center; width: 32px; }
+  .fase-table .num { font-family: var(--font-mono); color: #555; text-align: center; width: 32px; }
 
   .stato-flow { display: flex; align-items: center; gap: 8px; margin: 14px 0; flex-wrap: wrap; }
   .stato-node {
@@ -507,7 +509,7 @@
     <div class="step"><div class="step-num">✓</div><div class="step-body"><strong>In caso di dubbi chiedi al responsabile</strong><span>Non tentare operazioni di cui non sei sicuro.</span></div></div>
   </div>
   <div style="margin-top:32px;text-align:center;padding:20px;border:2px solid #000;border-radius:4px">
-    <div style="font-family:'DM Mono',monospace;font-size:11pt;letter-spacing:0.1em;margin-bottom:4px;font-weight:700">MANGO SRL</div>
+    <div style="font-family:var(--font-mono);font-size:11pt;letter-spacing:0.1em;margin-bottom:4px;font-weight:700">MANGO SRL</div>
     <div style="font-size:9pt;color:#555">Gestione Produzione — Versione 2.0 · Giugno 2025</div>
   </div>
 </div>
