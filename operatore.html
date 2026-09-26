@@ -12,18 +12,17 @@
 <title>Mango — Operatore</title>
 <!-- CSP via meta: frame-ancestors/report-uri/sandbox non hanno effetto qui (richiedono
      l'header HTTP reale, che GitHub Pages non permette di impostare) -- vedi vault. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.onesignal.com https://*.onesignal.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co; connect-src 'self' https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co wss://kpdlynvmsoctagwtzrxr.supabase.co wss://mtpzfxnyfkzikzlkomwz.supabase.co https://onesignal.com https://*.onesignal.com; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.onesignal.com https://*.onesignal.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co; connect-src 'self' https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co wss://kpdlynvmsoctagwtzrxr.supabase.co wss://mtpzfxnyfkzikzlkomwz.supabase.co https://onesignal.com https://*.onesignal.com; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'">
 <!-- Audit Round 3, punto 10: X-Frame-Options/X-Content-Type-Options non hanno equivalente
      meta tag (i browser li ignorano fuori da un vero header HTTP, non impostabile su GitHub
      Pages) -- Referrer-Policy invece funziona anche via meta, riduce la fuga di URL interni
      (es. ?ordine=<uuid>) verso risorse di terze parti. Vedi vault. -->
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <script src="js/tema.js"></script>
+<script src="js/icone.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js" integrity="sha384-JBR+x8blGwjDRO63aHCGiZMD4VNiTR4ZUGA+N6ZKLf3zNt1fK8IBpcgPaMrxqWBp" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="css/tema.css">
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap');
-
 :root {
   --navh:     60px;
 }
@@ -32,7 +31,7 @@
 
 html, body { height: 100%; overflow: hidden; }
 
-body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink); font-size: 15px; }
+body { font-family: var(--font-sans); background: var(--bg); color: var(--ink); font-size: 15px; }
 
 /* ── LOGIN ── */
 #login-screen {
@@ -41,14 +40,14 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
 }
 .login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 40px; }
 .logo-mark { width: 40px; height: 40px; background: var(--accent); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
-.login-logo span { font-family: 'DM Mono', monospace; font-size: 20px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--chrome-ink); }
+.login-logo span { font-family: var(--font-mono); font-size: 20px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--chrome-ink); }
 .login-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); box-shadow: var(--shadow); padding: 28px; width: 100%; max-width: 360px; }
 .login-card h2 { font-size: 20px; font-weight: 600; margin-bottom: 20px; }
 .form-group { margin-bottom: 16px; }
 .form-group label { display: block; font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
 .form-group select, .form-group input {
   width: 100%; padding: 13px 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-ctl);
-  background: var(--bg); color: var(--ink); font-family: 'Inter', sans-serif; font-size: 16px;
+  background: var(--bg); color: var(--ink); font-family: var(--font-sans); font-size: 16px;
   outline: none; -webkit-appearance: none; appearance: none;
 }
 .form-group select:focus, .form-group input:focus { border-color: var(--accent); }
@@ -57,12 +56,12 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
 }
 .pin-digit {
   width: 56px; height: 56px; border: 1px solid var(--border-strong); border-radius: var(--radius-ctl);
-  text-align: center; font-size: 22px; font-family: 'DM Mono', monospace;
+  text-align: center; font-size: 22px; font-family: var(--font-mono);
   background: var(--bg); color: var(--ink); outline: none;
   -webkit-text-security: disc;
 }
 .pin-digit:focus { border-color: var(--accent); }
-.btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 44px; padding: 14px; border-radius: var(--radius-ctl); border: none; cursor: pointer; font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600; transition: opacity 0.15s; }
+.btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 44px; padding: 14px; border-radius: var(--radius-ctl); border: none; cursor: pointer; font-family: var(--font-sans); font-size: 15px; font-weight: 600; transition: opacity 0.15s; }
 .btn:active { opacity: 0.75; }
 .btn:disabled { opacity: 0.5; }
 .btn-primary { background: var(--accent); color: var(--on-accent); }
@@ -78,7 +77,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
   padding: 0 16px; height: 52px; display: flex; align-items: center; justify-content: space-between;
   flex-shrink: 0; border-bottom: 1px solid var(--border);
 }
-.app-header .logo-sm { font-family: 'DM Mono', monospace; font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+.app-header .logo-sm { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
 .app-header .logo-mark-sm { width: 22px; height: 22px; background: var(--accent); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); }
 .user-chip { background: var(--chrome-fill); color: var(--chrome-ink); border: none; font: inherit; cursor: pointer; min-height: 32px; padding: 5px 10px; border-radius: 20px; font-size: 12px; display: flex; align-items: center; gap: 6px; }
 .online-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
@@ -95,7 +94,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
 .nav-tab { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 20px; cursor: pointer; color: var(--chrome-faint); transition: color 0.15s; }
 .nav-tab.active { color: var(--chrome-active); }
 .nav-tab .tab-icon { font-size: 20px; }
-.nav-tab .tab-label { font-size: 10px; font-family: 'DM Mono', monospace; letter-spacing: 0.06em; text-transform: uppercase; }
+.nav-tab .tab-label { font-size: 10px; font-family: var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; }
 
 /* ── SCREEN ── */
 .screen { display: none; padding: 16px; }
@@ -141,7 +140,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
 .fase-row.in_corso .fase-num-circle { background: var(--info-soft); color: var(--info-ink); }
 .fase-row.in_attesa .fase-num-circle { background: var(--attesa-bg); color: var(--attesa-ink); }
 .fase-row.completata .fase-num-circle { background: var(--ok-soft); color: var(--ok-ink); }
-.fase-num-circle { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500; flex-shrink: 0; }
+.fase-num-circle { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 12px; font-weight: 500; flex-shrink: 0; }
 .fase-info { flex: 1; }
 .fase-info .fn { font-size: 14px; font-weight: 600; }
 .fase-info .fo { font-size: 12px; color: var(--muted); margin-top: 2px; }
@@ -177,7 +176,7 @@ body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink
 @media (prefers-reduced-motion: reduce) {
   .nota-ordine-testo { animation: none; color: var(--alert-ink); }
 }
-textarea { width: 100%; padding: 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-ctl); font-family: 'Inter', sans-serif; font-size: 14px; background: var(--bg); color: var(--ink); resize: vertical; outline: none; min-height: 80px; }
+textarea { width: 100%; padding: 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-ctl); font-family: var(--font-sans); font-size: 14px; background: var(--bg); color: var(--ink); resize: vertical; outline: none; min-height: 80px; }
 textarea:focus { border-color: var(--accent); }
 .upload-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; border: 2px dashed var(--border); border-radius: 8px; background: var(--phase-bg); color: var(--muted); font-size: 14px; cursor: pointer; margin-bottom: 12px; }
 .upload-btn:active { background: var(--border); }
@@ -231,7 +230,7 @@ textarea:focus { border-color: var(--accent); }
 .offline-banner { background: var(--warn); color: var(--on-warn); padding: 8px 16px; font-size: 13px; text-align: center; display: none; }
 .offline-banner.show { display: block; }
 
-.section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-family: 'DM Mono', monospace; margin: 20px 0 8px; }
+.section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-family: var(--font-mono); margin: 20px 0 8px; }
 .progress-bar-wrap { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin: 6px 0 4px; }
 .progress-bar-fill { height: 100%; border-radius: 4px; background: var(--accent); transition: width 0.3s; }
 .progress-bar-fill.done { background: var(--ok); }
@@ -262,6 +261,10 @@ textarea:focus { border-color: var(--accent); }
 .profilo-panel[hidden] { display: none; }
 .profilo-panel .section-title { margin: 0 0 10px; }
 .queue-badge { background: var(--warn); color: var(--on-warn); border-radius: 12px; padding: 2px 8px; font-size: 11px; font-weight: 600; }
+/* icone SVG: misure per contesto */
+.nav-tab .tab-icon i[data-ic] { width: 22px; height: 22px; }
+.empty-state .icon i[data-ic] { width: 36px; height: 36px; }
+.btn i[data-ic] { width: 20px; height: 20px; }
 </style>
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 </head>
@@ -297,7 +300,7 @@ textarea:focus { border-color: var(--accent); }
 
 <!-- APP -->
 <div id="app-screen" style="display:none;flex-direction:column;height:100vh">
-  <div class="offline-banner" id="offline-banner">⚡ Offline — le azioni verranno sincronizzate alla riconnessione</div>
+  <div class="offline-banner" id="offline-banner"><i data-ic="offline"></i> Offline — le azioni verranno sincronizzate alla riconnessione</div>
   <div class="app-header">
     <div class="logo-sm">
       <div class="logo-mark-sm"></div>
@@ -331,16 +334,16 @@ textarea:focus { border-color: var(--accent); }
         <div class="section-title">Le mie fasi in corso</div>
         <div id="btn-batch-completa" style="display:none;flex-direction:column;gap:8px;margin-bottom:8px"></div>
         <div id="btn-batch-fasi" style="display:none;flex-direction:row;gap:8px;margin-bottom:8px">
-          <button class="btn btn-secondary" style="flex:1;font-size:13px" onclick="pausaTutteFasi()">⏸ Pausa tutte</button>
-          <button class="btn btn-primary" style="flex:1;font-size:13px" onclick="riprendiTutteFasi()">▶ Riprendi tutte</button>
+          <button class="btn btn-secondary" style="flex:1;font-size:13px" onclick="pausaTutteFasi()"><i data-ic="pausa"></i> Pausa tutte</button>
+          <button class="btn btn-primary" style="flex:1;font-size:13px" onclick="riprendiTutteFasi()"><i data-ic="play"></i> Riprendi tutte</button>
         </div>
         <div class="card" id="mie-fasi-card">
-          <div class="empty-state"><div class="icon">✅</div><p>Nessuna fase in corso</p></div>
+          <div class="empty-state"><div class="icon"><i data-ic="spunta"></i></div><p>Nessuna fase in corso</p></div>
         </div>
 
         <!-- Ricerca ordini -->
         <div style="margin-bottom:8px;display:flex;align-items:center;gap:10px">
-          <input type="text" id="ordini-search" placeholder="🔍 Cerca cliente o codice ordine…" oninput="filtraOrdini()"
+          <input type="text" id="ordini-search" placeholder="Cerca cliente o codice ordine…" oninput="filtraOrdini()"
             style="flex:1;padding:12px 14px;border:1px solid var(--border);border-radius:10px;font-size:15px;background:var(--surface);color:var(--ink);outline:none">
         </div>
         <div id="ordini-count" style="font-size:13px;color:var(--muted);margin-bottom:10px"></div>
@@ -348,7 +351,7 @@ textarea:focus { border-color: var(--accent); }
         <!-- Disponibili -->
         <div class="section-title">Ordini con fasi disponibili</div>
         <div id="ordini-disponibili-list">
-          <div class="empty-state"><div class="icon">📋</div><p>Caricamento…</p></div>
+          <div class="empty-state"><div class="icon"><i data-ic="appunti"></i></div><p>Caricamento…</p></div>
         </div>
 
         <div id="queue-info" style="margin-top:12px;text-align:center;display:none">
@@ -387,7 +390,7 @@ textarea:focus { border-color: var(--accent); }
         <div class="page-title">Le mie attività</div>
         <div class="section-title">Fasi completate</div>
         <div class="card" id="attivita-list">
-          <div class="empty-state"><div class="icon">📊</div><p>Caricamento…</p></div>
+          <div class="empty-state"><div class="icon"><i data-ic="grafico"></i></div><p>Caricamento…</p></div>
         </div>
       </div>
     </div>
@@ -401,7 +404,7 @@ textarea:focus { border-color: var(--accent); }
         </div>
 
         <div id="notif-list-op">
-          <div class="empty-state"><div class="icon">🔔</div><p>Caricamento…</p></div>
+          <div class="empty-state"><div class="icon"><i data-ic="campana"></i></div><p>Caricamento…</p></div>
         </div>
       </div>
     </div>
@@ -411,21 +414,21 @@ textarea:focus { border-color: var(--accent); }
   <div id="op-sped-multi-bar" style="display:none;position:fixed;left:0;right:0;bottom:var(--navh);z-index:99;background:var(--inverse);color:var(--on-inverse);padding:10px 16px;align-items:center;gap:10px;box-shadow:var(--shadow-bar)">
     <strong id="op-sped-multi-count" style="font-size:13px;flex:1">0 selezionati</strong>
     <button type="button" class="btn btn-secondary" style="width:auto;padding:8px 14px;font-size:13px" onclick="toggleModalitaSpedizioneMultiplaOp()">Annulla</button>
-    <button type="button" class="btn btn-ok" style="width:auto;padding:8px 14px;font-size:13px" onclick="eseguiSpedizioneMultiplaOp()">🚚 Spedisci</button>
+    <button type="button" class="btn btn-ok" style="width:auto;padding:8px 14px;font-size:13px" onclick="eseguiSpedizioneMultiplaOp()"><i data-ic="camion"></i> Spedisci</button>
   </div>
 
   <!-- BOTTOM NAV -->
   <div class="bottom-nav">
     <div class="nav-tab active" id="tab-home" onclick="showScreen('home')">
-      <span class="tab-icon">🏠</span>
+      <span class="tab-icon"><i data-ic="casa"></i></span>
       <span class="tab-label">Home</span>
     </div>
     <div class="nav-tab" id="tab-attivita" onclick="showScreen('attivita')">
-      <span class="tab-icon">📊</span>
+      <span class="tab-icon"><i data-ic="grafico"></i></span>
       <span class="tab-label">Attività</span>
     </div>
     <div class="nav-tab" id="tab-notifiche" onclick="showScreen('notifiche')" style="position:relative">
-      <span class="tab-icon">🔔</span>
+      <span class="tab-icon"><i data-ic="campana"></i></span>
       <div id="notif-badge-op" style="display:none;position:absolute;top:6px;right:18px;background:var(--alert-strong);color:var(--on-alert);border-radius:99px;font-size:10px;font-weight:700;padding:1px 5px;min-width:16px;text-align:center">0</div>
       <span class="tab-label">Notifiche</span>
     </div>
@@ -451,7 +454,7 @@ textarea:focus { border-color: var(--accent); }
 <!-- SPEDIZIONE UNICA — dialog completamento fase di gruppo -->
 <div id="gruppo-fase-dialog">
   <div class="box">
-    <h4>📦 Spedizione unica</h4>
+    <h4><i data-ic="pacco"></i> Spedizione unica</h4>
     <p id="gruppo-fase-dialog-testo"></p>
     <button type="button" class="btn btn-primary" id="gruppo-fase-dialog-tutti">Tutti gli ordini</button>
     <button type="button" class="btn btn-secondary" id="gruppo-fase-dialog-solo">Solo questo ordine</button>
@@ -1073,7 +1076,7 @@ async function renderHome() {
   }
 
   if (!tutteInCorso.length) {
-    mieEl.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>Nessuna fase in corso</p></div>';
+    mieEl.innerHTML = '<div class="empty-state"><div class="icon"><i data-ic="spunta"></i></div><p>Nessuna fase in corso</p></div>';
   } else {
     mieEl.innerHTML = tutteInCorso.map(f => `
       <div class="card-row" onclick="${f.isExtra ? `openFaseExtraDetail('${f.id}','${f.ordineId}')` : `openFaseDetail('${f.id}','${f.ordineId}')`}">
@@ -1081,7 +1084,7 @@ async function renderHome() {
           <div class="row-title">${escapeHtml(f.nome)}</div>
           <div class="row-sub">${escapeHtml(f.cliente)} · ${escapeHtml(f.codice)}${f.collegaNome ? ` · con ${escapeHtml(f.collegaNome)}` : ''}${f.isExtra ? ' · <em>Ordine Extra</em>' : ''}</div>
         </div>
-        <span class="badge badge-${f.stato}">${f.stato === 'in_attesa' ? 'In attesa' : f.stato === 'bloccata' ? '🚨 Bloccata' : 'In corso'}</span>
+        <span class="badge badge-${f.stato}">${f.stato === 'in_attesa' ? 'In attesa' : f.stato === 'bloccata' ? '<i data-ic="avviso"></i> Bloccata' : 'In corso'}</span>
         <span class="arrow">›</span>
       </div>`).join('');
   }
@@ -1299,7 +1302,7 @@ function filtraOrdini() {
   </div>`;
 
   if (!filtrati.length) {
-    dispEl.innerHTML = legenda + `<div class="empty-state"><div class="icon">📋</div><p>${q ? 'Nessun risultato' : 'Nessun ordine aperto'}</p></div>`;
+    dispEl.innerHTML = legenda + `<div class="empty-state"><div class="icon"><i data-ic="appunti"></i></div><p>${q ? 'Nessun risultato' : 'Nessun ordine aperto'}</p></div>`;
     return;
   }
 
@@ -1331,7 +1334,7 @@ function filtraOrdini() {
     if (meseDato !== meseCorrente) {
       meseCorrente = meseDato;
       const label = meseDato === '0000-00'
-        ? '📦 In attesa corriere'
+        ? '<i data-ic="pacco"></i> In attesa corriere'
         : meseDato === '9999-99'
           ? 'Senza scadenza'
           : new Date(meseDato + '-02').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
@@ -1339,7 +1342,7 @@ function filtraOrdini() {
         ? `<span onclick="event.stopPropagation();toggleModalitaSpedizioneMultiplaOp()" style="cursor:pointer;text-decoration:underline;text-underline-offset:2px;color:var(--accent-2);text-transform:none;letter-spacing:normal;font-weight:600">${modalitaSpedizioneMultiplaOp ? '✕ Annulla' : '☑ Seleziona più ordini'}</span>`
         : '';
       sep = `<div style="padding:5px 4px 3px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:6px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <span>📅 ${label}</span>${azioneSelMultipla}
+        <span><i data-ic="calendario"></i> ${label}</span>${azioneSelMultipla}
       </div>`;
     }
     const isAttesa = o.stato === 'attesa_spedizione';
@@ -1361,18 +1364,18 @@ function filtraOrdini() {
     if (!isAttesa && !isSosp && stima?.stimaStr) {
       const stimaFmt = stima.dataStimata.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit' });
       if (stima.isInRitardo) {
-        stimaBadge = `<span style="font-size:11px;font-weight:700;color:var(--alert-strong)">🔴 IN RITARDO · stima: ${stimaFmt}</span>`;
+        stimaBadge = `<span style="font-size:11px;font-weight:700;color:var(--alert-strong)"><i data-ic="punto"></i> IN RITARDO · stima: ${stimaFmt}</span>`;
       } else if (stima.isRischio) {
-        stimaBadge = `<span style="font-size:11px;font-weight:700;color:var(--warn-ink-2)">🟡 A RISCHIO · stima: ${stimaFmt}</span>`;
+        stimaBadge = `<span style="font-size:11px;font-weight:700;color:var(--warn-ink-2)"><i data-ic="punto"></i> A RISCHIO · stima: ${stimaFmt}</span>`;
       } else {
-        stimaBadge = `<span style="font-size:11px;color:var(--muted)">🟢 stima: ${stimaFmt}</span>`;
+        stimaBadge = `<span style="font-size:11px;color:var(--muted)"><i data-ic="punto" style="color:var(--ok)"></i> stima: ${stimaFmt}</span>`;
       }
     } else if (!isAttesa && !isSosp && stima?.isInRitardo) {
-      stimaBadge = `<span style="font-size:11px;font-weight:700;color:var(--alert-strong)">🔴 IN RITARDO</span>`;
+      stimaBadge = `<span style="font-size:11px;font-weight:700;color:var(--alert-strong)"><i data-ic="punto"></i> IN RITARDO</span>`;
     }
     const fratelliGruppo = codiciFratelliGruppo(o);
     const badgeGruppo = fratelliGruppo.length
-      ? `<div style="margin-top:2px;font-size:11px;color:var(--accent);font-weight:600">📦 Spedizione unica con ${escapeHtml(fratelliGruppo.join(', '))}</div>`
+      ? `<div style="margin-top:2px;font-size:11px;color:var(--accent);font-weight:600"><i data-ic="pacco"></i> Spedizione unica con ${escapeHtml(fratelliGruppo.join(', '))}</div>`
       : '';
     // Spedizione multipla: solo le card "in attesa corriere" diventano selezionabili quando la
     // modalità è attiva — le altre restano toccabili come sempre (aprono il dettaglio).
@@ -1390,9 +1393,9 @@ function filtraOrdini() {
         </div>
         <div class="row-sub">${o.tipo === 'extra' ? 'Ordine Extra' : `${strutturaLabel(o.struttura)} · ${tipoProdLabel(o.tipo_prodotto)}`}</div>
         ${isAttesa ? '<div style="margin-top:3px;font-size:12px;font-weight:600;color:var(--ok)">✓ In attesa corriere</div>'
-          : isSosp ? '<div style="margin-top:3px;font-size:12px;font-weight:700;color:var(--warn-ink)">⏸ SOSPESO</div>'
+          : isSosp ? '<div style="margin-top:3px;font-size:12px;font-weight:700;color:var(--warn-ink)"><i data-ic="pausa"></i> SOSPESO</div>'
           : (o.scadenza ? `<div style="margin-top:3px">${scadenzaLabel(o.scadenza)}</div>` : '')}
-        ${!hasDisp && !isAttesa && !isSosp ? '<div style="margin-top:2px;font-size:11px;color:var(--muted)">⬜ Nessuna fase disponibile</div>' : ''}
+        ${!hasDisp && !isAttesa && !isSosp ? '<div style="margin-top:2px;font-size:11px;color:var(--muted)"><i data-ic="quadrato"></i> Nessuna fase disponibile</div>' : ''}
         ${stimaBadge ? `<div style="margin-top:2px">${stimaBadge}</div>` : ''}
         ${badgeGruppo}
         <div class="ord-progress-wrap">
@@ -1431,7 +1434,7 @@ async function renderOrdineDetail(ordineId) {
     <div class="meta-item"><label>Stato</label><span class="badge badge-${ordine.stato}">${ordine.stato}</span></div>
     <div class="meta-item"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}${ordine.scadenza ? ` · Settimana ${settimanaIsoDaData(ordine.scadenza)}` : ''}</span></div>
     <div class="meta-item" id="ord-stima-item"><label>Consegna stimata</label><span id="ord-stima-val" style="color:var(--muted)">—</span></div>
-    ${fratelliGruppoDet.length ? `<div class="meta-item" style="grid-column:1/-1"><label>📦 Spedizione unica</label><span style="color:var(--accent);font-weight:600">Insieme a ${escapeHtml(fratelliGruppoDet.join(', '))}</span></div>` : ''}
+    ${fratelliGruppoDet.length ? `<div class="meta-item" style="grid-column:1/-1"><label><i data-ic="pacco"></i> Spedizione unica</label><span style="color:var(--accent);font-weight:600">Insieme a ${escapeHtml(fratelliGruppoDet.join(', '))}</span></div>` : ''}
     ${ordine.note_generali ? `<div class="meta-item" style="grid-column:1/-1"><label>Note</label><span class="nota-ordine-testo">${escapeHtml(ordine.note_generali)}</span></div>` : ''}
   `;
 
@@ -1439,7 +1442,7 @@ async function renderOrdineDetail(ordineId) {
   const btnSpeditoEl = document.getElementById('ord-det-btn-spedito');
   if (btnSpeditoEl) {
     if (ordine.stato === 'attesa_spedizione') {
-      btnSpeditoEl.innerHTML = `<button class="btn btn-ok" style="width:100%;margin-top:8px;padding:12px" onclick="segnaSpedito('${ordineId}')">📦 Segna come spedito</button>`;
+      btnSpeditoEl.innerHTML = `<button class="btn btn-ok" style="width:100%;margin-top:8px;padding:12px" onclick="segnaSpedito('${ordineId}')"><i data-ic="pacco"></i> Segna come spedito</button>`;
     } else {
       btnSpeditoEl.innerHTML = '';
     }
@@ -1467,7 +1470,7 @@ async function renderOrdineDetail(ordineId) {
       const opNome = f['users'] ? `${escapeHtml(f['users'].nome)} ${escapeHtml(f['users'].cognome)}` : '';
       const isMia = f.operatore_id === currentUser.id;
       return `<div class="fase-row ${f.stato}" onclick="openFaseExtraDetail('${f.id}', '${ordineId}')">
-        <div class="fase-num-circle">${f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '▶' : f.numero}</div>
+        <div class="fase-num-circle">${f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '<i data-ic="play"></i>' : f.numero}</div>
         <div class="fase-info">
           <div class="fn">${escapeHtml(f.nome)}</div>
           <div class="fo">${opNome ? opNome + (isMia ? ' (tu)' : '') : 'Disponibile'}</div>
@@ -1561,7 +1564,7 @@ async function renderOrdineDetail(ordineId) {
           const depOf = ordFasi.find(of => of.fase_id === depId);
           return depOf && _depNonSoddisfatta(depId, depOf);
         });
-      const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '▶' : f.stato === 'in_attesa' ? '⏸' : isNA ? '—' : isBloccata ? '🔒' : isCustom ? '★' : f.fase_id;
+      const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '<i data-ic="play"></i>' : f.stato === 'in_attesa' ? '<i data-ic="pausa"></i>' : isNA ? '—' : isBloccata ? '<i data-ic="lucchetto"></i>' : isCustom ? '★' : f.fase_id;
       const clickAttr = isNA ? '' : `onclick="openFaseDetail('${f.id}', '${ordineId}')"`;
       const extraBadges = [
         cnc ? '<span style="font-size:9px;font-weight:700;background:var(--violet);color:var(--on-violet);padding:1px 4px;border-radius:3px;margin-left:4px">CNC</span>' : '',
@@ -1599,7 +1602,7 @@ async function renderOrdineDetail(ordineId) {
         ${fasiExtStd.map(f => {
           const opNome = f['users'] ? `${escapeHtml(f['users'].nome)} ${escapeHtml(f['users'].cognome)}` : '';
           const isMia = f.operatore_id === currentUser.id;
-          const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '▶' : f.stato === 'in_attesa' ? '⏸' : '★';
+          const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '<i data-ic="play"></i>' : f.stato === 'in_attesa' ? '<i data-ic="pausa"></i>' : '★';
           return `<div class="fase-row ${f.stato}" onclick="openFaseExtraDetail('${f.id}', '${ordineId}')">
             <div class="fase-num-circle" style="background:var(--accent);color:var(--on-accent)">${icon}</div>
             <div class="fase-info">
@@ -1688,16 +1691,16 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
   } else if (tipoGestioneExtra === 'spedizione_esterna') {
     if (f.stato === 'disponibile') {
       bodyHtml += `<div class="azione-box" style="border-color:var(--violet-line-2)">
-        <h4>📤 Spedisci al fornitore</h4>
+        <h4><i data-ic="invio"></i> Spedisci al fornitore</h4>
         <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Quando spedisci il pezzo al fornitore esterno, registra l'uscita. Il tempo sarà misurato fino alla ricezione.</p>
-        <button class="btn btn-primary" onclick="segnaSpedizioneExtra('${faseExtraId}','${ordineId}')">📤 Segna come spedito</button>
+        <button class="btn btn-primary" onclick="segnaSpedizioneExtra('${faseExtraId}','${ordineId}')"><i data-ic="invio"></i> Segna come spedito</button>
       </div>`;
     } else if (f.stato === 'in_attesa') {
       const spedIl = f.spedita_il ? `<div class="meta-item" style="margin-bottom:10px"><label>Spedito il</label><span>${formatDateTime(f.spedita_il)}</span></div>` : '';
       bodyHtml += `${spedIl}<div class="azione-box" style="border-color:var(--ok-line)">
-        <h4>📦 Pezzo rientrato?</h4>
+        <h4><i data-ic="pacco"></i> Pezzo rientrato?</h4>
         <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Il pezzo è tornato dal fornitore? Conferma la ricezione per chiudere la fase e registrare il tempo di attesa.</p>
-        <button class="btn btn-ok" onclick="confermaRicezioneExtra('${faseExtraId}','${ordineId}')">✅ Conferma ricezione pezzo</button>
+        <button class="btn btn-ok" onclick="confermaRicezioneExtra('${faseExtraId}','${ordineId}')"><i data-ic="spunta"></i> Conferma ricezione pezzo</button>
       </div>`;
     } else if (f.stato === 'completata') {
       bodyHtml += `<div class="azione-box" style="border-color:var(--border);margin-top:12px">
@@ -1709,7 +1712,7 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
   } else if (f.stato === 'disponibile') {
     bodyHtml += `<div class="azione-box"><h4>Prendi in carico questa fase</h4>
       <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Puoi lavorarci insieme a un collega — entrambi dovete prendere in carico.</p>
-      <button class="btn btn-primary" onclick="prendiInCaricoExtra('${faseExtraId}','${ordineId}')">▶ Prendi in carico</button></div>`;
+      <button class="btn btn-primary" onclick="prendiInCaricoExtra('${faseExtraId}','${ordineId}')"><i data-ic="play"></i> Prendi in carico</button></div>`;
   } else if (f.stato === 'in_corso' && isMia) {
     const giaSulla = new Set(opMulti.map(o => o.operatore_id));
     giaSulla.add(currentUser.id);
@@ -1991,7 +1994,7 @@ async function renderFaseDetail(ordFaseId, ordineId) {
   } else if (f.stato === 'disponibile' && !sospeso && _depBloccanti.length > 0) {
     bodyHtml += `
       <div class="azione-box" style="border-color:var(--violet-line);background:var(--violet-bg)">
-        <h4 style="color:var(--violet)">🔒 Fase bloccata</h4>
+        <h4 style="color:var(--violet)"><i data-ic="lucchetto"></i> Fase bloccata</h4>
         <p style="font-size:13px;color:var(--muted);margin-bottom:0">Prima devi completare: <strong>${_depBloccanti.map(n => escapeHtml(n)).join(', ')}</strong></p>
       </div>`;
   } else if (f.stato === 'disponibile' && !sospeso) {
@@ -1999,16 +2002,16 @@ async function renderFaseDetail(ordFaseId, ordineId) {
     if (tgDisp === 'spedizione_esterna') {
       bodyHtml += `
         <div class="azione-box" style="border-color:var(--violet-line-2)">
-          <h4>📤 Spedisci al fornitore</h4>
+          <h4><i data-ic="invio"></i> Spedisci al fornitore</h4>
           <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Quando spedisci il pezzo al fornitore, registra l'uscita. Il tempo sarà misurato fino alla ricezione.</p>
-          <button class="btn btn-primary" onclick="segnaSpedizioneFase('${ordFaseId}','${ordineId}')">📤 Segna come spedito</button>
+          <button class="btn btn-primary" onclick="segnaSpedizioneFase('${ordFaseId}','${ordineId}')"><i data-ic="invio"></i> Segna come spedito</button>
         </div>`;
     } else {
     bodyHtml += `
       <div class="azione-box">
         <h4>Prendi in carico questa fase</h4>
         <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Puoi lavorarci insieme a un collega — entrambi dovete prendere in carico.</p>
-        <button class="btn btn-primary" onclick="prendiInCarico('${ordFaseId}', '${ordineId}')">▶ Prendi in carico</button>
+        <button class="btn btn-primary" onclick="prendiInCarico('${ordFaseId}', '${ordineId}')"><i data-ic="play"></i> Prendi in carico</button>
       </div>`;
     } // fine else spedizione_esterna
   } else if (f.stato === 'in_corso' && isMia) {
@@ -2040,15 +2043,15 @@ async function renderFaseDetail(ordFaseId, ordineId) {
         <div class="form-group">
           <label>Foto (opzionale)</label>
           <div style="display:flex;gap:8px">
-            <label class="upload-btn" style="flex:1;width:auto;margin-bottom:0" onclick="apriFotocameraInterna('${ordFaseId}','${ordineId}')">📷 Scatta foto</label>
-            <label class="upload-btn" style="flex:1;width:auto;margin-bottom:0" onclick="_apriRipiegoInputFile()">🖼️ Allega da galleria</label>
+            <label class="upload-btn" style="flex:1;width:auto;margin-bottom:0" onclick="apriFotocameraInterna('${ordFaseId}','${ordineId}')"><i data-ic="fotocamera"></i> Scatta foto</label>
+            <label class="upload-btn" style="flex:1;width:auto;margin-bottom:0" onclick="_apriRipiegoInputFile()"><i data-ic="immagine"></i> Allega da galleria</label>
           </div>
           <input type="file" id="fase-foto-input" accept="image/*" multiple style="display:none" onchange="previewFaseFoto(this)">
           <div class="foto-preview" id="fase-foto-preview"></div>
         </div>
         ${opzioniColleghi}
         <button class="btn btn-ok" id="btn-completa-fase" style="margin-top:14px" onclick="completaFase('${ordFaseId}', '${ordineId}')">✓ Segna come completata</button>
-        <button class="btn btn-secondary" style="margin-top:10px" onclick="mettiInAttesa('${ordFaseId}', '${ordineId}')">⏸ Metti in attesa</button>
+        <button class="btn btn-secondary" style="margin-top:10px" onclick="mettiInAttesa('${ordFaseId}', '${ordineId}')"><i data-ic="pausa"></i> Metti in attesa</button>
         <button class="btn btn-alert" style="margin-top:10px;font-size:12px;opacity:0.8" onclick="annullaPresaInCarico('${ordFaseId}', '${ordineId}')">✕ Annulla presa in carico</button>
       </div>`;
   } else if (f.stato === 'in_corso' && !isMia && !sospeso) {
@@ -2069,26 +2072,26 @@ async function renderFaseDetail(ordFaseId, ordineId) {
     if (tipoGestione === 'conferma_ricezione') {
       bodyHtml += `
         <div class="azione-box" style="border-color:var(--ok-line)">
-          <h4>📦 Attesa materiale esterno</h4>
+          <h4><i data-ic="pacco"></i> Attesa materiale esterno</h4>
           <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Il materiale è arrivato? Conferma la ricezione per chiudere questa fase.</p>
-          <button class="btn btn-ok" onclick="confermaRicezioneFase('${ordFaseId}','${ordineId}')">✅ Conferma ricezione</button>
+          <button class="btn btn-ok" onclick="confermaRicezioneFase('${ordFaseId}','${ordineId}')"><i data-ic="spunta"></i> Conferma ricezione</button>
         </div>`;
     } else if (tipoGestione === 'spedizione_esterna') {
       const spedIl = f.spedita_il ? `<div class="meta-item" style="margin-bottom:10px"><label>Spedito il</label><span>${formatDateTime(f.spedita_il)}</span></div>` : '';
       bodyHtml += `${spedIl}
         <div class="azione-box" style="border-color:var(--ok-line)">
-          <h4>📦 Pezzo rientrato dal fornitore?</h4>
+          <h4><i data-ic="pacco"></i> Pezzo rientrato dal fornitore?</h4>
           <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Il pezzo è tornato? Conferma la ricezione per chiudere la fase e registrare il tempo.</p>
-          <button class="btn btn-ok" onclick="confermaRicezioneFase('${ordFaseId}','${ordineId}')">✅ Conferma ricezione pezzo</button>
+          <button class="btn btn-ok" onclick="confermaRicezioneFase('${ordFaseId}','${ordineId}')"><i data-ic="spunta"></i> Conferma ricezione pezzo</button>
         </div>`;
     } else {
       bodyHtml += `
         <div class="azione-box" style="border-color:var(--attesa-line)">
-          <h4>⏸ Fase in attesa</h4>
+          <h4><i data-ic="pausa"></i> Fase in attesa</h4>
           <p style="font-size:13px;color:var(--muted);margin-bottom:12px">
             ${isMia ? 'Hai messo questa fase in attesa. Puoi riprenderla tu o lasciare che un collega la continui.' : 'Questa fase è in attesa. Puoi riprenderla tu.'}
           </p>
-          <button class="btn btn-primary" onclick="riprendi('${ordFaseId}', '${ordineId}', false)">▶ Riprendi fase</button>
+          <button class="btn btn-primary" onclick="riprendi('${ordFaseId}', '${ordineId}', false)"><i data-ic="play"></i> Riprendi fase</button>
         </div>`;
     }
   } else if (f.stato === 'completata') {
@@ -2100,7 +2103,7 @@ async function renderFaseDetail(ordFaseId, ordineId) {
       if (allDone && currentUser.ruolo !== 'sola_lettura') {
         bodyHtml += `
           <div class="azione-box" style="border-color:var(--ok)">
-            <h4>📦 Pronto per la spedizione</h4>
+            <h4><i data-ic="pacco"></i> Pronto per la spedizione</h4>
             <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Tutte le fasi di produzione sono completate. Segna l'ordine come spedito.</p>
             <button class="btn btn-ok" onclick="segnaSpedito('${ordineId}')">✓ Segna come spedito</button>
           </div>`;
@@ -2512,6 +2515,7 @@ function _renderFotoAccumulate() {
     img.src = URL.createObjectURL(file);
     const btn = document.createElement('button');
     btn.textContent = '✕';
+    btn.setAttribute('aria-label', 'Rimuovi foto');
     btn.title = 'Rimuovi foto';
     btn.style.cssText = 'position:absolute;top:2px;right:2px;background:var(--scrim-strong);color:var(--media-ink);border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;line-height:1;padding:0';
     btn.onclick = () => { _fotoAccumulate.splice(idx, 1); _renderFotoAccumulate(); };
@@ -2647,6 +2651,7 @@ function _renderStripFotocamera() {
     const btn = document.createElement('button');
     btn.className = 'del-btn';
     btn.textContent = '✕';
+    btn.setAttribute('aria-label', 'Rimuovi foto');
     btn.onclick = () => { URL.revokeObjectURL(s.url); _camScatti.splice(i, 1); _renderStripFotocamera(); };
     wrap.appendChild(img); wrap.appendChild(btn);
     strip.appendChild(wrap);
@@ -2743,14 +2748,14 @@ async function _caricaScattoInterno(scatto, ordFaseId, ordineId) {
 async function renderAttivita() {
   const el = document.getElementById('attivita-list');
   if (!currentUser || !isOnline) {
-    el.innerHTML = '<div class="empty-state"><div class="icon">📡</div><p>Disponibile solo online</p></div>';
+    el.innerHTML = '<div class="empty-state"><div class="icon"><i data-ic="segnale"></i></div><p>Disponibile solo online</p></div>';
     return;
   }
   const { data: storicoResp } = await sb.rpc('storico_fasi_completate', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
   const data = storicoResp?.ok ? storicoResp.dati : [];
 
   if (!data?.length) {
-    el.innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>Nessuna fase completata</p></div>';
+    el.innerHTML = '<div class="empty-state"><div class="icon"><i data-ic="grafico"></i></div><p>Nessuna fase completata</p></div>';
     return;
   }
   el.innerHTML = data.map(f => {
@@ -2759,7 +2764,7 @@ async function renderAttivita() {
       : '—';
     return `<div class="attivita-item">
       <div class="at-title">${escapeHtml(f.fasi?.nome || 'Fase')} — ${escapeHtml(f.ordini?.codice)}</div>
-      <div class="at-sub">${escapeHtml(f.ordini?.cliente)} · ${formatDate(f.completata_il)} · ⏱ ${durata}</div>
+      <div class="at-sub">${escapeHtml(f.ordini?.cliente)} · ${formatDate(f.completata_il)} · <i data-ic="timer"></i> ${durata}</div>
     </div>`;
   }).join('');
 }
@@ -2793,7 +2798,7 @@ function renderNotaOrdineBox(ordine) {
   const lunga = testo.length > 220;
   const contenuto = escapeHtml(testo).replace(/\n/g, '<br>');
   return `<div class="note-box" style="border-color:var(--warn-line);background:var(--warn-bg)">
-    <strong>📋 Note ordine</strong>
+    <strong><i data-ic="appunti"></i> Note ordine</strong>
     <div id="${id}" class="nota-ordine-testo${lunga ? ' nota-ordine-clamp' : ''}">${contenuto}</div>
     ${lunga ? `<button type="button" class="nota-ordine-toggle" onclick="(function(b){var el=document.getElementById('${id}');var esp=el.classList.toggle('espansa');b.textContent=esp?'Mostra meno':'Mostra tutto';})(this)">Mostra tutto</button>` : ''}
   </div>`;
@@ -2824,7 +2829,7 @@ function scadenzaLabel(scadenza) {
   const oggi = new Date(); oggi.setHours(0,0,0,0);
   const diff = Math.floor((new Date(scadenza) - oggi) / 86400000);
   const testo = formatDate(scadenza);
-  const extra = diff < 0 ? ' ⚠️ IN RITARDO' : diff === 0 ? ' ⚠️ OGGI' : diff === 1 ? ' · domani' : '';
+  const extra = diff < 0 ? ' <i data-ic="avviso"></i> IN RITARDO' : diff === 0 ? ' <i data-ic="avviso"></i> OGGI' : diff === 1 ? ' · domani' : '';
   if (!cls) return `<span style="font-size:11px;color:var(--muted)">Scad. ${testo}</span>`;
   const colore = cls === 'scad-danger' ? 'var(--alert-strong)' : 'var(--warn-strong)';
   return `<span style="font-size:11px;font-weight:600;color:${colore}">Scad. ${testo}${extra}</span>`;
@@ -2926,13 +2931,13 @@ function renderNotificheOp() {
   const el = document.getElementById('notif-list-op');
   const notifiche = window._notificheOp || [];
   if (!notifiche.length) {
-    el.innerHTML = '<div class="empty-state"><div class="icon">🔔</div><p>Nessuna notifica</p></div>';
+    el.innerHTML = '<div class="empty-state"><div class="icon"><i data-ic="campana"></i></div><p>Nessuna notifica</p></div>';
     return;
   }
-  const icone = { ordine_creato: '📋', ordine_sospeso: '⏸', comunicazione: '📢', ordine_in_ritardo: '🔴', ordine_pronto_spedizione: '📦', fase_riassegnata: '🔄' };
+  const icone = { ordine_creato: '<i data-ic="appunti"></i>', ordine_sospeso: '<i data-ic="pausa"></i>', comunicazione: '<i data-ic="megafono"></i>', ordine_in_ritardo: '<i data-ic="punto"></i>', ordine_pronto_spedizione: '<i data-ic="pacco"></i>', fase_riassegnata: '<i data-ic="aggiorna"></i>' };
   el.innerHTML = notifiche.map(n => `
     <div style="display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);${n.letta ? '' : 'background:var(--warn-bg);margin:0 -16px;padding:14px 16px'}">
-      <div style="font-size:20px;flex-shrink:0">${icone[n.tipo] || '🔔'}</div>
+      <div style="font-size:20px;flex-shrink:0">${icone[n.tipo] || '<i data-ic="campana"></i>'}</div>
       <div style="flex:1">
         <div style="font-size:13px;${n.letta ? 'color:var(--muted)' : 'font-weight:600'}">${escapeHtml(n.testo)}</div>
         <div style="font-size:11px;color:var(--muted);margin-top:3px">${formatDateTime(n.creata_il)}</div>
