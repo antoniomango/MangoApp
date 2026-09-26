@@ -1,0 +1,94 @@
+/* css/tema.css — unico punto dei colori di MangoApp.
+ *
+ * Nessun colore va scritto a mano nelle pagine: CSS, attributi style e stringhe JS che generano
+ * HTML usano solo var(--token). Il colore principale è UNO solo (--accent): cambiandolo qui cambia
+ * in tutta l'app.
+ *
+ * Token base (richiesti): --bg --surface --surface-2 --fill --border --border-strong --ink --ink-2
+ * --muted --accent --on-accent --ok/--ok-bg/--on-ok --warn/--warn-bg/--on-warn
+ * --alert/--alert-bg/--on-alert --info/--info-bg/--on-info --phase-bg --overlay --shadow.
+ *
+ * Token estesi: varianti che nell'interfaccia hanno un significato proprio (priorità urgente,
+ * fase in attesa esterna, ordine extra, spedito/chiuso, fase bloccata/CNC, lavorazione esterna,
+ * scala delle scadenze...) e che quindi NON devono collassare su un token base.
+ *
+ * Fase 1 (questo stato): valori = palette storica beige/legno, aspetto invariato.
+ */
+
+:root {
+  /* ── base ─────────────────────────────────────────── */
+  --bg:            #F2EDE6;
+  --surface:       #FDFAF6;
+  --surface-2:     #F9F9F7;
+  --fill:          #F3F4F6;
+  --border:        #D9CFC4;
+  --border-strong: #D9CFC4;
+  --ink:           #1C1714;
+  --ink-2:         #374151;
+  --muted:         #7A6E65;
+  --accent:        #8B5E3C;
+  --accent-2:      #C4926A;   /* bordo al passaggio del mouse, voce di navigazione attiva */
+  --on-accent:     #FFFFFF;
+  --phase-bg:      #EDE4D8;
+
+  /* ── stati: base ───────────────────────────────────── */
+  --ok:        #3A7D44;  --ok-bg:    #F0FDF4;  --on-ok:    #FFFFFF;
+  --warn:      #C27B00;  --warn-bg:  #FFFBEB;  --on-warn:  #FFFFFF;
+  --alert:     #B03A2E;  --alert-bg: #FEF2F2;  --on-alert: #FFFFFF;
+  --info:      #2563EB;  --info-bg:  #EFF6FF;  --on-info:  #FFFFFF;
+
+  /* ── stati: varianti (strong = pieno/indicatore, soft = sfondo badge, line = bordo, ink = testo su soft/bg) */
+  --ok-strong:    #16A34A;  --ok-soft:    #D1FAE5;  --ok-line:    #86EFAC;  --ok-ink:    #065F46;
+  --warn-strong:  #F59E0B;  --warn-soft:  #FEF3C7;  --warn-line:  #FDE68A;  --warn-ink:  #92400E;  --warn-ink-2:  #B45309;
+  --alert-strong: #EF4444;  --alert-soft: #FEE2E2;  --alert-line: #FECACA;  --alert-ink: #991B1B;  --alert-ink-2: #B91C1C;
+  --info-strong:  #3B82F6;  --info-soft:  #DBEAFE;  --info-line:  #93C5FD;  --info-ink:  #1E40AF;
+
+  /* priorità "urgente" (giallo, distinto da sospeso/ambra e da extra urgente/rosso) */
+  --urgente-bg:  #FEF9C3;  --urgente-ink: #713F12;
+  /* fase in attesa (arancio) e ordine extra */
+  --attesa-bg:   #FFF7ED;  --attesa-line: #FDBA74;  --attesa-ink: #C2410C;
+  --extra:       #F97316;  --extra-soft:  #FED7AA;  --extra-ink:  #9A3412;
+  /* spedito / chiuso / catalogo fasi (indaco) */
+  --indigo:      #4F46E5;  --indigo-soft: #E0E7FF;  --indigo-bg: #EEF2FF;  --indigo-line: #C7D2FE;  --indigo-ink: #3730A3;
+  /* fase bloccata / CNC / macchine (viola) */
+  --violet:      #7C3AED;  --violet-soft: #EDE9FE;  --violet-bg: #FAF5FF;  --violet-line: #E9D5FF;  --violet-line-2: #C4B5FD;  --violet-ink: #5B21B6;  --on-violet: #FFFFFF;
+  /* lavorazione esterna / competenze / eccezioni disponibilità (azzurro) */
+  --ext:         #0369A1;  --ext-bg:      #F0F9FF;  --ext-line:  #BAE6FD;  --on-ext: #FFFFFF;
+  --pink-soft:   #FCE7F3;
+  /* neutri "inattivo / non applicabile" */
+  --neutral:     #6B7280;  --neutral-soft: #E5E7EB;  --neutral-bg: #F5F5F5;  --neutral-line: #E0E0E0;  --neutral-solid: #9E9E9E;  --on-neutral: #FFFFFF;
+
+  /* ── intestazione, barra di navigazione, sfondo login ─ */
+  --chrome-bg:     #1C1714;
+  --chrome-ink:    #F2EDE6;
+  --chrome-muted:  #9E9189;
+  --chrome-faint:  #6B6460;
+  --chrome-fill:   rgba(255,255,255,0.1);
+  --chrome-active: var(--accent-2);
+
+  /* ── superficie invertita (toast, barre flottanti) ─── */
+  --inverse:    #1C1714;
+  --on-inverse: #FFFFFF;
+
+  /* ── velature e ombre ──────────────────────────────── */
+  --overlay:      rgba(28,23,20,0.65);
+  --overlay-soft: rgba(0,0,0,0.5);
+  --shadow:       0 4px 16px rgba(0,0,0,0.08);
+  --shadow-lg:    0 24px 80px rgba(0,0,0,0.3);
+  --shadow-xl:    0 20px 60px rgba(0,0,0,0.4);
+  --shadow-float: 0 4px 20px rgba(0,0,0,0.4);
+  --shadow-bar:   0 -2px 10px rgba(0,0,0,0.25);
+  --spinner-track: rgba(255,255,255,0.3);
+
+  /* ── fotocamera e foto: sempre scuri, identici in ogni tema ── */
+  --media-bg:     #000000;
+  --media-bar:    #111111;
+  --media-ink:    #FFFFFF;
+  --media-line:   #444444;
+  --media-ring:   #999999;
+  --media-press:  #CCCCCC;
+  --scrim:        rgba(0,0,0,0.45);
+  --scrim-strong: rgba(0,0,0,0.6);
+  --scrim-max:    rgba(0,0,0,0.85);
+
+}
