@@ -2300,6 +2300,7 @@ async function init() {
       await postLogin();
     } else if (event === 'SIGNED_OUT') {
       // Il dispositivo non riceve più le push del responsabile uscito (alias external_id)
+      _pushAliasResp = null;
       if (window.OneSignalDeferred) window.OneSignalDeferred.push(async function(OneSignal) { try { await OneSignal.logout(); } catch (e) { console.warn('OneSignal logout:', e); } });
       currentUser = null;
       document.getElementById('login-screen').style.display = 'flex';
@@ -7827,12 +7828,28 @@ async function _salvaOnesignalIdResp(subId) {
   if (error || !data?.ok) console.warn('salva_onesignal_id fallita:', error?.message || data?.errore);
 }
 
+// Alias push SEGRETO del responsabile (mai users.id): mio_push_alias restituisce solo il proprio
+// (responsabile_sessione_ok: auth.uid() = id). Solo in memoria; mai in console, mai nel DOM.
+let _pushAliasResp = null;
+async function _aliasPushResp() {
+  if (!currentUserRow) return null;
+  try {
+    const { data } = await sb.rpc('mio_push_alias', { p_responsabile_id: currentUserRow.id, p_session_token: null });
+    if (data?.ok && data.push_alias) _pushAliasResp = data.push_alias;
+  } catch (e) { /* resta quello già in memoria */ }
+  return _pushAliasResp;
+}
+async function _oneSignalLoginResp(OneSignal) {
+  const alias = await _aliasPushResp();
+  if (alias && currentUserRow) { try { await OneSignal.login(alias); } catch (e) { console.warn('OneSignal login non riuscito'); } }
+}
+
 let _oneSignalAvviatoResp = false;
 async function initOneSignalResp() {
   if (!window.OneSignalDeferred) return;
   if (_oneSignalAvviatoResp) {
     // postLogin può ripartire (SIGNED_IN al ritorno in primo piano): solo il login dell'alias
-    window.OneSignalDeferred.push(async function(OneSignal) { try { if (currentUserRow) await OneSignal.login(currentUserRow.id); } catch (e) { console.warn('OneSignal login:', e); } });
+    window.OneSignalDeferred.push(_oneSignalLoginResp);
     return;
   }
   _oneSignalAvviatoResp = true;
@@ -7847,7 +7864,7 @@ async function initOneSignalResp() {
       });
       const permission = await OneSignal.Notifications.permission;
       if (!permission) await OneSignal.Notifications.requestPermission();
-      await OneSignal.login(currentUserRow.id);
+      await _oneSignalLoginResp(OneSignal);
       // Fallback: se l'evento 'change' non è ancora arrivato, riprova per qualche secondo
       let subId = OneSignal.User.PushSubscription.id;
       for (let i = 0; i < 5 && !subId; i++) {
