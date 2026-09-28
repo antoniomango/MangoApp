@@ -1,9 +1,11 @@
-const CACHE = 'mango-v33';
+const CACHE = 'mango-v34';
 const ASSETS = [
   '/MangoApp/operatore.html',
   '/MangoApp/responsabile.html',
   '/MangoApp/ufficio.html',
   '/MangoApp/manifest.json',
+  '/MangoApp/manifest-responsabile.json',
+  '/MangoApp/manifest-ufficio.json',
   '/MangoApp/icon-192.png',
   '/MangoApp/icon-512.png',
   '/MangoApp/js/config.js',

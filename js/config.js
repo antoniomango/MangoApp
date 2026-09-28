@@ -44,7 +44,7 @@ const IS_PRODUZIONE = AMBIENTE === 'produzione';
 // Versione del client — da incrementare SEMPRE insieme a CACHE in sw.js (stesso valore,
 // stesso commit). Letta da responsabile.html per la guardia di versione sulle operazioni
 // distruttive (esportazione/archiviazione) — vedi Checklist-Sicurezza.md nel vault.
-const APP_VERSION = 'mango-v33';
+const APP_VERSION = 'mango-v34';
 
 // ═══════════════════════════════════════════════
 // SETTIMANA ISO 8601 — usata nel dettaglio ordine (operatore.html + responsabile.html)
@@ -83,6 +83,8 @@ function mostraBandaAmbienteTest() {
   document.body.prepend(banda);
   // Spinge il contenuto sotto la banda invece di sovrapporlo.
   document.body.style.paddingTop = '32px';
+  // Altezza della banda per gli elementi fissi a tutto schermo (layout telefono di responsabile.html)
+  document.documentElement.style.setProperty('--banda-ambiente', '32px');
 }
 
 if (document.readyState === 'loading') {
