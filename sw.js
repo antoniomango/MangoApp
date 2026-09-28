@@ -1,4 +1,4 @@
-const CACHE = 'mango-v32';
+const CACHE = 'mango-v33';
 const ASSETS = [
   '/MangoApp/operatore.html',
   '/MangoApp/responsabile.html',
@@ -15,6 +15,17 @@ const ASSETS = [
   '/MangoApp/fonts/GeistMono-Variable.woff2',
   '/MangoApp/fonts/OFL-Geist.txt'
 ];
+
+// Push: responsabile.html passa questo file a OneSignal come service worker, quindi deve contenere
+// anche il codice push di OneSignal (come OneSignalSDKWorker.js per gli operatori). Prima il
+// controllo dell'URL al clic (solo pagine dell'app), poi OneSignal. Se la CDN di OneSignal non
+// risponde il service worker si installa lo stesso: la cache dell'app non dipende dalle push.
+importScripts('js/sw-push.js');
+try {
+  importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
+} catch (e) {
+  console.warn('SW: OneSignal non caricato, push non disponibili', e);
+}
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
