@@ -911,6 +911,7 @@ async function showApp() {
   if (navigator.onLine && currentUser?.id) {
     const { data: check } = await sb.rpc('controlla_sessione', { p_user_id: currentUser.id });
     if (check?.valida === false) {
+      _oneSignalEsci();
       await cacheSet('current-user', null);
       await cacheSet('current-session-token', null);
       currentUser = null;
@@ -956,6 +957,7 @@ async function showApp() {
 
 async function doLogout() {
   if (typeof _profiloEsci === 'function') _profiloEsci();
+  _oneSignalEsci();
   currentUser = null;
   sessionToken = null;
   await cacheSet('current-user', null);
@@ -2501,7 +2503,11 @@ async function richiediPermessoNotifiche() {
   } catch(e) { _debug('ERRORE: ' + e.message); }
 }
 
-async function initOneSignal() {
+// Avvio di OneSignal una volta sola per pagina, senza login (serve anche all'uscita).
+let _oneSignalAvviato = false;
+function _oneSignalAvvia() {
+  if (_oneSignalAvviato) return;
+  _oneSignalAvviato = true;
   try {
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.OneSignalDeferred.push(async function(OS) {
@@ -2518,6 +2524,28 @@ async function initOneSignal() {
       });
     });
   } catch(e) { console.warn('OneSignal init:', e); }
+}
+
+// Dopo l'accesso: alias external_id = id dell'operatore, così send-push raggiunge tutti i dispositivi
+// su cui è entrato. Non chiede il permesso delle notifiche (quello resta sul pulsante del profilo).
+async function initOneSignal() {
+  _oneSignalAvvia();
+  try {
+    window.OneSignalDeferred.push(async function(OS) {
+      if (currentUser?.id) { try { await OS.login(currentUser.id); } catch (e) { console.warn('OneSignal login:', e); } }
+    });
+  } catch (e) { console.warn('OneSignal login:', e); }
+}
+
+// All'uscita (volontaria, sessione scaduta o logout forzato) il dispositivo smette di ricevere le
+// push di chi è uscito: OneSignal.logout() toglie l'alias external_id da questo dispositivo.
+function _oneSignalEsci() {
+  try {
+    _oneSignalAvvia();   // se non era ancora avviato (es. logout forzato all'apertura), prima l'avvio, mai il login
+    window.OneSignalDeferred.push(async function(OS) {
+      try { await OS.logout(); } catch (e) { console.warn('OneSignal logout:', e); }
+    });
+  } catch (e) { console.warn('OneSignal logout:', e); }
 }
 
 async function _salvaOnesignalId() {

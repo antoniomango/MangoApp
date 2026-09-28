@@ -2,12 +2,12 @@
 <html lang="it">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Mango">
+<meta name="apple-mobile-web-app-title" content="Mango Resp">
 <meta name="theme-color" content="#F2F2F7">
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="manifest-responsabile.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Mango — Responsabile</title>
 <!-- CSP via meta: frame-ancestors/report-uri/sandbox non hanno effetto qui (richiedono
@@ -418,6 +418,137 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
 .notif-btn i[data-ic] { width: 20px; height: 20px; }
 .empty-state .icon i[data-ic] { width: 36px; height: 36px; }
 .btn i[data-ic] { width: 18px; height: 18px; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TELEFONO E TABLET (2026-09-28). Solo media query: sopra i 1023 px non cambia nulla.
+   ≤ 1023 px: adattamenti fluidi (menu laterale ancora visibile, es. iPhone orizzontale).
+   ≤ 820 px: layout telefono — barra in basso, menu laterale come pannello "Altro",
+   ordini a card, modali a tutto schermo, tocchi ≥ 44 px, campi a 16 px (niente zoom iOS).
+   ══════════════════════════════════════════════════════════════════════════ */
+.barra-mobile, .altro-sfondo, .nav-mobile-fondo, .solo-mobile { display: none; }
+
+@media (max-width: 1023.98px) {
+  header { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
+  .shell { grid-template-columns: 200px minmax(0, 1fr); }
+  main { padding: 20px; min-width: 0; }
+  .page-hdr { flex-wrap: wrap; gap: 12px; }
+  .page-hdr > div:last-child { flex-wrap: wrap; }
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .ops-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fasi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  /* le tabelle scorrono dentro la propria card, mai la pagina */
+  .card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .card > table th, .card > table td { white-space: nowrap; }
+  .ric-tabs { max-width: 100%; overflow-x: auto; }
+  .header-right { gap: 10px; }
+}
+
+@media (max-width: 820px) {
+  /* ── accesso ── */
+  #login-screen { padding: max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom)); }
+  .login-card { width: 100%; max-width: 380px; padding: 32px 22px; }
+
+  /* ── intestazione: logo, stato, campanella; il resto va in "Altro" ── */
+  header { top: var(--banda-ambiente, 0px); height: auto; min-height: 52px; padding-top: env(safe-area-inset-top); padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); }
+  #user-label, #header-date, #app-version-label, .header-right > a { display: none; }
+  .notif-btn { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+
+  /* ── struttura: una colonna, scorre la pagina ── */
+  .shell { display: block; min-height: 0; }
+  main { padding: 16px max(14px, env(safe-area-inset-right)) calc(84px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); max-height: none; overflow: visible; }
+
+  /* ── menu laterale = pannello "Altro" ── */
+  #menu-laterale { display: none; position: fixed; left: 0; right: 0; bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 160;
+    max-height: calc(100dvh - 140px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y: auto; -webkit-overflow-scrolling: touch;
+    border-right: none; border-top: 1px solid var(--border); border-radius: 16px 16px 0 0; box-shadow: var(--shadow-xl); padding: 8px 0 12px; }
+  body.altro-aperto #menu-laterale { display: flex; }
+  body.altro-aperto .altro-sfondo { display: block; position: fixed; inset: 0; z-index: 150; background: var(--overlay); }
+  .nav-item { min-height: 44px; }
+  .nav-impostazioni-items.open { max-height: none; }
+  .nav-mobile-fondo { display: flex; flex-direction: column; gap: 8px; padding: 14px 20px 4px; border-top: 1px solid var(--border); margin-top: 8px; }
+  .nav-mobile-utente { font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
+
+  /* ── barra in basso ── */
+  .barra-mobile { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); position: fixed; left: 0; right: 0; bottom: 0; z-index: 170;
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding: 4px max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-left)); }
+  .barra-mobile button { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    min-height: 56px; background: none; border: none; color: var(--muted); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+  .barra-mobile button i[data-ic] { width: 22px; height: 22px; }
+  .barra-mobile button.attiva, .barra-mobile button[aria-expanded="true"] { color: var(--accent); }
+  .barra-mobile button span.barra-testo { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .barra-puntini { font-size: 18px; line-height: 22px; letter-spacing: 1px; }
+  .barra-conta { position: absolute; top: 4px; left: calc(50% + 6px); background: var(--alert); color: var(--on-alert); border-radius: 99px;
+    font-size: 10px; font-weight: 700; min-width: 18px; padding: 1px 5px; text-align: center; line-height: 1.4; }
+  .barra-conta[hidden] { display: none; }
+  .solo-mobile { display: block; }
+
+  /* ── intestazioni di pagina e filtri ── */
+  .page-hdr { align-items: flex-start; margin-bottom: 16px; }
+  .page-hdr h1 { font-size: 20px; }
+  .page-hdr > div:last-child:not(:first-child) { width: 100%; }
+  .filters > * { flex: 1 1 140px; min-width: 0; }
+  .filters input[type="text"] { flex-basis: 100%; }
+
+  /* ── griglie ── */
+  .kpi-grid { gap: 10px; margin-bottom: 18px; }
+  .kpi-card { padding: 14px; }
+  .kpi-card .value { font-size: 26px; }
+  .ops-grid, .detail-grid, .form-row { grid-template-columns: minmax(0, 1fr); }
+  .fasi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cfg-riga, .cfg-riga.tipo-ric { grid-template-columns: minmax(0, 1fr); }
+  .impatto-giorno { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .ric-azioni input { min-width: 0; flex-basis: 100%; }
+  .ric-azioni .btn { flex: 1 1 0; justify-content: center; }
+  .ric-tabs { display: flex; }
+  .ric-tabs button { flex: 1 0 auto; padding: 7px 9px; }
+  .toast { left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); max-width: none; }
+  .ops-barra > .ric-tabs { flex: 1 1 100%; }
+  .cfg-aggiungi input[type="text"] { min-width: 0; flex-basis: 100%; }
+  .kpi-bar-row .kpi-bar-label { width: 96px; }
+  .macro-cfg-hdr { flex-wrap: wrap; }
+  .fase-config-item { flex-wrap: wrap; align-items: flex-start; }
+  .fase-move-btns { flex-direction: row; gap: 6px; }
+  .fase-move-btn { min-width: 44px; min-height: 44px; font-size: 14px; }
+  .fase-config-num { align-self: center; }
+  .fase-config-inputs { flex: 1 1 100%; min-width: 0; grid-template-columns: minmax(0, 1fr); }
+  .fase-config-inputs > div[style*="grid-template-columns"] { grid-template-columns: minmax(0, 1fr) !important; }
+  .macro-cfg-hdr input[type="text"] { min-width: 0; flex: 1 1 140px !important; }
+
+  /* ── ordini: ogni riga diventa una card ── */
+  .tabella-ordini, .tabella-ordini tbody { display: block; }
+  .tabella-ordini thead { display: none; }
+  .tabella-ordini tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+  .tabella-ordini td { display: block; padding: 0; border: none; white-space: normal !important; min-width: 0 !important; }
+  .tabella-ordini td:only-child { grid-column: 1 / -1; padding: 6px 0 !important; }
+  .tabella-ordini .c-cliente { grid-column: 1; grid-row: 1; }
+  .tabella-ordini .c-stato { grid-column: 2; grid-row: 1; text-align: right; }
+  .tabella-ordini .c-tipo { grid-column: 1 / -1; font-size: 13px; color: var(--ink-2); }
+  .tabella-ordini .c-prio, .tabella-ordini .c-qta { display: none; }
+  .tabella-ordini .c-avanz { grid-column: 1 / -1; }
+  .tabella-ordini .c-scad { grid-column: 1; font-size: 13px; }
+  .tabella-ordini .c-scad::before { content: "Spedizione entro "; color: var(--muted); }
+  .tabella-ordini .c-azioni { grid-column: 2; align-self: end; text-align: right; }
+  .tabella-ordini .c-azioni:empty { display: none; }
+  .prog-fase { margin-top: 4px; font-size: 12px; color: var(--ink-2); overflow-wrap: anywhere; }
+
+  /* ── modali a tutto schermo, chiusura sempre raggiungibile ── */
+  .modal-overlay { padding: 0; align-items: stretch; top: var(--banda-ambiente, 0px); }
+  .modal { max-width: none !important; width: 100% !important; height: calc(100dvh - var(--banda-ambiente, 0px)); max-height: calc(100dvh - var(--banda-ambiente, 0px)) !important; border-radius: 0; border: none;
+    display: flex; flex-direction: column; overflow: hidden; }
+  .modal-hdr { position: sticky; top: 0; z-index: 1; background: var(--surface); padding: calc(12px + env(safe-area-inset-top)) 16px 12px; gap: 8px; }
+  .modal-body { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 16px; }
+  .modal-footer { padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); flex-wrap: wrap; }
+  .modal-footer .btn { flex: 1 1 auto; justify-content: center; }
+  .modal-close { min-width: 44px; min-height: 44px; flex-shrink: 0; }
+
+  /* ── tocchi e campi ── */
+  .btn, .op-etichetta, .ass-voce, .ric-tabs button { min-height: 44px; }
+  .btn { justify-content: center; }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), select, textarea { font-size: 16px !important; font-family: var(--font-sans); }
+  .notif-item { min-height: 44px; }
+  .notif-text { min-width: 0; overflow-wrap: anywhere; }
+}
 </style>
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 </head>
@@ -468,7 +599,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
   </header>
 
   <div class="shell">
-    <nav>
+    <nav id="menu-laterale" aria-label="Sezioni">
       <div class="nav-section">Produzione</div>
       <div class="nav-item active" onclick="showSection('dashboard')" id="nav-dashboard">
         <span class="icon"><i data-ic="grafico"></i></span> Dashboard
@@ -545,6 +676,10 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <span class="icon"><i data-ic="tema"></i></span> Aspetto
       </div>
       </div><!-- /nav-impostazioni-items -->
+      <div class="nav-mobile-fondo">
+        <span class="nav-mobile-utente" id="nav-mobile-utente"></span>
+        <button type="button" class="btn btn-secondary btn-full" onclick="doLogout()"><i data-ic="esci"></i> Esci</button>
+      </div>
     </nav>
 
     <main>
@@ -584,7 +719,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           <div class="kpi-card ok" style="cursor:pointer" onclick="openModalStoricoSpediti()" title="Vedi storico mensile e rispetto scadenze"><div class="label">Spediti (30gg)</div><div class="value" id="kpi-spediti">—</div></div>
         </div>
 
-        <div class="filters">
+        <div class="filters" id="ordini-elenco">
           <input type="text" id="ord-search" placeholder="Cerca cliente o codice…" oninput="renderOrdiniTable()">
           <select id="ord-stato" onchange="renderOrdiniTable()">
             <option value="">Tutti gli stati</option>
@@ -608,7 +743,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           <span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--ok-strong)"></span>Entro 7 giorni</span>
         </div>
         <div class="card">
-          <table>
+          <table class="tabella-ordini">
             <thead>
               <tr><th>Cliente / N° Ordine</th><th>Struttura / Tipo</th><th>Priorità</th><th>Qtà</th><th>Scadenza</th><th>Stato</th><th>Avanzamento</th><th>Azioni</th></tr>
             </thead>
@@ -1582,6 +1717,15 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       </section>
     </main>
   </div>
+  <!-- Telefono: barra in basso (nascosta sopra gli 820 px) -->
+  <div class="altro-sfondo" onclick="chiudiAltro()"></div>
+  <div class="barra-mobile" role="navigation" aria-label="Navigazione principale">
+    <button type="button" data-barra="dashboard" onclick="barraVai('dashboard')"><i data-ic="grafico"></i><span class="barra-testo">Panoramica</span></button>
+    <button type="button" data-barra="ordini" onclick="barraVai('ordini')"><i data-ic="appunti"></i><span class="barra-testo">Ordini</span></button>
+    <button type="button" data-barra="operatori" onclick="barraVai('operatori')"><i data-ic="persone"></i><span class="barra-testo">Operatori</span><span class="barra-conta" id="barra-conta-ric" hidden>0</span></button>
+    <button type="button" data-barra="notifiche" onclick="barraVai('notifiche')"><i data-ic="campana"></i><span class="barra-testo">Notifiche</span><span class="barra-conta" id="barra-conta-notif" hidden>0</span></button>
+    <button type="button" data-barra="altro" onclick="apriAltro()" aria-expanded="false" aria-controls="menu-laterale"><span class="barra-puntini" aria-hidden="true">•••</span><span class="barra-testo">Altro</span></button>
+  </div>
 </div>
 
 <!-- MODALE NUOVO ORDINE -->
@@ -2155,6 +2299,8 @@ async function init() {
       currentUser = session.user;
       await postLogin();
     } else if (event === 'SIGNED_OUT') {
+      // Il dispositivo non riceve più le push del responsabile uscito (alias external_id)
+      if (window.OneSignalDeferred) window.OneSignalDeferred.push(async function(OneSignal) { try { await OneSignal.logout(); } catch (e) { console.warn('OneSignal logout:', e); } });
       currentUser = null;
       document.getElementById('login-screen').style.display = 'flex';
       document.getElementById('app-screen').style.display = 'none';
@@ -2217,6 +2363,8 @@ async function postLogin() {
   const { data } = await sb.from('users').select('id, nome, cognome, email, ruolo, attivo, eliminato, forzato_logout, onesignal_id, creato_il').eq('email', currentUser.email).single();
   currentUserRow = data;
   document.getElementById('user-label').textContent = data ? `${data.nome} ${data.cognome}` : currentUser.email;
+  const um = document.getElementById('nav-mobile-utente');
+  if (um) um.textContent = (data ? `${data.nome} ${data.cognome}` : currentUser.email) + (typeof APP_VERSION !== 'undefined' ? ' · ' + APP_VERSION : '');
   document.getElementById('header-date').textContent = new Date().toLocaleDateString('it-IT', { weekday:'short', day:'numeric', month:'short' });
   verificaVersioneClient(); // non bloccante: le operazioni distruttive controllano clientObsoleto al click
   // Load fasi e tipi prodotto (devono precedere il resto)
@@ -2234,6 +2382,7 @@ async function postLogin() {
   if (currentUserRow?.ruolo === 'sola_lettura') {
     // Nascondi nav e funzioni non pertinenti all'ufficio
     document.querySelector('nav').style.display = 'none';
+    document.querySelector('.barra-mobile')?.style.setProperty('display', 'none', 'important');
     document.querySelector('.topbar').insertAdjacentHTML('afterbegin',
       `<div style="font-weight:700;font-size:14px;color:var(--accent);margin-right:auto"><i data-ic="grafico"></i> Vista Ufficio</div>`);
     showSection('ufficio');
@@ -2459,6 +2608,8 @@ async function loadNotifiche() {
   } else {
     badge.style.display = 'none';
   }
+  const bb = document.getElementById('barra-conta-notif');
+  if (bb) { bb.textContent = String(unread); bb.hidden = !unread; }
 }
 
 // ═══════════════════════════════════════════════
@@ -2519,9 +2670,45 @@ function toggleImpostazioni(force) {
   hdr.classList.toggle('open', open);
 }
 
+// ── Telefono: barra in basso e pannello "Altro" (il menu laterale) ──
+function _barraAttiva(voce) {
+  const chiave = voce === 'dashboard' || voce === 'ordini' || voce === 'operatori' || voce === 'notifiche' ? voce : 'altro';
+  document.querySelectorAll('.barra-mobile [data-barra]').forEach(b => b.classList.toggle('attiva', b.dataset.barra === chiave));
+}
+function barraVai(voce) {
+  if (voce === 'ordini') {
+    showSection('dashboard');
+    _barraAttiva('ordini');
+    document.getElementById('ordini-elenco')?.scrollIntoView({ block: 'start' });
+    return;
+  }
+  showSection(voce);
+  window.scrollTo(0, 0);
+}
+function apriAltro() {
+  const aperto = !document.body.classList.contains('altro-aperto');
+  document.body.classList.toggle('altro-aperto', aperto);
+  document.querySelector('.barra-mobile [data-barra="altro"]')?.setAttribute('aria-expanded', aperto ? 'true' : 'false');
+}
+function chiudiAltro() {
+  document.body.classList.remove('altro-aperto');
+  document.querySelector('.barra-mobile [data-barra="altro"]')?.setAttribute('aria-expanded', 'false');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.body.classList.contains('altro-aperto')) chiudiAltro(); });
+// Fase attuale di un ordine (solo sul telefono, nella card): la prima in corso, altrimenti la prima disponibile
+function _faseAttualeHtml(s) {
+  const r = (s.fasiRim || []).find(x => x.inCorso) || (s.fasiRim || [])[0];
+  if (!r) return '';
+  const f = (typeof fasi !== 'undefined' ? fasi : []).find(x => String(x.id) === String(r.fase_id));
+  const nome = r.nome || f?.nome;
+  return nome ? `<div class="solo-mobile prog-fase">${r.inCorso ? 'In corso' : 'Prossima'}: ${escapeHtml(nome)}</div>` : '';
+}
+
 function showSection(name) {
   // Alias storici: Richieste e Assenze squadra sono ora schede della sezione Operatori
   if (name === 'richieste' || name === 'assenze') { _opsScheda = name; _opsSalvaScheda(name); name = 'operatori'; }
+  chiudiAltro();
+  _barraAttiva(name);
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('sec-' + name)?.classList.add('active');
@@ -3535,20 +3722,18 @@ function ordineRow(o, mini = false) {
     ? `<div style="margin-top:4px;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="event.stopPropagation();apriPannelloGruppoSpedizione('${o.gruppo_spedizione_id}')"><i data-ic="pacco"></i> Spedizione unica con ${escapeHtml(fratelli.join(', '))}</div>`
     : '';
   return `<tr class="clickable ${isSosp ? '' : scadenzaClass(o.scadenza)}" data-scad="${isSosp ? '' : scadenzaClass(o.scadenza)}" ${rowClass} onclick="${rowOnclick}">
-    <td><div style="display:flex;align-items:flex-start;gap:8px">${checkbox}<div><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div>${badgeGruppo}</div></div></td>
-    <td>${o.tipo === 'extra' ? '<span style="font-weight:600;color:var(--accent)">Ordine Extra</span>' : `${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}`}</td>
-    <td><span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span></td>
-    <td style="text-align:center;font-weight:600">${o.quantita || 1}</td>
-    <td><div style="color:${isLate ? 'var(--alert-strong)' : 'inherit'};font-weight:${isLate ? '700' : 'normal'}">${scad}${isLate ? ' <i data-ic="avviso"></i>' : ''}</div><div id="scad-stima-${o.id}" style="font-size:10px;margin-top:2px"></div></td>
-    <td><span class="badge badge-${o.stato}">${statoLabel(o.stato)}</span></td>
-    <td id="prog-${o.id}" style="min-width:120px">—</td>
-    <td>
-      ${nascondiAzioni ? '' : (o.stato === 'aperto'
+    <td class="c-cliente"><div style="display:flex;align-items:flex-start;gap:8px">${checkbox}<div><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div>${badgeGruppo}</div></div></td>
+    <td class="c-tipo">${o.tipo === 'extra' ? '<span style="font-weight:600;color:var(--accent)">Ordine Extra</span>' : `${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}`}</td>
+    <td class="c-prio"><span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span></td>
+    <td class="c-qta" style="text-align:center;font-weight:600">${o.quantita || 1}</td>
+    <td class="c-scad"><div style="color:${isLate ? 'var(--alert-strong)' : 'inherit'};font-weight:${isLate ? '700' : 'normal'}">${scad}${isLate ? ' <i data-ic="avviso"></i>' : ''}</div><div id="scad-stima-${o.id}" style="font-size:10px;margin-top:2px"></div></td>
+    <td class="c-stato"><span class="badge badge-${o.stato}">${statoLabel(o.stato)}</span></td>
+    <td class="c-avanz" id="prog-${o.id}" style="min-width:120px">—</td>
+    <td class="c-azioni">${nascondiAzioni ? '' : (o.stato === 'aperto'
         ? `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();sospendi('${o.id}')">Sospendi</button>`
         : o.stato === 'attesa_spedizione'
           ? `<button class="btn btn-ok" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();segnaSpedito('${o.id}')"><i data-ic="pacco"></i> Spedisci</button>`
-          : `<button class="btn btn-ok" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();riattiva('${o.id}')">Riattiva</button>`)}
-    </td>
+          : `<button class="btn btn-ok" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();riattiva('${o.id}')">Riattiva</button>`)}</td>
   </tr>`;
 }
 
@@ -3671,7 +3856,7 @@ async function loadAvanzamenti(ids) {
           <div style="width:${pct}%;background:var(--ok);border-radius:4px;height:100%"></div>
         </div>
         <span style="font-size:11px;color:var(--muted);font-family:var(--font-mono);white-space:nowrap">${s.done}/${s.tot}${s.inCorso > 0 ? ` (${s.inCorso} <i data-ic="play"></i>)` : ''}</span>
-      </div>`;
+      </div>${_faseAttualeHtml(s)}`;
 
     const tr = el.closest('tr');
     if (!tr) return;
@@ -7642,8 +7827,15 @@ async function _salvaOnesignalIdResp(subId) {
   if (error || !data?.ok) console.warn('salva_onesignal_id fallita:', error?.message || data?.errore);
 }
 
+let _oneSignalAvviatoResp = false;
 async function initOneSignalResp() {
   if (!window.OneSignalDeferred) return;
+  if (_oneSignalAvviatoResp) {
+    // postLogin può ripartire (SIGNED_IN al ritorno in primo piano): solo il login dell'alias
+    window.OneSignalDeferred.push(async function(OneSignal) { try { if (currentUserRow) await OneSignal.login(currentUserRow.id); } catch (e) { console.warn('OneSignal login:', e); } });
+    return;
+  }
+  _oneSignalAvviatoResp = true;
   window.OneSignalDeferred = window.OneSignalDeferred || [];
   window.OneSignalDeferred.push(async function(OneSignal) {
     try {
@@ -9205,7 +9397,7 @@ async function aggiornaBadgeRichieste() {
   const { count, error } = await sb.from('richieste_assenza').select('id', { count: 'exact', head: true }).eq('stato', 'in_attesa');
   if (error) return;
   // Contatore sulla voce di menu Operatori e sulla scheda Richieste (nascosti se 0)
-  ['richieste-badge', 'ops-tab-ric-conta'].forEach(id => {
+  ['richieste-badge', 'ops-tab-ric-conta', 'barra-conta-ric'].forEach(id => {
     const b = document.getElementById(id);
     if (!b) return;
     b.textContent = String(count || 0);
