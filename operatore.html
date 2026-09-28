@@ -872,7 +872,9 @@ async function doLoginPin(pin) {
     await cacheSet('current-user', currentUser); // rinnova la finestra SESSIONE_OFFLINE_TTL_MS
   }
   if (currentUser?.ruolo === 'sola_lettura') {
-    localStorage.setItem('ufficio-user', JSON.stringify(currentUser));
+    // La vista ufficio non gestisce push: l'alias segreto non va salvato
+    const { push_alias: _nonSalvato, ...utenteUfficio } = currentUser;
+    localStorage.setItem('ufficio-user', JSON.stringify(utenteUfficio));
     window.location.href = 'ufficio.html';
     return { ok: true };
   }
@@ -2526,15 +2528,34 @@ function _oneSignalAvvia() {
   } catch(e) { console.warn('OneSignal init:', e); }
 }
 
-// Dopo l'accesso: alias external_id = id dell'operatore, così send-push raggiunge tutti i dispositivi
-// su cui è entrato. Non chiede il permesso delle notifiche (quello resta sul pulsante del profilo).
+// Alias push SEGRETO dell'operatore (mai users.id: gli id sono pubblici tramite lista_operatori_login).
+// Arriva con verifica_pin all'accesso; a ogni apertura lo si rilegge con mio_push_alias_operatore
+// (solo il proprio, con id + session_token), perché ruota al logout forzato e ai cambi di PIN.
+// Vive solo in currentUser e nella cache 'current-user': mai in console, mai nel DOM.
+async function _aliasPush() {
+  if (!currentUser?.id) return null;
+  if (isOnline && sessionToken) {
+    try {
+      const { data } = await sb.rpc('mio_push_alias_operatore', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
+      if (data?.ok && data.push_alias && currentUser && currentUser.push_alias !== data.push_alias) {
+        currentUser.push_alias = data.push_alias;
+        await cacheSet('current-user', currentUser);
+      }
+    } catch (e) { /* senza rete resta l'alias già in cache */ }
+  }
+  return currentUser?.push_alias || null;
+}
+
+// Dopo l'accesso: OneSignal.login(alias), così send-push raggiunge tutti i dispositivi su cui
+// l'operatore è entrato. Non chiede il permesso delle notifiche (quello resta sul pulsante del profilo).
 async function initOneSignal() {
   _oneSignalAvvia();
   try {
     window.OneSignalDeferred.push(async function(OS) {
-      if (currentUser?.id) { try { await OS.login(currentUser.id); } catch (e) { console.warn('OneSignal login:', e); } }
+      const alias = await _aliasPush();
+      if (alias && currentUser) { try { await OS.login(alias); } catch (e) { console.warn('OneSignal login non riuscito'); } }
     });
-  } catch (e) { console.warn('OneSignal login:', e); }
+  } catch (e) { console.warn('OneSignal login non riuscito'); }
 }
 
 // All'uscita (volontaria, sessione scaduta o logout forzato) il dispositivo smette di ricevere le
@@ -2551,8 +2572,10 @@ function _oneSignalEsci() {
 async function _salvaOnesignalId() {
   try {
     if (!window.OneSignal || !currentUser) { _debug('Skip: no OneSignal o no user'); return; }
-    _debug('Login OneSignal con id: ' + currentUser.id);
-    await OneSignal.login(currentUser.id);
+    const alias = await _aliasPush();
+    if (!alias) { _debug('Alias push non disponibile: rientra con il PIN'); return; }
+    _debug('Login OneSignal con l\'alias push (segreto, non mostrato)');
+    await OneSignal.login(alias);
     _debug('Login ok. Proprietà PushSubscription:');
     const ps = OneSignal.User.PushSubscription;
     _debug('id=' + ps.id);
@@ -3484,6 +3507,7 @@ async function _cpInvia(pin) {
     _cpVaiA(0);                                            // azzera anche _cpAttuale/_cpNuovo
     _cpMsg('PIN cambiato. Dal prossimo accesso usa il nuovo PIN.', true);
     toast('PIN cambiato', 'ok');
+    initOneSignal();   // il cambio PIN ha ruotato l'alias push: nuovo OneSignal.login
     return { ok: true, continua: true };
   }
   if (data?.errore === 'troppi_tentativi') {

@@ -337,7 +337,9 @@ async function doLogin(pin) {
   const { data } = await sb.rpc('verifica_pin', { p_user_id: userId, p_pin: pin });
   if (!data?.ok) { showErr(messaggioErrorePin(data)); return { ok: false, bloccatoFino: data?.bloccato_fino || null }; }
 
-  currentUser = data.user;
+  // La vista ufficio non gestisce push: l'alias push segreto restituito da verifica_pin non si conserva
+  const { push_alias: _nonSalvato, ...utente } = data.user || {};
+  currentUser = utente;
   sessionToken = data.session_token || null;
   localStorage.setItem('ufficio-user', JSON.stringify(currentUser));
   if (sessionToken) localStorage.setItem('ufficio-session-token', sessionToken);
