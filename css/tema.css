@@ -251,3 +251,81 @@ i[data-ic] {
   flex-shrink: 0; font-style: normal; line-height: 1;
 }
 i[data-ic] > svg { width: 100%; height: 100%; display: block; }
+
+/* ── Schermata di accesso con tastierino PIN (js/pin-pad.js; operatore.html, ufficio.html) ── */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+/* a tutto schermo: la pagina non scorre mai dietro la schermata di accesso; se c'è la banda
+   "AMBIENTE DI TEST" (js/config.js, 32px in alto) la schermata parte sotto la banda */
+#login-screen { position: fixed; inset: 0; overflow-y: auto; z-index: 50; }
+#mango-banda-ambiente ~ #login-screen { top: 32px; }
+.accesso {
+  width: 100%; max-width: 320px; margin: auto;   /* centrato, ma scorre se non ci sta */
+  display: flex; flex-direction: column; align-items: stretch; gap: 18px;
+}
+.accesso .login-logo { justify-content: center; margin: 0; }
+.accesso .login-logo span { letter-spacing: 0.3em; }
+.accesso-sotto { text-align: center; font-size: 12px; color: var(--muted); margin-top: -10px; }
+.accesso-nome label {
+  display: block; font-size: 12px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;
+}
+.accesso-nome select {
+  width: 100%; min-height: 50px; padding: 0 40px 0 16px; border-radius: 12px;
+  border: 1px solid var(--border-strong); background-color: var(--surface); color: var(--ink);
+  font-family: var(--font-sans); font-size: 16px; outline: none;
+}
+.accesso-nome select:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px var(--fill); }
+
+.pinpad { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.pinpad-titolo { font-size: 15px; font-weight: 500; color: var(--ink-2); }
+.pinpad-dots { display: flex; gap: 18px; height: 16px; align-items: center; }
+.pinpad-dot {
+  width: 13px; height: 13px; border-radius: 50%;
+  border: 1.5px solid var(--ink-2); background: transparent; transition: background-color .12s;
+}
+.pinpad-dot.piena { background: var(--ink); border-color: var(--ink); }
+.pinpad-dots--errore { animation: pinpad-scuoti .4s ease-in-out; }
+@keyframes pinpad-scuoti {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-9px); } 40% { transform: translateX(8px); }
+  60% { transform: translateX(-6px); } 80% { transform: translateX(4px); }
+}
+.pinpad .err-msg, .pinpad .err { min-height: 18px; margin: 0; text-align: center; font-size: 13px; color: var(--alert); }
+.pinpad-tasti {
+  display: grid; grid-template-columns: repeat(3, 76px); gap: 14px 22px;
+  justify-content: center; margin-top: 2px;
+}
+.pinpad-tasto {
+  width: 76px; height: 76px; border-radius: 50%; border: none;
+  background: var(--fill); color: var(--ink);
+  font-family: var(--font-sans); font-size: 32px; font-weight: 300; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  transition: background-color .08s;
+}
+.pinpad-tasto:active:not(:disabled) { background: var(--border-strong); }
+.pinpad-tasto:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+.pinpad-tasto:disabled { opacity: .45; cursor: default; }
+.pinpad-cancella { background: transparent; color: var(--ink-2); }
+.pinpad-cancella i[data-ic] { width: 28px; height: 28px; }
+@media (max-height: 700px) {
+  .accesso { gap: 12px; }
+  .pinpad { gap: 10px; }
+  .pinpad-tasti { grid-template-columns: repeat(3, 64px); gap: 10px 20px; }
+  .pinpad-tasto { width: 64px; height: 64px; font-size: 28px; }
+}
+@media (max-height: 600px) {
+  #login-screen { padding-top: 8px !important; padding-bottom: 8px !important; }
+  .accesso { gap: 8px; }
+  .accesso-sotto { display: none; }
+  .accesso-nome label { margin-bottom: 4px; }
+  .pinpad { gap: 6px; }
+  .pinpad-tasti { gap: 8px 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pinpad-dots--errore { animation: none; }
+  .pinpad-dot, .pinpad-tasto { transition: none; }
+}
