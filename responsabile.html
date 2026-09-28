@@ -208,6 +208,50 @@ tr:hover td { background: var(--phase-bg); }
 .modal-close { background: none; border: none; cursor: pointer; font-size: 20px; color: var(--muted); line-height: 1; }
 .modal-body { padding: 24px; }
 .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+/* Richieste, profilo operatore, campi del profilo, tipi di richiesta */
+.nav-conta { margin-left: auto; background: var(--alert); color: var(--on-alert); border-radius: 99px; font-size: 10px; font-weight: 700; padding: 1px 7px; min-width: 18px; text-align: center; }
+.nav-conta[hidden] { display: none; }
+.ric-tabs { display: inline-flex; gap: 4px; background: var(--fill); border-radius: 10px; padding: 4px; margin-bottom: 16px; }
+.ric-tabs button { background: none; border: none; border-radius: 7px; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; cursor: pointer; }
+.ric-tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.ric-vista[hidden] { display: none; }
+.ric-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 16px 18px; margin-bottom: 14px; }
+.ric-card-testa { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+.ric-nome { font-weight: 700; font-size: 15px; }
+.ric-meta { color: var(--ink-2); font-size: 13px; margin-top: 2px; }
+.ric-nota-op { font-size: 13px; background: var(--phase-bg); border-radius: 8px; padding: 8px 10px; margin-top: 10px; overflow-wrap: anywhere; }
+.impatto { border: 1px solid var(--border); border-radius: 10px; margin-top: 12px; overflow: hidden; }
+.impatto-titolo { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; padding: 8px 12px; background: var(--phase-bg); }
+.impatto-giorno { padding: 8px 12px; border-top: 1px solid var(--border); font-size: 13px; display: grid; grid-template-columns: 150px 1fr; gap: 10px; }
+.impatto-giorno .ok { color: var(--ok-ink); }
+.impatto-giorno .rischio { color: var(--alert-ink); font-weight: 600; }
+.impatto-giorno .attenzione { color: var(--warn-ink); }
+.ric-azioni { display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+.ric-azioni input { flex: 1; min-width: 220px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-ctl); background: var(--bg); color: var(--ink); font-size: 13px; }
+.ric-err { color: var(--alert-ink); font-size: 13px; min-height: 18px; }
+.badge-in_attesa { background: var(--warn-soft); color: var(--warn-ink); }
+.badge-approvata { background: var(--ok-soft); color: var(--ok-ink); }
+.badge-rifiutata { background: var(--alert-soft); color: var(--alert-ink); }
+.badge-annullata { background: var(--fill); color: var(--muted); }
+.ass-giorno { font-size: 12px; font-weight: 700; color: var(--muted); padding: 10px 18px 4px; text-transform: capitalize; }
+.ass-riga { padding: 6px 18px 10px; font-size: 14px; border-bottom: 1px solid var(--border); }
+.ass-riga:last-child { border-bottom: none; }
+.ass-riga span { color: var(--muted); font-size: 13px; }
+.priv-avviso { background: var(--warn-soft); border-color: var(--warn-line); color: var(--warn-ink); font-size: 13px; line-height: 1.5; }
+.cfg-aggiungi { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.cfg-aggiungi input, .cfg-aggiungi select { padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-ctl); font-size: 13px; background: var(--bg); color: var(--ink); }
+.cfg-aggiungi input[type="text"] { flex: 1; min-width: 180px; }
+.cfg-aggiungi [hidden] { display: none; }
+.cfg-riga { display: grid; grid-template-columns: minmax(160px, 1.4fr) 110px minmax(110px, 1fr) auto; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.cfg-riga.tipo-ric { grid-template-columns: minmax(160px, 1.4fr) 110px auto; }
+.cfg-riga:last-child { border-bottom: none; }
+.cfg-riga input[type="text"], .cfg-riga select { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-ctl); font-size: 13px; background: var(--bg); color: var(--ink); }
+.cfg-riga .cfg-opzioni { grid-column: 1 / -1; }
+.cfg-riga.disattivo > :not(.cfg-azioni) { opacity: .55; }
+.cfg-azioni { display: flex; gap: 4px; align-items: center; white-space: nowrap; }
+.cfg-azioni .btn { padding: 5px 9px; font-size: 12px; }
+.tabella-taglie th, .tabella-taglie td { white-space: nowrap; }
+.do-gruppo { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 14px 0 8px; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
 /* ── DETTAGLIO ORDINE ── */
@@ -417,6 +461,10 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       <div class="nav-item" onclick="showSection('operatori')" id="nav-operatori">
         <span class="icon"><i data-ic="persone"></i></span> Operatori
       </div>
+      <div class="nav-item" onclick="showSection('richieste')" id="nav-richieste">
+        <span class="icon"><i data-ic="appunti"></i></span> Richieste
+        <span class="nav-conta" id="richieste-badge" hidden>0</span>
+      </div>
       <div class="nav-item" onclick="showSection('archivio')" id="nav-archivio">
         <span class="icon"><i data-ic="pacco"></i></span> Archivio
       </div>
@@ -467,6 +515,12 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       </div>
       <div class="nav-item" onclick="showSection('tempi-rif-config')" id="nav-tempi-rif-config">
         <span class="icon"><i data-ic="timer"></i></span> Tempi di riferimento
+      </div>
+      <div class="nav-item" onclick="showSection('campi-profilo-config')" id="nav-campi-profilo-config">
+        <span class="icon"><i data-ic="persona"></i></span> Campi del profilo
+      </div>
+      <div class="nav-item" onclick="showSection('tipi-richiesta-config')" id="nav-tipi-richiesta-config">
+        <span class="icon"><i data-ic="appunti"></i></span> Tipi di richiesta
       </div>
       <div class="nav-item" onclick="showSection('aspetto')" id="nav-aspetto">
         <span class="icon"><i data-ic="tema"></i></span> Aspetto
@@ -584,11 +638,49 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       <section class="section" id="sec-operatori">
         <div class="page-hdr">
           <div><h1>Operatori</h1></div>
-          <button class="btn btn-primary" onclick="openModalNuovoOperatore()">+ Nuovo Operatore</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary" onclick="apriTaglieSquadra()"><i data-ic="etichetta"></i> Taglie della squadra</button>
+            <button class="btn btn-primary" onclick="openModalNuovoOperatore()">+ Nuovo Operatore</button>
+          </div>
         </div>
         <div id="ops-ferie-panel" style="margin-bottom:18px"></div>
         <div class="ops-grid" id="ops-grid">
           <div style="color:var(--muted);padding:20px">Caricamento…</div>
+        </div>
+      </section>
+
+      <!-- RICHIESTE DI PERMESSO E ASSENZE -->
+      <section class="section" id="sec-richieste">
+        <div class="page-hdr">
+          <div>
+            <h1>Richieste</h1>
+            <div class="sub">Permessi e assenze degli operatori. L'approvazione aggiorna la disponibilità usata dal pianificatore.</div>
+          </div>
+          <button class="btn btn-secondary" onclick="apriSegnalaAssenza()"><i data-ic="avviso"></i> Segnala assenza</button>
+        </div>
+        <div class="ric-tabs" role="tablist" aria-label="Viste richieste">
+          <button type="button" role="tab" id="ric-tab-attesa" onclick="richiesteVista('attesa')">In attesa</button>
+          <button type="button" role="tab" id="ric-tab-storico" onclick="richiesteVista('storico')">Storico</button>
+          <button type="button" role="tab" id="ric-tab-assenze" onclick="richiesteVista('assenze')">Assenze squadra</button>
+        </div>
+        <div id="ric-vista-attesa" class="ric-vista"></div>
+        <div id="ric-vista-storico" class="ric-vista" hidden>
+          <div class="filters">
+            <select id="ric-f-stato" onchange="ricFiltro('stato', this.value)">
+              <option value="">Tutti gli stati</option>
+              <option value="approvata">Approvate</option>
+              <option value="rifiutata">Non approvate</option>
+              <option value="annullata">Annullate</option>
+              <option value="in_attesa">In attesa</option>
+            </select>
+            <select id="ric-f-operatore" onchange="ricFiltro('operatore', this.value)"></select>
+            <label style="font-size:12px;color:var(--muted)">Dal <input type="date" id="ric-f-dal" onchange="ricFiltro('dal', this.value)"></label>
+            <label style="font-size:12px;color:var(--muted)">Al <input type="date" id="ric-f-al" onchange="ricFiltro('al', this.value)"></label>
+          </div>
+          <div class="card" id="ric-storico-corpo"></div>
+        </div>
+        <div id="ric-vista-assenze" class="ric-vista" hidden>
+          <div class="card" style="padding:4px 0" id="ric-assenze-corpo"></div>
         </div>
       </section>
 
@@ -1152,6 +1244,23 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
             <input type="number" id="kpicfg-pausa-finestra" min="0" max="240" step="1" value="10"
               style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
           </div>
+          <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:4px 0 10px;border-bottom:1px solid var(--border);margin-bottom:16px">Richieste di permesso</div>
+          <div class="form-group" style="margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:13px;font-weight:600">Preavviso minimo (giorni)</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Giorni minimi tra la richiesta dell'operatore e l'inizio dell'assenza (0 = anche per oggi)</div>
+            </div>
+            <input type="number" id="kpicfg-ric-preavviso" min="0" max="60" step="1" value="0"
+              style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
+          </div>
+          <div class="form-group" style="margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:13px;font-weight:600">Massimo assenti nello stesso giorno</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Oltre questo numero l'impatto di una richiesta mostra un avviso (non blocca l'approvazione)</div>
+            </div>
+            <input type="number" id="kpicfg-ric-max-assenti" min="0" max="100" step="1" value="2"
+              style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
+          </div>
           <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:4px 0 10px;border-bottom:1px solid var(--border);margin-bottom:16px">Tempi di riferimento</div>
           <div class="form-group" style="margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
             <div style="flex:1;min-width:200px">
@@ -1357,6 +1466,55 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           </div>
         </div>
         <div class="card" style="padding:12px 16px"><div id="tempi-rif-body">Caricamento…</div></div>
+      </section>
+
+      <section class="section" id="sec-campi-profilo-config">
+        <div class="page-hdr">
+          <div>
+            <h1>Campi del profilo</h1>
+            <div class="sub">Dati che ogni operatore compila in "I miei dati". Un campo con valori salvati non si elimina: si disattiva.</div>
+          </div>
+        </div>
+        <div class="card priv-avviso" style="padding:14px 18px;max-width:900px">
+          <strong>Privacy:</strong> non aggiungere campi per dati sanitari (malattie, allergie, visite, idoneità), codice fiscale,
+          IBAN, indirizzo di casa o motivi delle assenze. Raccogli solo quello che serve davvero (contatti, taglie per abbigliamento e DPI).
+        </div>
+        <div class="card" style="padding:16px 18px;max-width:900px">
+          <div id="campi-profilo-body">Caricamento…</div>
+          <div class="cfg-aggiungi">
+            <input type="text" id="nuovo-campo-etichetta" maxlength="60" placeholder="Nuovo campo (es. Taglia cappello)">
+            <select id="nuovo-campo-tipo" onchange="_nuovoCampoTipoCambiato()">
+              <option value="testo">Testo</option>
+              <option value="telefono">Telefono</option>
+              <option value="scelta">Scelta da elenco</option>
+              <option value="numero">Numero</option>
+            </select>
+            <input type="text" id="nuovo-campo-gruppo" maxlength="40" placeholder="Gruppo (es. Taglie)" list="gruppi-campi-profilo">
+            <datalist id="gruppi-campi-profilo"></datalist>
+            <input type="text" id="nuovo-campo-opzioni" maxlength="600" placeholder="Opzioni separate da virgola (es. S, M, L)" hidden>
+            <button class="btn btn-primary" onclick="aggiungiCampoProfilo()">+ Aggiungi</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="sec-tipi-richiesta-config">
+        <div class="page-hdr">
+          <div>
+            <h1>Tipi di richiesta</h1>
+            <div class="sub">Voci tra cui l'operatore sceglie. "A ore" = permesso dentro un solo giorno. Un tipo già usato non si elimina: si disattiva.</div>
+          </div>
+        </div>
+        <div class="card" style="padding:16px 18px;max-width:760px">
+          <div id="tipi-richiesta-body">Caricamento…</div>
+          <div class="cfg-aggiungi">
+            <input type="text" id="nuovo-tipo-richiesta" maxlength="40" placeholder="Nuovo tipo (es. Recupero ore)">
+            <select id="nuovo-tipo-unita">
+              <option value="giorni">A giorni</option>
+              <option value="ore">A ore</option>
+            </select>
+            <button class="btn btn-primary" onclick="aggiungiTipoRichiesta()">+ Aggiungi</button>
+          </div>
+        </div>
       </section>
 
       <section class="section" id="sec-aspetto">
@@ -1642,6 +1800,69 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
 
 
 <!-- MODALE NUOVO OPERATORE -->
+<!-- SEGNALA ASSENZA (assenze non richieste: nessun campo motivo) -->
+<div class="modal-overlay" id="modal-segnala-assenza">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-hdr">
+      <h3>Segnala assenza</h3>
+      <button class="modal-close" onclick="closeModal('modal-segnala-assenza')" aria-label="Chiudi">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Per assenze non richieste. Viene registrata subito come approvata e aggiorna la disponibilità. Non si indica il motivo.</div>
+      <div class="form-group"><label for="sa-operatore">Operatore</label><select id="sa-operatore" onchange="_saSet('operatore', this.value)"></select></div>
+      <div class="form-row">
+        <div class="form-group"><label for="sa-dal">Dal</label><input type="date" id="sa-dal" onchange="_saSet('dal', this.value)"></div>
+        <div class="form-group"><label for="sa-al">Al</label><input type="date" id="sa-al" onchange="_saSet('al', this.value)"></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:12px;cursor:pointer">
+        <input type="checkbox" id="sa-ore" onchange="_saSet('ore', this.checked)"> Solo alcune ore (un solo giorno)
+      </label>
+      <div class="form-row" id="sa-ore-riga" hidden>
+        <div class="form-group"><label for="sa-oi">Dalle</label><input type="time" id="sa-oi" step="900" onchange="_saSet('oi', this.value)"></div>
+        <div class="form-group"><label for="sa-of">Alle</label><input type="time" id="sa-of" step="900" onchange="_saSet('of', this.value)"></div>
+      </div>
+      <div id="sa-err" class="ric-err" aria-live="assertive"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-segnala-assenza')">Annulla</button>
+      <button class="btn btn-primary" id="sa-conferma" onclick="confermaSegnalaAssenza()">Registra assenza</button>
+    </div>
+  </div>
+</div>
+
+<!-- DATI OPERATORE (profilo) -->
+<div class="modal-overlay" id="modal-dati-operatore">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-hdr">
+      <h3 id="do-titolo">Dati operatore</h3>
+      <button class="modal-close" onclick="closeModal('modal-dati-operatore')" aria-label="Chiudi">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Dati compilati dall'operatore in "I miei dati". Li vedete solo lui e il responsabile.</div>
+      <div id="do-corpo">Caricamento…</div>
+      <div id="do-err" class="ric-err" aria-live="assertive"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-dati-operatore')">Chiudi</button>
+      <button class="btn btn-primary" id="do-salva" onclick="salvaDatiOperatore()">Salva</button>
+    </div>
+  </div>
+</div>
+
+<!-- TAGLIE DELLA SQUADRA -->
+<div class="modal-overlay" id="modal-taglie">
+  <div class="modal" style="max-width:980px">
+    <div class="modal-hdr">
+      <h3>Taglie della squadra</h3>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-secondary" onclick="esportaTaglieCsv()"><i data-ic="invio"></i> Esporta CSV</button>
+        <button class="modal-close" onclick="closeModal('modal-taglie')" aria-label="Chiudi">✕</button>
+      </div>
+    </div>
+    <div class="modal-body" style="padding:0;overflow-x:auto" id="taglie-corpo">Caricamento…</div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-operatore">
   <div class="modal">
     <div class="modal-hdr">
@@ -1967,6 +2188,7 @@ async function postLogin() {
   setupRealtime();
   scheduleEndOfShiftRefresh();
   initOneSignalResp();
+  if (currentUserRow?.ruolo === 'responsabile') aggiornaBadgeRichieste();
   // Render in base al ruolo
   if (currentUserRow?.ruolo === 'sola_lettura') {
     // Nascondi nav e funzioni non pertinenti all'ufficio
@@ -2224,6 +2446,7 @@ function setupRealtime() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'notifiche' }, async () => {
       await loadNotifiche();
       renderNotifiche();
+      aggiornaBadgeRichieste();   // una nuova richiesta arriva sempre con una notifica al responsabile
     })
     .subscribe();
 }
@@ -2231,7 +2454,7 @@ function setupRealtime() {
 // ═══════════════════════════════════════════════
 // NAVIGAZIONE
 // ═══════════════════════════════════════════════
-const IMPOSTAZIONI_SECTIONS = ['fasi-config','tipi-prodotto-config','strutture-config','materiali-config','priorita-config','macro-config','orario-config','kpi-config','macchine-config','fasi-extra-config','notif-config','aspetto','lavorazioni-cnc-config','tempi-rif-config'];
+const IMPOSTAZIONI_SECTIONS = ['fasi-config','tipi-prodotto-config','strutture-config','materiali-config','priorita-config','macro-config','orario-config','kpi-config','macchine-config','fasi-extra-config','notif-config','aspetto','lavorazioni-cnc-config','tempi-rif-config','campi-profilo-config','tipi-richiesta-config'];
 
 function toggleImpostazioni(force) {
   const el  = document.getElementById('impostazioni-items');
@@ -2275,6 +2498,9 @@ function showSection(name) {
   else if (name === 'notif-config') { loadNotifDestinatari(); }
   else if (name === 'lavorazioni-cnc-config') { loadLavorazioniCnc().then(renderLavorazioniCncConfig); }
   else if (name === 'tempi-rif-config') { loadTempiRiferimento(); }
+  else if (name === 'richieste') { richiesteVista(_ricVista); }
+  else if (name === 'campi-profilo-config') { loadCampiProfilo(); }
+  else if (name === 'tipi-richiesta-config') { loadTipiRichiesta(); }
 }
 
 // ═══════════════════════════════════════════════
@@ -2282,6 +2508,7 @@ function showSection(name) {
 // ═══════════════════════════════════════════════
 const NOTIF_EVENTI = [
   { key: 'ordine_in_ritardo', label: 'Ordine in ritardo',           desc: 'Alert giornaliero (ore 5:30) per ogni ordine scaduto non ancora spedito' },
+  { key: 'richiesta_assenza', label: 'Nuova richiesta di permesso', desc: 'Quando un operatore invia una richiesta di permesso o assenza. Se non scegli nessuno la ricevono tutti i responsabili attivi' },
 ];
 
 let _notifDestCache = [];     // righe da notifiche_destinatari_config
@@ -4283,6 +4510,7 @@ function renderOperatori() {
       <div class="op-role">${op.ruolo === 'operatore' ? 'Operatore' : 'Sola Lettura'} ${op.attivo ? '' : '· <span style="color:var(--alert)">Disattivo</span>'}</div>
       <div class="op-actions" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
         <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="openModalModificaOperatore('${op.id}')"><i data-ic="matita"></i> Modifica</button>
+        <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="apriDatiOperatore('${op.id}')"><i data-ic="persona"></i> Dati</button>
         ${op.attivo
           ? `<button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="toggleOperatore('${op.id}', false)">Disattiva</button>`
           : `<button class="btn btn-ok" style="padding:5px 10px;font-size:12px" onclick="toggleOperatore('${op.id}', true)">Attiva</button>`
@@ -4881,6 +5109,8 @@ async function loadKpiConfig() {
   _set('kpicfg-svincolo-qta',        'soglia_quantita_svincolo_dipendenze',   2);
   _set('kpicfg-pausa-finestra',      'pausa_automatica_finestra_minuti',      10);
   _set('kpicfg-rif-sopra',           'rif_soglia_sopra_massimo',              1.5);
+  _set('kpicfg-ric-preavviso',       'richieste_preavviso_minimo_giorni',     0);
+  _set('kpicfg-ric-max-assenti',     'richieste_max_assenti_contemporanei',   2);
   // rif_soglia_sotto_tipico è salvato come frazione (0.30) ma mostrato in percentuale (30)
   const rsEl = document.getElementById('kpicfg-rif-sotto');
   if (rsEl) rsEl.value = map['rif_soglia_sotto_tipico'] != null ? Math.round(parseFloat(map['rif_soglia_sotto_tipico']) * 100) : 30;
@@ -4924,6 +5154,8 @@ async function salvaKpiConfig() {
     { chiave: 'pausa_automatica_finestra_minuti',   valore: _int('kpicfg-pausa-finestra', 10) },
     { chiave: 'rif_soglia_sotto_tipico',            valore: _flt('kpicfg-rif-sotto', 30) / 100 },
     { chiave: 'rif_soglia_sopra_massimo',           valore: _flt('kpicfg-rif-sopra', 1.5) },
+    { chiave: 'richieste_preavviso_minimo_giorni',  valore: _int('kpicfg-ric-preavviso', 0) },
+    { chiave: 'richieste_max_assenti_contemporanei', valore: _int('kpicfg-ric-max-assenti', 2) },
   ];
   if (errori.length) { toast('Valore mancante o non valido: ' + errori.join(', '), 'err'); return; }
   const { error } = await sb.from('kpi_config').upsert(rows);
@@ -8629,6 +8861,488 @@ async function eliminaManutenzione(manutId, macId) {
   await loadMacchine();
   renderMacchine();
   toast('Manutenzione eliminata');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RICHIESTE DI PERMESSO E ASSENZE · PROFILO OPERATORI · TAGLIE · CONFIGURAZIONE
+// ═══════════════════════════════════════════════════════════════════════════
+// Letture: richieste_assenza/campi_profilo/tipi_richiesta via tabella (RLS e_responsabile()),
+// sempre filtrate e ordinate su una colonna univoca; scritture su richieste e valori del
+// profilo SOLO via RPC (approvazione e disponibilità nella stessa transazione). Stato dei
+// moduli in memoria, aggiornato a ogni input. Valori dal database solo via escapeHtml.
+const RIC_ERRORI = {
+  non_autorizzato: 'Operazione non consentita', richiesta_non_in_attesa: 'La richiesta non è più in attesa',
+  richiesta_non_approvata: 'La richiesta non è approvata', richiesta_non_trovata: 'Richiesta non trovata',
+  nota_troppo_lunga: 'Nota troppo lunga (massimo 300 caratteri)', sovrapposizione: 'Si sovrappone a un\'altra assenza o richiesta dell\'operatore',
+  date_mancanti: 'Indica le date', data_fine_precedente_inizio: 'La data di fine è prima di quella di inizio',
+  periodo_troppo_lungo: 'Massimo 30 giorni', permesso_ore_un_solo_giorno: 'Le ore valgono per un solo giorno',
+  ora_fine_precedente_inizio: 'L\'ora di fine deve essere dopo quella di inizio', giorno_non_lavorativo: 'Giorno non lavorativo',
+  fuori_orario_lavoro: 'Fuori dall\'orario di lavoro', nessun_giorno_lavorativo: 'Nessun giorno lavorativo nel periodo',
+  orario_incompleto: 'Indica l\'ora di inizio e di fine', operatore_non_trovato: 'Operatore non trovato',
+  tipo_segnalazioni_mancante: 'Manca il tipo di richiesta per le segnalazioni (Altro)',
+  telefono_non_valido: 'usa solo cifre, spazi, + e - (massimo 20)', testo_troppo_lungo: 'massimo 100 caratteri',
+  scelta_non_valida: 'scegli un valore dall\'elenco', numero_non_valido: 'inserisci un numero valido', numero_fuori_limiti: 'numero fuori dai limiti',
+  campo_non_trovato: 'Campo non più disponibile',
+};
+const ricErrore = c => RIC_ERRORI[c] || c || 'Operazione non riuscita';
+const RIC_STATI = { in_attesa: 'In attesa', approvata: 'Approvata', rifiutata: 'Non approvata', annullata: 'Annullata' };
+const _isoOggi = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const _isoSpost = (giorni) => { const d = new Date(_isoOggi() + 'T12:00:00'); d.setDate(d.getDate() + giorni); return d.toISOString().slice(0, 10); };
+const _dIt = iso => { if (!iso) return ''; const [y, m, d] = String(iso).slice(0, 10).split('-'); return `${d}/${m}/${y}`; };
+const _oraHm = t => t ? String(t).slice(0, 5) : '';
+function _periodoRic(r) {
+  if (r.ora_inizio) return `${_dIt(r.data_inizio)} dalle ${_oraHm(r.ora_inizio)} alle ${_oraHm(r.ora_fine)}`;
+  if (r.data_inizio === r.data_fine) return _dIt(r.data_inizio);
+  return `dal ${_dIt(r.data_inizio)} al ${_dIt(r.data_fine)}`;
+}
+const RIC_SELECT = 'id, operatore_id, data_inizio, data_fine, ora_inizio, ora_fine, nota_operatore, stato, origine, nota_responsabile, deciso_il, creato_il, operatore:users!operatore_id(nome, cognome), decisore:users!deciso_da(nome, cognome), tipo:tipi_richiesta(nome, unita)';
+
+let _ricVista = 'attesa';
+let _ricAttesa = [];
+let _ricStorico = [];
+let _ricNote = {};   // richiesta_id → nota del responsabile in scrittura
+let _ricFiltri = { stato: '', operatore: '', dal: '', al: '' };
+let _ricOccupato = false;
+
+async function aggiornaBadgeRichieste() {
+  const { count, error } = await sb.from('richieste_assenza').select('id', { count: 'exact', head: true }).eq('stato', 'in_attesa');
+  const b = document.getElementById('richieste-badge');
+  if (!b || error) return;
+  b.textContent = String(count || 0);
+  b.hidden = !count;
+}
+
+function richiesteVista(v) {
+  _ricVista = v;
+  ['attesa', 'storico', 'assenze'].forEach(x => {
+    document.getElementById('ric-vista-' + x).hidden = x !== v;
+    document.getElementById('ric-tab-' + x).setAttribute('aria-selected', x === v ? 'true' : 'false');
+  });
+  if (v === 'attesa') loadRichiesteAttesa();
+  else if (v === 'storico') { _initFiltriStorico(); loadRichiesteStorico(); }
+  else loadAssenzeSquadraResp();
+}
+
+async function loadRichiesteAttesa() {
+  const el = document.getElementById('ric-vista-attesa');
+  el.innerHTML = '<div style="color:var(--muted);padding:12px">Caricamento…</div>';
+  // Le richieste in attesa sono poche per natura; limite + conteggio come rete di sicurezza.
+  const { data, error, count } = await sb.from('richieste_assenza').select(RIC_SELECT, { count: 'exact' })
+    .eq('stato', 'in_attesa').order('data_inizio').order('id').limit(200);
+  if (error) { el.innerHTML = `<div class="ric-err">${escapeHtml(error.message)}</div>`; return; }
+  _ricAttesa = data || [];
+  aggiornaBadgeRichieste();
+  if (!_ricAttesa.length) { el.innerHTML = '<div class="empty-state"><div class="icon"><i data-ic="spunta"></i></div><p>Nessuna richiesta in attesa</p></div>'; return; }
+  el.innerHTML = (count > _ricAttesa.length ? `<div class="ric-err">Mostrate ${_ricAttesa.length} richieste su ${count}.</div>` : '') +
+    _ricAttesa.map(r => `
+    <div class="ric-card" id="ric-${escapeHtml(r.id)}">
+      <div class="ric-card-testa">
+        <div>
+          <div class="ric-nome">${escapeHtml(r.operatore?.nome)} ${escapeHtml(r.operatore?.cognome)}</div>
+          <div class="ric-meta"><strong>${escapeHtml(r.tipo?.nome)}</strong> · ${escapeHtml(_periodoRic(r))}</div>
+          <div class="ric-meta" style="color:var(--muted);font-size:12px">Inviata il ${escapeHtml(formatDateTime(r.creato_il))}</div>
+        </div>
+        <span class="badge badge-in_attesa">In attesa</span>
+      </div>
+      ${r.nota_operatore ? `<div class="ric-nota-op">${escapeHtml(r.nota_operatore)}</div>` : ''}
+      <div class="impatto" id="imp-${escapeHtml(r.id)}"><div class="impatto-titolo">Impatto</div><div style="padding:8px 12px;font-size:13px;color:var(--muted)">Calcolo…</div></div>
+      <div class="ric-azioni">
+        <input type="text" maxlength="300" placeholder="Nota per l'operatore (facoltativa)" value="${escapeHtml(_ricNote[r.id] || '')}" oninput="_ricNote['${escapeJsAttr(r.id)}'] = this.value">
+        <button class="btn btn-ok" onclick="decidiRichiesta('${escapeJsAttr(r.id)}', 'approva')"><i data-ic="spunta"></i> Approva</button>
+        <button class="btn btn-danger" onclick="decidiRichiesta('${escapeJsAttr(r.id)}', 'rifiuta')">Rifiuta</button>
+      </div>
+    </div>`).join('');
+  _ricAttesa.forEach(r => caricaImpatto(r.id));
+}
+
+async function caricaImpatto(id) {
+  const box = document.getElementById('imp-' + id);
+  const { data, error } = await sb.rpc('richiesta_impatto', { p_richiesta_id: id, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (!box) return;
+  if (error || !data?.ok) { box.innerHTML = `<div class="impatto-titolo">Impatto</div><div class="ric-err" style="padding:8px 12px">${escapeHtml(ricErrore(data?.errore || error?.message))}</div>`; return; }
+  const lista = (arr) => arr.map(x => escapeHtml(x)).join(', ');
+  box.innerHTML = `<div class="impatto-titolo">Impatto${data.parziale ? ' — permesso a ore: presente il resto della giornata' : ''}</div>` +
+    (data.giorni.length ? data.giorni.map(g => {
+      const righe = [];
+      if (g.altri_assenti > 0) righe.push(`<div class="${g.supera_massimo ? 'rischio' : 'attenzione'}">Già assenti: ${g.altri_assenti} (${lista(g.nomi_assenti)})</div>`);
+      if (g.supera_massimo) righe.push(`<div class="rischio">Oltre il massimo di ${escapeHtml(data.massimo_assenti)} assenti nello stesso giorno</div>`);
+      if (g.fasi_scoperte.length) righe.push(`<div class="rischio">Fasi senza altri operatori competenti: ${lista(g.fasi_scoperte)}</div>`);
+      if (g.macchine_scoperte.length) righe.push(`<div class="rischio">Macchine senza altri operatori abilitati: ${lista(g.macchine_scoperte)}</div>`);
+      if (g.fasi_senza_macchina.length) righe.push(`<div class="attenzione">Fasi che resterebbero senza nessuna macchina utilizzabile: ${lista(g.fasi_senza_macchina)}</div>`);
+      if (!righe.length) righe.push('<div class="ok">Coperto: nessuna fase o macchina scoperta</div>');
+      const d = new Date(g.data + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: '2-digit' });
+      return `<div class="impatto-giorno"><div><strong>${escapeHtml(d)}</strong></div><div>${righe.join('')}</div></div>`;
+    }).join('') : '<div class="impatto-giorno"><div></div><div class="ok">Nessun giorno lavorativo coinvolto</div></div>');
+}
+
+async function decidiRichiesta(id, azione) {
+  if (_ricOccupato) return;
+  const r = _ricAttesa.find(x => x.id === id);
+  const nome = r ? `${r.operatore?.nome} ${r.operatore?.cognome}` : '';
+  if (!confirm(`${azione === 'approva' ? 'Approvare' : 'Rifiutare'} la richiesta di ${nome}?`)) return;
+  _ricOccupato = true;
+  const { data, error } = await sb.rpc(azione === 'approva' ? 'richiesta_approva' : 'richiesta_rifiuta', {
+    p_richiesta_id: id, p_nota: (_ricNote[id] || '').trim() || null, p_responsabile_id: currentUserRow.id, p_session_token: null,
+  });
+  _ricOccupato = false;
+  if (error || !data?.ok) { toast(ricErrore(data?.errore || error?.message), 'err'); return; }
+  delete _ricNote[id];
+  toast(azione === 'approva' ? `Richiesta approvata: disponibilità aggiornata (${data.giorni_aggiornati} giorn${data.giorni_aggiornati === 1 ? 'o' : 'i'})` : 'Richiesta rifiutata', 'ok');
+  await loadRichiesteAttesa();
+}
+
+function _initFiltriStorico() {
+  if (!_ricFiltri.dal) { _ricFiltri.dal = _isoSpost(-90); _ricFiltri.al = _isoSpost(90); }
+  document.getElementById('ric-f-dal').value = _ricFiltri.dal;
+  document.getElementById('ric-f-al').value = _ricFiltri.al;
+  document.getElementById('ric-f-stato').value = _ricFiltri.stato;
+  const sel = document.getElementById('ric-f-operatore');
+  sel.innerHTML = '<option value="">Tutti gli operatori</option>' + operatoriCache
+    .filter(o => o.ruolo === 'operatore').sort((a, b) => (a.cognome || '').localeCompare(b.cognome || ''))
+    .map(o => `<option value="${escapeHtml(o.id)}"${o.id === _ricFiltri.operatore ? ' selected' : ''}>${escapeHtml(o.cognome)} ${escapeHtml(o.nome)}</option>`).join('');
+}
+
+function ricFiltro(chiave, valore) { _ricFiltri[chiave] = valore; loadRichiesteStorico(); }
+
+async function loadRichiesteStorico() {
+  const el = document.getElementById('ric-storico-corpo');
+  if (!_ricFiltri.dal || !_ricFiltri.al) { el.innerHTML = '<div class="ric-err" style="padding:14px">Indica il periodo (dal/al)</div>'; return; }
+  el.innerHTML = '<div style="color:var(--muted);padding:14px">Caricamento…</div>';
+  // Tabella che cresce: sempre filtrata per periodo, ordinata su colonna univoca, con limite e conteggio.
+  let q = sb.from('richieste_assenza').select(RIC_SELECT, { count: 'exact' })
+    .gte('data_inizio', _ricFiltri.dal).lte('data_inizio', _ricFiltri.al);
+  if (_ricFiltri.stato) q = q.eq('stato', _ricFiltri.stato);
+  if (_ricFiltri.operatore) q = q.eq('operatore_id', _ricFiltri.operatore);
+  const { data, error, count } = await q.order('data_inizio', { ascending: false }).order('id').range(0, 499);
+  if (error) { el.innerHTML = `<div class="ric-err" style="padding:14px">${escapeHtml(error.message)}</div>`; return; }
+  _ricStorico = data || [];
+  if (!_ricStorico.length) { el.innerHTML = '<div class="empty-state"><p>Nessuna richiesta nel periodo</p></div>'; return; }
+  el.innerHTML = (count > _ricStorico.length ? `<div class="ric-err" style="padding:10px 14px">Mostrate ${_ricStorico.length} richieste su ${count}: restringi il periodo.</div>` : '') + `
+    <table><thead><tr><th>Operatore</th><th>Tipo</th><th>Periodo</th><th>Stato</th><th>Deciso da</th><th>Note</th><th></th></tr></thead><tbody>
+    ${_ricStorico.map(r => `<tr>
+      <td>${escapeHtml(r.operatore?.nome)} ${escapeHtml(r.operatore?.cognome)}</td>
+      <td>${r.origine === 'responsabile' ? 'Assenza segnalata' : escapeHtml(r.tipo?.nome)}</td>
+      <td style="white-space:nowrap">${escapeHtml(_periodoRic(r))}</td>
+      <td><span class="badge badge-${escapeHtml(r.stato)}">${escapeHtml(RIC_STATI[r.stato] || r.stato)}</span></td>
+      <td style="font-size:12px">${r.decisore ? `${escapeHtml(r.decisore.nome)} ${escapeHtml(r.decisore.cognome)}<br><span style="color:var(--muted)">${escapeHtml(formatDateTime(r.deciso_il))}</span>` : '—'}</td>
+      <td style="font-size:12px;max-width:260px;overflow-wrap:anywhere">${r.nota_operatore ? `<div>Op.: ${escapeHtml(r.nota_operatore)}</div>` : ''}${r.nota_responsabile ? `<div style="color:var(--muted)">Resp.: ${escapeHtml(r.nota_responsabile)}</div>` : ''}</td>
+      <td>${r.stato === 'approvata' ? `<button class="btn btn-secondary" style="padding:5px 10px;font-size:12px;white-space:nowrap" onclick="annullaApprovazione('${escapeJsAttr(r.id)}')">Annulla approvazione</button>` : ''}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+async function annullaApprovazione(id) {
+  const r = _ricStorico.find(x => x.id === id);
+  if (!confirm(`Annullare l'assenza approvata di ${r?.operatore?.nome || ''} ${r?.operatore?.cognome || ''} (${r ? _periodoRic(r) : ''})?\nLa disponibilità torna esattamente com'era prima dell'approvazione.`)) return;
+  const { data, error } = await sb.rpc('richiesta_annulla_approvazione', { p_richiesta_id: id, p_nota: null, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast(ricErrore(data?.errore || error?.message), 'err'); return; }
+  toast(`Approvazione annullata: ${data.giorni_ripristinati} giorn${data.giorni_ripristinati === 1 ? 'o' : 'i'} ripristinat${data.giorni_ripristinati === 1 ? 'o' : 'i'}`, 'ok');
+  await loadRichiesteStorico();
+}
+
+// Assenze della squadra: stessa RPC dell'operatore, solo nome e date/orari.
+async function loadAssenzeSquadraResp() {
+  const el = document.getElementById('ric-assenze-corpo');
+  el.innerHTML = '<div style="color:var(--muted);padding:14px">Caricamento…</div>';
+  const { data, error } = await sb.rpc('calendario_assenze_squadra', { p_utente_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { el.innerHTML = `<div class="ric-err" style="padding:14px">${escapeHtml(ricErrore(data?.errore || error?.message))}</div>`; return; }
+  const assenze = data.assenze || [];
+  if (!assenze.length) { el.innerHTML = '<div class="empty-state"><p>Nessuna assenza approvata nelle prossime 4 settimane</p></div>'; return; }
+  let html = '', ultimo = null;
+  assenze.forEach(a => {
+    if (a.data_inizio !== ultimo) {
+      ultimo = a.data_inizio;
+      html += `<div class="ass-giorno">${escapeHtml(new Date(a.data_inizio + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }))}</div>`;
+    }
+    const quando = a.ora_inizio ? `assente dalle ${a.ora_inizio} alle ${a.ora_fine}` : a.data_fine === a.data_inizio ? 'assente' : `assente fino al ${_dIt(a.data_fine)}`;
+    html += `<div class="ass-riga">${escapeHtml(a.nome)} ${escapeHtml(a.cognome)} <span>— ${escapeHtml(quando)}</span></div>`;
+  });
+  el.innerHTML = html;
+}
+
+// ── Segnala assenza (assenza non richiesta: nessun motivo) ──
+let _saForm = { operatore: '', dal: '', al: '', ore: false, oi: '', of: '' };
+function apriSegnalaAssenza() {
+  _saForm = { operatore: '', dal: _isoOggi(), al: _isoOggi(), ore: false, oi: '', of: '' };
+  const sel = document.getElementById('sa-operatore');
+  sel.innerHTML = '<option value="">— Scegli —</option>' + operatoriCache
+    .filter(o => o.ruolo === 'operatore' && o.attivo && !o.eliminato).sort((a, b) => (a.cognome || '').localeCompare(b.cognome || ''))
+    .map(o => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.cognome)} ${escapeHtml(o.nome)}</option>`).join('');
+  document.getElementById('sa-dal').value = _saForm.dal;
+  document.getElementById('sa-al').value = _saForm.al;
+  document.getElementById('sa-ore').checked = false;
+  document.getElementById('sa-ore-riga').hidden = true;
+  document.getElementById('sa-oi').value = '';
+  document.getElementById('sa-of').value = '';
+  document.getElementById('sa-err').textContent = '';
+  document.getElementById('modal-segnala-assenza').classList.add('open');
+}
+function _saSet(campo, valore) {
+  _saForm[campo] = valore;
+  if (campo === 'ore') {
+    document.getElementById('sa-ore-riga').hidden = !valore;
+    if (valore) { _saForm.al = _saForm.dal; document.getElementById('sa-al').value = _saForm.dal; }
+  }
+  if (campo === 'dal' && (_saForm.ore || !_saForm.al || _saForm.al < valore)) { _saForm.al = valore; document.getElementById('sa-al').value = valore; }
+}
+async function confermaSegnalaAssenza() {
+  const err = document.getElementById('sa-err');
+  const f = _saForm;
+  err.textContent = '';
+  if (!f.operatore) { err.textContent = 'Scegli l\'operatore'; return; }
+  if (!f.dal || !f.al) { err.textContent = ricErrore('date_mancanti'); return; }
+  if (f.ore && (!f.oi || !f.of)) { err.textContent = ricErrore('orario_incompleto'); return; }
+  const btn = document.getElementById('sa-conferma');
+  btn.disabled = true;
+  const { data, error } = await sb.rpc('assenza_segnala', {
+    p_operatore_id: f.operatore, p_data_inizio: f.dal, p_data_fine: f.ore ? f.dal : f.al,
+    p_ora_inizio: f.ore ? f.oi : null, p_ora_fine: f.ore ? f.of : null,
+    p_responsabile_id: currentUserRow.id, p_session_token: null,
+  });
+  btn.disabled = false;
+  if (error || !data?.ok) { err.textContent = ricErrore(data?.errore || error?.message); return; }
+  closeModal('modal-segnala-assenza');
+  toast(`Assenza registrata: disponibilità aggiornata (${data.giorni_aggiornati} giorn${data.giorni_aggiornati === 1 ? 'o' : 'i'})`, 'ok');
+  if (_ricVista) richiesteVista(_ricVista);
+}
+
+// ── Dati di un operatore (profilo) ──
+let _doOperatore = null, _doCampi = [], _doValori = {};
+async function apriDatiOperatore(id) {
+  const op = operatoriCache.find(o => o.id === id);
+  _doOperatore = id; _doCampi = []; _doValori = {};
+  document.getElementById('do-titolo').textContent = `Dati — ${op ? op.nome + ' ' + op.cognome : ''}`;
+  document.getElementById('do-err').textContent = '';
+  const corpo = document.getElementById('do-corpo');
+  corpo.innerHTML = 'Caricamento…';
+  document.getElementById('modal-dati-operatore').classList.add('open');
+  const { data, error } = await sb.rpc('profilo_operatore_leggi_resp', { p_operatore_id: id, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { corpo.innerHTML = `<div class="ric-err">${escapeHtml(ricErrore(data?.errore || error?.message))}</div>`; return; }
+  _doCampi = data.campi || [];
+  _doValori = Object.fromEntries(_doCampi.map(c => [c.id, c.valore ?? '']));
+  if (!_doCampi.length) { corpo.innerHTML = '<p style="color:var(--muted)">Nessun campo del profilo attivo.</p>'; return; }
+  let html = '', gruppo = null;
+  _doCampi.forEach(c => {
+    if (c.gruppo !== gruppo) { gruppo = c.gruppo; html += `<div class="do-gruppo">${escapeHtml(gruppo)}</div>`; }
+    const idc = 'do-' + escapeHtml(c.id);
+    const on = `oninput="_doValori['${escapeJsAttr(c.id)}'] = this.value" onchange="_doValori['${escapeJsAttr(c.id)}'] = this.value"`;
+    const v = _doValori[c.id];
+    const ctl = c.tipo === 'scelta'
+      ? `<select id="${idc}" ${on}><option value="">—</option>${(c.opzioni || []).map(o => `<option value="${escapeHtml(o)}"${String(o) === String(v) ? ' selected' : ''}>${escapeHtml(o)}</option>`).join('')}</select>`
+      : `<input id="${idc}" type="${c.tipo === 'telefono' ? 'tel' : 'text'}" maxlength="${c.tipo === 'telefono' ? 20 : c.tipo === 'numero' ? 10 : 100}" value="${escapeHtml(v)}" ${on}>`;
+    html += `<div class="form-group" style="margin-bottom:12px"><label for="${idc}">${escapeHtml(c.etichetta)}</label>${ctl}</div>`;
+  });
+  corpo.innerHTML = html;
+}
+async function salvaDatiOperatore() {
+  const err = document.getElementById('do-err');
+  err.textContent = '';
+  const modificati = {};
+  _doCampi.forEach(c => { if ((_doValori[c.id] ?? '') !== (c.valore ?? '')) modificati[c.id] = _doValori[c.id] ?? ''; });
+  if (!Object.keys(modificati).length) { closeModal('modal-dati-operatore'); return; }
+  const { data, error } = await sb.rpc('profilo_operatore_salva_resp', { p_operatore_id: _doOperatore, p_valori: modificati, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) {
+    const campo = _doCampi.find(c => c.id === data?.campo_id);
+    err.textContent = (campo ? campo.etichetta + ': ' : '') + ricErrore(data?.errore || error?.message);
+    return;
+  }
+  toast('Dati operatore salvati', 'ok');
+  closeModal('modal-dati-operatore');
+}
+
+// ── Taglie della squadra + CSV per ordini di abbigliamento e DPI ──
+let _taglie = null;
+async function apriTaglieSquadra() {
+  const corpo = document.getElementById('taglie-corpo');
+  corpo.innerHTML = '<div style="padding:20px;color:var(--muted)">Caricamento…</div>';
+  document.getElementById('modal-taglie').classList.add('open');
+  const { data, error } = await sb.rpc('taglie_squadra', { p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { corpo.innerHTML = `<div class="ric-err" style="padding:20px">${escapeHtml(ricErrore(data?.errore || error?.message))}</div>`; return; }
+  _taglie = data;
+  if (!data.campi.length) { corpo.innerHTML = '<div style="padding:20px;color:var(--muted)">Nessun campo attivo nel gruppo "Taglie" (Impostazioni → Campi del profilo).</div>'; return; }
+  corpo.innerHTML = `<table class="tabella-taglie"><thead><tr><th>Operatore</th>${data.campi.map(c => `<th>${escapeHtml(c.etichetta)}</th>`).join('')}</tr></thead><tbody>
+    ${data.operatori.map(o => `<tr><td><strong>${escapeHtml(o.cognome)} ${escapeHtml(o.nome)}</strong></td>${data.campi.map(c => `<td>${escapeHtml(o.valori[c.id] || '—')}</td>`).join('')}</tr>`).join('')}
+    </tbody></table>`;
+}
+function _csvCella(v) {
+  let s = String(v ?? '');
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;          // niente formule eseguite dal foglio di calcolo
+  return `"${s.replace(/"/g, '""')}"`;
+}
+function esportaTaglieCsv() {
+  if (!_taglie?.campi?.length) { toast('Niente da esportare', 'err'); return; }
+  const righe = [['Cognome', 'Nome', ..._taglie.campi.map(c => c.etichetta)],
+    ..._taglie.operatori.map(o => [o.cognome, o.nome, ..._taglie.campi.map(c => o.valori[c.id] || '')])];
+  const csv = righe.map(r => r.map(_csvCella).join(';')).join('\r\n');
+  const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = `taglie-squadra-${_isoOggi()}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ── Impostazioni: Campi del profilo ──
+let _campiProfilo = [];
+const TIPI_CAMPO = { testo: 'Testo', telefono: 'Telefono', scelta: 'Scelta', numero: 'Numero' };
+async function loadCampiProfilo() {
+  const { data, error } = await sb.from('campi_profilo').select('*').order('gruppo').order('posizione').order('id').limit(500);
+  const el = document.getElementById('campi-profilo-body');
+  if (error) { el.innerHTML = `<div class="ric-err">${escapeHtml(error.message)}</div>`; return; }
+  _campiProfilo = data || [];
+  document.getElementById('gruppi-campi-profilo').innerHTML = [...new Set(['Contatti', 'Taglie', ..._campiProfilo.map(c => c.gruppo)])].map(g => `<option value="${escapeHtml(g)}">`).join('');
+  renderCampiProfilo();
+}
+function renderCampiProfilo() {
+  const el = document.getElementById('campi-profilo-body');
+  if (!_campiProfilo.length) { el.innerHTML = '<p style="color:var(--muted)">Nessun campo.</p>'; return; }
+  el.innerHTML = _campiProfilo.map((c, i) => {
+    const id = escapeJsAttr(c.id);
+    const stessoGruppo = _campiProfilo.filter(x => x.gruppo === c.gruppo);
+    const pos = stessoGruppo.indexOf(c);
+    return `<div class="cfg-riga ${c.attivo ? '' : 'disattivo'}">
+      <input type="text" maxlength="60" aria-label="Etichetta" value="${escapeHtml(c.etichetta)}" onchange="aggiornaCampoProfilo('${id}', { etichetta: this.value.trim() })">
+      <span style="font-size:12px;color:var(--muted)">${escapeHtml(TIPI_CAMPO[c.tipo] || c.tipo)}</span>
+      <input type="text" maxlength="40" aria-label="Gruppo" value="${escapeHtml(c.gruppo)}" list="gruppi-campi-profilo" onchange="aggiornaCampoProfilo('${id}', { gruppo: this.value.trim() })">
+      <div class="cfg-azioni">
+        <button class="btn btn-secondary" title="Su" aria-label="Sposta su" ${pos === 0 ? 'disabled' : ''} onclick="spostaCampoProfilo('${id}', -1)">↑</button>
+        <button class="btn btn-secondary" title="Giù" aria-label="Sposta giù" ${pos === stessoGruppo.length - 1 ? 'disabled' : ''} onclick="spostaCampoProfilo('${id}', 1)">↓</button>
+        <button class="btn ${c.attivo ? 'btn-secondary' : 'btn-ok'}" onclick="aggiornaCampoProfilo('${id}', { attivo: ${!c.attivo} })">${c.attivo ? 'Disattiva' : 'Attiva'}</button>
+        <button class="btn btn-danger" aria-label="Elimina" onclick="eliminaCampoProfilo('${id}')"><i data-ic="cestino"></i></button>
+      </div>
+      ${c.tipo === 'scelta' ? `<input class="cfg-opzioni" type="text" maxlength="600" aria-label="Opzioni" value="${escapeHtml((c.opzioni || []).join(', '))}" onchange="aggiornaOpzioniCampo('${id}', this.value)">` : ''}
+    </div>`;
+  }).join('');
+}
+function _opzioniDaTesto(testo) {
+  return [...new Set(String(testo).split(',').map(s => s.trim()).filter(Boolean))].slice(0, 60);
+}
+async function aggiornaCampoProfilo(id, modifiche) {
+  if ('etichetta' in modifiche && !modifiche.etichetta) { toast('L\'etichetta non può essere vuota', 'err'); return renderCampiProfilo(); }
+  if ('gruppo' in modifiche && !modifiche.gruppo) { toast('Il gruppo non può essere vuoto', 'err'); return renderCampiProfilo(); }
+  const { error } = await sb.from('campi_profilo').update(modifiche).eq('id', id);
+  if (error) { toast('Errore: ' + error.message, 'err'); }
+  else toast('Campo aggiornato', 'ok');
+  await loadCampiProfilo();
+}
+async function aggiornaOpzioniCampo(id, testo) {
+  const opzioni = _opzioniDaTesto(testo);
+  if (!opzioni.length) { toast('Serve almeno un\'opzione', 'err'); return renderCampiProfilo(); }
+  await aggiornaCampoProfilo(id, { opzioni });
+}
+async function spostaCampoProfilo(id, delta) {
+  const c = _campiProfilo.find(x => x.id === id);
+  const gruppo = _campiProfilo.filter(x => x.gruppo === c.gruppo);
+  const i = gruppo.indexOf(c), j = i + delta;
+  if (j < 0 || j >= gruppo.length) return;
+  const ordine = gruppo.slice(); [ordine[i], ordine[j]] = [ordine[j], ordine[i]];
+  for (let k = 0; k < ordine.length; k++) {
+    if (ordine[k].posizione !== (k + 1) * 10) {
+      const { error } = await sb.from('campi_profilo').update({ posizione: (k + 1) * 10 }).eq('id', ordine[k].id);
+      if (error) { toast('Errore: ' + error.message, 'err'); break; }
+    }
+  }
+  await loadCampiProfilo();
+}
+async function eliminaCampoProfilo(id) {
+  const c = _campiProfilo.find(x => x.id === id);
+  if (!confirm(`Eliminare il campo "${c?.etichetta}"?`)) return;
+  const { error } = await sb.from('campi_profilo').delete().eq('id', id);
+  if (error) {
+    toast(error.code === '23503' ? 'Il campo ha valori salvati: non si elimina, disattivalo' : 'Errore: ' + error.message, 'err');
+    return;
+  }
+  toast('Campo eliminato', 'ok');
+  await loadCampiProfilo();
+}
+function _nuovoCampoTipoCambiato() {
+  document.getElementById('nuovo-campo-opzioni').hidden = document.getElementById('nuovo-campo-tipo').value !== 'scelta';
+}
+function _chiaveDaEtichetta(etichetta) {
+  const base = etichetta.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30) || 'campo';
+  const suffisso = Array.from(crypto.getRandomValues(new Uint8Array(2)), b => b.toString(16).padStart(2, '0')).join('');
+  return `${base}_${suffisso}`;
+}
+async function aggiungiCampoProfilo() {
+  const etichetta = document.getElementById('nuovo-campo-etichetta').value.trim();
+  const tipo = document.getElementById('nuovo-campo-tipo').value;
+  const gruppo = document.getElementById('nuovo-campo-gruppo').value.trim() || 'Contatti';
+  if (!etichetta) { toast('Scrivi l\'etichetta del campo', 'err'); return; }
+  let opzioni = null;
+  if (tipo === 'scelta') {
+    opzioni = _opzioniDaTesto(document.getElementById('nuovo-campo-opzioni').value);
+    if (!opzioni.length) { toast('Indica le opzioni separate da virgola', 'err'); return; }
+  }
+  const posizione = Math.max(0, ..._campiProfilo.filter(c => c.gruppo === gruppo).map(c => c.posizione || 0)) + 10;
+  const { error } = await sb.from('campi_profilo').insert({ chiave: _chiaveDaEtichetta(etichetta), etichetta, tipo, opzioni, gruppo, posizione });
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  document.getElementById('nuovo-campo-etichetta').value = '';
+  document.getElementById('nuovo-campo-opzioni').value = '';
+  toast('Campo aggiunto', 'ok');
+  await loadCampiProfilo();
+}
+
+// ── Impostazioni: Tipi di richiesta ──
+let _tipiRichiesta = [];
+async function loadTipiRichiesta() {
+  const { data, error } = await sb.from('tipi_richiesta').select('*').order('posizione').order('id').limit(200);
+  const el = document.getElementById('tipi-richiesta-body');
+  if (error) { el.innerHTML = `<div class="ric-err">${escapeHtml(error.message)}</div>`; return; }
+  _tipiRichiesta = data || [];
+  el.innerHTML = _tipiRichiesta.map((t, i) => {
+    const id = escapeJsAttr(t.id);
+    return `<div class="cfg-riga tipo-ric ${t.attivo ? '' : 'disattivo'}">
+      <input type="text" maxlength="40" aria-label="Nome" value="${escapeHtml(t.nome)}" onchange="aggiornaTipoRichiesta('${id}', { nome: this.value.trim() })">
+      <select aria-label="Unità" onchange="aggiornaTipoRichiesta('${id}', { unita: this.value })">
+        <option value="giorni"${t.unita === 'giorni' ? ' selected' : ''}>A giorni</option>
+        <option value="ore"${t.unita === 'ore' ? ' selected' : ''}>A ore</option>
+      </select>
+      <div class="cfg-azioni">
+        <button class="btn btn-secondary" aria-label="Sposta su" ${i === 0 ? 'disabled' : ''} onclick="spostaTipoRichiesta('${id}', -1)">↑</button>
+        <button class="btn btn-secondary" aria-label="Sposta giù" ${i === _tipiRichiesta.length - 1 ? 'disabled' : ''} onclick="spostaTipoRichiesta('${id}', 1)">↓</button>
+        <button class="btn ${t.attivo ? 'btn-secondary' : 'btn-ok'}" onclick="aggiornaTipoRichiesta('${id}', { attivo: ${!t.attivo} })">${t.attivo ? 'Disattiva' : 'Attiva'}</button>
+        <button class="btn btn-danger" aria-label="Elimina" onclick="eliminaTipoRichiesta('${id}')"><i data-ic="cestino"></i></button>
+      </div>
+      ${t.per_segnalazioni ? '<div class="cfg-opzioni" style="font-size:12px;color:var(--muted)">Usato anche per le assenze segnalate dal responsabile</div>' : ''}
+    </div>`;
+  }).join('') || '<p style="color:var(--muted)">Nessun tipo.</p>';
+}
+async function aggiornaTipoRichiesta(id, modifiche) {
+  if ('nome' in modifiche && !modifiche.nome) { toast('Il nome non può essere vuoto', 'err'); return loadTipiRichiesta(); }
+  const { error } = await sb.from('tipi_richiesta').update(modifiche).eq('id', id);
+  if (error) toast(error.code === '23505' ? 'Esiste già un tipo con questo nome' : 'Errore: ' + error.message, 'err');
+  else toast('Tipo aggiornato', 'ok');
+  await loadTipiRichiesta();
+}
+async function spostaTipoRichiesta(id, delta) {
+  const i = _tipiRichiesta.findIndex(t => t.id === id), j = i + delta;
+  if (j < 0 || j >= _tipiRichiesta.length) return;
+  const ordine = _tipiRichiesta.slice(); [ordine[i], ordine[j]] = [ordine[j], ordine[i]];
+  for (let k = 0; k < ordine.length; k++) {
+    if (ordine[k].posizione !== (k + 1) * 10) {
+      const { error } = await sb.from('tipi_richiesta').update({ posizione: (k + 1) * 10 }).eq('id', ordine[k].id);
+      if (error) { toast('Errore: ' + error.message, 'err'); break; }
+    }
+  }
+  await loadTipiRichiesta();
+}
+async function eliminaTipoRichiesta(id) {
+  const t = _tipiRichiesta.find(x => x.id === id);
+  if (t?.per_segnalazioni) { toast('Questo tipo serve per le assenze segnalate: puoi rinominarlo, non eliminarlo', 'err'); return; }
+  if (!confirm(`Eliminare il tipo "${t?.nome}"?`)) return;
+  const { error } = await sb.from('tipi_richiesta').delete().eq('id', id);
+  if (error) { toast(error.code === '23503' ? 'Il tipo è già usato da alcune richieste: non si elimina, disattivalo' : 'Errore: ' + error.message, 'err'); return; }
+  toast('Tipo eliminato', 'ok');
+  await loadTipiRichiesta();
+}
+async function aggiungiTipoRichiesta() {
+  const nome = document.getElementById('nuovo-tipo-richiesta').value.trim();
+  const unita = document.getElementById('nuovo-tipo-unita').value;
+  if (!nome) { toast('Scrivi il nome del tipo', 'err'); return; }
+  const posizione = Math.max(0, ..._tipiRichiesta.map(t => t.posizione || 0)) + 10;
+  const { error } = await sb.from('tipi_richiesta').insert({ nome, unita, posizione });
+  if (error) { toast(error.code === '23505' ? 'Esiste già un tipo con questo nome' : 'Errore: ' + error.message, 'err'); return; }
+  document.getElementById('nuovo-tipo-richiesta').value = '';
+  toast('Tipo aggiunto', 'ok');
+  await loadTipiRichiesta();
 }
 
 init();

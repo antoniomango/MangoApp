@@ -18,10 +18,15 @@
 //     nomeSelezionato: () => bool,     // senza nome il tastierino non invia nulla
 //     mostraErrore: (testo) => {},     // testo semplice (textContent nella pagina)
 //     visibile: () => bool,            // la tastiera fisica reagisce solo se la schermata è visibile
-//     invia: async (pin) => ({ ok, bloccatoFino }),
-//     suSblocco: () => {}              // opzionale, a fine blocco
+//     invia: async (pin) => ({ ok, bloccatoFino, continua }),
+//     suSblocco: () => {},             // opzionale, a fine blocco
+//     titolo: 'Inserisci il PIN'       // opzionale
 //   });
-//   pad.azzera(); pad.fermaTastiera();
+//   pad.azzera(); pad.fermaTastiera(); pad.impostaTitolo(testo);
+//
+// Più PIN in sequenza (cambio PIN: attuale, nuovo, conferma): invia() restituisce
+// { ok: true, continua: true } per passare al PIN successivo senza chiudere il tastierino;
+// la pagina conserva i PIN dei passaggi precedenti solo in variabili in memoria.
 (function () {
   'use strict';
 
@@ -44,7 +49,7 @@
     var root = opz.contenitore;
     root.classList.add('pinpad');
 
-    var titolo = el('div', 'pinpad-titolo', 'Inserisci il PIN');
+    var titolo = el('div', 'pinpad-titolo', opz.titolo || 'Inserisci il PIN');
     var dots = el('div', 'pinpad-dots');
     dots.setAttribute('aria-hidden', 'true');
     for (var i = 0; i < LUNG; i++) dots.appendChild(el('span', 'pinpad-dot'));
@@ -140,7 +145,11 @@
         .then(function (esito) {
           tentativo = null;
           occupato = false;
-          if (esito && esito.ok) { mostraPallini(0); fermaTastiera(); return; }
+          if (esito && esito.ok) {
+            mostraPallini(0);
+            if (esito.continua) abilita(true); else fermaTastiera();
+            return;
+          }
           scuoti();
           mostraPallini(0);
           if (esito && esito.bloccatoFino) blocca(esito.bloccatoFino);
@@ -175,9 +184,11 @@
       attivaTastiera();
     }
 
+    function impostaTitolo(testo) { titolo.textContent = testo; }
+
     mostraPallini(0);
     attivaTastiera();
-    return { azzera: azzera, fermaTastiera: fermaTastiera };
+    return { azzera: azzera, fermaTastiera: fermaTastiera, impostaTitolo: impostaTitolo };
   }
 
   window.MangoPinPad = { monta: monta };

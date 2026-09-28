@@ -256,6 +256,44 @@ textarea:focus { border-color: var(--accent); }
 .nav-tab .tab-icon i[data-ic] { width: 22px; height: 22px; }
 .empty-state .icon i[data-ic] { width: 36px; height: 36px; }
 .btn i[data-ic] { width: 20px; height: 20px; }
+/* Il mio profilo: voci del pannello e schermata (dati, richieste, assenze squadra, cambio PIN) */
+.profilo-menu { display: flex; flex-direction: column; gap: 2px; margin-bottom: 14px; min-width: 200px; }
+.profilo-menu button { display: flex; align-items: center; gap: 10px; background: none; border: none; color: var(--ink); font: inherit; font-size: 14px; padding: 10px 6px; border-radius: 8px; cursor: pointer; text-align: left; min-height: 44px; }
+.profilo-menu button:hover, .profilo-menu button:focus-visible { background: var(--phase-bg); }
+.profilo-menu i[data-ic] { width: 18px; height: 18px; color: var(--muted); }
+.prof-hdr { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.prof-hdr .page-title { margin-bottom: 0; }
+.prof-back { background: none; border: none; color: var(--ink); font-size: 26px; line-height: 1; padding: 4px 10px 8px 0; cursor: pointer; min-height: 44px; }
+.prof-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; background: var(--fill); border-radius: 10px; padding: 4px; margin-bottom: 14px; }
+.prof-tabs button { background: none; border: none; border-radius: 7px; color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; padding: 8px 2px; min-height: 40px; cursor: pointer; line-height: 1.15; }
+.prof-tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+.prof-vista[hidden] { display: none; }
+.prof-avviso { font-size: 12px; color: var(--muted); background: var(--phase-bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
+.prof-avviso.forte { color: var(--warn-ink); background: var(--warn-soft); border-color: var(--warn-line); }
+.prof-gruppo { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 14px 0 8px; }
+.prof-campo { margin-bottom: 12px; }
+.prof-campo label { display: block; font-size: 13px; font-weight: 600; color: var(--ink-2); margin-bottom: 6px; }
+.prof-campo input, .prof-campo select, .prof-campo textarea { width: 100%; box-sizing: border-box; padding: 11px 12px; border: 1px solid var(--border-strong); border-radius: 10px; font: inherit; font-size: 15px; background: var(--surface); color: var(--ink); }
+.prof-campo textarea { min-height: 76px; resize: vertical; }
+.prof-campo input:focus, .prof-campo select:focus, .prof-campo textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.prof-riga2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.prof-err { color: var(--alert-ink); font-size: 13px; min-height: 18px; margin: 4px 0 8px; }
+.prof-ok { color: var(--ok-ink); font-size: 13px; }
+.ric-item { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.ric-item:last-child { border-bottom: none; }
+.ric-testa { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.ric-tipo { font-weight: 600; font-size: 14px; }
+.ric-periodo { font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+.ric-nota { font-size: 12px; color: var(--muted); margin-top: 6px; overflow-wrap: anywhere; }
+.badge-in_attesa { background: var(--warn-soft); color: var(--warn-ink); }
+.badge-approvata { background: var(--ok-soft); color: var(--ok-ink); }
+.badge-rifiutata { background: var(--alert-soft); color: var(--alert-ink); }
+.badge-annullata { background: var(--fill); color: var(--muted); }
+.ass-giorno { font-size: 12px; font-weight: 700; color: var(--muted); padding: 10px 14px 4px; }
+.ass-riga { padding: 6px 14px 10px; font-size: 14px; border-bottom: 1px solid var(--border); }
+.ass-riga:last-child { border-bottom: none; }
+.ass-riga span { color: var(--muted); font-size: 13px; }
+#cp-pad { padding: 8px 0 4px; }
 </style>
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 </head>
@@ -298,8 +336,15 @@ textarea:focus { border-color: var(--accent); }
     </div>
   </div>
 
-  <!-- Pannello profilo: preferenze personali del dispositivo (solo grafica, nessun dato sul server) -->
+  <!-- Pannello profilo: il mio profilo (dati, richieste, assenze, PIN) + preferenze del dispositivo -->
   <div class="profilo-panel" id="pannello-profilo" hidden>
+    <div class="section-title">Il mio profilo</div>
+    <div class="profilo-menu">
+      <button type="button" onclick="apriProfilo('dati')"><i data-ic="persona"></i> I miei dati</button>
+      <button type="button" onclick="apriProfilo('richieste')"><i data-ic="appunti"></i> Richieste</button>
+      <button type="button" onclick="apriProfilo('assenze')"><i data-ic="calendario"></i> Assenze squadra</button>
+      <button type="button" onclick="apriProfilo('pin')"><i data-ic="lucchetto"></i> Cambia PIN</button>
+    </div>
     <div class="section-title">Aspetto</div>
     <div id="tema-selettore-op"></div>
   </div>
@@ -389,6 +434,44 @@ textarea:focus { border-color: var(--accent); }
         <div id="notif-list-op">
           <div class="empty-state"><div class="icon"><i data-ic="campana"></i></div><p>Caricamento…</p></div>
         </div>
+      </div>
+    </div>
+
+    <!-- IL MIO PROFILO (dal pannello del nome in alto) -->
+    <div class="screen" id="screen-profilo">
+      <div class="prof-hdr">
+        <button type="button" class="prof-back" onclick="showScreen('home')" aria-label="Torna alla home">‹</button>
+        <div class="page-title">Il mio profilo</div>
+      </div>
+      <div class="prof-tabs" role="tablist" aria-label="Sezioni del profilo">
+        <button type="button" role="tab" id="prof-tab-dati" aria-controls="prof-vista-dati" onclick="profiloVista('dati')">I miei dati</button>
+        <button type="button" role="tab" id="prof-tab-richieste" aria-controls="prof-vista-richieste" onclick="profiloVista('richieste')">Richieste</button>
+        <button type="button" role="tab" id="prof-tab-assenze" aria-controls="prof-vista-assenze" onclick="profiloVista('assenze')">Assenze squadra</button>
+        <button type="button" role="tab" id="prof-tab-pin" aria-controls="prof-vista-pin" onclick="profiloVista('pin')">Cambia PIN</button>
+      </div>
+
+      <div class="prof-vista" id="prof-vista-dati" role="tabpanel" aria-labelledby="prof-tab-dati" hidden>
+        <div class="prof-avviso">Questi dati li vedi tu e il responsabile.</div>
+        <div id="prof-dati-corpo"></div>
+      </div>
+
+      <div class="prof-vista" id="prof-vista-richieste" role="tabpanel" aria-labelledby="prof-tab-richieste" hidden>
+        <div class="card"><div class="card-body" id="ric-form"></div></div>
+        <div class="section-title">Le mie richieste</div>
+        <div class="card" id="ric-elenco"></div>
+      </div>
+
+      <div class="prof-vista" id="prof-vista-assenze" role="tabpanel" aria-labelledby="prof-tab-assenze" hidden>
+        <div class="prof-avviso">Assenze approvate della squadra nelle prossime 4 settimane.</div>
+        <div class="card" id="ass-elenco"></div>
+      </div>
+
+      <div class="prof-vista" id="prof-vista-pin" role="tabpanel" aria-labelledby="prof-tab-pin" hidden>
+        <div class="card"><div class="card-body">
+          <div id="cp-pad"></div>
+          <div id="cp-msg" class="prof-err" aria-live="assertive" style="text-align:center"></div>
+          <div style="font-size:12px;color:var(--muted);text-align:center">4 cifre, non tutte uguali e non in sequenza (es. 1234 o 4321).</div>
+        </div></div>
       </div>
     </div>
   </div>
@@ -872,6 +955,7 @@ async function showApp() {
 }
 
 async function doLogout() {
+  if (typeof _profiloEsci === 'function') _profiloEsci();
   currentUser = null;
   sessionToken = null;
   await cacheSet('current-user', null);
@@ -983,6 +1067,7 @@ function avviaPollingAggiornamenti() {
 // ═══════════════════════════════════════════════
 function showScreen(name) {
   if (name !== 'home') annullaSpedizioneMultiplaOp();
+  if (name !== 'profilo' && typeof _profiloEsci === 'function') _profiloEsci();
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
   document.getElementById('screen-' + name)?.classList.add('active');
@@ -3006,6 +3091,384 @@ window.pinPad = MangoPinPad.monta({
   suSblocco: () => showErr(''),
 });
 start();
+</script>
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// IL MIO PROFILO — I miei dati, Richieste, Assenze squadra, Cambia PIN
+// ═══════════════════════════════════════════════════════════════════════════
+// Tutto passa dalle RPC operatore (valida_sessione + session_token): nessuna lettura
+// diretta di tabelle. Lo stato dei moduli sta in memoria (aggiornato a ogni input), mai
+// riletto dal DOM al momento del salvataggio. Valori dal database solo via escapeHtml.
+// I PIN del cambio PIN vivono solo nel componente js/pin-pad.js e, tra un passaggio e
+// l'altro, in _cpAttuale/_cpNuovo: mai nel DOM, in storage o in console.
+
+const PROF_ERRORI = {
+  sessione_non_valida: 'Sessione scaduta: rientra con il PIN',
+  telefono_non_valido: 'usa solo cifre, spazi, + e - (massimo 20)',
+  testo_troppo_lungo: 'massimo 100 caratteri',
+  scelta_non_valida: 'scegli un valore dall\'elenco',
+  numero_non_valido: 'inserisci un numero valido',
+  numero_fuori_limiti: 'numero fuori dai limiti',
+  campo_non_trovato: 'Campo non più disponibile: ricarica la pagina',
+  tipo_non_valido: 'Tipo di richiesta non valido',
+  orario_incompleto: 'Indica l\'ora di inizio e di fine',
+  orario_non_previsto: 'Per questo tipo non serve l\'orario',
+  nota_troppo_lunga: 'Nota troppo lunga (massimo 300 caratteri)',
+  preavviso_insufficiente: 'Preavviso insufficiente',
+  date_mancanti: 'Indica le date',
+  data_fine_precedente_inizio: 'La data di fine è prima di quella di inizio',
+  periodo_troppo_lungo: 'Massimo 30 giorni per richiesta',
+  permesso_ore_un_solo_giorno: 'Un permesso a ore vale per un solo giorno',
+  ora_fine_precedente_inizio: 'L\'ora di fine deve essere dopo quella di inizio',
+  giorno_non_lavorativo: 'Quel giorno non è lavorativo',
+  fuori_orario_lavoro: 'Orario fuori dall\'orario di lavoro',
+  nessun_giorno_lavorativo: 'Nel periodo non c\'è nessun giorno lavorativo',
+  sovrapposizione: 'Si sovrappone a un\'altra tua richiesta in attesa o approvata',
+  non_autorizzato: 'Operazione non consentita',
+  richiesta_non_annullabile: 'La richiesta non è più in attesa',
+  pin_errato: 'PIN attuale errato',
+  troppi_tentativi: 'Troppi tentativi errati',
+  pin_nuovo_non_valido: 'Il nuovo PIN deve avere 4 cifre',
+  pin_nuovo_troppo_semplice: 'PIN troppo semplice: niente cifre tutte uguali o in sequenza',
+  pin_nuovo_uguale: 'Il nuovo PIN è uguale a quello attuale',
+};
+const profErrore = codice => PROF_ERRORI[codice] || 'Operazione non riuscita';
+const STATI_RICHIESTA = { in_attesa: 'In attesa', approvata: 'Approvata', rifiutata: 'Non approvata', annullata: 'Annullata' };
+
+let _profVista = 'dati';
+let _profCampi = [];      // campi attivi con valore salvato
+let _profValori = {};     // campo_id → valore in modifica
+let _ricDati = null;      // risposta di richieste_operatore_elenco
+let _ricForm = { tipo_id: '', data_inizio: '', data_fine: '', ora_inizio: '', ora_fine: '', nota: '' };
+let _ricInvio = false;
+
+function _dataIt(iso) {
+  if (!iso) return '';
+  const [y, m, d] = String(iso).slice(0, 10).split('-');
+  return `${d}/${m}/${y}`;
+}
+function _periodoRichiesta(r) {
+  if (r.ora_inizio) return `${_dataIt(r.data_inizio)} dalle ${r.ora_inizio} alle ${r.ora_fine}`;
+  if (r.data_inizio === r.data_fine) return `${_dataIt(r.data_inizio)}`;
+  return `dal ${_dataIt(r.data_inizio)} al ${_dataIt(r.data_fine)}`;
+}
+function _offlineBox(el) {
+  el.innerHTML = '<div class="empty-state"><div class="icon"><i data-ic="offline"></i></div><p>Serve la connessione a internet</p></div>';
+}
+
+function apriProfilo(vista) {
+  toggleProfilo(false);
+  showScreen('profilo');
+  profiloVista(vista);
+}
+
+function profiloVista(vista) {
+  _profVista = vista;
+  ['dati', 'richieste', 'assenze', 'pin'].forEach(v => {
+    document.getElementById('prof-vista-' + v).hidden = v !== vista;
+    document.getElementById('prof-tab-' + v).setAttribute('aria-selected', v === vista ? 'true' : 'false');
+  });
+  if (vista !== 'pin') _cpFerma();
+  if (vista === 'dati') caricaMieiDati();
+  else if (vista === 'richieste') caricaRichieste();
+  else if (vista === 'assenze') caricaAssenzeSquadra();
+  else if (vista === 'pin') _cpAvvia();
+}
+
+// Chiamata da showScreen (uscita dalla schermata) e da doLogout.
+function _profiloEsci() {
+  _cpFerma();
+}
+
+// ── I miei dati ──
+async function caricaMieiDati() {
+  const el = document.getElementById('prof-dati-corpo');
+  if (!navigator.onLine) { _offlineBox(el); return; }
+  el.innerHTML = '<div style="color:var(--muted);padding:12px 0">Caricamento…</div>';
+  const { data } = await sb.rpc('profilo_operatore_leggi', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
+  if (!data?.ok) { el.innerHTML = `<div class="prof-err">${escapeHtml(profErrore(data?.errore))}</div>`; return; }
+  _profCampi = data.campi || [];
+  _profValori = Object.fromEntries(_profCampi.map(c => [c.id, c.valore ?? '']));
+  renderMieiDati();
+}
+
+function renderMieiDati() {
+  const el = document.getElementById('prof-dati-corpo');
+  if (!_profCampi.length) { el.innerHTML = '<div class="empty-state"><p>Nessun dato richiesto per ora</p></div>'; return; }
+  const gruppi = [];
+  _profCampi.forEach(c => { let g = gruppi.find(x => x.nome === c.gruppo); if (!g) gruppi.push(g = { nome: c.gruppo, campi: [] }); g.campi.push(c); });
+  el.innerHTML = gruppi.map(g => `
+    <div class="prof-gruppo">${escapeHtml(g.nome)}</div>
+    <div class="card"><div class="card-body">
+      ${g.campi.map(c => {
+        const id = 'pf-' + escapeHtml(c.id);
+        const val = _profValori[c.id] ?? '';
+        const on = `oninput="_profSet('${escapeJsAttr(c.id)}', this.value)" onchange="_profSet('${escapeJsAttr(c.id)}', this.value)"`;
+        let ctl;
+        if (c.tipo === 'scelta') {
+          ctl = `<select id="${id}" ${on}><option value="">—</option>${(c.opzioni || []).map(o =>
+            `<option value="${escapeHtml(o)}"${String(o) === String(val) ? ' selected' : ''}>${escapeHtml(o)}</option>`).join('')}</select>`;
+        } else if (c.tipo === 'telefono') {
+          ctl = `<input id="${id}" type="tel" inputmode="tel" maxlength="20" autocomplete="off" value="${escapeHtml(val)}" ${on}>`;
+        } else if (c.tipo === 'numero') {
+          ctl = `<input id="${id}" type="text" inputmode="decimal" maxlength="10" value="${escapeHtml(val)}" ${on}>`;
+        } else {
+          ctl = `<input id="${id}" type="text" maxlength="100" autocomplete="off" value="${escapeHtml(val)}" ${on}>`;
+        }
+        return `<div class="prof-campo"><label for="${id}">${escapeHtml(c.etichetta)}</label>${ctl}</div>`;
+      }).join('')}
+    </div></div>`).join('') +
+    `<div id="prof-dati-err" class="prof-err" aria-live="assertive"></div>
+     <button type="button" class="btn btn-primary" id="prof-dati-salva" onclick="salvaMieiDati()"><i data-ic="salva"></i> Salva</button>`;
+}
+
+function _profSet(campoId, valore) { _profValori[campoId] = valore; }
+
+async function salvaMieiDati() {
+  const err = document.getElementById('prof-dati-err');
+  const btn = document.getElementById('prof-dati-salva');
+  err.textContent = '';
+  if (!navigator.onLine) { err.textContent = 'Serve la connessione a internet'; return; }
+  const modificati = {};
+  _profCampi.forEach(c => { if ((_profValori[c.id] ?? '') !== (c.valore ?? '')) modificati[c.id] = _profValori[c.id] ?? ''; });
+  if (!Object.keys(modificati).length) { toast('Nessuna modifica da salvare'); return; }
+  btn.disabled = true;
+  const { data } = await sb.rpc('profilo_operatore_salva', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_valori: modificati });
+  btn.disabled = false;
+  if (!data?.ok) {
+    const campo = _profCampi.find(c => c.id === data?.campo_id);
+    err.textContent = (campo ? campo.etichetta + ': ' : '') + profErrore(data?.errore);
+    return;
+  }
+  toast('Dati salvati', 'ok');
+  await caricaMieiDati();
+}
+
+// ── Richieste ──
+async function caricaRichieste() {
+  const form = document.getElementById('ric-form');
+  const elenco = document.getElementById('ric-elenco');
+  if (!navigator.onLine) { _offlineBox(form); elenco.innerHTML = ''; return; }
+  elenco.innerHTML = '<div style="color:var(--muted);padding:14px">Caricamento…</div>';
+  const { data } = await sb.rpc('richieste_operatore_elenco', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
+  if (!data?.ok) { elenco.innerHTML = `<div class="prof-err" style="padding:14px">${escapeHtml(profErrore(data?.errore))}</div>`; return; }
+  _ricDati = data;
+  if (!_ricForm.tipo_id || !data.tipi.some(t => t.id === _ricForm.tipo_id)) _ricForm.tipo_id = data.tipi[0]?.id || '';
+  renderFormRichiesta();
+  renderElencoRichieste();
+}
+
+function _ricTipo() { return (_ricDati?.tipi || []).find(t => t.id === _ricForm.tipo_id); }
+
+function renderFormRichiesta() {
+  const el = document.getElementById('ric-form');
+  const tipi = _ricDati?.tipi || [];
+  if (!tipi.length) { el.innerHTML = '<p style="color:var(--muted)">Nessun tipo di richiesta disponibile</p>'; return; }
+  const tipo = _ricTipo();
+  const oggi = _ricDati.oggi;
+  const f = _ricForm;
+  const orario = _ricDati.orario || {};
+  const preavviso = Number(_ricDati.preavviso_giorni) || 0;
+  el.innerHTML = `
+    <div class="section-title" style="margin-top:0">Nuova richiesta</div>
+    <div class="prof-campo"><label for="ric-tipo">Tipo</label>
+      <select id="ric-tipo" onchange="_ricSet('tipo_id', this.value, true)">
+        ${tipi.map(t => `<option value="${escapeHtml(t.id)}"${t.id === f.tipo_id ? ' selected' : ''}>${escapeHtml(t.nome)}${t.unita === 'ore' ? ' (a ore)' : ''}</option>`).join('')}
+      </select></div>
+    ${tipo?.unita === 'ore' ? `
+      <div class="prof-campo"><label for="ric-di">Giorno</label>
+        <input id="ric-di" type="date" min="${escapeHtml(oggi)}" value="${escapeHtml(f.data_inizio)}" onchange="_ricSet('data_inizio', this.value)"></div>
+      <div class="prof-riga2">
+        <div class="prof-campo"><label for="ric-oi">Dalle</label>
+          <input id="ric-oi" type="time" step="900" value="${escapeHtml(f.ora_inizio)}" onchange="_ricSet('ora_inizio', this.value)"></div>
+        <div class="prof-campo"><label for="ric-of">Alle</label>
+          <input id="ric-of" type="time" step="900" value="${escapeHtml(f.ora_fine)}" onchange="_ricSet('ora_fine', this.value)"></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin:-4px 0 10px">Orario di lavoro: ${escapeHtml(orario.inizio || '')}–${escapeHtml(orario.fine || '')}</div>` : `
+      <div class="prof-riga2">
+        <div class="prof-campo"><label for="ric-di">Dal</label>
+          <input id="ric-di" type="date" min="${escapeHtml(oggi)}" value="${escapeHtml(f.data_inizio)}" onchange="_ricSet('data_inizio', this.value)"></div>
+        <div class="prof-campo"><label for="ric-df">Al</label>
+          <input id="ric-df" type="date" min="${escapeHtml(f.data_inizio || oggi)}" value="${escapeHtml(f.data_fine)}" onchange="_ricSet('data_fine', this.value)"></div>
+      </div>`}
+    <div class="prof-campo"><label for="ric-nota">Nota (facoltativa)</label>
+      <textarea id="ric-nota" maxlength="300" oninput="_ricSet('nota', this.value)">${escapeHtml(f.nota)}</textarea>
+      <div class="prof-avviso forte" style="margin:6px 0 0">Non inserire informazioni sulla salute.</div></div>
+    ${preavviso > 0 ? `<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Preavviso minimo: ${preavviso} giorn${preavviso === 1 ? 'o' : 'i'}</div>` : ''}
+    <div id="ric-err" class="prof-err" aria-live="assertive"></div>
+    <button type="button" class="btn btn-primary" id="ric-invia" onclick="inviaRichiesta()"><i data-ic="invio"></i> Invia richiesta</button>`;
+}
+
+function _ricSet(campo, valore, ridisegna) {
+  _ricForm[campo] = valore;
+  if (campo === 'data_inizio' && (!_ricForm.data_fine || _ricForm.data_fine < valore)) {
+    _ricForm.data_fine = valore;
+    const df = document.getElementById('ric-df');
+    if (df) { df.value = valore; df.min = valore; }
+  }
+  if (ridisegna) renderFormRichiesta();
+}
+
+async function inviaRichiesta() {
+  if (_ricInvio) return;
+  const err = document.getElementById('ric-err');
+  err.textContent = '';
+  const tipo = _ricTipo();
+  const f = _ricForm;
+  if (!tipo) return;
+  const ore = tipo.unita === 'ore';
+  const fine = ore ? f.data_inizio : f.data_fine;
+  if (!f.data_inizio || !fine) { err.textContent = profErrore('date_mancanti'); return; }
+  if (fine < f.data_inizio) { err.textContent = profErrore('data_fine_precedente_inizio'); return; }
+  if (ore && (!f.ora_inizio || !f.ora_fine)) { err.textContent = profErrore('orario_incompleto'); return; }
+  if (ore && f.ora_fine <= f.ora_inizio) { err.textContent = profErrore('ora_fine_precedente_inizio'); return; }
+  _ricInvio = true;
+  document.getElementById('ric-invia').disabled = true;
+  const { data } = await sb.rpc('richiesta_operatore_crea', {
+    p_operatore_id: currentUser.id, p_session_token: sessionToken, p_tipo_id: tipo.id,
+    p_data_inizio: f.data_inizio, p_data_fine: fine,
+    p_ora_inizio: ore ? f.ora_inizio : null, p_ora_fine: ore ? f.ora_fine : null,
+    p_nota: f.nota.trim() || null,
+  });
+  _ricInvio = false;
+  const btn = document.getElementById('ric-invia');
+  if (btn) btn.disabled = false;
+  if (!data?.ok) {
+    let msg = profErrore(data?.errore);
+    if (data?.errore === 'preavviso_insufficiente' && data.preavviso_giorni) msg += ` (minimo ${data.preavviso_giorni} giorni)`;
+    err.textContent = msg;
+    return;
+  }
+  toast('Richiesta inviata al responsabile', 'ok');
+  _ricForm = { tipo_id: _ricForm.tipo_id, data_inizio: '', data_fine: '', ora_inizio: '', ora_fine: '', nota: '' };
+  await caricaRichieste();
+}
+
+function renderElencoRichieste() {
+  const el = document.getElementById('ric-elenco');
+  const lista = _ricDati?.richieste || [];
+  if (!lista.length) { el.innerHTML = '<div class="empty-state"><p>Nessuna richiesta</p></div>'; return; }
+  el.innerHTML = lista.map(r => `
+    <div class="ric-item">
+      <div class="ric-testa">
+        <div>
+          <div class="ric-tipo">${escapeHtml(r.origine === 'responsabile' ? 'Assenza segnalata' : r.tipo)}</div>
+          <div class="ric-periodo">${escapeHtml(_periodoRichiesta(r))}</div>
+        </div>
+        <span class="badge badge-${escapeHtml(r.stato)}">${escapeHtml(STATI_RICHIESTA[r.stato] || r.stato)}</span>
+      </div>
+      ${r.nota_operatore ? `<div class="ric-nota">La tua nota: ${escapeHtml(r.nota_operatore)}</div>` : ''}
+      ${r.nota_responsabile ? `<div class="ric-nota">Responsabile: ${escapeHtml(r.nota_responsabile)}</div>` : ''}
+      ${r.stato === 'in_attesa' ? `<button type="button" class="btn btn-secondary" style="margin-top:10px;min-height:40px;padding:8px;font-size:13px" onclick="annullaMiaRichiesta('${escapeJsAttr(r.id)}')">Annulla richiesta</button>` : ''}
+    </div>`).join('');
+}
+
+async function annullaMiaRichiesta(id) {
+  if (!confirm('Annullare questa richiesta?')) return;
+  const { data } = await sb.rpc('richiesta_operatore_annulla', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_richiesta_id: id });
+  if (!data?.ok) { toast(profErrore(data?.errore), 'err'); return; }
+  toast('Richiesta annullata', 'ok');
+  await caricaRichieste();
+}
+
+// ── Assenze squadra (solo nome e date/orari) ──
+async function caricaAssenzeSquadra() {
+  const el = document.getElementById('ass-elenco');
+  if (!navigator.onLine) { _offlineBox(el); return; }
+  el.innerHTML = '<div style="color:var(--muted);padding:14px">Caricamento…</div>';
+  const { data } = await sb.rpc('calendario_assenze_squadra', { p_utente_id: currentUser.id, p_session_token: sessionToken });
+  if (!data?.ok) { el.innerHTML = `<div class="prof-err" style="padding:14px">${escapeHtml(profErrore(data?.errore))}</div>`; return; }
+  el.innerHTML = renderAssenzeSquadraHtml(data.assenze || []);
+}
+
+// Condivisa con responsabile.html nella forma (stessa RPC, stessi campi).
+function renderAssenzeSquadraHtml(assenze) {
+  if (!assenze.length) return '<div class="empty-state"><p>Nessuna assenza nelle prossime 4 settimane</p></div>';
+  let html = '', ultimo = null;
+  assenze.forEach(a => {
+    if (a.data_inizio !== ultimo) {
+      ultimo = a.data_inizio;
+      const d = new Date(a.data_inizio + 'T12:00:00');
+      html += `<div class="ass-giorno">${escapeHtml(d.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }))}</div>`;
+    }
+    const quando = a.ora_inizio ? `assente dalle ${a.ora_inizio} alle ${a.ora_fine}`
+      : a.data_fine === a.data_inizio ? 'assente' : `assente fino al ${_dataIt(a.data_fine)}`;
+    html += `<div class="ass-riga">${escapeHtml(a.nome)} ${escapeHtml(a.cognome)} <span>— ${escapeHtml(quando)}</span></div>`;
+  });
+  return html;
+}
+
+// ── Cambia PIN (tastierino js/pin-pad.js, tre passaggi) ──
+let _cpPad = null, _cpPasso = 0, _cpAttuale = null, _cpNuovo = null;
+const CP_TITOLI = ['PIN attuale', 'Nuovo PIN', 'Conferma il nuovo PIN'];
+const PIN_SEQUENZE = ['0123','1234','2345','3456','4567','5678','6789','9876','8765','7654','6543','5432','4321','3210'];
+
+function _cpMsg(testo, ok) {
+  const m = document.getElementById('cp-msg');
+  m.textContent = testo || '';
+  m.className = ok ? 'prof-ok' : 'prof-err';
+  m.style.textAlign = 'center';
+}
+function _cpVaiA(passo) {
+  _cpPasso = passo;
+  if (passo === 0) { _cpAttuale = null; _cpNuovo = null; }
+  if (passo === 1) _cpNuovo = null;
+  if (_cpPad) _cpPad.impostaTitolo(CP_TITOLI[passo]);
+}
+function _cpAvvia() {
+  _cpMsg('');
+  if (!_cpPad) {
+    _cpPad = MangoPinPad.monta({
+      contenitore: document.getElementById('cp-pad'),
+      messaggio: null,
+      titolo: CP_TITOLI[0],
+      nomeSelezionato: () => true,
+      mostraErrore: t => _cpMsg(t),
+      visibile: () => document.getElementById('screen-profilo').classList.contains('active') && _profVista === 'pin',
+      invia: _cpInvia,
+      suSblocco: () => _cpMsg(''),
+    });
+  } else {
+    _cpPad.azzera();
+  }
+  _cpVaiA(0);
+}
+function _cpFerma() {
+  _cpAttuale = null; _cpNuovo = null; _cpPasso = 0;
+  if (_cpPad) { _cpPad.fermaTastiera(); _cpPad.impostaTitolo(CP_TITOLI[0]); }
+}
+
+async function _cpInvia(pin) {
+  if (!navigator.onLine) { _cpMsg('Serve la connessione a internet'); return { ok: false }; }
+  _cpMsg('');
+  if (_cpPasso === 0) { _cpAttuale = pin; _cpVaiA(1); return { ok: true, continua: true }; }
+  if (_cpPasso === 1) {
+    if (/^(\d)\1{3}$/.test(pin) || PIN_SEQUENZE.includes(pin)) { _cpMsg(profErrore('pin_nuovo_troppo_semplice')); return { ok: false }; }
+    if (pin === _cpAttuale) { _cpMsg(profErrore('pin_nuovo_uguale')); return { ok: false }; }
+    _cpNuovo = pin; _cpVaiA(2); return { ok: true, continua: true };
+  }
+  if (pin !== _cpNuovo) { _cpMsg('I due PIN non coincidono: inserisci di nuovo il nuovo PIN'); _cpVaiA(1); return { ok: false }; }
+  const { data } = await sb.rpc('cambia_pin_operatore', {
+    p_operatore_id: currentUser.id, p_session_token: sessionToken, p_pin_attuale: _cpAttuale, p_pin_nuovo: _cpNuovo,
+  });
+  if (data?.ok) {
+    await _salvaPinHashLocale(currentUser.id, _cpNuovo);   // accesso offline con il nuovo PIN
+    _cpVaiA(0);                                            // azzera anche _cpAttuale/_cpNuovo
+    _cpMsg('PIN cambiato. Dal prossimo accesso usa il nuovo PIN.', true);
+    toast('PIN cambiato', 'ok');
+    return { ok: true, continua: true };
+  }
+  if (data?.errore === 'troppi_tentativi') {
+    _cpVaiA(0);
+    _cpMsg(messaggioErrorePin(data));
+    return { ok: false, bloccatoFino: data.bloccato_fino || null };
+  }
+  // nuovo PIN rifiutato: si reinserisce solo il nuovo (l'attuale resta in memoria);
+  // PIN attuale errato o altro: si ricomincia dal PIN attuale
+  _cpVaiA(['pin_nuovo_troppo_semplice', 'pin_nuovo_non_valido', 'pin_nuovo_uguale'].includes(data?.errore) ? 1 : 0);
+  _cpMsg(profErrore(data?.errore));
+  return { ok: false };
+}
 </script>
 <script>
 if ('serviceWorker' in navigator) {
