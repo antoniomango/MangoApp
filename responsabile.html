@@ -462,6 +462,12 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       <div class="nav-item" onclick="showSection('notif-config')" id="nav-notif-config">
         <span class="icon"><i data-ic="campana"></i></span> Destinatari Notifiche
       </div>
+      <div class="nav-item" onclick="showSection('lavorazioni-cnc-config')" id="nav-lavorazioni-cnc-config">
+        <span class="icon"><i data-ic="chiave"></i></span> Lavorazioni CNC
+      </div>
+      <div class="nav-item" onclick="showSection('tempi-rif-config')" id="nav-tempi-rif-config">
+        <span class="icon"><i data-ic="timer"></i></span> Tempi di riferimento
+      </div>
       <div class="nav-item" onclick="showSection('aspetto')" id="nav-aspetto">
         <span class="icon"><i data-ic="tema"></i></span> Aspetto
       </div>
@@ -778,6 +784,21 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           <h3 style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--accent)"><i data-ic="persona"></i> Confronto operatori per fase</h3>
           <div style="font-size:11px;color:var(--muted);margin-bottom:14px">Tempo mediano effettivo per operatore — solo fasi con ≥ 2 campioni — <i data-ic="avviso"></i> = dati scarsi (&lt;3)</div>
           <div id="kpi-operatori"></div>
+        </div>
+
+        <!-- Riferimento e tempi registrati (per fase e prodotto, nessun dato per operatore) -->
+        <div class="card" style="padding:20px;margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:6px">
+            <div>
+              <h3 style="font-size:13px;font-weight:600;margin-bottom:4px;color:var(--accent)"><i data-ic="timer"></i> Riferimento e tempi registrati</h3>
+              <div style="font-size:11px;color:var(--muted)">Tempo per pezzo: solo fasi completate di ordini da 1 pezzo, tempo del lotto diviso per gli ordini del lotto; escluse fasi ≤ 1 minuto e lotti oltre la giornata lavorativa</div>
+            </div>
+            <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px">Dal
+              <input type="date" id="kpi-tempi-rif-dal" value="2026-09-28" onchange="loadConfrontoTempiRiferimento()"
+                style="padding:6px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-ctl);background:var(--bg);color:var(--ink);font-size:12px">
+            </label>
+          </div>
+          <div id="kpi-tempi-rif"></div>
         </div>
 
         <!-- RIGA 8: Schede di riferimento -->
@@ -1114,6 +1135,40 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
             <input type="number" id="kpicfg-ret-log-cron" min="1" max="90" step="1" value="7"
               style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
           </div>
+          <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:20px 0 10px;border-bottom:1px solid var(--border);margin-bottom:16px">Produzione e turno</div>
+          <div class="form-group" style="margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:13px;font-weight:600">Quantità per svincolo anticipato</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Sopra questa quantità (esclusa) le fasi vincolate si sbloccano appena la vincolante è presa in carico</div>
+            </div>
+            <input type="number" id="kpicfg-svincolo-qta" min="0" max="1000" step="1" value="2"
+              style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
+          </div>
+          <div class="form-group" style="margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:13px;font-weight:600">Finestra pausa automatica (minuti)</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Minuti dopo la fine turno entro cui la pausa automatica mette comunque in pausa le fasi aperte</div>
+            </div>
+            <input type="number" id="kpicfg-pausa-finestra" min="0" max="240" step="1" value="10"
+              style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
+          </div>
+          <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:4px 0 10px;border-bottom:1px solid var(--border);margin-bottom:16px">Tempi di riferimento</div>
+          <div class="form-group" style="margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:13px;font-weight:600">Fuori scala sotto il tipico (%)</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Una fase registrata è fuori scala se il tempo per pezzo è sotto questa percentuale del tipico</div>
+            </div>
+            <input type="number" id="kpicfg-rif-sotto" min="0" max="100" step="1" value="30"
+              style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
+          </div>
+          <div class="form-group" style="margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px">
+              <label style="font-size:13px;font-weight:600">Fuori scala sopra il massimo (×)</label>
+              <div style="font-size:11px;color:var(--muted);margin-top:3px">Una fase registrata è fuori scala se il tempo per pezzo supera il massimo moltiplicato per questo fattore</div>
+            </div>
+            <input type="number" id="kpicfg-rif-sopra" min="1" max="10" step="0.1" value="1.5"
+              style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;flex-shrink:0">
+          </div>
         </div>
       </section>
 
@@ -1273,6 +1328,37 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <div id="notif-config-body">Caricamento…</div>
       </section>
 
+      <section class="section" id="sec-lavorazioni-cnc-config">
+        <div class="page-hdr">
+          <div>
+            <h1>Lavorazioni CNC</h1>
+            <div class="sub">Voci del menu "Lavorazione CNC" dell'ordine. Una voce usata da almeno un ordine non si elimina: si disattiva.</div>
+          </div>
+        </div>
+        <div class="card" style="padding:20px;max-width:760px">
+          <div id="lavorazioni-cnc-body">Caricamento…</div>
+          <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+            <input type="text" id="nuova-lavorazione-cnc" maxlength="80" placeholder="Nuova lavorazione (es. Squadratura + fresature)"
+              style="flex:1;min-width:220px;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-ctl);font-size:13px;background:var(--bg);color:var(--ink)">
+            <button class="btn btn-primary" onclick="aggiungiLavorazioneCnc()">+ Aggiungi</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="sec-tempi-rif-config">
+        <div class="page-hdr">
+          <div>
+            <h1>Tempi di riferimento</h1>
+            <div class="sub">Tempo per 1 pezzo (lavoro + spostamento), tipico e massimo, per fase e tipo prodotto. Servono solo al confronto nei KPI: non cambiano pianificatore né stime.</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="tempi-rif-tipo" onchange="loadTempiRiferimento()" style="padding:7px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-ctl);background:var(--bg);color:var(--ink);font-size:13px"></select>
+            <button class="btn btn-primary" style="white-space:nowrap" onclick="aggiungiTempoRiferimento()">+ Aggiungi riga</button>
+          </div>
+        </div>
+        <div class="card" style="padding:12px 16px"><div id="tempi-rif-body">Caricamento…</div></div>
+      </section>
+
       <section class="section" id="sec-aspetto">
         <div class="page-hdr">
           <div>
@@ -1356,6 +1442,10 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <div class="form-group">
           <label>Materiale *</label>
           <select id="ord-materiale"></select>
+        </div>
+        <div class="form-group">
+          <label>Lavorazione CNC</label>
+          <select id="ord-lavorazione-cnc"><option value="">Non indicata</option></select>
         </div>
       </div>
       <div class="form-row">
@@ -1451,6 +1541,10 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <div class="form-group">
           <label>Materiale</label>
           <select id="mod-materiale"></select>
+        </div>
+        <div class="form-group">
+          <label>Lavorazione CNC</label>
+          <select id="mod-lavorazione-cnc"><option value="">Non indicata</option></select>
         </div>
       </div>
       <div class="form-row">
@@ -1864,7 +1958,7 @@ async function postLogin() {
   document.getElementById('header-date').textContent = new Date().toLocaleDateString('it-IT', { weekday:'short', day:'numeric', month:'short' });
   verificaVersioneClient(); // non bloccante: le operazioni distruttive controllano clientObsoleto al click
   // Load fasi e tipi prodotto (devono precedere il resto)
-  await Promise.all([loadFasi(), loadTipiProdotto(), loadPrioritaConfig(), loadAttributiConfig()]);
+  await Promise.all([loadFasi(), loadTipiProdotto(), loadPrioritaConfig(), loadAttributiConfig(), loadLavorazioniCnc()]);
   // Load data
   await Promise.all([loadOrdini(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadChiusureCache(), loadMacroFasi(), loadFaseMediaMinuti(), loadFaseExtraMediaMinuti(), caricaNomiFasiExtraStoria(), loadMacchine()]);
   // Check ordini in ritardo (solo responsabile)
@@ -2137,7 +2231,7 @@ function setupRealtime() {
 // ═══════════════════════════════════════════════
 // NAVIGAZIONE
 // ═══════════════════════════════════════════════
-const IMPOSTAZIONI_SECTIONS = ['fasi-config','tipi-prodotto-config','strutture-config','materiali-config','priorita-config','macro-config','orario-config','kpi-config','macchine-config','fasi-extra-config','notif-config','aspetto'];
+const IMPOSTAZIONI_SECTIONS = ['fasi-config','tipi-prodotto-config','strutture-config','materiali-config','priorita-config','macro-config','orario-config','kpi-config','macchine-config','fasi-extra-config','notif-config','aspetto','lavorazioni-cnc-config','tempi-rif-config'];
 
 function toggleImpostazioni(force) {
   const el  = document.getElementById('impostazioni-items');
@@ -2179,6 +2273,8 @@ function showSection(name) {
   else if (name === 'macchine-config') { loadMacchine().then(renderMacchine); }
   else if (name === 'fasi-extra-config') { loadCatalogoFasiExtra(); }
   else if (name === 'notif-config') { loadNotifDestinatari(); }
+  else if (name === 'lavorazioni-cnc-config') { loadLavorazioniCnc().then(renderLavorazioniCncConfig); }
+  else if (name === 'tempi-rif-config') { loadTempiRiferimento(); }
 }
 
 // ═══════════════════════════════════════════════
@@ -3400,7 +3496,8 @@ async function renderDettaglioOrdine(id) {
       ? `<div class="detail-field"><label>Tipo</label><span style="color:var(--extra);font-weight:600">Ordine Extra</span></div>`
       : `<div class="detail-field"><label>Struttura</label><span>${strutturaLabel(ordine.struttura)}</span></div>
     <div class="detail-field"><label>Tipo Prodotto</label><span>${tipoProdLabel(ordine.tipo_prodotto)}</span></div>
-    <div class="detail-field"><label>Materiale</label><span>${escapeHtml(ordine.materiale || '—')}</span></div>`}
+    <div class="detail-field"><label>Materiale</label><span>${escapeHtml(ordine.materiale || '—')}</span></div>
+    <div class="detail-field"><label>Lavorazione CNC</label><span>${ordine.lavorazione_cnc_id ? escapeHtml(lavorazioneCncNome(ordine.lavorazione_cnc_id) || '—') : '<span style="color:var(--muted)">Non indicata</span>'}</span></div>`}
     <div class="detail-field"><label>Priorità</label><span class="badge badge-${ordine.priorita}">${prioLabel(ordine.priorita)}</span></div>
     <div class="detail-field"><label>Stato</label><span class="badge badge-${ordine.stato}">${statoLabel(ordine.stato)}</span></div>
     <div class="detail-field"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}${ordine.scadenza ? ` · Settimana ${settimanaIsoDaData(ordine.scadenza)}` : ''}${isLate ? ' <i data-ic="avviso"></i> In ritardo' : ''}</span></div>
@@ -3953,6 +4050,7 @@ function openModalNuovoOrdine() {
   if (struEl && struEl.options.length) struEl.selectedIndex = 0;
   if (tipoPEl && tipoPEl.options.length) tipoPEl.selectedIndex = 0;
   if (matEl && matEl.options.length) matEl.selectedIndex = 0;
+  popolaLavorazioniCncSelect('ord-lavorazione-cnc', null);
   setTipoOrdine('standard');
   // Reset esplicito fasi opzionali — setTipoOrdine le azzera solo quando tipo !== 'standard'
   fasi.filter(f => f.opzionale).forEach(f => {
@@ -4025,6 +4123,7 @@ async function creaOrdine() {
     insertPayload.struttura = document.getElementById('ord-struttura').value;
     insertPayload.tipo_prodotto = document.getElementById('ord-tipo-prodotto').value;
     insertPayload.materiale = document.getElementById('ord-materiale').value;
+    insertPayload.lavorazione_cnc_id = document.getElementById('ord-lavorazione-cnc').value || null;
 
   }
   const { data: newOrdine, error } = await sb.from('ordini').insert(insertPayload).select().single();
@@ -4779,6 +4878,12 @@ async function loadKpiConfig() {
   _set('kpicfg-ret-notif-non-lette', 'retention_notifiche_non_lette_giorni',  120);
   _set('kpicfg-ret-pin',             'retention_pin_tentativi_ore',           24);
   _set('kpicfg-ret-log-cron',        'retention_log_cron_giorni',             7);
+  _set('kpicfg-svincolo-qta',        'soglia_quantita_svincolo_dipendenze',   2);
+  _set('kpicfg-pausa-finestra',      'pausa_automatica_finestra_minuti',      10);
+  _set('kpicfg-rif-sopra',           'rif_soglia_sopra_massimo',              1.5);
+  // rif_soglia_sotto_tipico è salvato come frazione (0.30) ma mostrato in percentuale (30)
+  const rsEl = document.getElementById('kpicfg-rif-sotto');
+  if (rsEl) rsEl.value = map['rif_soglia_sotto_tipico'] != null ? Math.round(parseFloat(map['rif_soglia_sotto_tipico']) * 100) : 30;
   // margine_capacita is stored as 0.90 but shown as 90
   const mEl = document.getElementById('kpicfg-margine');
   if (mEl && map['margine_capacita'] != null) mEl.value = Math.round(parseFloat(map['margine_capacita']) * 100);
@@ -4786,8 +4891,21 @@ async function loadKpiConfig() {
 }
 
 async function salvaKpiConfig() {
-  const _int  = (id, def) => parseInt(document.getElementById(id)?.value) || def;
-  const _flt  = (id, def) => parseFloat(document.getElementById(id)?.value) || def;
+  // Prima "parseInt(...) || default": uno 0 inserito veniva sostituito dal default. Ora un campo
+  // vuoto o non numerico blocca il salvataggio con un messaggio; 0 è un valore valido.
+  const errori = [];
+  const _num = (id, def, intero) => {
+    const el = document.getElementById(id);
+    const raw = (el?.value ?? '').toString().trim().replace(',', '.');
+    const n = raw === '' ? NaN : Number(raw);
+    if (!Number.isFinite(n) || n < 0) {
+      errori.push(el?.closest('.form-group')?.querySelector('label')?.textContent || id);
+      return def;
+    }
+    return intero ? Math.round(n) : n;
+  };
+  const _int = (id, def) => _num(id, def, true);
+  const _flt = (id, def) => _num(id, def, false);
   const rows = [
     { chiave: 'soglia_rischio_giorni',              valore: _int('kpicfg-soglia', 1) },
     { chiave: 'settimane_storico_capacita',         valore: _int('kpicfg-settimane', 6) },
@@ -4802,10 +4920,272 @@ async function salvaKpiConfig() {
     { chiave: 'retention_notifiche_non_lette_giorni', valore: _int('kpicfg-ret-notif-non-lette', 120) },
     { chiave: 'retention_pin_tentativi_ore',        valore: _int('kpicfg-ret-pin', 24) },
     { chiave: 'retention_log_cron_giorni',          valore: _int('kpicfg-ret-log-cron', 7) },
+    { chiave: 'soglia_quantita_svincolo_dipendenze', valore: _int('kpicfg-svincolo-qta', 2) },
+    { chiave: 'pausa_automatica_finestra_minuti',   valore: _int('kpicfg-pausa-finestra', 10) },
+    { chiave: 'rif_soglia_sotto_tipico',            valore: _flt('kpicfg-rif-sotto', 30) / 100 },
+    { chiave: 'rif_soglia_sopra_massimo',           valore: _flt('kpicfg-rif-sopra', 1.5) },
   ];
+  if (errori.length) { toast('Valore mancante o non valido: ' + errori.join(', '), 'err'); return; }
   const { error } = await sb.from('kpi_config').upsert(rows);
   if (error) { toast('Errore salvataggio: ' + error.message, 'err'); return; }
   toast('Soglie KPI salvate', 'ok');
+}
+
+// ═══════════════════════════════════════════════
+// LAVORAZIONI CNC (catalogo) — tabella lavorazioni_cnc, RLS solo responsabile
+// ═══════════════════════════════════════════════
+// Stato in memoria (aggiornato a ogni onchange): i salvataggi non rileggono mai il DOM.
+let lavorazioniCnc = [];
+
+async function loadLavorazioniCnc() {
+  const { data, error } = await sb.from('lavorazioni_cnc').select('id, nome, posizione, attivo').order('posizione').order('nome');
+  if (error) { console.warn('loadLavorazioniCnc:', error.message); lavorazioniCnc = []; }
+  else lavorazioniCnc = (data || []).map(l => ({ ...l, _nome: l.nome }));
+  popolaLavorazioniCncSelect('ord-lavorazione-cnc', null);
+}
+
+function lavorazioneCncNome(id) {
+  if (!id) return null;
+  return lavorazioniCnc.find(l => l.id === id)?.nome || null;
+}
+
+// Menu "Lavorazione CNC": voci attive in ordine di posizione. La voce già assegnata all'ordine
+// resta selezionabile anche se nel frattempo è stata disattivata (per non perderla salvando).
+function popolaLavorazioniCncSelect(selectId, valoreCorrente) {
+  const el = document.getElementById(selectId);
+  if (!el) return;
+  const voci = lavorazioniCnc.filter(l => l.attivo || l.id === valoreCorrente);
+  el.innerHTML = '<option value="">Non indicata</option>' + voci.map(l =>
+    `<option value="${escapeHtml(l.id)}">${escapeHtml(l.nome)}${l.attivo ? '' : ' (disattivata)'}</option>`).join('');
+  el.value = valoreCorrente || '';
+}
+
+function renderLavorazioniCncConfig() {
+  const el = document.getElementById('lavorazioni-cnc-body');
+  if (!el) return;
+  if (!lavorazioniCnc.length) { el.innerHTML = '<div class="empty-state"><p>Nessuna lavorazione configurata</p></div>'; return; }
+  el.innerHTML = lavorazioniCnc.map((l, i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <button class="fase-move-btn" ${i === 0 ? 'disabled' : ''} onclick="spostaLavorazioneCnc(${i},-1)" aria-label="Sposta su">▲</button>
+        <button class="fase-move-btn" ${i === lavorazioniCnc.length - 1 ? 'disabled' : ''} onclick="spostaLavorazioneCnc(${i},1)" aria-label="Sposta giù">▼</button>
+      </div>
+      <input type="text" value="${escapeHtml(l._nome)}" maxlength="80" oninput="lavorazioniCnc[${i}]._nome=this.value"
+        style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-ctl);font-size:13px;background:var(--bg);color:var(--ink)">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;white-space:nowrap">
+        <input type="checkbox" ${l.attivo ? 'checked' : ''} onchange="impostaAttivoLavorazioneCnc(${i}, this.checked)"> Attiva
+      </label>
+      <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px" onclick="rinominaLavorazioneCnc(${i})"><i data-ic="salva"></i> Salva nome</button>
+      <button class="btn btn-danger" style="padding:6px 10px;font-size:12px" onclick="eliminaLavorazioneCnc(${i})" aria-label="Elimina"><i data-ic="cestino"></i></button>
+    </div>`).join('');
+}
+
+async function aggiungiLavorazioneCnc() {
+  const input = document.getElementById('nuova-lavorazione-cnc');
+  const nome = (input?.value || '').trim();
+  if (!nome) { toast('Inserisci il nome della lavorazione', 'err'); return; }
+  const pos = lavorazioniCnc.reduce((m, l) => Math.max(m, l.posizione || 0), 0) + 1;
+  const { error } = await sb.from('lavorazioni_cnc').insert({ nome, posizione: pos, attivo: true });
+  if (error) { toast(error.code === '23505' ? 'Esiste già una lavorazione con questo nome' : 'Errore: ' + error.message, 'err'); return; }
+  input.value = '';
+  await loadLavorazioniCnc(); renderLavorazioniCncConfig();
+  toast('Lavorazione aggiunta', 'ok');
+}
+
+async function rinominaLavorazioneCnc(i) {
+  const l = lavorazioniCnc[i]; if (!l) return;
+  const nome = (l._nome || '').trim();
+  if (!nome) { toast('Il nome non può essere vuoto', 'err'); return; }
+  const { error } = await sb.from('lavorazioni_cnc').update({ nome }).eq('id', l.id);
+  if (error) { toast(error.code === '23505' ? 'Esiste già una lavorazione con questo nome' : 'Errore: ' + error.message, 'err'); return; }
+  await loadLavorazioniCnc(); renderLavorazioniCncConfig();
+  toast('Nome salvato', 'ok');
+}
+
+async function impostaAttivoLavorazioneCnc(i, attivo) {
+  const l = lavorazioniCnc[i]; if (!l) return;
+  const { error } = await sb.from('lavorazioni_cnc').update({ attivo }).eq('id', l.id);
+  if (error) { toast('Errore: ' + error.message, 'err'); }
+  await loadLavorazioniCnc(); renderLavorazioniCncConfig();
+  if (!error) toast(attivo ? 'Lavorazione attivata' : 'Lavorazione disattivata', 'ok');
+}
+
+async function spostaLavorazioneCnc(i, dir) {
+  const a = lavorazioniCnc[i], b = lavorazioniCnc[i + dir];
+  if (!a || !b) return;
+  // posizioni esplicite in sequenza, poi scambio delle due voci
+  const ordinate = lavorazioniCnc.map((l, k) => ({ id: l.id, posizione: k + 1 }));
+  [ordinate[i].posizione, ordinate[i + dir].posizione] = [ordinate[i + dir].posizione, ordinate[i].posizione];
+  const res = await Promise.all(ordinate.map(o => sb.from('lavorazioni_cnc').update({ posizione: o.posizione }).eq('id', o.id)));
+  const err = res.find(r => r.error)?.error;
+  if (err) toast('Errore: ' + err.message, 'err');
+  await loadLavorazioniCnc(); renderLavorazioniCncConfig();
+}
+
+async function eliminaLavorazioneCnc(i) {
+  const l = lavorazioniCnc[i]; if (!l) return;
+  // Una voce usata da almeno un ordine (o da un tempo di riferimento) non si elimina: si disattiva.
+  // Il vincolo ON DELETE RESTRICT nel database lo impedisce comunque; qui si spiega il perché.
+  const [{ count: nOrdini }, { count: nTempi }] = await Promise.all([
+    sb.from('ordini').select('id', { count: 'exact', head: true }).eq('lavorazione_cnc_id', l.id),
+    sb.from('tempi_riferimento').select('id', { count: 'exact', head: true }).eq('lavorazione_cnc_id', l.id),
+  ]);
+  if ((nOrdini || 0) > 0 || (nTempi || 0) > 0) {
+    toast(`Usata da ${nOrdini || 0} ordini e ${nTempi || 0} tempi di riferimento: si può solo disattivare`, 'err');
+    return;
+  }
+  if (!confirm(`Eliminare la lavorazione "${l.nome}"?`)) return;
+  const { error } = await sb.from('lavorazioni_cnc').delete().eq('id', l.id);
+  if (error) { toast(error.code === '23503' ? 'La lavorazione è in uso: si può solo disattivare' : 'Errore: ' + error.message, 'err'); return; }
+  await loadLavorazioniCnc(); renderLavorazioniCncConfig();
+  toast('Lavorazione eliminata', 'ok');
+}
+
+// ═══════════════════════════════════════════════
+// TEMPI DI RIFERIMENTO per fase / tipo prodotto / lavorazione CNC
+// Solo dati di confronto: NON usati da pianificatore, stime o altri calcoli.
+// ═══════════════════════════════════════════════
+let tempiRif = [];            // righe del tipo prodotto selezionato (+ bozze non salvate, id null)
+let tempiRifTipo = null;
+
+async function loadTempiRiferimento() {
+  const sel = document.getElementById('tempi-rif-tipo');
+  if (sel && !sel.options.length) {
+    sel.innerHTML = tipiProdotto.map(t => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.label)}</option>`).join('');
+  }
+  if (!lavorazioniCnc.length) await loadLavorazioniCnc();
+  tempiRifTipo = sel?.value || tipiProdotto[0]?.id || null;
+  if (!tempiRifTipo) { tempiRif = []; renderTempiRiferimento(); return; }
+  const { data, error } = await sb.from('tempi_riferimento')
+    .select('id, fase_id, tipo_prodotto, lavorazione_cnc_id, minuti_tipici, minuti_max, note, aggiornato_il')
+    .eq('tipo_prodotto', tempiRifTipo).order('fase_id').order('id');
+  if (error) { toast('Errore caricamento tempi: ' + error.message, 'err'); tempiRif = []; }
+  else tempiRif = (data || []).map(r => ({ ...r }));
+  const posFase = id => fasi.find(f => f.id === id)?.posizione ?? 9999;
+  tempiRif.sort((a, b) => posFase(a.fase_id) - posFase(b.fase_id));
+  renderTempiRiferimento();
+}
+
+function tempiRifSet(i, campo, valore) {
+  const r = tempiRif[i]; if (!r) return;
+  if (campo === 'fase_id') r.fase_id = valore ? parseInt(valore, 10) : null;
+  else if (campo === 'lavorazione_cnc_id') r.lavorazione_cnc_id = valore || null;
+  else r[campo] = valore;
+}
+
+function renderTempiRiferimento() {
+  const el = document.getElementById('tempi-rif-body');
+  if (!el) return;
+  const optFasi = sel => '<option value="">— fase —</option>' + fasi.map(f =>
+    `<option value="${f.id}" ${f.id === sel ? 'selected' : ''}>${escapeHtml(f.nome)}</option>`).join('');
+  const optLav = sel => '<option value="">Senza lavorazione indicata</option>' + lavorazioniCnc
+    .filter(l => l.attivo || l.id === sel).map(l =>
+    `<option value="${escapeHtml(l.id)}" ${l.id === sel ? 'selected' : ''}>${escapeHtml(l.nome)}${l.attivo ? '' : ' (disattivata)'}</option>`).join('');
+  const cella = 'padding:6px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-ctl);font-size:13px;background:var(--bg);color:var(--ink)';
+  el.innerHTML = `
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em">
+        <th style="padding:8px">Fase</th><th style="padding:8px">Lavorazione CNC</th>
+        <th style="padding:8px">Tipico (min)</th><th style="padding:8px">Massimo (min)</th><th style="padding:8px">Note</th><th></th>
+      </tr></thead>
+      <tbody>${tempiRif.length ? tempiRif.map((r, i) => `
+        <tr style="border-top:1px solid var(--border)">
+          <td style="padding:6px 8px"><select style="${cella};min-width:150px;max-width:220px" onchange="tempiRifSet(${i},'fase_id',this.value)">${optFasi(r.fase_id)}</select></td>
+          <td style="padding:6px 8px"><select style="${cella};min-width:140px;max-width:210px" onchange="tempiRifSet(${i},'lavorazione_cnc_id',this.value)">${optLav(r.lavorazione_cnc_id)}</select></td>
+          <td style="padding:6px 8px"><input type="number" min="0.1" step="0.5" value="${escapeHtml(r.minuti_tipici ?? '')}" style="${cella};width:72px" onchange="tempiRifSet(${i},'minuti_tipici',this.value)"></td>
+          <td style="padding:6px 8px"><input type="number" min="0.1" step="0.5" value="${escapeHtml(r.minuti_max ?? '')}" style="${cella};width:72px" onchange="tempiRifSet(${i},'minuti_max',this.value)"></td>
+          <td style="padding:6px 8px"><input type="text" maxlength="200" value="${escapeHtml(r.note || '')}" style="${cella};width:100%;min-width:90px" onchange="tempiRifSet(${i},'note',this.value)"></td>
+          <td style="padding:6px 8px;white-space:nowrap">
+            <button class="btn btn-secondary" style="padding:6px 10px;font-size:12px" onclick="salvaTempoRiferimento(${i})"><i data-ic="salva"></i> Salva</button>
+            <button class="btn btn-danger" style="padding:6px 10px;font-size:12px" onclick="eliminaTempoRiferimento(${i})" aria-label="Elimina"><i data-ic="cestino"></i></button>
+          </td>
+        </tr>`).join('') : '<tr><td colspan="6" style="padding:16px;color:var(--muted)">Nessun tempo di riferimento per questo tipo prodotto</td></tr>'}
+      </tbody>
+    </table></div>`;
+}
+
+function aggiungiTempoRiferimento() {
+  if (!tempiRifTipo) { toast('Nessun tipo prodotto selezionato', 'err'); return; }
+  tempiRif.push({ id: null, fase_id: null, tipo_prodotto: tempiRifTipo, lavorazione_cnc_id: null, minuti_tipici: '', minuti_max: '', note: '' });
+  renderTempiRiferimento();
+}
+
+function _numeroValido(v) {
+  if (v === null || v === undefined || String(v).trim() === '') return null;
+  const n = Number(String(v).replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+
+async function salvaTempoRiferimento(i) {
+  const r = tempiRif[i]; if (!r) return;
+  const tip = _numeroValido(r.minuti_tipici), max = _numeroValido(r.minuti_max);
+  if (!r.fase_id) { toast('Scegli la fase', 'err'); return; }
+  if (tip === null || tip <= 0) { toast('Il tempo tipico deve essere un numero maggiore di 0', 'err'); return; }
+  if (max === null || max <= 0) { toast('Il tempo massimo deve essere un numero maggiore di 0', 'err'); return; }
+  if (max < tip) { toast('Il tempo massimo non può essere minore del tipico', 'err'); return; }
+  const payload = { fase_id: r.fase_id, tipo_prodotto: r.tipo_prodotto, lavorazione_cnc_id: r.lavorazione_cnc_id || null,
+    minuti_tipici: tip, minuti_max: max, note: (r.note || '').trim() || null };
+  const { error } = r.id
+    ? await sb.from('tempi_riferimento').update(payload).eq('id', r.id)
+    : await sb.from('tempi_riferimento').insert(payload);
+  if (error) {
+    const msg = error.code === '23505' ? 'Esiste già un tempo per questa fase e lavorazione'
+      : error.code === '23514' ? 'Valori non validi (tipico > 0, massimo ≥ tipico)' : 'Errore: ' + error.message;
+    toast(msg, 'err'); return;
+  }
+  await loadTempiRiferimento();
+  toast('Tempo di riferimento salvato', 'ok');
+}
+
+async function eliminaTempoRiferimento(i) {
+  const r = tempiRif[i]; if (!r) return;
+  if (!r.id) { tempiRif.splice(i, 1); renderTempiRiferimento(); return; }
+  if (!confirm('Eliminare questo tempo di riferimento?')) return;
+  const { error } = await sb.from('tempi_riferimento').delete().eq('id', r.id);
+  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  await loadTempiRiferimento();
+  toast('Tempo di riferimento eliminato', 'ok');
+}
+
+// ── KPI: riferimento vs tempi registrati (RPC solo-responsabile, niente dati per operatore) ──
+async function loadConfrontoTempiRiferimento() {
+  const el = document.getElementById('kpi-tempi-rif');
+  if (!el || !currentUserRow) return;
+  const dal = document.getElementById('kpi-tempi-rif-dal')?.value || '2026-09-28';
+  el.innerHTML = '<div style="color:var(--muted);font-size:12px">Caricamento…</div>';
+  const { data, error } = await sb.rpc('confronto_tempi_riferimento', {
+    p_responsabile_id: currentUserRow.id, p_session_token: null, p_dal: dal });
+  if (error || !data?.ok) { el.innerHTML = `<div style="color:var(--alert);font-size:12px">Errore: ${escapeHtml(error?.message || data?.errore || 'sconosciuto')}</div>`; return; }
+  const righe = data.righe || [];
+  const fmt = v => (v === null || v === undefined) ? '—' : Number(v).toLocaleString('it-IT', { maximumFractionDigits: 1 });
+  const soglie = `Fuori scala: sotto il ${fmt(Number(data.soglia_sotto_tipico) * 100)}% del tipico o sopra ${fmt(data.soglia_sopra_massimo)}× il massimo · giornata ${fmt(data.giornata_minuti)} min`;
+  if (!righe.length) { el.innerHTML = `<div style="color:var(--muted);font-size:12px">${escapeHtml(soglie)}<br>Nessun tempo di riferimento né fase registrata.</div>`; return; }
+  let tipoCorrente = null;
+  el.innerHTML = `<div style="font-size:11px;color:var(--muted);margin-bottom:10px">${escapeHtml(soglie)}</div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em">
+      <th style="padding:6px 8px">Fase</th><th style="padding:6px 8px">Lavorazione CNC</th>
+      <th style="padding:6px 8px;text-align:right">Riferimento tipico / max</th>
+      <th style="padding:6px 8px;text-align:right">Mediana</th><th style="padding:6px 8px;text-align:right">75° perc.</th>
+      <th style="padding:6px 8px;text-align:right">Fasi</th><th style="padding:6px 8px;text-align:right">Fuori scala</th>
+    </tr></thead><tbody>${righe.map(r => {
+      let sep = '';
+      if (r.tipo_prodotto !== tipoCorrente) {
+        tipoCorrente = r.tipo_prodotto;
+        sep = `<tr><td colspan="7" style="padding:10px 8px 4px;font-weight:700;font-size:12px;border-top:2px solid var(--border)">${escapeHtml(r.tipo_label)}</td></tr>`;
+      }
+      const rif = r.minuti_tipici === null ? '<span style="color:var(--muted)">non definito</span>' : `${fmt(r.minuti_tipici)} / ${fmt(r.minuti_max)}`;
+      const fuori = Number(r.fuori_scala) > 0 ? `<span style="color:var(--alert);font-weight:600">${fmt(r.fuori_scala)}</span>` : fmt(r.fuori_scala);
+      return sep + `<tr style="border-top:1px solid var(--border)">
+        <td style="padding:6px 8px">${escapeHtml(r.fase_nome)}${r.note ? ` <span style="color:var(--muted);font-size:11px">(${escapeHtml(r.note)})</span>` : ''}</td>
+        <td style="padding:6px 8px">${r.lavorazione_nome ? escapeHtml(r.lavorazione_nome) : '<span style="color:var(--muted)">—</span>'}</td>
+        <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono)">${rif}</td>
+        <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono)">${fmt(r.mediana)}</td>
+        <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono)">${fmt(r.p75)}</td>
+        <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono)">${fmt(r.n)}</td>
+        <td style="padding:6px 8px;text-align:right;font-family:var(--font-mono)">${fuori}</td></tr>`;
+    }).join('')}</tbody></table></div>`;
 }
 
 async function salvaOrario() {
@@ -7149,6 +7529,7 @@ async function fetchAllRows(queryBuilderFn, pageSize = 1000) {
 }
 
 async function loadKpi() {
+  loadConfrontoTempiRiferimento();   // indipendente dal periodo selezionato (ha la sua data)
   const giorni = parseInt(document.getElementById('kpi-periodo').value);
   const dal = giorni > 0 ? new Date(Date.now() - giorni * 86400000).toISOString() : null;
 
@@ -7664,6 +8045,7 @@ function openModificaOrdine(id) {
   document.getElementById('mod-tipo-prodotto').value = ordine.tipo_prodotto || 'portoncino';
   document.getElementById('mod-struttura').value = ordine.struttura || '';
   document.getElementById('mod-materiale').value = ordine.materiale || '';
+  popolaLavorazioniCncSelect('mod-lavorazione-cnc', ordine.lavorazione_cnc_id || null);
   document.getElementById('mod-prio').value = ordine.priorita || 'normale';
   document.getElementById('mod-quantita').value = ordine.quantita || 1;
   document.getElementById('mod-scadenza').value = ordine.scadenza || '';
@@ -7710,6 +8092,7 @@ async function salvaModificaOrdine() {
     payload.tipo_prodotto = nuovoTipo;
     payload.struttura = nuovaStruttura;
     payload.materiale = nuovoMateriale;
+    payload.lavorazione_cnc_id = document.getElementById('mod-lavorazione-cnc').value || null;
 
   }
 
