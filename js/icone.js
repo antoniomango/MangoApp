@@ -60,7 +60,8 @@
     fotocamera:  '<path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="4"/>',
     immagine:    '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/>',
     quadrato:    '<rect x="5" y="5" width="14" height="14" rx="2"/>',
-    chevron:     '<path d="m9 6 6 6-6 6"/>'
+    chevron:     '<path d="m9 6 6 6-6 6"/>',
+    cancella:    '<path d="M21 5H9l-7 7 7 7h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1z"/><path d="m12 9 6 6"/><path d="m18 9-6 6"/>'
   };
 
   var SVG_NS = 'http://www.w3.org/2000/svg';
