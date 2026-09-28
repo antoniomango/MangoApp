@@ -215,6 +215,28 @@ tr:hover td { background: var(--phase-bg); }
 .ric-tabs button { background: none; border: none; border-radius: 7px; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; cursor: pointer; }
 .ric-tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
 .ric-vista[hidden] { display: none; }
+/* Sezione Operatori: schede, etichette di stato sulle card, scheda Assenze */
+.tab-conta { display: inline-block; margin-left: 6px; background: var(--alert); color: var(--on-alert); border-radius: 99px; font-size: 10px; font-weight: 700; padding: 1px 7px; min-width: 18px; text-align: center; }
+.tab-conta[hidden] { display: none; }
+.ops-barra { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.ops-barra.solo-azioni { justify-content: flex-end; }
+.op-etichette { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.op-etichetta { border: 1px solid transparent; border-radius: 99px; font: inherit; font-size: 11px; font-weight: 600; padding: 2px 9px; cursor: pointer; line-height: 1.5; text-align: left; }
+.op-etichetta.assenza { background: var(--warn-soft); color: var(--warn-ink); border-color: var(--warn-line); }
+.op-etichetta.attesa { background: var(--info-soft); color: var(--info-ink); border-color: var(--info-line); }
+.op-etichetta:focus-visible, .ass-voce:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ass-giorno.oltre { color: var(--alert-ink); }
+.ass-conta { font-weight: 600; text-transform: none; margin-left: 6px; }
+.ass-giorno.oltre .ass-conta { background: var(--alert-soft); border-radius: 99px; padding: 1px 8px; }
+.ass-voce { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; width: 100%; background: none; border: none; border-bottom: 1px solid var(--border); color: var(--ink); font: inherit; font-size: 14px; text-align: left; padding: 8px 18px; cursor: pointer; }
+.ass-voce:hover { background: var(--phase-bg); }
+.ass-voce .ass-dett { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.ass-fonte { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; border-radius: 6px; padding: 1px 6px; background: var(--fill); color: var(--muted); }
+.ass-fonte.mano { background: var(--warn-soft); color: var(--warn-ink); }
+.ass-chiusura { padding: 8px 18px; font-size: 13px; color: var(--muted); font-style: italic; border-bottom: 1px solid var(--border); }
+.notif-item.cliccabile { cursor: pointer; }
+.notif-item.cliccabile:hover { background: var(--phase-bg); }
+tr.ric-evidenza td { background: var(--info-soft); }
 .ric-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 16px 18px; margin-bottom: 14px; }
 .ric-card-testa { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
 .ric-nome { font-weight: 700; font-size: 15px; }
@@ -460,10 +482,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       <div class="nav-section">Gestione</div>
       <div class="nav-item" onclick="showSection('operatori')" id="nav-operatori">
         <span class="icon"><i data-ic="persone"></i></span> Operatori
-      </div>
-      <div class="nav-item" onclick="showSection('richieste')" id="nav-richieste">
-        <span class="icon"><i data-ic="appunti"></i></span> Richieste
-        <span class="nav-conta" id="richieste-badge" hidden>0</span>
+        <span class="nav-conta" id="richieste-badge" hidden title="Richieste in attesa">0</span>
       </div>
       <div class="nav-item" onclick="showSection('archivio')" id="nav-archivio">
         <span class="icon"><i data-ic="pacco"></i></span> Archivio
@@ -634,53 +653,75 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         </div>
       </section>
 
-      <!-- OPERATORI -->
+      <!-- OPERATORI: schede Produzione / Ufficio / Richieste / Assenze -->
       <section class="section" id="sec-operatori">
         <div class="page-hdr">
-          <div><h1>Operatori</h1></div>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-secondary" onclick="apriTaglieSquadra()"><i data-ic="etichetta"></i> Taglie della squadra</button>
-            <button class="btn btn-primary" onclick="openModalNuovoOperatore()">+ Nuovo Operatore</button>
-          </div>
-        </div>
-        <div id="ops-ferie-panel" style="margin-bottom:18px"></div>
-        <div class="ops-grid" id="ops-grid">
-          <div style="color:var(--muted);padding:20px">Caricamento…</div>
-        </div>
-      </section>
-
-      <!-- RICHIESTE DI PERMESSO E ASSENZE -->
-      <section class="section" id="sec-richieste">
-        <div class="page-hdr">
           <div>
-            <h1>Richieste</h1>
-            <div class="sub">Permessi e assenze degli operatori. L'approvazione aggiorna la disponibilità usata dal pianificatore.</div>
+            <h1>Operatori</h1>
+            <div class="sub">Profili di produzione e ufficio, richieste di permesso e assenze in programma.</div>
           </div>
-          <button class="btn btn-secondary" onclick="apriSegnalaAssenza()"><i data-ic="avviso"></i> Segnala assenza</button>
         </div>
-        <div class="ric-tabs" role="tablist" aria-label="Viste richieste">
-          <button type="button" role="tab" id="ric-tab-attesa" onclick="richiesteVista('attesa')">In attesa</button>
-          <button type="button" role="tab" id="ric-tab-storico" onclick="richiesteVista('storico')">Storico</button>
-          <button type="button" role="tab" id="ric-tab-assenze" onclick="richiesteVista('assenze')">Assenze squadra</button>
+        <div class="ric-tabs" role="tablist" aria-label="Schede operatori" id="ops-tabs" onkeydown="tabsTastiera(event, operatoriScheda)">
+          <button type="button" role="tab" id="ops-tab-produzione" data-tab="produzione" aria-controls="ops-pan-produzione" onclick="operatoriScheda('produzione')">Produzione</button>
+          <button type="button" role="tab" id="ops-tab-ufficio" data-tab="ufficio" aria-controls="ops-pan-ufficio" onclick="operatoriScheda('ufficio')">Ufficio</button>
+          <button type="button" role="tab" id="ops-tab-richieste" data-tab="richieste" aria-controls="ops-pan-richieste" onclick="operatoriScheda('richieste')">Richieste <span class="tab-conta" id="ops-tab-ric-conta" hidden>0</span></button>
+          <button type="button" role="tab" id="ops-tab-assenze" data-tab="assenze" aria-controls="ops-pan-assenze" onclick="operatoriScheda('assenze')">Assenze</button>
         </div>
-        <div id="ric-vista-attesa" class="ric-vista"></div>
-        <div id="ric-vista-storico" class="ric-vista" hidden>
-          <div class="filters">
-            <select id="ric-f-stato" onchange="ricFiltro('stato', this.value)">
-              <option value="">Tutti gli stati</option>
-              <option value="approvata">Approvate</option>
-              <option value="rifiutata">Non approvate</option>
-              <option value="annullata">Annullate</option>
-              <option value="in_attesa">In attesa</option>
-            </select>
-            <select id="ric-f-operatore" onchange="ricFiltro('operatore', this.value)"></select>
-            <label style="font-size:12px;color:var(--muted)">Dal <input type="date" id="ric-f-dal" onchange="ricFiltro('dal', this.value)"></label>
-            <label style="font-size:12px;color:var(--muted)">Al <input type="date" id="ric-f-al" onchange="ricFiltro('al', this.value)"></label>
+
+        <div id="ops-pan-produzione" class="ric-vista" role="tabpanel" aria-labelledby="ops-tab-produzione">
+          <div class="ops-barra">
+            <button class="btn btn-secondary" onclick="apriTaglieSquadra()"><i data-ic="etichetta"></i> Taglie della squadra</button>
+            <button class="btn btn-primary" onclick="openModalNuovoOperatore('operatore')">+ Nuovo Operatore</button>
           </div>
-          <div class="card" id="ric-storico-corpo"></div>
+          <div class="ops-grid" id="ops-grid">
+            <div style="color:var(--muted);padding:20px">Caricamento…</div>
+          </div>
         </div>
-        <div id="ric-vista-assenze" class="ric-vista" hidden>
-          <div class="card" style="padding:4px 0" id="ric-assenze-corpo"></div>
+
+        <div id="ops-pan-ufficio" class="ric-vista" role="tabpanel" aria-labelledby="ops-tab-ufficio" hidden>
+          <div class="ops-barra solo-azioni">
+            <button class="btn btn-primary" onclick="openModalNuovoOperatore('sola_lettura')">+ Nuovo Operatore</button>
+          </div>
+          <div class="ops-grid" id="ops-grid-ufficio"></div>
+        </div>
+
+        <div id="ops-pan-richieste" class="ric-vista" role="tabpanel" aria-labelledby="ops-tab-richieste" hidden>
+          <div class="ops-barra">
+            <div class="ric-tabs" role="tablist" aria-label="Viste richieste" style="margin-bottom:0" onkeydown="tabsTastiera(event, richiesteVista)">
+              <button type="button" role="tab" id="ric-tab-attesa" data-tab="attesa" aria-controls="ric-vista-attesa" onclick="richiesteVista('attesa')">In attesa</button>
+              <button type="button" role="tab" id="ric-tab-storico" data-tab="storico" aria-controls="ric-vista-storico" onclick="richiesteVista('storico')">Storico</button>
+            </div>
+            <button class="btn btn-secondary" onclick="apriSegnalaAssenza()"><i data-ic="avviso"></i> Segnala assenza</button>
+          </div>
+          <div class="sub" style="color:var(--muted);font-size:13px;margin-bottom:12px">L'approvazione aggiorna la disponibilità usata dal pianificatore.</div>
+          <div id="ric-vista-attesa" class="ric-vista" role="tabpanel" aria-labelledby="ric-tab-attesa"></div>
+          <div id="ric-vista-storico" class="ric-vista" role="tabpanel" aria-labelledby="ric-tab-storico" hidden>
+            <div class="filters">
+              <select id="ric-f-stato" onchange="ricFiltro('stato', this.value)">
+                <option value="">Tutti gli stati</option>
+                <option value="approvata">Approvate</option>
+                <option value="rifiutata">Non approvate</option>
+                <option value="annullata">Annullate</option>
+                <option value="in_attesa">In attesa</option>
+              </select>
+              <select id="ric-f-operatore" onchange="ricFiltro('operatore', this.value)"></select>
+              <label style="font-size:12px;color:var(--muted)">Dal <input type="date" id="ric-f-dal" onchange="ricFiltro('dal', this.value)"></label>
+              <label style="font-size:12px;color:var(--muted)">Al <input type="date" id="ric-f-al" onchange="ricFiltro('al', this.value)"></label>
+            </div>
+            <div class="card" id="ric-storico-corpo" style="overflow-x:auto"></div>
+          </div>
+        </div>
+
+        <div id="ops-pan-assenze" class="ric-vista" role="tabpanel" aria-labelledby="ops-tab-assenze" hidden>
+          <div class="ops-barra">
+            <div class="ric-tabs" role="tablist" aria-label="Raggruppamento assenze" style="margin-bottom:0" onkeydown="tabsTastiera(event, assenzeRaggruppa)">
+              <button type="button" role="tab" id="ass-tab-giorno" data-tab="giorno" aria-controls="ass-corpo" onclick="assenzeRaggruppa('giorno')">Per giorno</button>
+              <button type="button" role="tab" id="ass-tab-operatore" data-tab="operatore" aria-controls="ass-corpo" onclick="assenzeRaggruppa('operatore')">Per operatore</button>
+            </div>
+            <div class="filters" style="margin-bottom:0"><select id="ass-f-operatore" aria-label="Filtra per operatore" onchange="assenzeFiltroOperatore(this.value)"></select></div>
+          </div>
+          <div class="sub" id="ass-sotto" style="color:var(--muted);font-size:13px;margin-bottom:12px"></div>
+          <div class="card" style="padding:4px 0" id="ass-corpo"></div>
         </div>
       </section>
 
@@ -2198,9 +2239,21 @@ async function postLogin() {
     showSection('ufficio');
     await loadUfficio();
   } else {
-    showSection('dashboard');
-    renderDashboard();
+    const destinazione = _sezioneDaLink();
+    if (destinazione) showSection(destinazione);
+    else { showSection('dashboard'); renderDashboard(); }
   }
+}
+
+// Collegamento diretto (es. da una push): responsabile.html?sezione=richieste oppure #richieste.
+// Solo valori in whitelist; il parametro viene poi tolto dall'indirizzo.
+function _sezioneDaLink() {
+  const AMMESSE = ['richieste', 'assenze', 'operatori'];
+  let v = '';
+  try { v = new URLSearchParams(location.search).get('sezione') || location.hash.replace(/^#/, ''); } catch (e) { return null; }
+  if (!AMMESSE.includes(v)) return null;
+  try { history.replaceState(null, '', location.pathname); } catch (e) { /* ignora */ }
+  return v;
 }
 
 // ═══════════════════════════════════════════════
@@ -2447,6 +2500,7 @@ function setupRealtime() {
       await loadNotifiche();
       renderNotifiche();
       aggiornaBadgeRichieste();   // una nuova richiesta arriva sempre con una notifica al responsabile
+      if (document.getElementById('sec-operatori')?.classList.contains('active')) aggiornaStatoAssenze();
     })
     .subscribe();
 }
@@ -2466,6 +2520,8 @@ function toggleImpostazioni(force) {
 }
 
 function showSection(name) {
+  // Alias storici: Richieste e Assenze squadra sono ora schede della sezione Operatori
+  if (name === 'richieste' || name === 'assenze') { _opsScheda = name; _opsSalvaScheda(name); name = 'operatori'; }
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('sec-' + name)?.classList.add('active');
@@ -2474,7 +2530,7 @@ function showSection(name) {
 
   if (name === 'dashboard') renderDashboard();
   else if (name === 'ordini') renderOrdiniTable();
-  else if (name === 'operatori') { renderOperatori(); loadRiepilogoPermessi(); }
+  else if (name === 'operatori') { operatoriScheda(_opsScheda); }
   else if (name === 'archivio') { renderArchivioTable(); loadDimensioneDatabase(); }
   else if (name === 'notifiche') renderNotifiche();
   else if (name === 'fasi-config') renderFasiConfig();
@@ -2498,7 +2554,6 @@ function showSection(name) {
   else if (name === 'notif-config') { loadNotifDestinatari(); }
   else if (name === 'lavorazioni-cnc-config') { loadLavorazioniCnc().then(renderLavorazioniCncConfig); }
   else if (name === 'tempi-rif-config') { loadTempiRiferimento(); }
-  else if (name === 'richieste') { richiesteVista(_ricVista); }
   else if (name === 'campi-profilo-config') { loadCampiProfilo(); }
   else if (name === 'tipi-richiesta-config') { loadTipiRichiesta(); }
 }
@@ -4498,28 +4553,46 @@ async function confermRiassegna() {
 // ═══════════════════════════════════════════════
 // OPERATORI
 // ═══════════════════════════════════════════════
-function renderOperatori() {
-  const grid = document.getElementById('ops-grid');
-  if (!operatoriCache.length) {
-    grid.innerHTML = '<div class="empty-state"><div class="icon"><i data-ic="persone"></i></div><p>Nessun operatore configurato</p></div>';
-    return;
-  }
-  grid.innerHTML = operatoriCache.map(op => `
+function _cardOperatore(op, conDati, etichette) {
+  return `
     <div class="op-card ${op.attivo ? '' : 'inactive'}">
       <div class="op-name">${escapeHtml(op.nome)} ${escapeHtml(op.cognome)}</div>
-      <div class="op-role">${op.ruolo === 'operatore' ? 'Operatore' : 'Sola Lettura'} ${op.attivo ? '' : '· <span style="color:var(--alert)">Disattivo</span>'}</div>
+      <div class="op-role">${op.ruolo === 'operatore' ? 'Operatore' : 'Vista ufficio'} ${op.attivo ? '' : '· <span style="color:var(--alert)">Disattivo</span>'}</div>
+      ${etichette || ''}
       <div class="op-actions" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
-        <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="openModalModificaOperatore('${op.id}')"><i data-ic="matita"></i> Modifica</button>
-        <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="apriDatiOperatore('${op.id}')"><i data-ic="persona"></i> Dati</button>
+        <button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="openModalModificaOperatore('${escapeJsAttr(op.id)}')"><i data-ic="matita"></i> Modifica</button>
+        ${conDati ? `<button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="apriDatiOperatore('${escapeJsAttr(op.id)}')"><i data-ic="persona"></i> Dati</button>` : ''}
         ${op.attivo
-          ? `<button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="toggleOperatore('${op.id}', false)">Disattiva</button>`
-          : `<button class="btn btn-ok" style="padding:5px 10px;font-size:12px" onclick="toggleOperatore('${op.id}', true)">Attiva</button>`
+          ? `<button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="toggleOperatore('${escapeJsAttr(op.id)}', false)">Disattiva</button>`
+          : `<button class="btn btn-ok" style="padding:5px 10px;font-size:12px" onclick="toggleOperatore('${escapeJsAttr(op.id)}', true)">Attiva</button>`
         }
-        <button class="btn" style="padding:5px 10px;font-size:12px;background:var(--warn-strong);color:var(--on-warn)" onclick="forzaLogout('${op.id}', '${escapeJsAttr(op.nome)}')"><i data-ic="esci"></i> Esci</button>
-        <button class="btn" style="padding:5px 10px;font-size:12px;background:var(--alert);color:var(--on-alert)" onclick="eliminaOperatore('${op.id}', '${escapeJsAttr(op.nome + ' ' + op.cognome)}')" aria-label="Elimina operatore"><i data-ic="cestino"></i></button>
+        <button class="btn" style="padding:5px 10px;font-size:12px;background:var(--warn-strong);color:var(--on-warn)" onclick="forzaLogout('${escapeJsAttr(op.id)}', '${escapeJsAttr(op.nome)}')"><i data-ic="esci"></i> Esci</button>
+        <button class="btn" style="padding:5px 10px;font-size:12px;background:var(--alert);color:var(--on-alert)" onclick="eliminaOperatore('${escapeJsAttr(op.id)}', '${escapeJsAttr(op.nome + ' ' + op.cognome)}')" aria-label="Elimina ${escapeHtml(op.nome)} ${escapeHtml(op.cognome)}"><i data-ic="cestino"></i></button>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+}
+
+// Etichette di stato sulla card (solo ruolo 'operatore'): assenza di oggi o prossima entro
+// 14 giorni + richieste in attesa. Dati da _assDati (richieste_assenza via RLS + disponibilita_giornaliera).
+function _etichetteOperatore(op) {
+  const st = _assStatoOperatore(op.id);
+  const out = [];
+  if (st.assenza) out.push(`<button type="button" class="op-etichetta assenza" title="Vedi le assenze di ${escapeHtml(op.nome)}" onclick="apriAssenzeOperatore('${escapeJsAttr(op.id)}')">${escapeHtml(st.assenza)}</button>`);
+  if (st.inAttesa) out.push(`<button type="button" class="op-etichetta attesa" title="Apri le richieste in attesa" onclick="operatoriScheda('richieste'); richiesteVista('attesa')">${st.inAttesa} ${st.inAttesa === 1 ? 'richiesta' : 'richieste'} in attesa</button>`);
+  return out.length ? `<div class="op-etichette">${out.join('')}</div>` : '';
+}
+
+function renderOperatori() {
+  const grid = document.getElementById('ops-grid');
+  const gridUff = document.getElementById('ops-grid-ufficio');
+  const produzione = operatoriCache.filter(o => o.ruolo === 'operatore');
+  const ufficio = operatoriCache.filter(o => o.ruolo === 'sola_lettura');
+  grid.innerHTML = produzione.length
+    ? produzione.map(op => _cardOperatore(op, true, _etichetteOperatore(op))).join('')
+    : '<div class="empty-state"><div class="icon"><i data-ic="persone"></i></div><p>Nessun operatore di produzione</p></div>';
+  if (gridUff) gridUff.innerHTML = ufficio.length
+    ? ufficio.map(op => _cardOperatore(op, false, '')).join('')
+    : '<div class="empty-state"><div class="icon"><i data-ic="persone"></i></div><p>Nessun profilo ufficio</p></div>';
 }
 
 async function forzaLogout(id, nome) {
@@ -4533,13 +4606,13 @@ async function forzaLogout(id, nome) {
   toast(`${nome} verrà disconnesso alla prossima apertura dell'app`, 'ok');
 }
 
-function openModalNuovoOperatore() {
+function openModalNuovoOperatore(ruolo) {
   document.getElementById('op-edit-id').value = '';
   document.getElementById('op-nome').value = '';
   document.getElementById('op-cognome').value = '';
   document.getElementById('op-pin').value = '';
-  document.getElementById('op-ruolo').value = 'operatore';
-  document.getElementById('op-modal-title').textContent = 'Nuovo Operatore';
+  document.getElementById('op-ruolo').value = ruolo === 'sola_lettura' ? 'sola_lettura' : 'operatore';
+  document.getElementById('op-modal-title').textContent = ruolo === 'sola_lettura' ? 'Nuovo profilo ufficio' : 'Nuovo Operatore';
   document.getElementById('op-modal-btn').textContent = 'Crea';
   document.getElementById('op-pin-label').textContent = 'PIN (4 cifre) *';
   document.getElementById('op-pin-hint').style.display = 'none';
@@ -4764,6 +4837,8 @@ function aggiornaCampoOreDaMotivo() {
 
 function annullaModificaPermesso() {
   _editPermesso = null;
+  // La sezione Ferie e permessi esiste solo in modifica: in creazione non c'è niente da azzerare
+  if (!document.getElementById('op-perm-dal')) return;
   document.getElementById('op-perm-dal').value = '';
   document.getElementById('op-perm-al').value = '';
   document.getElementById('op-perm-ore').value = 0;
@@ -4870,7 +4945,7 @@ async function aggiungiPermessoPeriodo(operatoreId) {
   annullaModificaPermesso();
   caricaFerieOperatore(operatoreId);
   caricaDisponibilitaPanel();
-  loadRiepilogoPermessi();
+  aggiornaStatoAssenze();
 }
 
 async function rimuoviPermessoPeriodo(operatoreId, dal, al) {
@@ -4888,63 +4963,281 @@ async function rimuoviPermessoPeriodo(operatoreId, dal, al) {
   toast('Periodo rimosso', 'ok');
   caricaFerieOperatore(operatoreId);
   caricaDisponibilitaPanel();
-  loadRiepilogoPermessi();
+  aggiornaStatoAssenze();
 }
 
-async function loadRiepilogoPermessi() {
-  const el = document.getElementById('ops-ferie-panel');
-  if (!el) return;
+// ═══════════════════════════════════════════════
+// SEZIONE OPERATORI — schede Produzione / Ufficio / Richieste / Assenze
+// ═══════════════════════════════════════════════
+const OPS_SCHEDE = ['produzione', 'ufficio', 'richieste', 'assenze'];
+const OPS_SCHEDA_CHIAVE = 'mangoapp-operatori-scheda';
+let _opsScheda = (() => {
+  try { const v = localStorage.getItem(OPS_SCHEDA_CHIAVE); return OPS_SCHEDE.includes(v) ? v : 'produzione'; }
+  catch (e) { return 'produzione'; }
+})();
+function _opsSalvaScheda(v) { try { localStorage.setItem(OPS_SCHEDA_CHIAVE, v); } catch (e) { /* storage non disponibile: resta in memoria */ } }
 
-  const oggi = new Date().toISOString().slice(0, 10);
-  const { data } = await sb.from('disponibilita_giornaliera')
-    .select('operatore_id, data, ore, motivo, users(nome, cognome)')
-    .gte('data', oggi)
-    .order('data');
+// Stato ARIA di un gruppo di schede: aria-selected, tabindex "roving", pannelli nascosti.
+function _selezionaTab(valori, v, idTab, idPannello) {
+  valori.forEach(x => {
+    const tab = document.getElementById(idTab(x));
+    if (tab) { tab.setAttribute('aria-selected', x === v ? 'true' : 'false'); tab.tabIndex = x === v ? 0 : -1; }
+    if (idPannello) { const p = document.getElementById(idPannello(x)); if (p) p.hidden = x !== v; }
+  });
+}
 
-  if (!data?.length) {
-    el.innerHTML = '<div style="font-size:12px;color:var(--muted);font-style:italic;padding:4px 0 12px">Nessun permesso o ferie in programma</div>';
-    return;
+// Frecce sinistra/destra, Home, Fine su un role="tablist" (pattern WAI-ARIA, attivazione automatica).
+function tabsTastiera(e, apri) {
+  const tabs = [...e.currentTarget.querySelectorAll(':scope > [role="tab"]')];
+  const i = tabs.indexOf(document.activeElement);
+  if (i < 0) return;
+  const j = e.key === 'ArrowRight' ? (i + 1) % tabs.length
+    : e.key === 'ArrowLeft' ? (i - 1 + tabs.length) % tabs.length
+    : e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : null;
+  if (j === null) return;
+  e.preventDefault();
+  e.stopPropagation();
+  apri(tabs[j].dataset.tab);
+  tabs[j].focus();
+}
+
+function operatoriScheda(v) {
+  if (!OPS_SCHEDE.includes(v)) v = 'produzione';
+  _opsScheda = v;
+  _opsSalvaScheda(v);
+  _selezionaTab(OPS_SCHEDE, v, x => 'ops-tab-' + x, x => 'ops-pan-' + x);
+  if (v === 'produzione') { renderOperatori(); aggiornaStatoAssenze(); }
+  else if (v === 'ufficio') renderOperatori();
+  else if (v === 'richieste') richiesteVista(_ricVista);
+  else { renderAssenze(); aggiornaStatoAssenze(); }
+}
+
+function apriRichiesteInAttesa() { _ricVista = 'attesa'; showSection('richieste'); }
+function apriAssenzeOperatore(id) { _assFiltroOp = id; showSection('assenze'); }
+
+// ── Dati assenze (prossime 4 settimane) ──
+// Fonti, senza doppioni:
+//  1. richieste_assenza approvate (origine operatore = "Richiesta", responsabile = "Segnalata");
+//  2. righe di disponibilita_giornaliera con motivo e ore ridotte inserite a mano, ESCLUSE le date
+//     che una richiesta approvata dello stesso operatore ha già scritto (richieste_disponibilita).
+let _assDati = null;
+let _assSeq = 0;
+let _assRaggruppa = 'giorno';
+let _assFiltroOp = '';
+
+function _assGiornoLavorativo(iso, chiusure) {
+  const dow = new Date(iso + 'T12:00:00').getDay();
+  if (dow === 0) return false;
+  if (dow === 6 && !orarioConfig?.sabato_lavorativo) return false;
+  return !chiusure.some(c => iso >= c.data_inizio && iso <= c.data_fine);
+}
+function _assGiorni(dal, al) {
+  const out = [];
+  const d = new Date(dal + 'T12:00:00');
+  for (let k = 0; k < 400; k++) {
+    const iso = d.toISOString().slice(0, 10);
+    if (iso > al) break;
+    out.push(iso);
+    d.setDate(d.getDate() + 1);
   }
+  return out;
+}
+const _dm = iso => { const [, m, d] = String(iso).slice(0, 10).split('-'); return `${Number(d)}/${Number(m)}`; };
+function _rangeBreve(dal, al) {
+  if (dal === al) return _dm(dal);
+  if (dal.slice(0, 7) === al.slice(0, 7)) return `${Number(dal.slice(8, 10))}–${_dm(al)}`;
+  return `${_dm(dal)}–${_dm(al)}`;
+}
+const _oreTxt = n => String(Number(n)).replace('.', ',');
 
-  // Raggruppa per operatore filtrando le righe che non sono eccezioni reali
-  const perOperatore = {};
-  for (const r of data) {
-    const op = operatoriCache.find(o => o.id === r.operatore_id);
-    if (!op) continue;
-    if (!r.motivo) continue; // mostra solo righe con motivo esplicito (permessi/ferie documentati)
-    if (!perOperatore[r.operatore_id]) perOperatore[r.operatore_id] = { op, righe: [] };
-    perOperatore[r.operatore_id].righe.push(r);
+async function _caricaAssenze() {
+  const seq = ++_assSeq;
+  const oggi = _isoOggi(), fine = _isoSpost(27);
+  // Tutte le query sono limitate al periodo (tabelle che crescono), ordinate su colonna univoca, con conteggio.
+  const [ra, att, dg, ch, cfg] = await Promise.all([
+    sb.from('richieste_assenza').select('id, operatore_id, data_inizio, data_fine, ora_inizio, ora_fine, origine, tipo:tipi_richiesta(nome)', { count: 'exact' })
+      .eq('stato', 'approvata').gte('data_fine', oggi).lte('data_inizio', fine).order('data_inizio').order('id').range(0, 999),
+    sb.from('richieste_assenza').select('id, operatore_id', { count: 'exact' })
+      .eq('stato', 'in_attesa').order('id').range(0, 999),
+    sb.from('disponibilita_giornaliera').select('id, operatore_id, data, ore, motivo', { count: 'exact' })
+      .gte('data', oggi).lte('data', fine).order('data').order('id').range(0, 4999),
+    sb.from('chiusure_aziendali').select('id, data_inizio, data_fine, descrizione')
+      .gte('data_fine', oggi).lte('data_inizio', fine).order('data_inizio').order('id').limit(200),
+    sb.from('kpi_config').select('valore').eq('chiave', 'richieste_max_assenti_contemporanei').maybeSingle(),
+  ]);
+  const errore = ra.error || att.error || dg.error || ch.error;
+  if (errore) { if (seq === _assSeq) _assDati = { errore: errore.message }; return _assDati; }
+
+  const richieste = ra.data || [];
+  const ids = richieste.map(r => r.id);
+  const coperti = new Set();   // "operatore|data" già scritti da una richiesta approvata
+  let troncato = (ra.count ?? 0) > richieste.length || (att.count ?? 0) > (att.data || []).length || (dg.count ?? 0) > (dg.data || []).length;
+  const opDiRichiesta = Object.fromEntries(richieste.map(r => [r.id, r.operatore_id]));
+  for (let k = 0; k < ids.length; k += 100) {
+    const { data: rd, error: eRd } = await sb.from('richieste_disponibilita').select('richiesta_id, data')
+      .in('richiesta_id', ids.slice(k, k + 100)).gte('data', oggi).lte('data', fine)
+      .order('richiesta_id').order('data').range(0, 4999);
+    if (eRd) { if (seq === _assSeq) _assDati = { errore: eRd.message }; return _assDati; }
+    (rd || []).forEach(x => coperti.add(opDiRichiesta[x.richiesta_id] + '|' + x.data));
   }
+  if (seq !== _assSeq) return _assDati;   // nel frattempo è partito un caricamento più recente
 
-  const voci = Object.values(perOperatore);
-  if (!voci.length) {
-    el.innerHTML = '<div style="font-size:12px;color:var(--muted);font-style:italic;padding:4px 0 12px">Nessun permesso o ferie in programma</div>';
-    return;
-  }
-
-  const righeHtml = voci.flatMap(({ op, righe }) => {
-    const oreDefault = op.ore_default ?? 8;
-    const gruppi = raggruppaInIntervalli(righe);
-    return gruppi.map(g => {
-      const label = oreLabel(g.ore, oreDefault);
-      const range = g.inizio === g.fine ? formatDate(g.inizio) : `${formatDate(g.inizio)} → ${formatDate(g.fine)}`;
-      const motivoStr = g.motivo ? ` · ${escapeHtml(g.motivo)}` : '';
-      const nomeOp = escapeHtml(`${op.nome} ${op.cognome}`);
-      return `<div style="display:flex;align-items:center;gap:10px;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:12px"
-        onmouseenter="this.style.background='var(--surface)'" onmouseleave="this.style.background=''"
-        onclick="openModalModificaOperatore('${op.id}')" title="Apri scheda operatore">
-        <span style="font-weight:600;min-width:140px">${nomeOp}</span>
-        <span style="color:var(--muted);font-family:var(--font-mono);font-size:11px;min-width:130px">${range}</span>
-        <span style="flex:1;color:var(--muted)">${motivoStr ? motivoStr.slice(3) : '—'}</span>
-        <span style="font-size:11px;font-weight:600;color:${Number(g.ore)===0?'var(--alert)':'var(--warn-ink)'}">${label}</span>
-      </div>`;
+  const produzione = new Map(operatoriCache.filter(o => o.ruolo === 'operatore' && o.attivo).map(o => [o.id, o]));
+  const voci = [];
+  richieste.forEach(r => {
+    if (!produzione.has(r.operatore_id)) return;
+    voci.push({ fonte: 'richiesta', id: r.id, opId: r.operatore_id, dal: r.data_inizio, al: r.data_fine,
+      oraI: _oraHm(r.ora_inizio), oraF: _oraHm(r.ora_fine), tipo: r.tipo?.nome || '', origine: r.origine });
+  });
+  const perOp = {};
+  (dg.data || []).forEach(x => {
+    const op = produzione.get(x.operatore_id);
+    if (!op || !x.motivo || !String(x.motivo).trim()) return;
+    if (Number(x.ore) >= Number(op.ore_default ?? 8)) return;      // non è un'assenza (es. straordinario)
+    if (coperti.has(x.operatore_id + '|' + x.data)) return;          // già mostrato come richiesta
+    (perOp[x.operatore_id] = perOp[x.operatore_id] || []).push(x);
+  });
+  const chiusure = ch.data || [];
+  Object.entries(perOp).forEach(([opId, righe]) => {
+    // Unisce anche i periodi separati solo da giorni non lavorativi (es. venerdì + lunedì)
+    const gruppi = [];
+    raggruppaInIntervalli(righe).forEach(g => {
+      const prec = gruppi[gruppi.length - 1];
+      const inMezzo = prec ? _assGiorni(prec.fine, g.inizio).slice(1, -1) : [];
+      if (prec && String(prec.ore) === String(g.ore) && prec.motivo === g.motivo && inMezzo.length <= 7 && inMezzo.every(d => !_assGiornoLavorativo(d, chiusure))) prec.fine = g.fine;
+      else gruppi.push({ ...g });
     });
-  }).join('');
+    gruppi.forEach(g => voci.push({ fonte: 'mano', opId, dal: g.inizio, al: g.fine, ore: Number(g.ore), motivo: g.motivo }));
+  });
+  voci.sort((a, b) => a.dal.localeCompare(b.dal) || _nomeOp(a.opId).localeCompare(_nomeOp(b.opId)));
 
-  el.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:4px">
-    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Ferie e permessi in programma</div>
-    ${righeHtml}
-  </div>`;
+  const inAttesa = {};
+  (att.data || []).forEach(r => { inAttesa[r.operatore_id] = (inAttesa[r.operatore_id] || 0) + 1; });
+
+  _assDati = { oggi, fine, voci, inAttesa, chiusure: ch.data || [], troncato,
+    massimo: Number(cfg.data?.valore ?? 2) };
+  return _assDati;
+}
+
+function _nomeOp(id) { const o = operatoriCache.find(x => x.id === id); return o ? `${o.cognome} ${o.nome}` : ''; }
+function _nomeOpVisibile(id) { const o = operatoriCache.find(x => x.id === id); return o ? `${o.nome} ${o.cognome}` : ''; }
+const _vocePiena = v => v.fonte === 'richiesta' ? !v.oraI : v.ore === 0;
+
+async function aggiornaStatoAssenze() {
+  await _caricaAssenze();
+  const attiva = document.getElementById('sec-operatori')?.classList.contains('active');
+  if (!attiva) return;
+  if (_opsScheda === 'produzione') renderOperatori();
+  else if (_opsScheda === 'assenze') renderAssenze();
+}
+
+// Etichetta per la card: assenza che copre oggi, altrimenti la prossima entro 14 giorni.
+function _assStatoOperatore(opId) {
+  if (!_assDati || _assDati.errore) return {};
+  const { oggi } = _assDati;
+  const limite = _isoSpost(14);
+  const mie = _assDati.voci.filter(v => v.opId === opId);
+  let assenza = '';
+  const ora = mie.find(v => v.dal <= oggi && v.al >= oggi);
+  if (ora) {
+    if (ora.fonte === 'richiesta' && ora.oraI) assenza = `Permesso oggi ${ora.oraI}–${ora.oraF}`;
+    else if (ora.fonte === 'mano' && ora.ore > 0) assenza = `Permesso oggi (${_oreTxt(ora.ore)} h in servizio)`;
+    else assenza = 'Assente oggi';
+  } else {
+    const pross = mie.find(v => v.dal > oggi && v.dal <= limite);
+    if (pross) {
+      if (pross.fonte === 'richiesta' && pross.oraI) assenza = `Permesso ${_dm(pross.dal)} ${pross.oraI}–${pross.oraF}`;
+      else if (pross.fonte === 'mano' && pross.ore > 0) assenza = `Permesso ${_rangeBreve(pross.dal, pross.al)} (${_oreTxt(pross.ore)} h in servizio)`;
+      else assenza = `Assente ${_rangeBreve(pross.dal, pross.al)}`;
+    }
+  }
+  return { assenza, inAttesa: _assDati.inAttesa[opId] || 0 };
+}
+
+function assenzeRaggruppa(v) { _assRaggruppa = v === 'operatore' ? 'operatore' : 'giorno'; renderAssenze(); }
+function assenzeFiltroOperatore(id) { _assFiltroOp = id || ''; renderAssenze(); }
+
+function _voceAssenzaHtml(v, perGiorno, giorno) {
+  const etichetta = v.fonte === 'mano' ? 'Inserito a mano' : v.origine === 'responsabile' ? 'Segnalata' : 'Richiesta';
+  let dett;
+  if (v.fonte === 'richiesta') {
+    const quando = v.oraI ? `dalle ${v.oraI} alle ${v.oraF}${perGiorno ? '' : ' del ' + _dIt(v.dal)}`
+      : perGiorno ? (v.dal === v.al ? 'tutto il giorno' : giorno === v.al ? `ultimo giorno (dal ${_dIt(v.dal)})` : `fino al ${_dIt(v.al)}`)
+      : (v.dal === v.al ? _dIt(v.dal) : `dal ${_dIt(v.dal)} al ${_dIt(v.al)}`);
+    dett = [v.tipo, quando].filter(Boolean).join(' · ');
+  } else {
+    const periodo = perGiorno ? '' : (v.dal === v.al ? _dIt(v.dal) : `dal ${_dIt(v.dal)} al ${_dIt(v.al)}`);
+    dett = [v.motivo, periodo, v.ore === 0 ? 'assente' : `${_oreTxt(v.ore)} h in servizio`].filter(Boolean).join(' · ');
+  }
+  const azione = v.fonte === 'richiesta' ? `apriRichiestaStorico('${escapeJsAttr(v.id)}')` : `openModalModificaOperatore('${escapeJsAttr(v.opId)}')`;
+  const titolo = v.fonte === 'richiesta' ? 'Apri la richiesta nello storico' : 'Apri la scheda dell\'operatore';
+  return `<button type="button" class="ass-voce" title="${titolo}" onclick="${azione}">
+    <strong>${escapeHtml(_nomeOpVisibile(v.opId))}</strong>
+    <span class="ass-fonte${v.fonte === 'mano' ? ' mano' : ''}">${etichetta}</span>
+    <span class="ass-dett">${escapeHtml(dett)}</span>
+  </button>`;
+}
+
+function renderAssenze() {
+  const corpo = document.getElementById('ass-corpo');
+  const sotto = document.getElementById('ass-sotto');
+  const sel = document.getElementById('ass-f-operatore');
+  if (!corpo) return;
+  _selezionaTab(['giorno', 'operatore'], _assRaggruppa, x => 'ass-tab-' + x);
+  const produzione = operatoriCache.filter(o => o.ruolo === 'operatore' && o.attivo)
+    .sort((a, b) => `${a.cognome} ${a.nome}`.localeCompare(`${b.cognome} ${b.nome}`));
+  if (_assFiltroOp && !produzione.some(o => o.id === _assFiltroOp)) _assFiltroOp = '';
+  sel.innerHTML = '<option value="">Tutti gli operatori</option>' + produzione
+    .map(o => `<option value="${escapeHtml(o.id)}"${o.id === _assFiltroOp ? ' selected' : ''}>${escapeHtml(o.cognome)} ${escapeHtml(o.nome)}</option>`).join('');
+
+  if (!_assDati) { corpo.innerHTML = '<div style="color:var(--muted);padding:14px">Caricamento…</div>'; sotto.textContent = ''; return; }
+  if (_assDati.errore) { corpo.innerHTML = `<div class="ric-err" style="padding:14px">${escapeHtml(_assDati.errore)}</div>`; sotto.textContent = ''; return; }
+
+  const { oggi, fine, chiusure, massimo } = _assDati;
+  sotto.textContent = `Dal ${_dIt(oggi)} al ${_dIt(fine)} · massimo assenti nello stesso giorno: ${massimo}` +
+    (_assDati.troncato ? ' · Attenzione: elenco incompleto, troppi dati nel periodo' : '');
+  const voci = _assDati.voci.filter(v => !_assFiltroOp || v.opId === _assFiltroOp);
+  let html = '';
+
+  if (_assRaggruppa === 'giorno') {
+    _assGiorni(oggi, fine).forEach(g => {
+      const chiusura = chiusure.find(c => g >= c.data_inizio && g <= c.data_fine);
+      const lavorativo = _assGiornoLavorativo(g, chiusure);
+      // Solo giorni lavorativi (come richiesta_applica_disponibilita); un periodo a mano che cade
+      // interamente in giorni non lavorativi resta comunque visibile nei suoi giorni.
+      const delGiorno = voci.filter(v => v.dal <= g && v.al >= g && (lavorativo || (v.fonte === 'mano' && !_assGiorni(v.dal, v.al).some(d => _assGiornoLavorativo(d, chiusure)))));
+      if (!delGiorno.length && !chiusura) return;
+      // Assenti a giornata intera fra tutti gli operatori di produzione (indipendente dal filtro)
+      const assenti = lavorativo ? new Set(_assDati.voci.filter(v => v.dal <= g && v.al >= g && _vocePiena(v)).map(v => v.opId)).size : 0;
+      const oltre = assenti > massimo;
+      const data = new Date(g + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+      html += `<div class="ass-giorno${oltre ? ' oltre' : ''}">${escapeHtml(data)}${assenti ? `<span class="ass-conta">· ${assenti} assent${assenti === 1 ? 'e' : 'i'}${oltre ? ` (oltre il massimo di ${massimo})` : ''}</span>` : ''}</div>`;
+      if (chiusura) html += `<div class="ass-chiusura">Chiusura aziendale${chiusura.descrizione ? ' — ' + escapeHtml(chiusura.descrizione) : ''}</div>`;
+      html += delGiorno.map(v => _voceAssenzaHtml(v, true, g)).join('');
+    });
+  } else {
+    if (chiusure.length) {
+      html += '<div class="ass-giorno" style="text-transform:none">Chiusura aziendale</div>' + chiusure.map(c =>
+        `<div class="ass-chiusura">${escapeHtml(c.data_inizio === c.data_fine ? _dIt(c.data_inizio) : `dal ${_dIt(c.data_inizio)} al ${_dIt(c.data_fine)}`)}${c.descrizione ? ' — ' + escapeHtml(c.descrizione) : ''}</div>`).join('');
+    }
+    produzione.forEach(o => {
+      const sue = voci.filter(v => v.opId === o.id);
+      if (!sue.length) return;
+      html += `<div class="ass-giorno" style="text-transform:none">${escapeHtml(o.cognome)} ${escapeHtml(o.nome)}</div>` + sue.map(v => _voceAssenzaHtml(v, false)).join('');
+    });
+  }
+  corpo.innerHTML = html || `<div class="empty-state"><p>${_assFiltroOp ? 'Nessuna assenza per questo operatore' : 'Nessuna assenza'} nelle prossime 4 settimane</p></div>`;
+}
+
+// Dalla scheda Assenze allo Storico delle richieste, con la riga evidenziata.
+let _ricEvidenzia = null;
+function apriRichiestaStorico(id) {
+  const v = _assDati?.voci?.find(x => x.id === id);
+  const dal = _isoSpost(-90), al = _isoSpost(90);
+  _ricFiltri = { stato: '', operatore: v?.opId || '', dal: v && v.dal < dal ? v.dal : dal, al: v && v.dal > al ? v.dal : al };
+  _ricEvidenzia = id;
+  _ricVista = 'storico';
+  showSection('richieste');
 }
 
 // ═══════════════════════════════════════════════
@@ -6435,6 +6728,9 @@ async function salvaLimiteDb() {
 // ═══════════════════════════════════════════════
 // NOTIFICHE
 // ═══════════════════════════════════════════════
+const NOTIF_ATTR_RICHIESTA = ' role="button" tabindex="0" title="Apri le richieste" onclick="apriRichiesteInAttesa()" onkeydown="tastoAttiva(event, apriRichiesteInAttesa)"';
+function tastoAttiva(e, fn) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } }
+
 async function renderNotifiche() {
   await loadNotifiche();
   const el = document.getElementById('notif-list');
@@ -6442,8 +6738,9 @@ async function renderNotifiche() {
     el.innerHTML = '<div class="empty-state"><div class="icon"><i data-ic="campana"></i></div><p>Nessuna notifica</p></div>';
     return;
   }
+  // Le notifiche di nuova richiesta di permesso portano a Operatori → Richieste
   el.innerHTML = notificheCache.map(n => `
-    <div class="notif-item ${n.letta ? '' : 'unread'}">
+    <div class="notif-item ${n.letta ? '' : 'unread'}${n.tipo === 'richiesta_assenza' ? ' cliccabile' : ''}"${n.tipo === 'richiesta_assenza' ? NOTIF_ATTR_RICHIESTA : ''}>
       <div class="notif-dot ${n.letta ? 'read' : ''}"></div>
       <div class="notif-text">
         ${escapeHtml(n.testo)}
@@ -7314,7 +7611,7 @@ function _htmlTabFuori(righe) {
 
 function closeModal(id) {
   document.getElementById(id)?.classList.remove('open');
-  if (id === 'modal-operatore') { annullaModificaPermesso(); loadRiepilogoPermessi(); }
+  if (id === 'modal-operatore') { annullaModificaPermesso(); aggiornaStatoAssenze(); }
 }
 
 function escapeHtml(str) {
@@ -8906,21 +9203,23 @@ let _ricOccupato = false;
 
 async function aggiornaBadgeRichieste() {
   const { count, error } = await sb.from('richieste_assenza').select('id', { count: 'exact', head: true }).eq('stato', 'in_attesa');
-  const b = document.getElementById('richieste-badge');
-  if (!b || error) return;
-  b.textContent = String(count || 0);
-  b.hidden = !count;
+  if (error) return;
+  // Contatore sulla voce di menu Operatori e sulla scheda Richieste (nascosti se 0)
+  ['richieste-badge', 'ops-tab-ric-conta'].forEach(id => {
+    const b = document.getElementById(id);
+    if (!b) return;
+    b.textContent = String(count || 0);
+    b.hidden = !count;
+  });
 }
 
 function richiesteVista(v) {
+  if (v === 'assenze') { showSection('assenze'); return; }   // ex vista "Assenze squadra": ora scheda Assenze
+  if (v !== 'attesa' && v !== 'storico') v = 'attesa';
   _ricVista = v;
-  ['attesa', 'storico', 'assenze'].forEach(x => {
-    document.getElementById('ric-vista-' + x).hidden = x !== v;
-    document.getElementById('ric-tab-' + x).setAttribute('aria-selected', x === v ? 'true' : 'false');
-  });
+  _selezionaTab(['attesa', 'storico'], v, x => 'ric-tab-' + x, x => 'ric-vista-' + x);
   if (v === 'attesa') loadRichiesteAttesa();
-  else if (v === 'storico') { _initFiltriStorico(); loadRichiesteStorico(); }
-  else loadAssenzeSquadraResp();
+  else { _initFiltriStorico(); loadRichiesteStorico(); }
 }
 
 async function loadRichiesteAttesa() {
@@ -8989,6 +9288,7 @@ async function decidiRichiesta(id, azione) {
   delete _ricNote[id];
   toast(azione === 'approva' ? `Richiesta approvata: disponibilità aggiornata (${data.giorni_aggiornati} giorn${data.giorni_aggiornati === 1 ? 'o' : 'i'})` : 'Richiesta rifiutata', 'ok');
   await loadRichiesteAttesa();
+  aggiornaStatoAssenze();
 }
 
 function _initFiltriStorico() {
@@ -9019,7 +9319,7 @@ async function loadRichiesteStorico() {
   if (!_ricStorico.length) { el.innerHTML = '<div class="empty-state"><p>Nessuna richiesta nel periodo</p></div>'; return; }
   el.innerHTML = (count > _ricStorico.length ? `<div class="ric-err" style="padding:10px 14px">Mostrate ${_ricStorico.length} richieste su ${count}: restringi il periodo.</div>` : '') + `
     <table><thead><tr><th>Operatore</th><th>Tipo</th><th>Periodo</th><th>Stato</th><th>Deciso da</th><th>Note</th><th></th></tr></thead><tbody>
-    ${_ricStorico.map(r => `<tr>
+    ${_ricStorico.map(r => `<tr id="ric-st-${escapeHtml(r.id)}"${r.id === _ricEvidenzia ? ' class="ric-evidenza"' : ''}>
       <td>${escapeHtml(r.operatore?.nome)} ${escapeHtml(r.operatore?.cognome)}</td>
       <td>${r.origine === 'responsabile' ? 'Assenza segnalata' : escapeHtml(r.tipo?.nome)}</td>
       <td style="white-space:nowrap">${escapeHtml(_periodoRic(r))}</td>
@@ -9028,6 +9328,7 @@ async function loadRichiesteStorico() {
       <td style="font-size:12px;max-width:260px;overflow-wrap:anywhere">${r.nota_operatore ? `<div>Op.: ${escapeHtml(r.nota_operatore)}</div>` : ''}${r.nota_responsabile ? `<div style="color:var(--muted)">Resp.: ${escapeHtml(r.nota_responsabile)}</div>` : ''}</td>
       <td>${r.stato === 'approvata' ? `<button class="btn btn-secondary" style="padding:5px 10px;font-size:12px;white-space:nowrap" onclick="annullaApprovazione('${escapeJsAttr(r.id)}')">Annulla approvazione</button>` : ''}</td>
     </tr>`).join('')}</tbody></table>`;
+  if (_ricEvidenzia) { document.getElementById('ric-st-' + _ricEvidenzia)?.scrollIntoView({ block: 'center' }); _ricEvidenzia = null; }
 }
 
 async function annullaApprovazione(id) {
@@ -9037,26 +9338,7 @@ async function annullaApprovazione(id) {
   if (error || !data?.ok) { toast(ricErrore(data?.errore || error?.message), 'err'); return; }
   toast(`Approvazione annullata: ${data.giorni_ripristinati} giorn${data.giorni_ripristinati === 1 ? 'o' : 'i'} ripristinat${data.giorni_ripristinati === 1 ? 'o' : 'i'}`, 'ok');
   await loadRichiesteStorico();
-}
-
-// Assenze della squadra: stessa RPC dell'operatore, solo nome e date/orari.
-async function loadAssenzeSquadraResp() {
-  const el = document.getElementById('ric-assenze-corpo');
-  el.innerHTML = '<div style="color:var(--muted);padding:14px">Caricamento…</div>';
-  const { data, error } = await sb.rpc('calendario_assenze_squadra', { p_utente_id: currentUserRow.id, p_session_token: null });
-  if (error || !data?.ok) { el.innerHTML = `<div class="ric-err" style="padding:14px">${escapeHtml(ricErrore(data?.errore || error?.message))}</div>`; return; }
-  const assenze = data.assenze || [];
-  if (!assenze.length) { el.innerHTML = '<div class="empty-state"><p>Nessuna assenza approvata nelle prossime 4 settimane</p></div>'; return; }
-  let html = '', ultimo = null;
-  assenze.forEach(a => {
-    if (a.data_inizio !== ultimo) {
-      ultimo = a.data_inizio;
-      html += `<div class="ass-giorno">${escapeHtml(new Date(a.data_inizio + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' }))}</div>`;
-    }
-    const quando = a.ora_inizio ? `assente dalle ${a.ora_inizio} alle ${a.ora_fine}` : a.data_fine === a.data_inizio ? 'assente' : `assente fino al ${_dIt(a.data_fine)}`;
-    html += `<div class="ass-riga">${escapeHtml(a.nome)} ${escapeHtml(a.cognome)} <span>— ${escapeHtml(quando)}</span></div>`;
-  });
-  el.innerHTML = html;
+  aggiornaStatoAssenze();
 }
 
 // ── Segnala assenza (assenza non richiesta: nessun motivo) ──
@@ -9102,7 +9384,8 @@ async function confermaSegnalaAssenza() {
   if (error || !data?.ok) { err.textContent = ricErrore(data?.errore || error?.message); return; }
   closeModal('modal-segnala-assenza');
   toast(`Assenza registrata: disponibilità aggiornata (${data.giorni_aggiornati} giorn${data.giorni_aggiornati === 1 ? 'o' : 'i'})`, 'ok');
-  if (_ricVista) richiesteVista(_ricVista);
+  if (_opsScheda === 'richieste') richiesteVista(_ricVista);
+  aggiornaStatoAssenze();
 }
 
 // ── Dati di un operatore (profilo) ──
@@ -9157,10 +9440,12 @@ async function apriTaglieSquadra() {
   document.getElementById('modal-taglie').classList.add('open');
   const { data, error } = await sb.rpc('taglie_squadra', { p_responsabile_id: currentUserRow.id, p_session_token: null });
   if (error || !data?.ok) { corpo.innerHTML = `<div class="ric-err" style="padding:20px">${escapeHtml(ricErrore(data?.errore || error?.message))}</div>`; return; }
-  _taglie = data;
+  // taglie_squadra restituisce anche i profili vista ufficio (sola_lettura): qui solo la produzione
+  const idProduzione = new Set(operatoriCache.filter(o => o.ruolo === 'operatore').map(o => o.id));
+  _taglie = { ...data, operatori: (data.operatori || []).filter(o => idProduzione.has(o.id)) };
   if (!data.campi.length) { corpo.innerHTML = '<div style="padding:20px;color:var(--muted)">Nessun campo attivo nel gruppo "Taglie" (Impostazioni → Campi del profilo).</div>'; return; }
   corpo.innerHTML = `<table class="tabella-taglie"><thead><tr><th>Operatore</th>${data.campi.map(c => `<th>${escapeHtml(c.etichetta)}</th>`).join('')}</tr></thead><tbody>
-    ${data.operatori.map(o => `<tr><td><strong>${escapeHtml(o.cognome)} ${escapeHtml(o.nome)}</strong></td>${data.campi.map(c => `<td>${escapeHtml(o.valori[c.id] || '—')}</td>`).join('')}</tr>`).join('')}
+    ${_taglie.operatori.map(o => `<tr><td><strong>${escapeHtml(o.cognome)} ${escapeHtml(o.nome)}</strong></td>${data.campi.map(c => `<td>${escapeHtml(o.valori[c.id] || '—')}</td>`).join('')}</tr>`).join('')}
     </tbody></table>`;
 }
 function _csvCella(v) {
