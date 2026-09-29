@@ -426,6 +426,10 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
    ordini a card, modali a tutto schermo, tocchi ≥ 44 px, campi a 16 px (niente zoom iOS).
    ══════════════════════════════════════════════════════════════════════════ */
 .barra-mobile, .altro-sfondo, .nav-mobile-fondo, .solo-mobile { display: none; }
+/* Richieste di permesso in attesa (in cima alla Panoramica) */
+.avviso-richieste { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--alert-soft); color: var(--alert-ink); border: 1px solid var(--alert-line); border-radius: var(--radius-card); padding: 12px 16px; margin-bottom: 12px; font-size: 14px; font-weight: 600; }
+.avviso-richieste[hidden] { display: none; }
+.avviso-richieste-testo { flex: 1 1 200px; }
 /* Avviso notifiche push del responsabile */
 .avviso-notifiche { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--info-soft); color: var(--info-ink); border: 1px solid var(--info-line); border-radius: var(--radius-card); padding: 12px 16px; margin-bottom: 18px; font-size: 13px; line-height: 1.45; }
 .avviso-notifiche[hidden] { display: none; }
@@ -697,6 +701,10 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
     <main>
       <!-- DASHBOARD -->
       <section class="section active" id="sec-dashboard">
+        <div class="avviso-richieste" id="avviso-richieste-dash" role="status" hidden>
+          <span class="avviso-richieste-testo" id="avviso-richieste-testo"></span>
+          <button type="button" class="btn btn-danger" onclick="apriRichiesteInAttesa()">Vedi</button>
+        </div>
         <div class="avviso-notifiche" id="avviso-notifiche-dash" role="status" hidden></div>
         <div class="page-hdr">
           <div>
@@ -2316,6 +2324,7 @@ async function init() {
       currentUser = session.user;
       await postLogin();
     } else if (event === 'SIGNED_OUT') {
+      fermaContatoriRichieste();
       // Il dispositivo non riceve più le push del responsabile uscito (alias external_id)
       _pushAliasResp = null;
       if (window.OneSignalDeferred) window.OneSignalDeferred.push(async function(OneSignal) { try { await OneSignal.logout(); } catch (e) { console.warn('OneSignal logout:', e); } });
@@ -2396,7 +2405,7 @@ async function postLogin() {
   setupRealtime();
   scheduleEndOfShiftRefresh();
   initOneSignalResp();
-  if (currentUserRow?.ruolo === 'responsabile') aggiornaBadgeRichieste();
+  if (currentUserRow?.ruolo === 'responsabile') { aggiornaBadgeRichieste(); avviaContatoriRichieste(); }
   // Render in base al ruolo
   if (currentUserRow?.ruolo === 'sola_lettura') {
     // Nascondi nav e funzioni non pertinenti all'ufficio
@@ -2670,9 +2679,10 @@ function setupRealtime() {
       await loadNotifiche();
       renderNotifiche();
       aggiornaBadgeRichieste();   // una nuova richiesta arriva sempre con una notifica al responsabile
+      _contatoreUltimo = Date.now();
       if (document.getElementById('sec-operatori')?.classList.contains('active')) aggiornaStatoAssenze();
     })
-    .subscribe();
+    .subscribe(_statoRealtime);
 }
 
 // ═══════════════════════════════════════════════
@@ -9598,6 +9608,62 @@ async function aggiornaBadgeRichieste() {
     b.textContent = String(count || 0);
     b.hidden = !count;
   });
+  // Riquadro in cima alla Panoramica (nascosto se 0)
+  const box = document.getElementById('avviso-richieste-dash');
+  if (box) {
+    box.hidden = !count;
+    document.getElementById('avviso-richieste-testo').textContent =
+      count === 1 ? '1 richiesta di permesso in attesa' : `${count || 0} richieste di permesso in attesa`;
+  }
+  _numeroSullIcona(count || 0);
+}
+
+// Numero sull'icona dell'app installata (Badging API); dove non c'è o manca il permesso, niente.
+function _numeroSullIcona(n) {
+  try {
+    if (n > 0 && typeof navigator.setAppBadge === 'function') Promise.resolve(navigator.setAppBadge(n)).catch(() => {});
+    else if (n === 0 && typeof navigator.clearAppBadge === 'function') Promise.resolve(navigator.clearAppBadge()).catch(() => {});
+  } catch (e) { /* non supportato */ }
+}
+
+// ── Contatore sempre aggiornato (il canale principale per le richieste; le push sono un aiuto in più) ──
+// Oltre al realtime: al ritorno in primo piano, ogni 2 minuti a pagina visibile, alla riconnessione
+// del canale realtime. Al massimo un aggiornamento ogni 10 secondi.
+const _CONTATORE_OGNI_MS = 120000;
+const _CONTATORE_MINIMO_MS = 10000;
+let _contatoreUltimo = 0;
+let _contatoreTimer = null;
+function _aggiornaContatori() {
+  if (currentUserRow?.ruolo !== 'responsabile' || !currentUser) return;
+  const ora = Date.now();
+  if (ora - _contatoreUltimo < _CONTATORE_MINIMO_MS) return;
+  _contatoreUltimo = ora;
+  aggiornaBadgeRichieste();
+  loadNotifiche().then(() => {
+    if (document.getElementById('sec-notifiche')?.classList.contains('active')) renderNotifiche();
+  }).catch(() => {});
+}
+function _avviaTimerContatori() {
+  _fermaTimerContatori();
+  if (document.visibilityState !== 'visible') return;
+  _contatoreTimer = setInterval(_aggiornaContatori, _CONTATORE_OGNI_MS);
+}
+function _fermaTimerContatori() { if (_contatoreTimer) { clearInterval(_contatoreTimer); _contatoreTimer = null; } }
+function avviaContatoriRichieste() {
+  _contatoreUltimo = Date.now();   // l'accesso ha appena caricato tutto
+  _avviaTimerContatori();
+}
+function fermaContatoriRichieste() { _fermaTimerContatori(); _numeroSullIcona(0); }
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') { _aggiornaContatori(); if (currentUser) _avviaTimerContatori(); }
+  else _fermaTimerContatori();
+});
+window.addEventListener('pageshow', e => { if (e.persisted) { _aggiornaContatori(); if (currentUser) _avviaTimerContatori(); } });
+// Canale realtime: dopo un'interruzione, alla nuova sottoscrizione riallinea i contatori
+let _realtimeInterrotto = false;
+function _statoRealtime(stato) {
+  if (stato === 'CHANNEL_ERROR' || stato === 'TIMED_OUT' || stato === 'CLOSED') _realtimeInterrotto = true;
+  else if (stato === 'SUBSCRIBED' && _realtimeInterrotto) { _realtimeInterrotto = false; _aggiornaContatori(); }
 }
 
 function richiesteVista(v) {
