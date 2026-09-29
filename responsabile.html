@@ -2388,7 +2388,9 @@ async function postLogin() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-screen').style.display = 'block';
   // Fetch user row
-  const { data } = await sb.from('users').select('id, nome, cognome, email, ruolo, attivo, eliminato, forzato_logout, onesignal_id, creato_il').eq('email', currentUser.email).single();
+  // Solo le colonne che authenticated può leggere su users (privilegi per colonna, 20260929_users_privilegi_colonna):
+  // mai forzato_logout, onesignal_id, creato_il né i campi di sicurezza, che la pagina non usa.
+  const { data } = await sb.from('users').select('id, nome, cognome, email, ruolo, attivo, eliminato').eq('email', currentUser.email).single();
   currentUserRow = data;
   document.getElementById('user-label').textContent = data ? `${data.nome} ${data.cognome}` : currentUser.email;
   const um = document.getElementById('nav-mobile-utente');
