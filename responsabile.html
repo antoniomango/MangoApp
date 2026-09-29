@@ -7889,9 +7889,12 @@ function _statoNotifiche() {
   if (_attivazioneInCorso) return 'in-corso';
   const p = Notification.permission;
   if (p === 'denied') return 'negato';
+  // Avvio fallito o non completato entro _ATTESA_AVVIO_MS: mai "verifica in corso" senza fine
+  if (_erroreOneSignal && !_oneSignalResp) return 'errore';
   if (p === 'granted') {
     const ps = _oneSignalResp?.User?.PushSubscription;
     if (!_oneSignalResp) return 'caricamento';
+    if (_iscrizioneInCorso) return 'in-corso';
     return ps && ps.optedIn && ps.id ? 'attive' : 'da-attivare';
   }
   return 'da-attivare';
@@ -7902,6 +7905,7 @@ const _TESTI_NOTIFICHE = {
   'da-attivare': 'Notifiche non attive su questo dispositivo: attivale per ricevere subito le richieste di permesso e gli avvisi.',
   'in-corso': 'Attivazione delle notifiche in corso…',
   'caricamento': 'Verifica delle notifiche in corso…',
+  'errore': 'Notifiche non disponibili su questo dispositivo in questo momento.',
   'ios-safari': 'Per ricevere le notifiche apri Mango Resp dalla schermata Home (le notifiche funzionano solo nell\'app installata).',
   'non-supportate': 'Questo browser non supporta le notifiche push.',
 };
@@ -7915,8 +7919,8 @@ function _testoNegato() {
 function _aggiornaAvvisoNotifiche() {
   const stato = currentUser && currentUserRow?.ruolo === 'responsabile' ? _statoNotifiche() : null;
   const testo = stato === 'negato' ? _testoNegato() : (_TESTI_NOTIFICHE[stato] || '');
-  const conPulsante = stato === 'da-attivare';
-  const daMostrare = stato === 'da-attivare' || stato === 'negato' || stato === 'ios-safari';
+  const conPulsante = stato === 'da-attivare' || stato === 'errore';
+  const daMostrare = stato === 'da-attivare' || stato === 'negato' || stato === 'ios-safari' || stato === 'errore';
   const riempi = (el, conNonOra) => {
     if (!el) return;
     el.replaceChildren();
@@ -7929,8 +7933,9 @@ function _aggiornaAvvisoNotifiche() {
       azioni.className = 'avviso-notifiche-azioni';
       if (conPulsante) {
         const b = document.createElement('button');
-        b.type = 'button'; b.className = 'btn btn-primary'; b.textContent = 'Attiva notifiche';
-        b.addEventListener('click', attivaNotificheResp);
+        b.type = 'button'; b.className = 'btn btn-primary';
+        b.textContent = stato === 'errore' ? 'Riprova' : 'Attiva notifiche';
+        b.addEventListener('click', stato === 'errore' ? riprovaNotificheResp : attivaNotificheResp);
         azioni.appendChild(b);
       }
       if (conNonOra) {
@@ -7988,6 +7993,16 @@ async function _salvaSottoscrizioneResp(OneSignal, secondi) {
   _aggiornaAvvisoNotifiche();
 }
 
+// Avvio che non si completa (libreria bloccata, rete, service worker rifiutato): dopo questo tempo
+// si mostra "Notifiche non disponibili" con "Riprova", mai "verifica in corso" senza fine.
+const _ATTESA_AVVIO_MS = 20000;
+let _erroreOneSignal = false;
+let _iscrizioneInCorso = false;
+
+// "Riprova": ricarica la pagina, cioè rilancia l'avvio di OneSignal da zero (una seconda
+// OneSignal.init sulla stessa pagina non è affidabile).
+function riprovaNotificheResp() { location.reload(); }
+
 async function initOneSignalResp() {
   window.OneSignalDeferred = window.OneSignalDeferred || [];
   if (_oneSignalAvviatoResp) {
@@ -7997,12 +8012,28 @@ async function initOneSignalResp() {
     return;
   }
   _oneSignalAvviatoResp = true;
+  _erroreOneSignal = false;
   _aggiornaAvvisoNotifiche();
+  // Anche se la libreria non arriva proprio (la coda non viene mai eseguita)
+  const timerAvvio = setTimeout(() => {
+    if (!_oneSignalResp) { _erroreOneSignal = true; console.warn('Notifiche: avvio non completato'); _aggiornaAvvisoNotifiche(); }
+  }, _ATTESA_AVVIO_MS);
   window.OneSignalDeferred.push(async function(OneSignal) {
     try {
-      await OneSignal.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/sw.js' });
-    } catch (e) { console.warn('OneSignal: avvio non riuscito'); _aggiornaAvvisoNotifiche(); return; }
+      // scope esplicito: il service worker è /MangoApp/sw.js (lo stesso della cache, con il codice push
+      // dalla v33) e non può controllare "/", lo scope predefinito di OneSignal: senza questo parametro
+      // il browser rifiutava la registrazione e l'avvio non si completava mai.
+      await OneSignal.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/sw.js', serviceWorkerParam: { scope: '/MangoApp/' } });
+    } catch (e) {
+      clearTimeout(timerAvvio);
+      _erroreOneSignal = true;
+      console.warn('Notifiche: avvio non riuscito');
+      _aggiornaAvvisoNotifiche();
+      return;
+    }
+    clearTimeout(timerAvvio);
     _oneSignalResp = OneSignal;
+    _erroreOneSignal = false;
     try {
       // La sottoscrizione arriva dopo il permesso, anche con secondi di ritardo
       OneSignal.User.PushSubscription.addEventListener('change', async (event) => {
@@ -8012,9 +8043,17 @@ async function initOneSignalResp() {
       });
       OneSignal.Notifications.addEventListener('permissionChange', () => _aggiornaAvvisoNotifiche());
       await _oneSignalLoginResp(OneSignal);
-      // Permesso già concesso (es. PC già abilitato): salva subito la sottoscrizione, senza chiedere nulla
-      if (Notification.permission === 'granted') await _salvaSottoscrizioneResp(OneSignal, 5);
-    } catch (e) { console.warn('OneSignal: iscrizione non completata'); }
+      // Permesso già concesso (es. PC già abilitato): niente richiesta; se la sottoscrizione non è
+      // attiva la si riattiva (optIn non richiede un gesto quando il permesso c'è già) e la si salva.
+      if (Notification.permission === 'granted') {
+        _iscrizioneInCorso = true;
+        _aggiornaAvvisoNotifiche();
+        try {
+          if (!OneSignal.User.PushSubscription.optedIn) await OneSignal.User.PushSubscription.optIn();
+        } catch (e) { console.warn('Notifiche: riattivazione non riuscita'); }
+        try { await _salvaSottoscrizioneResp(OneSignal, 10); } finally { _iscrizioneInCorso = false; }
+      }
+    } catch (e) { _iscrizioneInCorso = false; console.warn('Notifiche: iscrizione non completata'); }
     _aggiornaAvvisoNotifiche();
   });
 }
