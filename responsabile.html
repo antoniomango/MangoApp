@@ -426,6 +426,15 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
    ordini a card, modali a tutto schermo, tocchi ≥ 44 px, campi a 16 px (niente zoom iOS).
    ══════════════════════════════════════════════════════════════════════════ */
 .barra-mobile, .altro-sfondo, .nav-mobile-fondo, .solo-mobile { display: none; }
+/* Avviso notifiche push del responsabile */
+.avviso-notifiche { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--info-soft); color: var(--info-ink); border: 1px solid var(--info-line); border-radius: var(--radius-card); padding: 12px 16px; margin-bottom: 18px; font-size: 13px; line-height: 1.45; }
+.avviso-notifiche[hidden] { display: none; }
+.avviso-notifiche-testo { flex: 1 1 260px; }
+.avviso-notifiche-azioni { display: flex; gap: 8px; flex-wrap: wrap; }
+.avviso-notifiche.compatto { margin: 0; padding: 10px 12px; font-size: 12px; }
+.avviso-notifiche.piatto { background: none; border: none; padding: 0; margin: 0; color: var(--ink-2); }
+.avviso-notifiche.piatto[data-stato="attive"] { color: var(--ok-ink); }
+.avviso-notifiche.piatto[data-stato="negato"], .avviso-notifiche.piatto[data-stato="non-supportate"] { color: var(--warn-ink); }
 
 @media (max-width: 1023.98px) {
   header { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); }
@@ -462,6 +471,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
     max-height: calc(100dvh - 140px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y: auto; -webkit-overflow-scrolling: touch;
     border-right: none; border-top: 1px solid var(--border); border-radius: 16px 16px 0 0; box-shadow: var(--shadow-xl); padding: 8px 0 12px; }
   body.altro-aperto #menu-laterale { display: flex; }
+  #menu-laterale > * { flex-shrink: 0; }   /* il pannello scorre: le voci non si schiacciano né si sovrappongono */
   body.altro-aperto .altro-sfondo { display: block; position: fixed; inset: 0; z-index: 150; background: var(--overlay); }
   .nav-item { min-height: 44px; }
   .nav-impostazioni-items.open { max-height: none; }
@@ -550,6 +560,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
   .notif-text { min-width: 0; overflow-wrap: anywhere; }
 }
 </style>
+<script>window.OneSignalDeferred = window.OneSignalDeferred || [];   // prima della libreria: le chiamate si accodano finché non è pronta</script>
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 </head>
 <body>
@@ -678,6 +689,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       </div><!-- /nav-impostazioni-items -->
       <div class="nav-mobile-fondo">
         <span class="nav-mobile-utente" id="nav-mobile-utente"></span>
+        <div class="avviso-notifiche compatto" id="avviso-notifiche-altro" role="status" hidden></div>
         <button type="button" class="btn btn-secondary btn-full" onclick="doLogout()"><i data-ic="esci"></i> Esci</button>
       </div>
     </nav>
@@ -685,6 +697,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
     <main>
       <!-- DASHBOARD -->
       <section class="section active" id="sec-dashboard">
+        <div class="avviso-notifiche" id="avviso-notifiche-dash" role="status" hidden></div>
         <div class="page-hdr">
           <div>
             <h1>Dashboard</h1>
@@ -1610,6 +1623,10 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
             <div class="sub">Scegli chi riceve ogni tipo di notifica automatica</div>
           </div>
         </div>
+        <div class="card" style="padding:16px 20px">
+          <h3 style="font-size:14px;font-weight:600;margin-bottom:8px">Notifiche su questo dispositivo</h3>
+          <div class="avviso-notifiche piatto" id="stato-notifiche-dispositivo" role="status" hidden></div>
+        </div>
         <div id="notif-config-body">Caricamento…</div>
       </section>
 
@@ -2303,6 +2320,7 @@ async function init() {
       _pushAliasResp = null;
       if (window.OneSignalDeferred) window.OneSignalDeferred.push(async function(OneSignal) { try { await OneSignal.logout(); } catch (e) { console.warn('OneSignal logout:', e); } });
       currentUser = null;
+      _aggiornaAvvisoNotifiche();
       document.getElementById('login-screen').style.display = 'flex';
       document.getElementById('app-screen').style.display = 'none';
     }
@@ -7823,9 +7841,12 @@ function escapeJsAttr(str) {
 const ONESIGNAL_APP_ID = 'f1b7b981-355e-46c2-a476-224e3d06d82b';
 // REST key gestita da Supabase Edge Function (non nel codice client)
 
+let _ultimaSottoscrizioneSalvata = null;   // evita di salvare due volte la stessa (listener + attesa)
 async function _salvaOnesignalIdResp(subId) {
+  if (!subId || subId === _ultimaSottoscrizioneSalvata) return;
+  _ultimaSottoscrizioneSalvata = subId;
   const { data, error } = await sb.rpc('salva_onesignal_id', { p_user_id: currentUserRow.id, p_onesignal_id: subId, p_session_token: null });
-  if (error || !data?.ok) console.warn('salva_onesignal_id fallita:', error?.message || data?.errore);
+  if (error || !data?.ok) { _ultimaSottoscrizioneSalvata = null; console.warn('Notifiche: salvataggio della sottoscrizione non riuscito'); }
 }
 
 // Alias push SEGRETO del responsabile (mai users.id): mio_push_alias restituisce solo il proprio
@@ -7844,39 +7865,157 @@ async function _oneSignalLoginResp(OneSignal) {
   if (alias && currentUserRow) { try { await OneSignal.login(alias); } catch (e) { console.warn('OneSignal login non riuscito'); } }
 }
 
+// ── Notifiche push del responsabile ──
+// Fino a mango-v35 initOneSignalResp usciva subito ("if (!window.OneSignalDeferred) return"): la coda
+// non era mai creata prima del login, quindi il responsabile non si è mai iscritto (né da PC né da
+// iPhone). Ora la coda nasce in <head>, prima della libreria; all'accesso solo init + login con l'alias;
+// il permesso si chiede SOLO dal pulsante "Attiva notifiche" (iOS lo concede solo dentro un gesto).
 let _oneSignalAvviatoResp = false;
+let _oneSignalResp = null;          // libreria pronta (dopo init)
+let _attivazioneInCorso = false;
+let _avvisoNotificheNascosto = false;
+try { _avvisoNotificheNascosto = localStorage.getItem('mangoapp-avviso-notifiche') === 'nascosto'; } catch (e) { /* storage non disponibile */ }
+
+function _eIOS() { return /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); }
+function _appInstallata() {
+  try { return navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches; } catch (e) { return false; }
+}
+function _pushSupportate() { return 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window; }
+
+// Stato delle notifiche su QUESTO dispositivo
+function _statoNotifiche() {
+  if (_eIOS() && !_appInstallata()) return 'ios-safari';
+  if (!_pushSupportate()) return 'non-supportate';
+  if (_attivazioneInCorso) return 'in-corso';
+  const p = Notification.permission;
+  if (p === 'denied') return 'negato';
+  if (p === 'granted') {
+    const ps = _oneSignalResp?.User?.PushSubscription;
+    if (!_oneSignalResp) return 'caricamento';
+    return ps && ps.optedIn && ps.id ? 'attive' : 'da-attivare';
+  }
+  return 'da-attivare';
+}
+
+const _TESTI_NOTIFICHE = {
+  'attive': 'Notifiche attive su questo dispositivo.',
+  'da-attivare': 'Notifiche non attive su questo dispositivo: attivale per ricevere subito le richieste di permesso e gli avvisi.',
+  'in-corso': 'Attivazione delle notifiche in corso…',
+  'caricamento': 'Verifica delle notifiche in corso…',
+  'ios-safari': 'Per ricevere le notifiche apri Mango Resp dalla schermata Home (le notifiche funzionano solo nell\'app installata).',
+  'non-supportate': 'Questo browser non supporta le notifiche push.',
+};
+function _testoNegato() {
+  return _eIOS()
+    ? 'Notifiche bloccate. Per riattivarle: Impostazioni dell\'iPhone → Notifiche → Mango Resp → Consenti notifiche.'
+    : 'Notifiche bloccate nel browser. Per riattivarle: icona del lucchetto accanto all\'indirizzo → Notifiche → Consenti, poi ricarica la pagina.';
+}
+
+// Disegna i riquadri: Panoramica (se da fare), pannello "Altro" sul telefono, Impostazioni (sempre)
+function _aggiornaAvvisoNotifiche() {
+  const stato = currentUser && currentUserRow?.ruolo === 'responsabile' ? _statoNotifiche() : null;
+  const testo = stato === 'negato' ? _testoNegato() : (_TESTI_NOTIFICHE[stato] || '');
+  const conPulsante = stato === 'da-attivare';
+  const daMostrare = stato === 'da-attivare' || stato === 'negato' || stato === 'ios-safari';
+  const riempi = (el, conNonOra) => {
+    if (!el) return;
+    el.replaceChildren();
+    const p = document.createElement('span');
+    p.className = 'avviso-notifiche-testo';
+    p.textContent = testo;
+    el.appendChild(p);
+    if (conPulsante || conNonOra) {
+      const azioni = document.createElement('span');
+      azioni.className = 'avviso-notifiche-azioni';
+      if (conPulsante) {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'btn btn-primary'; b.textContent = 'Attiva notifiche';
+        b.addEventListener('click', attivaNotificheResp);
+        azioni.appendChild(b);
+      }
+      if (conNonOra) {
+        const n = document.createElement('button');
+        n.type = 'button'; n.className = 'btn btn-secondary'; n.textContent = 'Non ora';
+        n.addEventListener('click', () => { _avvisoNotificheNascosto = true; try { localStorage.setItem('mangoapp-avviso-notifiche', 'nascosto'); } catch (e) { /* ignora */ } _aggiornaAvvisoNotifiche(); });
+        azioni.appendChild(n);
+      }
+      el.appendChild(azioni);
+    }
+  };
+  const dash = document.getElementById('avviso-notifiche-dash');
+  if (dash) { dash.hidden = !stato || !daMostrare || _avvisoNotificheNascosto; if (!dash.hidden) riempi(dash, true); }
+  const altro = document.getElementById('avviso-notifiche-altro');
+  if (altro) { altro.hidden = !stato || !daMostrare; if (!altro.hidden) riempi(altro, false); }
+  const imp = document.getElementById('stato-notifiche-dispositivo');
+  if (imp) {
+    imp.hidden = !stato;
+    if (stato) { riempi(imp, false); imp.dataset.stato = stato; }
+  }
+}
+
+// Tocco su "Attiva notifiche": il permesso va chiesto SUBITO, nello stesso gesto (niente await prima).
+function attivaNotificheResp() {
+  if (_attivazioneInCorso) return;
+  if (!_pushSupportate()) { _aggiornaAvvisoNotifiche(); return; }
+  let richiesta;
+  try {
+    richiesta = _oneSignalResp?.Notifications?.requestPermission
+      ? _oneSignalResp.Notifications.requestPermission()
+      : Notification.requestPermission();        // libreria non ancora pronta: permesso nativo, OneSignal lo vedrà all'avvio
+  } catch (e) { richiesta = Promise.reject(e); }
+  _attivazioneInCorso = true;
+  _aggiornaAvvisoNotifiche();
+  Promise.resolve(richiesta).catch(() => null).then(async () => {
+    if (Notification.permission === 'granted' && _oneSignalResp) {
+      try { if (!_oneSignalResp.User.PushSubscription.optedIn) await _oneSignalResp.User.PushSubscription.optIn(); } catch (e) { /* riprova il listener */ }
+      await _salvaSottoscrizioneResp(_oneSignalResp, 15);
+    }
+  }).finally(() => {
+    _attivazioneInCorso = false;
+    if (Notification.permission === 'granted') toast(_statoNotifiche() === 'attive' ? 'Notifiche attivate su questo dispositivo' : 'Permesso concesso: attivazione in corso', 'ok');
+    _aggiornaAvvisoNotifiche();
+  });
+}
+
+// La sottoscrizione arriva con qualche secondo di ritardo: attende l'id e lo salva (mai in console)
+async function _salvaSottoscrizioneResp(OneSignal, secondi) {
+  let subId = OneSignal.User.PushSubscription.id;
+  for (let i = 0; i < secondi && !subId; i++) {
+    await new Promise(r => setTimeout(r, 1000));
+    subId = OneSignal.User.PushSubscription.id;
+  }
+  if (subId && OneSignal.User.PushSubscription.optedIn && currentUserRow) await _salvaOnesignalIdResp(subId);
+  _aggiornaAvvisoNotifiche();
+}
+
 async function initOneSignalResp() {
-  if (!window.OneSignalDeferred) return;
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
   if (_oneSignalAvviatoResp) {
     // postLogin può ripartire (SIGNED_IN al ritorno in primo piano): solo il login dell'alias
     window.OneSignalDeferred.push(_oneSignalLoginResp);
+    _aggiornaAvvisoNotifiche();
     return;
   }
   _oneSignalAvviatoResp = true;
-  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  _aggiornaAvvisoNotifiche();
   window.OneSignalDeferred.push(async function(OneSignal) {
     try {
       await OneSignal.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/sw.js' });
-      // Ascolta il cambio di sottoscrizione — l'id spesso non è ancora pronto subito dopo login()
+    } catch (e) { console.warn('OneSignal: avvio non riuscito'); _aggiornaAvvisoNotifiche(); return; }
+    _oneSignalResp = OneSignal;
+    try {
+      // La sottoscrizione arriva dopo il permesso, anche con secondi di ritardo
       OneSignal.User.PushSubscription.addEventListener('change', async (event) => {
         const subId = event.current?.id;
-        if (subId && currentUserRow) await _salvaOnesignalIdResp(subId);
+        if (subId && event.current?.optedIn !== false && currentUserRow) await _salvaOnesignalIdResp(subId);
+        _aggiornaAvvisoNotifiche();
       });
-      const permission = await OneSignal.Notifications.permission;
-      if (!permission) await OneSignal.Notifications.requestPermission();
+      OneSignal.Notifications.addEventListener('permissionChange', () => _aggiornaAvvisoNotifiche());
       await _oneSignalLoginResp(OneSignal);
-      // Fallback: se l'evento 'change' non è ancora arrivato, riprova per qualche secondo
-      let subId = OneSignal.User.PushSubscription.id;
-      for (let i = 0; i < 5 && !subId; i++) {
-        await new Promise(r => setTimeout(r, 1000));
-        subId = OneSignal.User.PushSubscription.id;
-      }
-      if (subId) {
-        await _salvaOnesignalIdResp(subId);
-      } else {
-        console.warn('OneSignal: subscription ID non disponibile dopo 5 tentativi — verrà comunque salvato dal listener quando arriva');
-      }
-    } catch(e) { console.warn('OneSignal init:', e); }
+      // Permesso già concesso (es. PC già abilitato): salva subito la sottoscrizione, senza chiedere nulla
+      if (Notification.permission === 'granted') await _salvaSottoscrizioneResp(OneSignal, 5);
+    } catch (e) { console.warn('OneSignal: iscrizione non completata'); }
+    _aggiornaAvvisoNotifiche();
   });
 }
 
