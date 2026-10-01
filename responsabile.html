@@ -485,6 +485,16 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
   body.altro-aperto .altro-sfondo { display: block; position: fixed; inset: 0; z-index: 150; background: var(--overlay); }
   .nav-item { min-height: 44px; }
   .nav-gruppo-testa { min-height: 44px; }
+  /* tabelle dei tempi di riferimento: una scheda per riga */
+  .tempi-tab, .tempi-tab tbody, .tempi-tab tr, .tempi-tab td { display: block; width: 100%; }
+  .tempi-tab thead { display: none; }
+  .tempi-tab tr { border: 1px solid var(--border) !important; border-radius: var(--radius-card); padding: 8px 12px; margin-bottom: 10px; background: var(--surface); }
+  .tempi-tab td { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 5px 0 !important; text-align: right; }
+  .tempi-tab td[data-label]::before { content: attr(data-label); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; flex: 0 0 34%; text-align: left; }
+  .tempi-tab td.cella-fase { display: block; text-align: left; font-size: 14px; }
+  .tempi-tab td.cella-fase::before { content: none; }
+  .tempi-tab td input[type="text"], .tempi-tab td input[type="number"], .tempi-tab td select { max-width: 60%; }
+  .tempi-tab td:last-child { justify-content: flex-end; }
   .nav-mobile-fondo { display: flex; flex-direction: column; gap: 8px; padding: 14px 20px 4px; border-top: 1px solid var(--border); margin-top: 8px; }
   .nav-mobile-utente { font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
 
@@ -1488,7 +1498,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <div class="page-hdr">
           <div>
             <h1>Attributi dell'ordine</h1>
-            <div class="sub">Dati aggiuntivi da compilare in ogni ordine: possono essere criteri delle fasi e moltiplicatori dei tempi di riferimento</div>
+            <div class="sub">Dati aggiuntivi da compilare in ogni ordine: possono essere criteri delle fasi</div>
           </div>
         </div>
         <div id="attributi-config-body">Caricamento…</div>
@@ -1570,12 +1580,9 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <div class="page-hdr">
           <div>
             <h1>Tempi di riferimento</h1>
-            <div class="sub">Tempo per 1 pezzo (lavoro + spostamento), minimo e massimo, per fase e tipo prodotto. Servono solo al confronto nei KPI: non cambiano pianificatore né stime. Il tempo delle fasi che sono la somma delle lavorazioni CNC si imposta nel Catalogo lavorazioni CNC.</div>
+            <div class="sub">Un tempo per fase, in minuti per 1 pezzo. Vale per tutti i prodotti a cui la fase si applica; prodotti e condizioni si impostano nella pagina Fasi. Le fasi nuove compaiono qui da sole.</div>
           </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <select id="tempi-rif-tipo" onchange="loadTempiRiferimento()" style="padding:7px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-ctl);background:var(--bg);color:var(--ink);font-size:13px"></select>
-            <button class="btn btn-primary" style="white-space:nowrap" onclick="aggiungiTempoRiferimento()">+ Aggiungi riga</button>
-          </div>
+          <div id="tempi-rif-riepilogo"></div>
         </div>
         <div id="tempi-rif-note"></div>
         <div class="card" style="padding:12px 16px"><div id="tempi-rif-body">Caricamento…</div></div>
@@ -6054,104 +6061,85 @@ function latiLavorazioniDettaglioHtml(ordine) {
 }
 
 // ═══════════════════════════════════════════════
-// TEMPI DI RIFERIMENTO per fase / tipo prodotto / lavorazione CNC
+// TEMPI DI RIFERIMENTO: un tempo (minimo/massimo) per fase, valido per tutti i prodotti a cui la fase si applica.
+// Prodotti e condizioni si decidono solo nella configurazione della fase (pagina Fasi). Elenco da elenco_tempi_per_fase.
 // Solo dati di confronto: NON usati da pianificatore, stime o altri calcoli.
 // ═══════════════════════════════════════════════
-let tempiRif = [];            // righe del tipo prodotto selezionato (+ bozze non salvate, id null)
-let tempiRifTipo = null;
-let tempiRifStorico = [];     // righe storiche (con lavorazione_cnc_id o di fasi il cui tempo viene dal catalogo): sola lettura
-const faseTempoDaCatalogo = id => !!fasi.find(f => f.id === id)?.tempo_da_lavorazioni_cnc;
+let tempiFasi = [];            // una riga per fase attiva a cui serve un tempo (+ bozze non salvate: campi _min/_max/_conf/_note)
+let tempiRifStorico = [];      // righe storiche (fasi con tempo da catalogo): sola lettura
+let tempiFasiCatalogo = [];    // fasi il cui tempo è la somma delle lavorazioni CNC
 
 async function loadTempiRiferimento() {
-  const sel = document.getElementById('tempi-rif-tipo');
-  if (sel && !sel.options.length) {
-    sel.innerHTML = tipiProdotto.map(t => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.label)}</option>`).join('');
-  }
-  if (!lavorazioniCnc.length) await loadLavorazioniCnc();
-  tempiRifTipo = sel?.value || tipiProdotto[0]?.id || null;
-  if (!tempiRifTipo) { tempiRif = []; tempiRifStorico = []; renderTempiRiferimento(); return; }
-  const { data, error } = await sb.from('tempi_riferimento')
-    .select('id, fase_id, tipo_prodotto, lavorazione_cnc_id, materiale, struttura, moltiplica_per_attributo, da_confermare, minuti_tipici, minuti_max, note, aggiornato_il')
-    .eq('tipo_prodotto', tempiRifTipo).order('fase_id').order('id');
-  if (error) { toast('Errore caricamento tempi: ' + error.message, 'err'); tempiRif = []; tempiRifStorico = []; }
-  else {
-    const tutte = (data || []).map(r => ({ ...r }));
-    tempiRifStorico = tutte.filter(r => r.lavorazione_cnc_id || faseTempoDaCatalogo(r.fase_id));
-    tempiRif = tutte.filter(r => !(r.lavorazione_cnc_id || faseTempoDaCatalogo(r.fase_id)));
-  }
-  const posFase = id => fasi.find(f => f.id === id)?.posizione ?? 9999;
-  tempiRif.sort((a, b) => posFase(a.fase_id) - posFase(b.fase_id));
-  tempiRifStorico.sort((a, b) => posFase(a.fase_id) - posFase(b.fase_id));
+  const { data, error } = await sb.rpc('elenco_tempi_per_fase', { p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Errore caricamento tempi: ' + (data?.errore || error?.message || ''), 'err'); return; }
+  tempiFasi = (data.fasi || []).map(f => ({ ...f, _min: f.tempo?.minuti_tipici ?? '', _max: f.tempo?.minuti_max ?? '', _conf: !!f.tempo?.da_confermare, _note: f.tempo?.note || '' }));
+  tempiFasiCatalogo = data.fasi_da_catalogo || [];
+  tempiRifStorico = data.storico || [];
   renderTempiRiferimento();
 }
 
-function tempiRifSet(i, campo, valore) {
-  const r = tempiRif[i]; if (!r) return;
-  if (campo === 'fase_id') r.fase_id = valore ? parseInt(valore, 10) : null;
-  else r[campo] = valore;
-}
+function tempiRifSet(i, campo, valore) { const r = tempiFasi[i]; if (r) r[campo] = valore; }
 
-// Note per le fasi a tempo da lavorazioni e riquadro storico (sola lettura, chiuso di default)
+const fmtMinuti = v => (v === null || v === undefined || v === '') ? '—' : Number(v).toLocaleString('it-IT', { maximumFractionDigits: 1 });
+
+// Note per le fasi a tempo da catalogo e riquadro Storico (sola lettura, chiuso di default)
 function renderTempiRifExtra() {
   const note = document.getElementById('tempi-rif-note');
-  if (note) note.innerHTML = fasiAttive().filter(f => f.tempo_da_lavorazioni_cnc).map(f =>
+  if (note) note.innerHTML = tempiFasiCatalogo.map(f =>
     `<div class="avviso-notifiche" style="margin-bottom:12px">Il tempo di <b>${escapeHtml(f.nome)}</b> è la somma delle lavorazioni scelte sull'ordine: si imposta nel <a href="#" onclick="showSection('lavorazioni-cnc-config'); return false" style="color:inherit;font-weight:600">Catalogo lavorazioni CNC</a>.</div>`).join('');
   const box = document.getElementById('tempi-rif-storico');
   if (!box) return;
   if (!tempiRifStorico.length) { box.innerHTML = ''; return; }
-  const optLabel = (chiave, v) => v ? Etichette.opzione(chiave, v) : '—';
-  const fm = v => (v === null || v === undefined) ? '—' : Number(v).toLocaleString('it-IT', { maximumFractionDigits: 1 });
   const td = 'padding:6px 8px';
   box.innerHTML = `<details class="card" style="padding:12px 16px;margin-top:12px"><summary style="cursor:pointer;font-size:13px;font-weight:600">Storico (ordini inseriti prima del catalogo lavorazioni) — ${tempiRifStorico.length} ${tempiRifStorico.length === 1 ? 'riga' : 'righe'}, sola lettura</summary>
     <div style="font-size:12px;color:var(--muted);margin:8px 0">Restano in uso per gli ordini precedenti al catalogo e non si modificano.</div>
-    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em">
-      <th style="padding:8px">Fase</th><th style="padding:8px">Lavorazione</th><th style="padding:8px">Materiale</th><th style="padding:8px">Struttura</th><th style="padding:8px">Minimo (min)</th><th style="padding:8px">Massimo (min)</th><th style="padding:8px">Note</th></tr></thead>
+    <div style="overflow-x:auto"><table class="tempi-tab" style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em">
+      <th style="padding:8px">Fase</th><th style="padding:8px">Prodotto</th><th style="padding:8px">Lavorazione</th><th style="padding:8px">Minimo (min)</th><th style="padding:8px">Massimo (min)</th><th style="padding:8px">Note</th></tr></thead>
       <tbody>${tempiRifStorico.map(r => `<tr style="border-top:1px solid var(--border)">
-        <td style="${td}">${escapeHtml(fasi.find(x => x.id === r.fase_id)?.nome || '—')}</td>
-        <td style="${td}">${r.lavorazione_cnc_id ? escapeHtml(lavorazioneCncNome(r.lavorazione_cnc_id) || '—') : '<span style="color:var(--muted)">—</span>'}</td>
-        <td style="${td}">${escapeHtml(optLabel('materiale', r.materiale))}</td><td style="${td}">${escapeHtml(optLabel('struttura', r.struttura))}</td>
-        <td style="${td};font-family:var(--font-mono)">${fm(r.minuti_tipici)}</td><td style="${td};font-family:var(--font-mono)">${fm(r.minuti_max)}</td>
-        <td style="${td}">${escapeHtml(r.note || '')}</td></tr>`).join('')}</tbody></table></div></details>`;
+        <td data-label="Fase" style="${td}">${escapeHtml(r.fase_nome || '—')}</td>
+        <td data-label="Prodotto" style="${td}">${escapeHtml(r.tipo_label || 'Tutti')}</td>
+        <td data-label="Lavorazione" style="${td}">${r.lavorazione_nome ? escapeHtml(r.lavorazione_nome) : '<span style="color:var(--muted)">—</span>'}</td>
+        <td data-label="Minimo (min)" style="${td};font-family:var(--font-mono)">${fmtMinuti(r.minuti_tipici)}</td><td data-label="Massimo (min)" style="${td};font-family:var(--font-mono)">${fmtMinuti(r.minuti_max)}</td>
+        <td data-label="Note" style="${td}">${escapeHtml(r.note || '')}</td></tr>`).join('')}</tbody></table></div></details>`;
 }
 
 function renderTempiRiferimento() {
   renderTempiRifExtra();
   const el = document.getElementById('tempi-rif-body');
   if (!el) return;
-  const optFasi = sel => '<option value="">— fase —</option>' + fasiAttive().filter(f => !f.tempo_da_lavorazioni_cnc).map(f =>
-    `<option value="${f.id}" ${f.id === sel ? 'selected' : ''}>${escapeHtml(f.nome)}</option>`).join('');
+  const daImpostare = tempiFasi.filter(f => !f.tempo).length;
+  const sum = document.getElementById('tempi-rif-riepilogo');
+  if (sum) sum.innerHTML = daImpostare
+    ? `<span style="display:inline-block;background:var(--warn-soft);color:var(--warn-ink);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">${daImpostare} ${daImpostare === 1 ? 'fase da impostare' : 'fasi da impostare'}</span>`
+    : `<span style="display:inline-block;background:var(--ok-soft);color:var(--ok-ink);border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600">Tutte le fasi hanno un tempo</span>`;
   const cella = 'padding:6px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-ctl);font-size:13px;background:var(--bg);color:var(--ink)';
-  el.innerHTML = `
+  const AMB = { anta: 'Anta intera', lato: '1 lato' };
+  el.innerHTML = tempiFasi.length ? `
     <div style="overflow-x:auto">
-    <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <table class="tempi-tab" style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em">
-        <th style="padding:8px">Fase</th><th style="padding:8px">Materiale</th><th style="padding:8px">Struttura</th>
-        <th style="padding:8px" title="Il tempo è per unità dell'attributo (es. per faccia) e viene moltiplicato per il valore dell'ordine">Per…</th><th style="padding:8px" title="Tempo non ancora validato con la squadra">Da confermare</th>
-        <th style="padding:8px">Minimo (min)</th><th style="padding:8px">Massimo (min)</th><th style="padding:8px">Note</th><th></th>
+        <th style="padding:8px">Fase</th><th style="padding:8px">Prodotti</th>
+        <th style="padding:8px" title="1 lato: il tempo vale per ogni lato su cui si fa la fase (entrambi i lati = ×2)">Vale per</th>
+        <th style="padding:8px">Minimo (min)</th><th style="padding:8px">Massimo (min)</th><th style="padding:8px" title="Tempo non ancora validato con la squadra">Da confermare</th><th style="padding:8px">Note</th><th></th>
       </tr></thead>
-      <tbody>${tempiRif.length ? tempiRif.map((r, i) => `
+      <tbody>${tempiFasi.map((r, i) => `
         <tr style="border-top:1px solid var(--border)">
-          <td style="padding:6px 8px"><select style="${cella};min-width:150px;max-width:220px" onchange="tempiRifSet(${i},'fase_id',this.value)">${optFasi(r.fase_id)}</select></td>
-          <td style="padding:6px 8px"><select style="${cella};min-width:110px" onchange="tempiRifSet(${i},'materiale',this.value)"><option value="">Tutti</option>${(attributiConfig.find(a => a.chiave === 'materiale')?.opzioni || []).filter(o => o.attivo !== false || o.valore === r.materiale).map(o => `<option value="${escapeHtml(o.valore)}" ${o.valore === r.materiale ? 'selected' : ''}>${escapeHtml(o.etichetta)}</option>`).join('')}</select></td>
-          <td style="padding:6px 8px"><select style="${cella};min-width:110px" onchange="tempiRifSet(${i},'struttura',this.value)"><option value="">Tutte</option>${(attributiConfig.find(a => a.chiave === 'struttura')?.opzioni || []).filter(o => o.attivo !== false || o.valore === r.struttura).map(o => `<option value="${escapeHtml(o.valore)}" ${o.valore === r.struttura ? 'selected' : ''}>${escapeHtml(o.etichetta)}</option>`).join('')}</select></td>
-          <td style="padding:6px 8px"><select style="${cella};min-width:110px" onchange="tempiRifSet(${i},'moltiplica_per_attributo',this.value)"><option value="">Per ordine</option>${attributiConfig.filter(a => a.tipo === 'numero' && !a.su_colonna).map(a => `<option value="${escapeHtml(a.chiave)}" ${a.chiave === r.moltiplica_per_attributo ? 'selected' : ''}>Per ${escapeHtml(a.etichetta.toLowerCase())}</option>`).join('')}</select></td>
-          <td style="padding:6px 8px;text-align:center"><input type="checkbox" ${r.da_confermare ? 'checked' : ''} onchange="tempiRifSet(${i},'da_confermare',this.checked)"></td>
-          <td style="padding:6px 8px"><input type="number" min="0.1" step="0.5" value="${escapeHtml(r.minuti_tipici ?? '')}" style="${cella};width:72px" onchange="tempiRifSet(${i},'minuti_tipici',this.value)"></td>
-          <td style="padding:6px 8px"><input type="number" min="0.1" step="0.5" value="${escapeHtml(r.minuti_max ?? '')}" style="${cella};width:72px" onchange="tempiRifSet(${i},'minuti_max',this.value)"></td>
-          <td style="padding:6px 8px"><input type="text" maxlength="200" value="${escapeHtml(r.note || '')}" style="${cella};width:100%;min-width:90px" onchange="tempiRifSet(${i},'note',this.value)"></td>
+          <td data-label="Fase" class="cella-fase" style="padding:6px 8px;font-weight:600">${escapeHtml(r.nome)}${r.tempo ? '' : ' <span style="font-size:11px;background:var(--warn-soft);color:var(--warn-ink);border-radius:5px;padding:1px 7px;font-weight:600;white-space:nowrap">Da impostare</span>'}</td>
+          <td data-label="Prodotti" style="padding:6px 8px">${r.tutti ? 'Tutti' : escapeHtml((r.prodotti || []).join(', ') || '—')}${r.altre_condizioni ? `<div style="font-size:11px;color:var(--muted)">solo ${escapeHtml(r.altre_condizioni)}</div>` : ''}</td>
+          <td data-label="Vale per" style="padding:6px 8px"><select style="${cella};min-width:110px" aria-label="Vale per" onchange="tempiAmbitoFase(${i}, this.value)">${Object.entries(AMB).map(([v, t]) => `<option value="${v}" ${r.ambito_tempo === v ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
+          <td data-label="Minimo (min)" style="padding:6px 8px"><input type="number" min="0.1" step="0.5" value="${escapeHtml(r._min)}" aria-label="Minimo" style="${cella};width:84px" oninput="tempiRifSet(${i},'_min',this.value)"></td>
+          <td data-label="Massimo (min)" style="padding:6px 8px"><input type="number" min="0.1" step="0.5" value="${escapeHtml(r._max)}" aria-label="Massimo" style="${cella};width:84px" oninput="tempiRifSet(${i},'_max',this.value)"></td>
+          <td data-label="Da confermare" style="padding:6px 8px;text-align:center"><input type="checkbox" ${r._conf ? 'checked' : ''} aria-label="Da confermare" onchange="tempiRifSet(${i},'_conf',this.checked)"></td>
+          <td data-label="Note" style="padding:6px 8px"><input type="text" maxlength="200" value="${escapeHtml(r._note)}" aria-label="Note" style="${cella};width:100%;min-width:90px" oninput="tempiRifSet(${i},'_note',this.value)"></td>
           <td style="padding:6px 8px;white-space:nowrap">
-            <button class="btn btn-secondary" style="padding:6px 10px;font-size:12px" onclick="salvaTempoRiferimento(${i})"><i data-ic="salva"></i> Salva</button>
-            <button class="btn btn-danger" style="padding:6px 10px;font-size:12px" onclick="eliminaTempoRiferimento(${i})" aria-label="Elimina"><i data-ic="cestino"></i></button>
+            <button class="btn btn-secondary" style="padding:6px 10px;font-size:12px" onclick="salvaTempoFase(${i})"><i data-ic="salva"></i> Salva</button>
+            ${r.tempo ? `<button class="btn btn-danger" style="padding:6px 10px;font-size:12px" onclick="eliminaTempoFase(${i})" aria-label="Elimina il tempo"><i data-ic="cestino"></i></button>` : ''}
           </td>
-        </tr>`).join('') : '<tr><td colspan="9" style="padding:16px;color:var(--muted)">Nessun tempo di riferimento per questo tipo prodotto</td></tr>'}
+        </tr>`).join('')}
       </tbody>
-    </table></div>`;
-}
-
-function aggiungiTempoRiferimento() {
-  if (!tempiRifTipo) { toast('Nessun tipo prodotto selezionato', 'err'); return; }
-  tempiRif.push({ id: null, fase_id: null, tipo_prodotto: tempiRifTipo, minuti_tipici: '', minuti_max: '', note: '' });
-  renderTempiRiferimento();
+    </table></div>
+    <div style="font-size:12px;color:var(--muted);margin-top:10px">1 lato: il tempo vale per ogni lato su cui si fa la fase (entrambi i lati = ×2). I prodotti e le altre condizioni si impostano nella pagina Fasi.</div>`
+    : '<div style="padding:16px;color:var(--muted)">Nessuna fase a cui serve un tempo di riferimento.</div>';
 }
 
 function _numeroValido(v) {
@@ -6160,35 +6148,40 @@ function _numeroValido(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-async function salvaTempoRiferimento(i) {
-  const r = tempiRif[i]; if (!r) return;
-  const tip = _numeroValido(r.minuti_tipici), max = _numeroValido(r.minuti_max);
-  if (!r.fase_id) { toast('Scegli la fase', 'err'); return; }
+async function salvaTempoFase(i) {
+  const r = tempiFasi[i]; if (!r) return;
+  const tip = _numeroValido(r._min), max = _numeroValido(r._max);
   if (tip === null || tip <= 0) { toast('Il tempo minimo deve essere un numero maggiore di 0', 'err'); return; }
   if (max === null || max <= 0) { toast('Il tempo massimo deve essere un numero maggiore di 0', 'err'); return; }
   if (max < tip) { toast('Il tempo massimo non può essere minore del minimo', 'err'); return; }
-  if (faseTempoDaCatalogo(r.fase_id)) { toast('Il tempo di questa fase è la somma delle lavorazioni: si imposta nel Catalogo lavorazioni CNC', 'err'); return; }
-  const payload = { fase_id: r.fase_id, tipo_prodotto: r.tipo_prodotto,
-    materiale: r.materiale || null, struttura: r.struttura || null, moltiplica_per_attributo: r.moltiplica_per_attributo || null, da_confermare: !!r.da_confermare,
-    minuti_tipici: tip, minuti_max: max, note: (r.note || '').trim() || null };
-  const { data, error } = await sb.rpc('salva_tempo_riferimento', { p_dati: { ...payload, id: r.id || null }, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  const dati = { fase_id: r.fase_id, minuti_tipici: tip, minuti_max: max, da_confermare: !!r._conf, note: (r._note || '').trim() || null };
+  if (r.tempo?.id) dati.id = r.tempo.id;
+  const { data, error } = await sb.rpc('salva_tempo_riferimento', { p_dati: dati, p_responsabile_id: currentUserRow.id, p_session_token: null });
   if (error || !data?.ok) {
-    const msg = data?.errore === 'riga_gia_esistente' ? 'Esiste già un tempo per questa fase con gli stessi criteri'
-      : data?.errore === 'minuti_non_validi' ? 'Valori non validi (minimo > 0, massimo ≥ minimo)' : (data?.messaggio || 'Errore: ' + (data?.errore || error?.message || ''));
-    toast(msg, 'err'); return;
+    toast(data?.errore === 'minuti_non_validi' ? 'Valori non validi (minimo > 0, massimo ≥ minimo)' : (data?.messaggio || 'Errore: ' + (data?.errore || error?.message || '')), 'err'); return;
   }
   await loadTempiRiferimento();
   toast('Tempo di riferimento salvato', 'ok');
 }
 
-async function eliminaTempoRiferimento(i) {
-  const r = tempiRif[i]; if (!r) return;
-  if (!r.id) { tempiRif.splice(i, 1); renderTempiRiferimento(); return; }
-  if (!confirm('Eliminare questo tempo di riferimento?')) return;
-  const { data, error } = await sb.rpc('elimina_tempo_riferimento', { p_id: r.id, p_responsabile_id: currentUserRow.id, p_session_token: null });
-  if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
+async function eliminaTempoFase(i) {
+  const r = tempiFasi[i]; if (!r?.tempo?.id) return;
+  if (!confirm(`Eliminare il tempo di riferimento di "${r.nome}"? La fase tornerà "da impostare".`)) return;
+  const { data, error } = await sb.rpc('elimina_tempo_riferimento', { p_id: r.tempo.id, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast(data?.messaggio || 'Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
   await loadTempiRiferimento();
   toast('Tempo di riferimento eliminato', 'ok');
+}
+
+// "Vale per" (anta intera / 1 lato) è una proprietà della fase: si salva con la stessa RPC della pagina Fasi (salva_configurazione_fasi)
+async function tempiAmbitoFase(i, valore) {
+  const r = tempiFasi[i]; if (!r || r.ambito_tempo === valore) return;
+  const { data, error } = await sb.rpc('salva_configurazione_fasi', {
+    p_modifiche: [{ id: r.fase_id, ambito_tempo: valore }], p_solo_anteprima: false, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Salvataggio NON riuscito: ' + (data?.errore || error?.message || ''), 'err'); renderTempiRiferimento(); return; }
+  r.ambito_tempo = valore;
+  await loadFasi();
+  toast(valore === 'lato' ? 'Il tempo ora vale per ogni lato' : 'Il tempo ora vale per l\'anta intera', 'ok');
 }
 
 // ── KPI: riferimento vs tempi registrati (RPC solo-responsabile, niente dati per operatore) ──
