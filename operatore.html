@@ -110,9 +110,6 @@ body { font-family: var(--font-sans); background: var(--bg); color: var(--ink); 
 .badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
 .badge-aperto { background: var(--ok-soft); color: var(--ok-ink); }
 .badge-sospeso { background: var(--warn-soft); color: var(--warn-ink); }
-.badge-normale { background: var(--fill); color: var(--ink-2); }
-.badge-urgente { background: var(--urgente-bg); color: var(--urgente-ink); }
-.badge-extra_urgente { background: var(--alert-soft); color: var(--alert-ink); }
 .badge-disponibile { background: var(--phase-bg); color: var(--muted); }
 .badge-in_corso { background: var(--info-soft); color: var(--info-ink); }
 .badge-in_attesa { background: var(--attesa-bg); color: var(--attesa-ink); }
@@ -531,7 +528,10 @@ textarea:focus { border-color: var(--accent); }
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<script src="js/config.deploy.js"></script>
 <script src="js/config.js"></script>
+<script src="js/etichette.js"></script>
+<script src="js/calendario.js"></script>
 <script>
 // ═══════════════════════════════════════════════
 // SUPABASE
@@ -560,8 +560,7 @@ let currentOrdineId = null;
 let currentFaseDetId = null; // ordine_fasi.id
 let _faseDetCorrente = null; // riga ordine_fasi renderizzata da renderFaseDetail() — usata da completaFase()
 let faseMediaMinutiMap = {};
-let orarioConfig = null;
-let chiusureAziendaliCache = [];
+let orarioConfig = null;   // solo per l'orario di fine turno (timer di aggiornamento); il calendario è in Calendario
 
 // ═══════════════════════════════════════════════
 // INDEXEDDB — OFFLINE QUEUE
@@ -934,9 +933,11 @@ async function showApp() {
   document.getElementById('home-date').textContent = oggi.toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long' });
 
   await loadFasi();
+  await loadEtichette();
+  await loadCalendario();
   await loadOrdini();
   await loadNotificheOp();
-  await Promise.all([loadFaseMediaMinuti(), loadOrarioConfigOp(), loadChiusureCache()]);
+  await Promise.all([loadFaseMediaMinuti(), loadOrarioConfigOp()]);
   avviaPollingAggiornamenti();
   scheduleEndOfShiftRefreshOp();
   updateQueueBadge();
@@ -985,6 +986,24 @@ async function doLogout() {
 // ═══════════════════════════════════════════════
 // DATA
 // ═══════════════════════════════════════════════
+// Etichette (tipi prodotto, attributi, priorità con colore/peso) da configurazione, con cache per l'uso offline
+// Calendario lavorativo (oggi nel fuso aziendale, giornata tipo, giorni lavorativi, costanti di stima) dal server, con cache per l'uso offline
+async function loadCalendario() {
+  if (isOnline && await Calendario.carica(sb, currentUser.id, sessionToken)) {
+    await cacheSet('calendario', Calendario.esporta());
+  } else {
+    Calendario.imposta(await cacheGet('calendario'));
+  }
+}
+
+async function loadEtichette() {
+  if (isOnline && await Etichette.carica(sb, currentUser.id, sessionToken)) {
+    await cacheSet('etichette', Etichette.esporta());
+  } else {
+    Etichette.imposta(await cacheGet('etichette'));
+  }
+}
+
 async function loadFasi() {
   if (isOnline) {
     const [{ data: fasiData }, { data: dipData }] = await Promise.all([
@@ -1005,12 +1024,11 @@ async function loadOrdini() {
   if (isOnline) {
     const { data: resp } = await sb.rpc('ordini_attivi', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
     const data = resp?.ok ? resp.dati : [];
-    const prioOrd = { 'extra_urgente': 0, 'urgente': 1, 'normale': 2 };
     ordiniCache = (data || []).sort((a, b) => {
       const as = a.stato === 'attesa_spedizione' ? 0 : 1;
       const bs = b.stato === 'attesa_spedizione' ? 0 : 1;
       if (as !== bs) return as - bs;
-      const pd = prioOrd[a.priorita] - prioOrd[b.priorita];
+      const pd = Etichette.confrontaPriorita(a.priorita, b.priorita);
       if (pd !== 0) return pd;
       if (a.scadenza && b.scadenza) return new Date(a.scadenza) - new Date(b.scadenza);
       if (a.scadenza) return -1;
@@ -1216,7 +1234,7 @@ async function renderHome() {
       const fase_id = parseInt(f.fase_id);
       const media = faseMediaMinutiMap[fase_id];
       if (!media) return;
-      const minuti = (f.stato === 'in_corso' ? media * 0.5 : media) * q;
+      const minuti = (f.stato === 'in_corso' ? media * Calendario.costante('fattore_fase_in_corso') : media) * q;
       if (!faseQueue[fase_id]) faseQueue[fase_id] = [];
       faseQueue[fase_id].push({ ordine_id: o.id, minuti, scad });
     });
@@ -1267,7 +1285,7 @@ async function renderHome() {
       maxMinuti = Math.max(maxMinuti, calcolaFinish(parseInt(f.fase_id)));
     });
 
-    const oggi = new Date().toISOString().split('T')[0];
+    const oggi = Calendario.oggiIso();
     const isInRitardo = !!(o.scadenza && oggi > o.scadenza);
     if (maxMinuti > 0) {
       const giorni = Math.ceil(maxMinuti / minutiGiorno);
@@ -1480,7 +1498,7 @@ function filtraOrdini() {
       <div class="row-main" style="width:100%">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div class="row-title">${escapeHtml(o.cliente)} — ${escapeHtml(o.codice || '')}</div>
-          <span class="badge badge-${o.priorita}" style="margin-left:8px">${prioLabel(o.priorita)}</span>
+          <span style="margin-left:8px">${Etichette.badgePriorita(o.priorita)}</span>
         </div>
         <div class="row-sub">${o.tipo === 'extra' ? 'Ordine Extra' : `${strutturaLabel(o.struttura)} · ${tipoProdLabel(o.tipo_prodotto)}`}</div>
         ${isAttesa ? '<div style="margin-top:3px;font-size:12px;font-weight:600;color:var(--ok)">✓ In attesa corriere</div>'
@@ -1515,14 +1533,15 @@ async function renderOrdineDetail(ordineId) {
   if (!ordine) { showScreen('home'); return; }
 
   document.getElementById('ord-det-title').textContent = `${ordine.cliente} — ${ordine.codice || ''}`;
-  const oggi = new Date().toISOString().split('T')[0];
+  const oggi = Calendario.oggiIso();
   const isLate = ordine.scadenza && ordine.scadenza < oggi;
   const fratelliGruppoDet = codiciFratelliGruppo(ordine);
   document.getElementById('ord-det-meta').innerHTML = `
     <div class="meta-item"><label>Struttura</label><span>${strutturaLabel(ordine.struttura)}</span></div>
     <div class="meta-item"><label>Tipo</label><span>${tipoProdLabel(ordine.tipo_prodotto)}</span></div>
-    <div class="meta-item"><label>Priorità</label><span class="badge badge-${ordine.priorita}">${prioLabel(ordine.priorita)}</span></div>
-    <div class="meta-item"><label>Stato</label><span class="badge badge-${ordine.stato}">${ordine.stato}</span></div>
+    ${ordine.tipo === 'extra' ? '' : `<div class="meta-item"><label>Materiale</label><span>${escapeHtml(materialeLabel(ordine.materiale))}</span></div>` + Etichette.attributiOrdine(ordine).map(a => `<div class="meta-item"><label>${escapeHtml(a.etichetta)}</label><span>${escapeHtml(a.valore)}</span></div>`).join('')}
+    <div class="meta-item"><label>Priorità</label>${Etichette.badgePriorita(ordine.priorita)}</div>
+    <div class="meta-item"><label>Stato</label><span class="badge badge-${ordine.stato}">${Etichette.statoOrdine(ordine.stato)}</span></div>
     <div class="meta-item"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}${ordine.scadenza ? ` · Settimana ${settimanaIsoDaData(ordine.scadenza)}` : ''}</span></div>
     <div class="meta-item" id="ord-stima-item"><label>Consegna stimata</label><span id="ord-stima-val" style="color:var(--muted)">—</span></div>
     ${fratelliGruppoDet.length ? `<div class="meta-item" style="grid-column:1/-1"><label><i data-ic="pacco"></i> Spedizione unica</label><span style="color:var(--accent);font-weight:600">Insieme a ${escapeHtml(fratelliGruppoDet.join(', '))}</span></div>` : ''}
@@ -1592,7 +1611,7 @@ async function renderOrdineDetail(ordineId) {
       ordFasi.forEach(f => {
         if (f.stato === 'completata' || f.stato === 'non_applicabile') return;
         const media = faseMediaMinutiMap[parseInt(f.fase_id)];
-        if (media) minRim += f.stato === 'in_corso' ? media * 0.5 : media;
+        if (media) minRim += f.stato === 'in_corso' ? media * Calendario.costante('fattore_fase_in_corso') : media;
       });
       if (minRim > 0) {
         const quantita = ordine.quantita || 1;
@@ -1601,7 +1620,7 @@ async function renderOrdineDetail(ordineId) {
         const stimaStr = dataStimata.toISOString().split('T')[0];
         const stimaFmt = dataStimata.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' });
         const isRischio = ordine.scadenza && stimaStr > ordine.scadenza;
-        const isInRitardo = ordine.scadenza && new Date().toISOString().split('T')[0] > ordine.scadenza;
+        const isInRitardo = ordine.scadenza && Calendario.oggiIso() > ordine.scadenza;
         stimaEl.textContent = stimaFmt + (isInRitardo ? ' ⚠️ IN RITARDO' : isRischio ? ' ⚠️ a rischio' : ' ✓');
         stimaEl.style.color = isInRitardo ? 'var(--alert-strong)' : isRischio ? 'var(--warn-ink-2)' : 'var(--ok-strong)';
         stimaEl.style.fontWeight = (isInRitardo || isRischio) ? '700' : '400';
@@ -2266,9 +2285,7 @@ async function uniscitiAFase(ordFaseId, ordineId) {
   renderHome();
 }
 
-// Fasi finali di imballo/pedana per cui ha senso "spedizione unica": id fase 16
-// (Imballaggio Pronto Consegna) e 21 (Preparazione pedana), entrambe tipo_gestione='standard'.
-const FASI_GRUPPO_SPEDIZIONE = [16, 21];
+// "Spedizione unica": la scelta compare solo per le fasi con la proprietà fasi.gruppo_spedizione (configurabile dal responsabile).
 
 // Dialog "solo questo ordine / tutti gli ordini del gruppo" — risolve a 'solo', 'tutti' o
 // null (annullato, non completare nulla).
@@ -2300,7 +2317,7 @@ async function completaFase(ordFaseId, ordineId) {
   // se completare solo questo ordine o tutti quelli della stessa spedizione. Solo online: la
   // scelta richiede di conoscere i fratelli del gruppo, già disponibili in ordiniCache.
   let modalitaGruppo = false;
-  if (isOnline && _faseDetCorrente?.id === ordFaseId && FASI_GRUPPO_SPEDIZIONE.includes(_faseDetCorrente.fase_id)) {
+  if (isOnline && _faseDetCorrente?.id === ordFaseId && faseGruppoSpedizione(_faseDetCorrente.fase_id)) {
     const ordine = ordiniCache.find(o => o.id === ordineId);
     if (ordine?.gruppo_spedizione_id) {
       const codiciFratelli = ordiniCache
@@ -2479,7 +2496,7 @@ async function riprendiTutteFasi() {
 // ═══════════════════════════════════════════════
 // ONESIGNAL
 // ═══════════════════════════════════════════════
-const ONESIGNAL_APP_ID = 'f1b7b981-355e-46c2-a476-224e3d06d82b';
+// L'ID app OneSignal non sta nel codice: arriva da config_sistema via config_pubblica (leggiConfigPubblica in js/config.js)
 // REST API Key: non condividere, non committare in repo pubblici
 // REST key gestita da Supabase Edge Function (non nel codice client)
 
@@ -2513,7 +2530,10 @@ function _oneSignalAvvia() {
   try {
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.OneSignalDeferred.push(async function(OS) {
-      await OS.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/OneSignalSDKWorker.js', serviceWorkerParam: { scope: '/MangoApp/' } });
+      const appId = (await leggiConfigPubblica(sb))?.onesignal_app_id;
+      if (!appId) return;   // push non configurate sul server: l'app funziona senza
+      const base = new URL('./', location.href).pathname;   // cartella dell'app (anche fuori da /MangoApp/)
+      await OS.init({ appId, notifyButton: { enable: false }, serviceWorkerPath: base + 'OneSignalSDKWorker.js', serviceWorkerParam: { scope: base } });
       // Ascolta quando arriva l'ID dalla subscription (può richiedere secondi)
       OS.User.PushSubscription.addEventListener('change', async (event) => {
         const subId = event.current?.id;
@@ -2940,17 +2960,21 @@ function renderNotaOrdineBox(ordine) {
     ${lunga ? `<button type="button" class="nota-ordine-toggle" onclick="(function(b){var el=document.getElementById('${id}');var esp=el.classList.toggle('espansa');b.textContent=esp?'Mostra meno':'Mostra tutto';})(this)">Mostra tutto</button>` : ''}
   </div>`;
 }
-function strutturaLabel(s) { return { 'quattro_lati': '4 Lati', 'barra_l': 'Barra ad L', 'complanare': 'Complanare' }[s] || (s || '—'); }
-function tipoProdLabel(t) { return { 'portoncino': 'Portoncino', 'battente': 'Battente' }[t] || (t || '—'); }
-function prioLabel(p) { return { 'normale': 'Normale', 'urgente': 'Urgente', 'extra_urgente': 'Extra Urgente' }[p] || p; }
-function statoFaseLabel(s) { return { 'disponibile': 'Disponibile', 'in_corso': 'In corso', 'in_attesa': 'In attesa', 'completata': 'Completata', 'non_applicabile': 'N/A' }[s] || s; }
+// Etichette e colori da configurazione / stati di sistema: tutte in js/etichette.js
+const strutturaLabel = (s) => Etichette.struttura(s);
+const materialeLabel = (m) => Etichette.materiale(m);
+const tipoProdLabel = (t) => Etichette.tipoProdotto(t);
+const prioLabel = (p) => Etichette.prioritaEtichetta(p);
+const statoFaseLabel = (s) => Etichette.statoFase(s);
 
 function getFaseNome(faseId) {
   const f = fasi.find(x => x.id === faseId);
   return f ? f.nome : `Fase ${faseId}`;
 }
-const isCNC = (id) => [3, 6, 14, 19].includes(id);
-const isEsterna = (id) => id === 9;
+// Proprietà di fase lette dalla configurazione (fasi.e_cnc, fasi.e_attesa_esterna, fasi.gruppo_spedizione)
+const isCNC = (id) => fasi.find(f => f.id === id)?.e_cnc === true;
+const isEsterna = (id) => fasi.find(f => f.id === id)?.e_attesa_esterna === true;
+const faseGruppoSpedizione = (id) => fasi.find(f => f.id === id)?.gruppo_spedizione === true;
 function scadenzaClass(scadenza) {
   if (!scadenza) return '';
   const oggi = new Date(); oggi.setHours(0,0,0,0);
@@ -2993,34 +3017,9 @@ async function loadOrarioConfigOp() {
   if (data) orarioConfig = data;
 }
 
-async function loadChiusureCache() {
-  if (!isOnline) return;
-  const { data } = await sb.from('chiusure_aziendali').select('data_inizio, data_fine');
-  chiusureAziendaliCache = data || [];
-}
-
-function getMinutiGiorno() {
-  if (!orarioConfig) return 480;
-  const [hi, mi] = (orarioConfig.ora_inizio || '08:00').split(':').map(Number);
-  const [hf, mf] = (orarioConfig.ora_fine   || '17:00').split(':').map(Number);
-  return (hf * 60 + mf) - (hi * 60 + mi);
-}
-
-function addGiorniLavorativi(dataInizio, giorni) {
-  const d = new Date(dataInizio);
-  if (giorni <= 0) return d;
-  let aggiunti = 0;
-  while (aggiunti < giorni) {
-    d.setDate(d.getDate() + 1);
-    const dow = d.getDay();
-    if (dow === 0) continue;
-    if (dow === 6 && !orarioConfig?.sabato_lavorativo) continue;
-    const iso = d.toISOString().split('T')[0];
-    if (chiusureAziendaliCache.some(c => iso >= c.data_inizio && iso <= c.data_fine)) continue;
-    aggiunti++;
-  }
-  return d;
-}
+// Calendario: nessuna regola nel client (vedi js/calendario.js)
+const getMinutiGiorno = () => Calendario.minutiGiorno();
+const addGiorniLavorativi = (da, giorni) => Calendario.aggiungiGiorniLavorativi(typeof da === 'string' ? da : Calendario.oggiIso(), giorni);
 
 async function loadFaseMediaMinuti() {
   if (!isOnline || !currentUser) return;
@@ -3183,7 +3182,7 @@ const PROF_ERRORI = {
   pin_nuovo_uguale: 'Il nuovo PIN è uguale a quello attuale',
 };
 const profErrore = codice => PROF_ERRORI[codice] || 'Operazione non riuscita';
-const STATI_RICHIESTA = { in_attesa: 'In attesa', approvata: 'Approvata', rifiutata: 'Non approvata', annullata: 'Annullata' };
+const STATI_RICHIESTA = Etichette.STATI_RICHIESTA;
 
 let _profVista = 'dati';
 let _profCampi = [];      // campi attivi con valore salvato
@@ -3451,7 +3450,6 @@ function renderAssenzeSquadraHtml(assenze) {
 // ── Cambia PIN (tastierino js/pin-pad.js, tre passaggi) ──
 let _cpPad = null, _cpPasso = 0, _cpAttuale = null, _cpNuovo = null;
 const CP_TITOLI = ['PIN attuale', 'Nuovo PIN', 'Conferma il nuovo PIN'];
-const PIN_SEQUENZE = ['0123','1234','2345','3456','4567','5678','6789','9876','8765','7654','6543','5432','4321','3210'];
 
 function _cpMsg(testo, ok) {
   const m = document.getElementById('cp-msg');
@@ -3493,7 +3491,6 @@ async function _cpInvia(pin) {
   _cpMsg('');
   if (_cpPasso === 0) { _cpAttuale = pin; _cpVaiA(1); return { ok: true, continua: true }; }
   if (_cpPasso === 1) {
-    if (/^(\d)\1{3}$/.test(pin) || PIN_SEQUENZE.includes(pin)) { _cpMsg(profErrore('pin_nuovo_troppo_semplice')); return { ok: false }; }
     if (pin === _cpAttuale) { _cpMsg(profErrore('pin_nuovo_uguale')); return { ok: false }; }
     _cpNuovo = pin; _cpVaiA(2); return { ok: true, continua: true };
   }
