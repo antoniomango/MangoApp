@@ -110,9 +110,6 @@ body { font-family: var(--font-sans); background: var(--bg); color: var(--ink); 
 .badge { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
 .badge-aperto { background: var(--ok-soft); color: var(--ok-ink); }
 .badge-sospeso { background: var(--warn-soft); color: var(--warn-ink); }
-.badge-normale { background: var(--fill); color: var(--ink-2); }
-.badge-urgente { background: var(--urgente-bg); color: var(--urgente-ink); }
-.badge-extra_urgente { background: var(--alert-soft); color: var(--alert-ink); }
 .badge-disponibile { background: var(--phase-bg); color: var(--muted); }
 .badge-in_corso { background: var(--info-soft); color: var(--info-ink); }
 .badge-in_attesa { background: var(--attesa-bg); color: var(--attesa-ink); }
@@ -532,6 +529,7 @@ textarea:focus { border-color: var(--accent); }
 <div class="toast" id="toast"></div>
 
 <script src="js/config.js"></script>
+<script src="js/etichette.js"></script>
 <script>
 // ═══════════════════════════════════════════════
 // SUPABASE
@@ -934,6 +932,7 @@ async function showApp() {
   document.getElementById('home-date').textContent = oggi.toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long' });
 
   await loadFasi();
+  await loadEtichette();
   await loadOrdini();
   await loadNotificheOp();
   await Promise.all([loadFaseMediaMinuti(), loadOrarioConfigOp(), loadChiusureCache()]);
@@ -985,6 +984,15 @@ async function doLogout() {
 // ═══════════════════════════════════════════════
 // DATA
 // ═══════════════════════════════════════════════
+// Etichette (tipi prodotto, attributi, priorità con colore/peso) da configurazione, con cache per l'uso offline
+async function loadEtichette() {
+  if (isOnline && await Etichette.carica(sb, currentUser.id, sessionToken)) {
+    await cacheSet('etichette', Etichette.esporta());
+  } else {
+    Etichette.imposta(await cacheGet('etichette'));
+  }
+}
+
 async function loadFasi() {
   if (isOnline) {
     const [{ data: fasiData }, { data: dipData }] = await Promise.all([
@@ -1005,12 +1013,11 @@ async function loadOrdini() {
   if (isOnline) {
     const { data: resp } = await sb.rpc('ordini_attivi', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
     const data = resp?.ok ? resp.dati : [];
-    const prioOrd = { 'extra_urgente': 0, 'urgente': 1, 'normale': 2 };
     ordiniCache = (data || []).sort((a, b) => {
       const as = a.stato === 'attesa_spedizione' ? 0 : 1;
       const bs = b.stato === 'attesa_spedizione' ? 0 : 1;
       if (as !== bs) return as - bs;
-      const pd = prioOrd[a.priorita] - prioOrd[b.priorita];
+      const pd = Etichette.confrontaPriorita(a.priorita, b.priorita);
       if (pd !== 0) return pd;
       if (a.scadenza && b.scadenza) return new Date(a.scadenza) - new Date(b.scadenza);
       if (a.scadenza) return -1;
@@ -1480,7 +1487,7 @@ function filtraOrdini() {
       <div class="row-main" style="width:100%">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div class="row-title">${escapeHtml(o.cliente)} — ${escapeHtml(o.codice || '')}</div>
-          <span class="badge badge-${o.priorita}" style="margin-left:8px">${prioLabel(o.priorita)}</span>
+          <span style="margin-left:8px">${Etichette.badgePriorita(o.priorita)}</span>
         </div>
         <div class="row-sub">${o.tipo === 'extra' ? 'Ordine Extra' : `${strutturaLabel(o.struttura)} · ${tipoProdLabel(o.tipo_prodotto)}`}</div>
         ${isAttesa ? '<div style="margin-top:3px;font-size:12px;font-weight:600;color:var(--ok)">✓ In attesa corriere</div>'
@@ -1521,8 +1528,8 @@ async function renderOrdineDetail(ordineId) {
   document.getElementById('ord-det-meta').innerHTML = `
     <div class="meta-item"><label>Struttura</label><span>${strutturaLabel(ordine.struttura)}</span></div>
     <div class="meta-item"><label>Tipo</label><span>${tipoProdLabel(ordine.tipo_prodotto)}</span></div>
-    <div class="meta-item"><label>Priorità</label><span class="badge badge-${ordine.priorita}">${prioLabel(ordine.priorita)}</span></div>
-    <div class="meta-item"><label>Stato</label><span class="badge badge-${ordine.stato}">${ordine.stato}</span></div>
+    <div class="meta-item"><label>Priorità</label>${Etichette.badgePriorita(ordine.priorita)}</div>
+    <div class="meta-item"><label>Stato</label><span class="badge badge-${ordine.stato}">${Etichette.statoOrdine(ordine.stato)}</span></div>
     <div class="meta-item"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}${ordine.scadenza ? ` · Settimana ${settimanaIsoDaData(ordine.scadenza)}` : ''}</span></div>
     <div class="meta-item" id="ord-stima-item"><label>Consegna stimata</label><span id="ord-stima-val" style="color:var(--muted)">—</span></div>
     ${fratelliGruppoDet.length ? `<div class="meta-item" style="grid-column:1/-1"><label><i data-ic="pacco"></i> Spedizione unica</label><span style="color:var(--accent);font-weight:600">Insieme a ${escapeHtml(fratelliGruppoDet.join(', '))}</span></div>` : ''}
@@ -2938,10 +2945,12 @@ function renderNotaOrdineBox(ordine) {
     ${lunga ? `<button type="button" class="nota-ordine-toggle" onclick="(function(b){var el=document.getElementById('${id}');var esp=el.classList.toggle('espansa');b.textContent=esp?'Mostra meno':'Mostra tutto';})(this)">Mostra tutto</button>` : ''}
   </div>`;
 }
-function strutturaLabel(s) { return { 'quattro_lati': '4 Lati', 'barra_l': 'Barra ad L', 'complanare': 'Complanare' }[s] || (s || '—'); }
-function tipoProdLabel(t) { return { 'portoncino': 'Portoncino', 'battente': 'Battente' }[t] || (t || '—'); }
-function prioLabel(p) { return { 'normale': 'Normale', 'urgente': 'Urgente', 'extra_urgente': 'Extra Urgente' }[p] || p; }
-function statoFaseLabel(s) { return { 'disponibile': 'Disponibile', 'in_corso': 'In corso', 'in_attesa': 'In attesa', 'completata': 'Completata', 'non_applicabile': 'N/A' }[s] || s; }
+// Etichette e colori da configurazione / stati di sistema: tutte in js/etichette.js
+const strutturaLabel = (s) => Etichette.struttura(s);
+const materialeLabel = (m) => Etichette.materiale(m);
+const tipoProdLabel = (t) => Etichette.tipoProdotto(t);
+const prioLabel = (p) => Etichette.prioritaEtichetta(p);
+const statoFaseLabel = (s) => Etichette.statoFase(s);
 
 function getFaseNome(faseId) {
   const f = fasi.find(x => x.id === faseId);
@@ -3183,7 +3192,7 @@ const PROF_ERRORI = {
   pin_nuovo_uguale: 'Il nuovo PIN è uguale a quello attuale',
 };
 const profErrore = codice => PROF_ERRORI[codice] || 'Operazione non riuscita';
-const STATI_RICHIESTA = { in_attesa: 'In attesa', approvata: 'Approvata', rifiutata: 'Non approvata', annullata: 'Annullata' };
+const STATI_RICHIESTA = Etichette.STATI_RICHIESTA;
 
 let _profVista = 'dati';
 let _profCampi = [];      // campi attivi con valore salvato

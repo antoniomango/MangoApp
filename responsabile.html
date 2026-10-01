@@ -158,9 +158,6 @@ tr:hover td { background: var(--phase-bg); }
 .badge-sospeso { background: var(--warn-soft); color: var(--warn-ink); }
 .badge-spedito { background: var(--indigo-soft); color: var(--indigo-ink); }
 .badge-attesa_spedizione { background: var(--ok-soft); color: var(--ok-ink); font-weight: 700; }
-.badge-normale { background: var(--fill); color: var(--ink-2); }
-.badge-urgente { background: var(--urgente-bg); color: var(--urgente-ink); }
-.badge-extra_urgente { background: var(--alert-soft); color: var(--alert-ink); }
 .badge-disponibile { background: var(--phase-bg); color: var(--muted); }
 .badge-in_corso { background: var(--info-soft); color: var(--info-ink); }
 .badge-in_attesa { background: var(--attesa-bg); color: var(--attesa-ink); }
@@ -2195,6 +2192,10 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <label>Peso (ordinamento — valore più alto = priorità maggiore)</label>
         <input type="number" id="prn-peso" value="10" min="1" style="width:100%">
       </div>
+      <div class="form-group">
+        <label>Colore</label>
+        <select id="prn-colore" style="width:100%"></select>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-priorita')">Annulla</button>
@@ -2264,6 +2265,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
 <div class="toast" id="toast"></div>
 
 <script src="js/config.js"></script>
+<script src="js/etichette.js"></script>
 <script>
 // ═══════════════════════════════════════════════
 // CONFIGURAZIONE SUPABASE
@@ -2501,9 +2503,15 @@ async function loadFasi() {
 // Fasi attive (le disattivate restano in `fasi` solo per risolvere i nomi dello storico)
 function fasiAttive() { return fasi.filter(f => f.attiva !== false); }
 
+// Il responsabile legge le tabelle di configurazione; il modulo condiviso Etichette ne riceve una copia
+function sincronizzaEtichette() {
+  Etichette.imposta({ tipi_prodotto: tipiProdotto, attributi: attributiConfig, priorita: prioritaConfig });
+}
+
 async function loadPrioritaConfig() {
   const { data } = await sb.from('priorita_ordine_config').select('*').order('posizione');
   prioritaConfig = data || [];
+  sincronizzaEtichette();
   popolaPrioritaSelects();
 }
 
@@ -2516,6 +2524,7 @@ async function loadAttributiConfig() {
     ...a,
     opzioni: (opz || []).filter(o => o.attributo_chiave === a.chiave).sort((x, y) => (x.posizione || 0) - (y.posizione || 0)),
   }));
+  sincronizzaEtichette();
   popolaAttributiSelects();
 }
 
@@ -2571,6 +2580,7 @@ function renderFasiOpzionaliForm() {
 async function loadTipiProdotto() {
   const { data } = await sb.from('tipi_prodotto').select('*').order('posizione').order('id');
   tipiProdotto = data || [];
+  sincronizzaEtichette();
   popolaTipiProdottoSelects();
 }
 
@@ -3768,7 +3778,7 @@ function ordineRow(o, mini = false) {
   return `<tr class="clickable ${isSosp ? '' : scadenzaClass(o.scadenza)}" data-scad="${isSosp ? '' : scadenzaClass(o.scadenza)}" ${rowClass} onclick="${rowOnclick}">
     <td class="c-cliente"><div style="display:flex;align-items:flex-start;gap:8px">${checkbox}<div><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div>${badgeGruppo}</div></div></td>
     <td class="c-tipo">${o.tipo === 'extra' ? '<span style="font-weight:600;color:var(--accent)">Ordine Extra</span>' : `${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}`}</td>
-    <td class="c-prio"><span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span></td>
+    <td class="c-prio">${Etichette.badgePriorita(o.priorita)}</td>
     <td class="c-qta" style="text-align:center;font-weight:600">${o.quantita || 1}</td>
     <td class="c-scad"><div style="color:${isLate ? 'var(--alert-strong)' : 'inherit'};font-weight:${isLate ? '700' : 'normal'}">${scad}${isLate ? ' <i data-ic="avviso"></i>' : ''}</div><div id="scad-stima-${o.id}" style="font-size:10px;margin-top:2px"></div></td>
     <td class="c-stato"><span class="badge badge-${o.stato}">${statoLabel(o.stato)}</span></td>
@@ -4007,9 +4017,9 @@ async function renderDettaglioOrdine(id) {
       ? `<div class="detail-field"><label>Tipo</label><span style="color:var(--extra);font-weight:600">Ordine Extra</span></div>`
       : `<div class="detail-field"><label>Struttura</label><span>${strutturaLabel(ordine.struttura)}</span></div>
     <div class="detail-field"><label>Tipo Prodotto</label><span>${tipoProdLabel(ordine.tipo_prodotto)}</span></div>
-    <div class="detail-field"><label>Materiale</label><span>${escapeHtml(ordine.materiale || '—')}</span></div>
+    <div class="detail-field"><label>Materiale</label><span>${escapeHtml(materialeLabel(ordine.materiale))}</span></div>
     <div class="detail-field"><label>Lavorazione CNC</label><span>${ordine.lavorazione_cnc_id ? escapeHtml(lavorazioneCncNome(ordine.lavorazione_cnc_id) || '—') : '<span style="color:var(--muted)">Non indicata</span>'}</span></div>`}
-    <div class="detail-field"><label>Priorità</label><span class="badge badge-${ordine.priorita}">${prioLabel(ordine.priorita)}</span></div>
+    <div class="detail-field"><label>Priorità</label>${Etichette.badgePriorita(ordine.priorita)}</div>
     <div class="detail-field"><label>Stato</label><span class="badge badge-${ordine.stato}">${statoLabel(ordine.stato)}</span></div>
     <div class="detail-field"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}${ordine.scadenza ? ` · Settimana ${settimanaIsoDaData(ordine.scadenza)}` : ''}${isLate ? ' <i data-ic="avviso"></i> In ritardo' : ''}</span></div>
     <div class="detail-field"><label>Consegna stimata</label><span id="det-stima-consegna" style="color:var(--muted)">Calcolo…</span></div>
@@ -6307,7 +6317,7 @@ function renderArchivioTable() {
     <tr class="clickable" onclick="openDettaglioOrdine('${o.id}')">
       <td><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div></td>
       <td>${o.tipo === 'extra' ? '<span style="color:var(--extra);font-weight:600">Ordine Extra</span>' : `${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}`}</td>
-      <td><span class="badge badge-${o.priorita}">${prioLabel(o.priorita)}</span></td>
+      <td>${Etichette.badgePriorita(o.priorita)}</td>
       <td>${formatDate(o.creato_il)}</td>
       <td>${o.spedito_il ? formatDate(o.spedito_il) : '—'}</td>
       <td style="font-variant-numeric:tabular-nums">${oreL}</td>
@@ -6326,22 +6336,7 @@ function _downloadBlob(blob, filename) {
 }
 
 // ─── Resa leggibile del log (cronologia PDF) ──────────────────────────────────
-const _AZIONE_LABELS = {
-  ordine_creato: 'Ordine creato',
-  ordine_spedito: 'Ordine spedito',
-  ordine_sospeso: 'Ordine sospeso',
-  fase_iniziata: 'Fase iniziata',
-  fase_completata: 'Fase completata',
-  fase_confermata_ricezione: 'Ricezione confermata',
-  fase_messa_in_attesa: 'Fase messa in attesa',
-  fase_riassegnata: 'Fase riassegnata',
-  fase_ripresa: 'Fase ripresa',
-  fase_annullata: 'Fase annullata',
-};
-const _STATO_FASE_LABELS = {
-  disponibile: 'disponibile', in_corso: 'in corso', completata: 'completata',
-  non_applicabile: 'non applicabile', in_attesa: 'in attesa', bloccata: 'bloccata',
-};
+const _statoFaseMinuscolo = (s) => Etichette.statoFase(s).toLowerCase();
 function _nomeOp(id) {
   if (!id) return null;
   const op = operatoriCache.find(o => o.id === id);
@@ -6359,7 +6354,7 @@ function _leggiLogRiga(azione, dettaglio, fasiOrd) {
     return { titolo: `Collega aggiunto: ${nome}${faseNome ? ` — ${faseNome}` : ''}`, dettagli: [] };
   }
 
-  let titolo = _AZIONE_LABELS[azione] || azione;
+  let titolo = Etichette.azioneLog(azione);
   if (faseNome) titolo += ` — ${faseNome}`;
 
   const dettagli = [];
@@ -6380,7 +6375,7 @@ function _leggiLogRiga(azione, dettaglio, fasiOrd) {
   } else if (d.vecchio_operatore) {
     dettagli.push(`Operatore precedente: ${_nomeOp(d.vecchio_operatore) || d.vecchio_operatore}`);
   }
-  if (d.stato_precedente) dettagli.push(`Stato precedente: ${_STATO_FASE_LABELS[d.stato_precedente] || d.stato_precedente}`);
+  if (d.stato_precedente) dettagli.push(`Stato precedente: ${_statoFaseMinuscolo(d.stato_precedente)}`);
   if (d.modifica) dettagli.push('Ordine modificato dopo la creazione');
   // Campi non riconosciuti: omessi deliberatamente (non mostrare JSON grezzo)
 
@@ -6442,7 +6437,7 @@ function generaPDFOrdine(ordine, fasiOrd, fasiExtra, logOrd, allegati) {
   if (ordine.tipo !== 'extra') {
     kv('Struttura', ordine.struttura);
     kv('Tipo Prodotto', ordine.tipo_prodotto);
-    kv('Materiale', ordine.materiale);
+    kv('Materiale', materialeLabel(ordine.materiale));
   }
   kv('Quantità', ordine.quantita);
   kv('Priorità', ordine.priorita);
@@ -6543,7 +6538,7 @@ function generaPDFOrdine(ordine, fasiOrd, fasiExtra, logOrd, allegati) {
       doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
       nomeLines.forEach((line, i) => doc.text(line, cols2[0], y + i * 3.6));
       doc.text(op ? `${op.nome} ${op.cognome}` : '—', cols2[1], y);
-      doc.text(_STATO_FASE_LABELS[f.stato] || f.stato || '—', cols2[2], y);
+      doc.text(f.stato ? _statoFaseMinuscolo(f.stato) : '—', cols2[2], y);
       doc.text(f.ore_stimate_manuali != null ? String(f.ore_stimate_manuali) : '—', cols2[3], y);
       doc.text(fmtDate(f.completata_il), cols2[4], y);
       y += Math.max(nomeLines.length * 3.6, lineH);
@@ -6805,7 +6800,7 @@ async function _esportaOrdiniConVerifica(ordini) {
     const rows = archiviati.map(o => {
       const st = lavoroStatsCache[o.id];
       return [
-        o.codice, o.cliente, strutturaLabel(o.struttura), tipoProdLabel(o.tipo_prodotto), o.materiale || '',
+        o.codice, o.cliente, strutturaLabel(o.struttura), tipoProdLabel(o.tipo_prodotto), materialeLabel(o.materiale),
         o.priorita, o.stato,
         formatDate(o.creato_il),
         o.scadenza ? o.scadenza.split('T')[0] : '',
@@ -7545,7 +7540,7 @@ async function confermaSalvaFasiConfig() {
 }
 
 function etichettaStatoFase(s) {
-  return ({ disponibile: 'Disponibile', non_applicabile: 'Non applicabile', in_attesa: 'In attesa', in_corso: 'In corso', completata: 'Completata', assente: 'Assente' })[s] || s;
+  return Etichette.statoFase(s);
 }
 
 // ═══════════════════════════════════════════════
@@ -7704,7 +7699,7 @@ function renderPrioritaConfig() {
   el.innerHTML = (!prioritaConfig.length ? '<p style="color:var(--muted);padding:12px 0">Nessuna priorità configurata.</p>' :
     prioritaConfig.map(p => `
       <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
-        <span style="font-size:13px;font-weight:600;flex:1">${escapeHtml(p.etichetta)}</span>
+        <span style="font-size:13px;font-weight:600;flex:1">${Etichette.badgePriorita(p.id)}</span>
         <span style="font-size:11px;color:var(--muted);font-family:monospace">${escapeHtml(p.id)} · peso ${p.peso}</span>
         <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="openModalPriorita('${escapeHtml(p.id)}')">Modifica</button>
       </div>
@@ -7722,22 +7717,25 @@ function openModalPriorita(id) {
   document.getElementById('prn-id').value = '';
   document.getElementById('prn-etichetta').value = p?.etichetta || '';
   document.getElementById('prn-peso').value = p?.peso ?? 10;
+  document.getElementById('prn-colore').innerHTML = Object.entries(Etichette.PALETTE).map(([k, c]) => `<option value="${k}">${escapeHtml(c.etichetta)}</option>`).join('');
+  document.getElementById('prn-colore').value = p?.colore || 'neutro';
   document.getElementById('modal-priorita').classList.add('open');
 }
 
 async function salvaModalePriorita() {
   const et = document.getElementById('prn-etichetta').value.trim();
   const peso = parseInt(document.getElementById('prn-peso').value) || 10;
+  const colore = document.getElementById('prn-colore').value;
   if (!et) { toast('Inserisci etichetta', 'err'); return; }
   if (_editPrioritaId) {
-    const { error } = await sb.from('priorita_ordine_config').update({ etichetta: et, peso }).eq('id', _editPrioritaId);
+    const { error } = await sb.from('priorita_ordine_config').update({ etichetta: et, peso, colore }).eq('id', _editPrioritaId);
     if (error) { toast('Errore: ' + error.message, 'err'); return; }
     toast('Priorità aggiornata', 'ok');
   } else {
     const id = document.getElementById('prn-id').value.trim().toLowerCase().replace(/\s+/g,'_');
     if (!id) { toast('Inserisci ID', 'err'); return; }
     const maxPos = Math.max(...prioritaConfig.map(p => p.posizione||0), 0);
-    const { error } = await sb.from('priorita_ordine_config').insert({ id, etichetta: et, peso, posizione: maxPos + 10 });
+    const { error } = await sb.from('priorita_ordine_config').insert({ id, etichetta: et, peso, colore, posizione: maxPos + 10 });
     if (error) { toast('Errore: ' + error.message, 'err'); return; }
     toast('Priorità aggiunta', 'ok');
   }
@@ -8393,18 +8391,10 @@ function formatDateTime(d) {
   return new Date(d).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-function prioLabel(p) {
-  const cfg = prioritaConfig.find(c => c.id === p);
-  return cfg ? cfg.etichetta : (p || '—');
-}
-
-function statoLabel(s) {
-  return { 'aperto': 'Aperto', 'sospeso': 'Sospeso', 'spedito': 'Spedito', 'attesa_spedizione': 'In attesa corriere' }[s] || s;
-}
-
-function statoFaseLabel(s) {
-  return { 'disponibile': 'Disponibile', 'in_corso': 'In Corso', 'in_attesa': 'In Attesa', 'completata': 'Completata', 'non_applicabile': 'N/A' }[s] || s;
-}
+// Etichette e colori da configurazione / stati di sistema: tutte in js/etichette.js
+const prioLabel = (p) => Etichette.prioritaEtichetta(p);
+const statoLabel = (s) => Etichette.statoOrdine(s);
+const statoFaseLabel = (s) => Etichette.statoFase(s);
 
 function logIcon(a) {
   const m = { 'fase_iniziata': '<i data-ic="play"></i>', 'fase_completata': '✓', 'fase_riassegnata': '↔', 'fase_messa_in_attesa': '<i data-ic="pausa"></i>', 'fase_ripresa': '↩', 'ordine_sospeso': '<i data-ic="pausa"></i>', 'ordine_riattivato': '<i data-ic="play"></i>', 'ordine_spedito': '<i data-ic="pacco"></i>', 'ordine_creato': '✚' };
@@ -8438,17 +8428,10 @@ async function riassegnaFaseExtra(faseExtraId, ordineId) {
 // ═══════════════════════════════════════════════
 // START
 // ═══════════════════════════════════════════════
-function strutturaLabel(s) {
-  const cfg = attributiConfig.find(c => c.chiave === 'struttura');
-  if (cfg) { const opt = (cfg.opzioni || []).find(o => o.valore === s); if (opt) return opt.etichetta; }
-  return s || '—';
-}
-function tipoProdLabel(t) {
-  if (!t) return '—';
-  const found = tipiProdotto.find(x => x.id === t);
-  return found ? found.label : t;
-}
-function tipoLabel(t) { return strutturaLabel(t); }
+const strutturaLabel = (s) => Etichette.struttura(s);
+const materialeLabel = (m) => Etichette.materiale(m);
+const tipoProdLabel = (t) => Etichette.tipoProdotto(t);
+const tipoLabel = (t) => strutturaLabel(t);
 function getFaseNome(faseId) {
   const f = fasi.find(x => x.id === faseId);
   return f ? f.nome : `Fase ${faseId}`;
@@ -8751,7 +8734,6 @@ async function loadKpi() {
     : '<div class="kpi-empty" style="color:var(--ok)">✓ Nessuna fase in attesa</div>';
 
   // ── DISTRIBUZIONE PRIORITÀ ──
-  const prioDefaultColors = { normale: 'var(--ok)', urgente: 'var(--warn)', extra_urgente: 'var(--alert)' };
   const prioCountMap = {};
   prioritaConfig.forEach(p => { prioCountMap[p.id] = 0; });
   tuttiOrdini.filter(o => ['aperto','attesa_spedizione'].includes(o.stato)).forEach(o => {
@@ -8761,7 +8743,7 @@ async function loadKpi() {
   document.getElementById('kpi-priorita').innerHTML =
     prioritaConfig.map(p => {
       const v = prioCountMap[p.id] || 0;
-      const color = prioDefaultColors[p.id] || 'var(--accent)';
+      const color = Etichette.colorePriorita(p.id).ink;
       return `
         <div class="kpi-bar-row">
           <div class="kpi-bar-label">${escapeHtml(p.etichetta)}</div>
@@ -8803,8 +8785,6 @@ async function loadKpi() {
   const { data: priorita } = await sb.rpc('lista_priorita_giornaliera');
   const pEl = document.getElementById('kpi-lista-priorita');
   if (priorita?.length) {
-    const prioLabel = { normale: 'Normale', urgente: 'Urgente', extra_urgente: 'Extra Urg.' };
-    const prioC = { normale: 'var(--ok)', urgente: 'var(--warn)', extra_urgente: 'var(--alert)' };
     pEl.innerHTML = `<table class="kpi-table">
       <thead><tr><th>#</th><th>Cliente / Codice</th><th>Priorità</th><th>Scadenza</th><th>Ore int.</th><th>Stima cons.</th><th>Rapporto</th></tr></thead>
       <tbody>` +
@@ -8821,7 +8801,7 @@ async function loadKpi() {
         return `<tr style="${rowStyle}">
           <td style="color:var(--muted);font-size:11px">${i+1}</td>
           <td>${escapeHtml(o.cliente||'')} <span style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">${escapeHtml(o.codice||'')}</span></td>
-          <td><span style="color:${prioC[o.priorita]||'var(--ink)'};font-size:11px">${prioLabel[o.priorita]||o.priorita}</span></td>
+          <td><span style="color:${Etichette.colorePriorita(o.priorita).ink};font-size:11px">${escapeHtml(prioLabel(o.priorita))}</span></td>
           <td>${formatDate(o.scadenza)} ${ggStr}</td>
           <td style="font-family:var(--font-mono)">${o.ore_rimaste}h</td>
           <td style="font-family:var(--font-mono);color:${stimaColor}">${o.giorni_stima_consegna != null ? o.giorni_stima_consegna + 'gg' : '—'}</td>
@@ -9000,9 +8980,9 @@ async function renderSchedeKpi() {
 
   const criteriHtml = c => {
     const parti = [];
-    if (c.struttura?.length)    parti.push('Struttura: ' + c.struttura.join(', '));
-    if (c.materiale?.length)    parti.push('Materiale: ' + c.materiale.join(', '));
-    if (c.tipo_prodotto?.length) parti.push('Tipo: ' + c.tipo_prodotto.join(', '));
+    if (c.struttura?.length)    parti.push('Struttura: ' + c.struttura.map(strutturaLabel).join(', '));
+    if (c.materiale?.length)    parti.push('Materiale: ' + c.materiale.map(materialeLabel).join(', '));
+    if (c.tipo_prodotto?.length) parti.push('Tipo: ' + c.tipo_prodotto.map(tipoProdLabel).join(', '));
     if (c.fasi_incluse?.length)  parti.push('Con fasi: ' + c.fasi_incluse.join(', '));
     if (c.fasi_escluse?.length)  parti.push('Senza fasi: ' + c.fasi_escluse.join(', '));
     return parti.length ? parti.join(' · ') : '(tutti gli ordini)';
@@ -9651,7 +9631,7 @@ const RIC_ERRORI = {
   campo_non_trovato: 'Campo non più disponibile',
 };
 const ricErrore = c => RIC_ERRORI[c] || c || 'Operazione non riuscita';
-const RIC_STATI = { in_attesa: 'In attesa', approvata: 'Approvata', rifiutata: 'Non approvata', annullata: 'Annullata' };
+const RIC_STATI = Etichette.STATI_RICHIESTA;
 const _isoOggi = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 const _isoSpost = (giorni) => { const d = new Date(_isoOggi() + 'T12:00:00'); d.setDate(d.getDate() + giorni); return d.toISOString().slice(0, 10); };
 const _dIt = iso => { if (!iso) return ''; const [y, m, d] = String(iso).slice(0, 10).split('-'); return `${d}/${m}/${y}`; };

@@ -240,6 +240,7 @@ header {
 </div>
 
 <script src="js/config.js"></script>
+<script src="js/etichette.js"></script>
 <script>
 // SUPABASE_URL / SUPABASE_ANON arrivano da js/config.js (ambiente produzione/test)
 const { createClient } = supabase;
@@ -373,6 +374,7 @@ function doLogout() {
 
 // ── DATI META ──
 async function caricaMeta() {
+  await Etichette.carica(sb, currentUser?.id, sessionToken);   // etichette da configurazione (tipi, strutture, materiali, priorità)
   const [{ data: macro }, { data: fasi }] = await Promise.all([
     sb.from('macro_fasi').select('*').order('posizione').order('id'),
     sb.from('fasi').select('id, nome, posizione, macro_fase_id').order('posizione').order('id')
@@ -586,7 +588,7 @@ function renderStorico() {
 function storCardHtml(o) {
   const dataSpedizione = o.spedito_il || o.completato_il;
   const isExtra = o.tipo === 'extra';
-  const dettagli = [o.tipo_prodotto, o.struttura ? o.struttura.replace(/_/g,' ') : null, o.materiale]
+  const dettagli = [o.tipo_prodotto ? Etichette.tipoProdotto(o.tipo_prodotto) : null, o.struttura ? Etichette.struttura(o.struttura) : null, o.materiale ? Etichette.materiale(o.materiale) : null]
     .filter(Boolean).join(' · ');
   return `<div class="stor-card" onclick="apriDettaglioStorico('${esc(o.id)}')">
     <div class="stor-hdr">
@@ -662,10 +664,10 @@ function renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine, stats) {
   const extraBadge = isExtra ? ` <span class="badge badge-extra">Ordine Extra</span>` : '';
 
   const metaItems = [];
-  if (o.tipo_prodotto) metaItems.push(['Tipo prodotto', o.tipo_prodotto]);
-  if (o.struttura)     metaItems.push(['Struttura', o.struttura.replace(/_/g, ' ')]);
-  if (o.materiale)     metaItems.push(['Materiale', o.materiale]);
-  if (o.priorita)      metaItems.push(['Priorità', o.priorita.replace(/_/g, ' ')]);
+  if (o.tipo_prodotto) metaItems.push(['Tipo prodotto', Etichette.tipoProdotto(o.tipo_prodotto)]);
+  if (o.struttura)     metaItems.push(['Struttura', Etichette.struttura(o.struttura)]);
+  if (o.materiale)     metaItems.push(['Materiale', Etichette.materiale(o.materiale)]);
+  if (o.priorita)      metaItems.push(['Priorità', Etichette.prioritaEtichetta(o.priorita)]);
   if (o.quantita > 1)  metaItems.push(['Quantità', String(o.quantita)]);
   const dataSpedizione = o.spedito_il || o.completato_il;
   if (dataSpedizione)  metaItems.push(['Spedito il', formatDataCompleta(dataSpedizione)]);
@@ -750,10 +752,7 @@ function faseRowHtml(f) {
   const nome = info?.nome || `Fase ${f.fase_id}`;
   const isNA = f.stato === 'non_applicabile';
   const badgeClass = `badge badge-fase-${f.stato}`;
-  const statoLabel = {
-    completata: 'Completata', in_corso: 'In corso', disponibile: 'Disponibile',
-    in_attesa: 'In attesa', non_applicabile: 'N/A'
-  }[f.stato] || f.stato;
+  const statoLabel = Etichette.statoFase(f.stato);
   return `<div class="fase-row">
     <span class="fase-nome${isNA?' na':''}">${esc(nome)}</span>
     <span class="${badgeClass}">${statoLabel}</span>
@@ -762,10 +761,7 @@ function faseRowHtml(f) {
 
 function fasextraRowHtml(f) {
   const badgeClass = `badge badge-fase-${f.stato}`;
-  const statoLabel = {
-    completata: 'Completata', in_corso: 'In corso', disponibile: 'Disponibile',
-    in_attesa: 'In attesa', non_applicabile: 'N/A'
-  }[f.stato] || f.stato;
+  const statoLabel = Etichette.statoFase(f.stato);
   return `<div class="fase-row">
     <span class="fase-nome">${esc(f.nome || `Fase ${f.numero}`)}</span>
     <span class="${badgeClass}">${statoLabel}</span>

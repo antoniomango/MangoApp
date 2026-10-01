@@ -9,6 +9,7 @@ const ASSETS = [
   '/MangoApp/icon-192.png',
   '/MangoApp/icon-512.png',
   '/MangoApp/js/config.js',
+  '/MangoApp/js/etichette.js',
   '/MangoApp/js/tema.js',
   '/MangoApp/js/icone.js',
   '/MangoApp/js/pin-pad.js',
