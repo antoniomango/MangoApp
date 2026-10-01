@@ -18,6 +18,17 @@ const AMBIENTI = {
   }
 };
 
+// Configurazione di deploy facoltativa (js/config.deploy.js → window.MANGO_CONFIG): sovrascrive o
+// aggiunge ambienti senza modificare questo file. Senza di essa valgono i valori predefiniti sopra.
+(function applicaConfigDeploy() {
+  const d = (typeof window !== 'undefined' && window.MANGO_CONFIG) || {};
+  Object.entries(d.ambienti || {}).forEach(([nome, a]) => {
+    if (a && typeof a.url === 'string' && typeof a.anon === 'string') AMBIENTI[nome] = { url: a.url, anon: a.anon };
+  });
+})();
+
+const AMBIENTE_DEFAULT = (window.MANGO_CONFIG && AMBIENTI[window.MANGO_CONFIG.ambienteDefault]) ? window.MANGO_CONFIG.ambienteDefault : 'produzione';
+
 function rilevaAmbiente() {
   const daUrl = new URLSearchParams(location.search).get('env');
   if (daUrl) {
@@ -29,11 +40,11 @@ function rilevaAmbiente() {
     // sicuro a produzione, e ripulisce lo stato salvato — un typo non deve
     // MAI lasciare l'app agganciata a un ambiente non-produzione per errore.
     localStorage.removeItem('mangoapp-env');
-    return 'produzione';
+    return AMBIENTE_DEFAULT;
   }
   const salvato = localStorage.getItem('mangoapp-env');
   if (salvato && AMBIENTI[salvato]) return salvato;
-  return 'produzione';
+  return AMBIENTE_DEFAULT;
 }
 
 const AMBIENTE      = rilevaAmbiente();
@@ -41,10 +52,22 @@ const SUPABASE_URL  = AMBIENTI[AMBIENTE].url;
 const SUPABASE_ANON = AMBIENTI[AMBIENTE].anon;
 const IS_PRODUZIONE = AMBIENTE === 'produzione';
 
+// Configurazione pubblica del server (RPC config_pubblica, leggibile anche prima del login; es. l'ID app delle
+// notifiche push). Risposta in cache per la sessione della pagina; null se non raggiungibile.
+let _configPubblicaCache = null;
+async function leggiConfigPubblica(client) {
+  if (_configPubblicaCache) return _configPubblicaCache;
+  try {
+    const { data, error } = await client.rpc('config_pubblica');
+    if (!error && data) _configPubblicaCache = data;
+  } catch (e) { /* offline: nessuna configurazione pubblica */ }
+  return _configPubblicaCache;
+}
+
 // Versione del client — da incrementare SEMPRE insieme a CACHE in sw.js (stesso valore,
 // stesso commit). Letta da responsabile.html per la guardia di versione sulle operazioni
 // distruttive (esportazione/archiviazione) — vedi Checklist-Sicurezza.md nel vault.
-const APP_VERSION = 'mango-v39';
+const APP_VERSION = 'mango-v40';
 
 // ═══════════════════════════════════════════════
 // SETTIMANA ISO 8601 — usata nel dettaglio ordine (operatore.html + responsabile.html)

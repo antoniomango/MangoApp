@@ -528,6 +528,7 @@ textarea:focus { border-color: var(--accent); }
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<script src="js/config.deploy.js"></script>
 <script src="js/config.js"></script>
 <script src="js/etichette.js"></script>
 <script src="js/calendario.js"></script>
@@ -2495,7 +2496,7 @@ async function riprendiTutteFasi() {
 // ═══════════════════════════════════════════════
 // ONESIGNAL
 // ═══════════════════════════════════════════════
-const ONESIGNAL_APP_ID = 'f1b7b981-355e-46c2-a476-224e3d06d82b';
+// L'ID app OneSignal non sta nel codice: arriva da config_sistema via config_pubblica (leggiConfigPubblica in js/config.js)
 // REST API Key: non condividere, non committare in repo pubblici
 // REST key gestita da Supabase Edge Function (non nel codice client)
 
@@ -2529,7 +2530,10 @@ function _oneSignalAvvia() {
   try {
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.OneSignalDeferred.push(async function(OS) {
-      await OS.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/OneSignalSDKWorker.js', serviceWorkerParam: { scope: '/MangoApp/' } });
+      const appId = (await leggiConfigPubblica(sb))?.onesignal_app_id;
+      if (!appId) return;   // push non configurate sul server: l'app funziona senza
+      const base = new URL('./', location.href).pathname;   // cartella dell'app (anche fuori da /MangoApp/)
+      await OS.init({ appId, notifyButton: { enable: false }, serviceWorkerPath: base + 'OneSignalSDKWorker.js', serviceWorkerParam: { scope: base } });
       // Ascolta quando arriva l'ID dalla subscription (può richiedere secondi)
       OS.User.PushSubscription.addEventListener('change', async (event) => {
         const subId = event.current?.id;
@@ -3446,7 +3450,6 @@ function renderAssenzeSquadraHtml(assenze) {
 // ── Cambia PIN (tastierino js/pin-pad.js, tre passaggi) ──
 let _cpPad = null, _cpPasso = 0, _cpAttuale = null, _cpNuovo = null;
 const CP_TITOLI = ['PIN attuale', 'Nuovo PIN', 'Conferma il nuovo PIN'];
-const PIN_SEQUENZE = ['0123','1234','2345','3456','4567','5678','6789','9876','8765','7654','6543','5432','4321','3210'];
 
 function _cpMsg(testo, ok) {
   const m = document.getElementById('cp-msg');
@@ -3488,7 +3491,6 @@ async function _cpInvia(pin) {
   _cpMsg('');
   if (_cpPasso === 0) { _cpAttuale = pin; _cpVaiA(1); return { ok: true, continua: true }; }
   if (_cpPasso === 1) {
-    if (/^(\d)\1{3}$/.test(pin) || PIN_SEQUENZE.includes(pin)) { _cpMsg(profErrore('pin_nuovo_troppo_semplice')); return { ok: false }; }
     if (pin === _cpAttuale) { _cpMsg(profErrore('pin_nuovo_uguale')); return { ok: false }; }
     _cpNuovo = pin; _cpVaiA(2); return { ok: true, continua: true };
   }

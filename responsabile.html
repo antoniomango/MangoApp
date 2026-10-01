@@ -1510,6 +1510,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           </div>
         </div>
         <div class="card" id="sistema-config-body" style="padding:20px;max-width:640px">Caricamento…</div>
+        <div class="card" id="sistema-job-body" style="padding:20px;max-width:640px;margin-top:16px"></div>
       </section>
 
       <!-- REGISTRO MODIFICHE DI CONFIGURAZIONE -->
@@ -2178,6 +2179,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
+<script src="js/config.deploy.js"></script>
 <script src="js/config.js"></script>
 <script src="js/etichette.js"></script>
 <script src="js/calendario.js"></script>
@@ -2728,6 +2730,7 @@ async function loadSistemaConfig() {
   const { data } = await sb.from('config_sistema').select('chiave, valore');
   _sistema = Object.fromEntries((data || []).map(r => [r.chiave, r.valore]));
   renderSistemaConfig();
+  loadJobSchedulati();
 }
 
 function renderSistemaConfig() {
@@ -2745,7 +2748,35 @@ function renderSistemaConfig() {
     riga('Versione minima del client', 'I dispositivi con una versione più vecchia devono ricaricare l\'app prima di operazioni delicate (es. mango-v40)',
       `<input type="text" value="${escapeHtml(_sistema.versione_minima_client || '')}" pattern="mango-v[0-9]+" onchange="salvaSistema('versione_minima_client', this.value.trim())" style="width:130px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">`) +
     riga('Limite database (MB)', 'Dimensione massima prevista del database: alimenta la barra di utilizzo in Archivio',
-      `<input type="number" min="1" step="1" value="${escapeHtml(_sistema.limite_db_mb || '')}" onchange="salvaSistema('limite_db_mb', this.value.trim())" style="width:110px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">`);
+      `<input type="number" min="1" step="1" value="${escapeHtml(_sistema.limite_db_mb || '')}" onchange="salvaSistema('limite_db_mb', this.value.trim())" style="width:110px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">`) +
+    riga('Notifiche push — ID app', 'Identificativo dell\'app di notifiche (OneSignal); vuoto = notifiche push disattivate',
+      `<input type="text" value="${escapeHtml(_sistema.onesignal_app_id || '')}" onchange="salvaSistema('onesignal_app_id', this.value.trim())" style="width:270px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
+    riga('PIN — tentativi errati consentiti', 'Dopo questo numero di errori nella finestra, l\'accesso si blocca (da 3 a 10)',
+      `<input type="number" min="3" max="10" step="1" value="${escapeHtml(_sistema.pin_tentativi_max || '')}" onchange="salvaSistema('pin_tentativi_max', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
+    riga('PIN — finestra dei tentativi (minuti)', 'Intervallo in cui si contano i tentativi errati (da 5 a 120)',
+      `<input type="number" min="5" max="120" step="1" value="${escapeHtml(_sistema.pin_finestra_minuti || '')}" onchange="salvaSistema('pin_finestra_minuti', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
+    riga('PIN — primo blocco (minuti)', 'Durata del primo blocco; raddoppia a ogni blocco consecutivo (da 5 a 120)',
+      `<input type="number" min="5" max="120" step="1" value="${escapeHtml(_sistema.pin_blocco_base_minuti || '')}" onchange="salvaSistema('pin_blocco_base_minuti', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
+    riga('PIN — blocco massimo (minuti)', 'Tetto alla durata del blocco (da 60 a 10080)',
+      `<input type="number" min="60" max="10080" step="1" value="${escapeHtml(_sistema.pin_blocco_max_minuti || '')}" onchange="salvaSistema('pin_blocco_max_minuti', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
+    riga('PIN — avviso al responsabile dopo N blocchi', 'Dopo questo numero di blocchi consecutivi il responsabile riceve una notifica (da 1 a 10)',
+      `<input type="number" min="1" max="10" step="1" value="${escapeHtml(_sistema.pin_blocchi_alert || '')}" onchange="salvaSistema('pin_blocchi_alert', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
+    riga('Durata della sessione operatore (ore)', 'Dopo questo tempo l\'operatore deve rifare il PIN (da 1 a 72)',
+      `<input type="number" min="1" max="72" step="1" value="${escapeHtml(_sistema.sessione_ore || '')}" onchange="salvaSistema('sessione_ore', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`);
+}
+
+// Job pianificati sul server (sola lettura: gli orari si cambiano solo in installazione, vedi documentazione)
+async function loadJobSchedulati() {
+  const el = document.getElementById('sistema-job-body');
+  if (!el) return;
+  const { data, error } = await sb.rpc('elenco_job_schedulati', { p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { el.innerHTML = '<div style="color:var(--muted);font-size:13px">Elenco dei job non disponibile</div>'; return; }
+  const esito = e => e === 'succeeded' ? 'ok' : (e || '—');
+  el.innerHTML = '<div style="font-size:13px;font-weight:600;margin-bottom:4px">Attività pianificate sul server</div>' +
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Sola lettura: gli orari (formato cron, in UTC) si impostano in fase di installazione. Gli intervalli di conservazione dei dati si cambiano nelle Soglie.</div>' +
+    '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="text-align:left;color:var(--muted);font-size:11px"><th style="padding:4px 6px">Attività</th><th style="padding:4px 6px">Orario (cron)</th><th style="padding:4px 6px">Attiva</th><th style="padding:4px 6px">Ultimo esito</th></tr></thead><tbody>' +
+    data.job.map(j => '<tr style="border-top:1px solid var(--border)"><td style="padding:5px 6px">' + escapeHtml(j.nome) + '</td><td style="padding:5px 6px"><code>' + escapeHtml(j.schedule) + '</code></td><td style="padding:5px 6px">' + (j.attivo ? 'sì' : 'no') + '</td><td style="padding:5px 6px">' + escapeHtml(esito(j.ultimo_esito)) + '</td></tr>').join('') +
+    '</tbody></table></div>';
 }
 
 async function salvaSistema(chiave, valore) {
@@ -4899,7 +4930,6 @@ async function salvaOperatore() {
 
   if (editId) {
     // MODIFICA
-    if (pin && !/^\d{4}$/.test(pin)) { toast('Il PIN deve essere 4 cifre numeriche', 'err'); return; }
     const esclusoPianificazione = document.getElementById('op-escluso-pianificazione').checked;
     const opAttuale = operatoriCache.find(o => o.id === editId);
     const oreInput = document.getElementById('op-ore-default').value.trim();
@@ -4914,7 +4944,7 @@ async function salvaOperatore() {
     if (pin) {
       // Aggiorna PIN via RPC (il PIN è hashato nel DB)
       const { data: pinData } = await sb.rpc('aggiorna_pin_operatore', { p_operatore_id: editId, p_nuovo_pin: pin, p_responsabile_id: currentUserRow.id });
-      if (!pinData?.ok) { toast(pinData?.errore || 'Errore aggiornamento PIN', 'err'); return; }
+      if (!pinData?.ok) { toast(messaggioPin(pinData?.errore) || 'Errore aggiornamento PIN', 'err'); return; }
     }
     const { data, error } = await sb.rpc('aggiorna_operatore', {
       p_operatore_id: editId,
@@ -4931,15 +4961,19 @@ async function salvaOperatore() {
     toast('Operatore aggiornato', 'ok');
   } else {
     // CREAZIONE
-    if (!/^\d{4}$/.test(pin)) { toast('Il PIN deve essere 4 cifre numeriche', 'err'); return; }
     const { data, error } = await sb.rpc('crea_operatore', { p_nome: nome, p_cognome: cognome, p_pin: pin, p_ruolo: ruolo, p_responsabile_id: currentUserRow.id });
-    if (error || !data?.ok) { toast(error?.message || data?.errore || 'Errore', 'err'); return; }
+    if (error || !data?.ok) { toast(messaggioPin(data?.errore) || error?.message || data?.errore || 'Errore', 'err'); return; }
     closeModal('modal-operatore');
     toast('Operatore creato', 'ok');
   }
 
   await loadOperatori();
   renderOperatori();
+}
+
+// Le regole di formato del PIN vivono solo sul server (valida_formato_pin): qui si mostra solo l'esito
+function messaggioPin(err) {
+  return err === 'pin_non_valido' ? 'PIN non valido: servono 4 cifre numeriche' : null;
 }
 
 async function toggleOperatore(id, attivo) {
@@ -7990,7 +8024,7 @@ function escapeJsAttr(str) {
 // ═══════════════════════════════════════════════
 // ONESIGNAL
 // ═══════════════════════════════════════════════
-const ONESIGNAL_APP_ID = 'f1b7b981-355e-46c2-a476-224e3d06d82b';
+// L'ID app OneSignal non sta nel codice: arriva da config_sistema via config_pubblica (leggiConfigPubblica in js/config.js)
 // REST key gestita da Supabase Edge Function (non nel codice client)
 
 let _ultimaSottoscrizioneSalvata = null;   // evita di salvare due volte la stessa (listener + attesa)
@@ -8175,7 +8209,10 @@ async function initOneSignalResp() {
       // scope esplicito: il service worker è /MangoApp/sw.js (lo stesso della cache, con il codice push
       // dalla v33) e non può controllare "/", lo scope predefinito di OneSignal: senza questo parametro
       // il browser rifiutava la registrazione e l'avvio non si completava mai.
-      await OneSignal.init({ appId: ONESIGNAL_APP_ID, notifyButton: { enable: false }, serviceWorkerPath: '/MangoApp/sw.js', serviceWorkerParam: { scope: '/MangoApp/' } });
+      const appId = (await leggiConfigPubblica(sb))?.onesignal_app_id;
+      if (!appId) throw new Error('onesignal_app_id non configurato');
+      const base = new URL('./', location.href).pathname;   // cartella dell'app (anche fuori da /MangoApp/)
+      await OneSignal.init({ appId, notifyButton: { enable: false }, serviceWorkerPath: base + 'sw.js', serviceWorkerParam: { scope: base } });
     } catch (e) {
       clearTimeout(timerAvvio);
       _erroreOneSignal = true;
