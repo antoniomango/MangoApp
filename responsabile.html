@@ -1206,14 +1206,18 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
               <input type="checkbox" id="or-sabato" onchange="toggleOrarioSabato(this)">
               Sabato lavorativo
             </label>
-            <div id="or-sabato-ore-row" style="display:none;grid-template-columns:1fr 1fr;gap:10px">
+            <div id="or-sabato-ore-row" style="display:none;grid-template-columns:1fr 1fr 1fr;gap:10px">
               <div class="form-group" style="margin:0">
-                <label>Ore lavorate</label>
-                <input type="number" id="or-ore-sabato" min="1" max="12" step="0.5" value="4" oninput="aggiornaRiepilogoOrario()">
+                <label>Inizio</label>
+                <input type="time" id="or-inizio-sabato" oninput="aggiornaRiepilogoOrario()">
               </div>
               <div class="form-group" style="margin:0">
-                <label>Fine turno sabato</label>
-                <input type="time" id="or-fine-sabato" value="13:00" oninput="aggiornaRiepilogoOrario()">
+                <label>Fine</label>
+                <input type="time" id="or-fine-sabato" oninput="aggiornaRiepilogoOrario()">
+              </div>
+              <div class="form-group" style="margin:0">
+                <label>Pausa (min)</label>
+                <input type="number" id="or-pausa-sabato" min="0" max="240" step="5" oninput="aggiornaRiepilogoOrario()">
               </div>
             </div>
           </div>
@@ -1232,10 +1236,18 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
                 <input type="checkbox" id="or-domenica" onchange="toggleOrarioDomenica(this)">
                 Domenica lavorativa
               </label>
-              <div id="or-domenica-ore-row" style="display:none">
+              <div id="or-domenica-ore-row" style="display:none;grid-template-columns:1fr 1fr 1fr;gap:10px">
                 <div class="form-group" style="margin:0">
-                  <label>Ore lavorate</label>
-                  <input type="number" id="or-ore-domenica" min="1" max="12" step="0.5" value="4" oninput="aggiornaRiepilogoOrario()">
+                  <label>Inizio</label>
+                  <input type="time" id="or-inizio-domenica" oninput="aggiornaRiepilogoOrario()">
+                </div>
+                <div class="form-group" style="margin:0">
+                  <label>Fine</label>
+                  <input type="time" id="or-fine-domenica" oninput="aggiornaRiepilogoOrario()">
+                </div>
+                <div class="form-group" style="margin:0">
+                  <label>Pausa (min)</label>
+                  <input type="number" id="or-pausa-domenica" min="0" max="240" step="5" oninput="aggiornaRiepilogoOrario()">
                 </div>
               </div>
             </div>
@@ -1256,6 +1268,26 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
             <span style="font-size:11px;font-weight:400;color:var(--muted)">Il piano non viene generato nei giorni di chiusura</span>
           </div>
           <div id="or-chiusure-list" style="margin-bottom:14px;font-size:12px;color:var(--muted);font-style:italic">Nessuna chiusura programmata</div>
+          <!-- STRAORDINARI -->
+          <div style="font-size:13px;font-weight:700;margin:26px 0 12px;display:flex;align-items:center;gap:8px">
+            <span style="font-size:16px"><i data-ic="orologio"></i></span> Straordinari
+            <span style="font-size:11px;font-weight:400;color:var(--muted)">Ore in più solo nei giorni indicati (in un giorno di riposo si lavorano solo le ore extra)</span>
+          </div>
+          <div id="or-straordinari-list" style="margin-bottom:14px;font-size:12px;color:var(--muted);font-style:italic">Nessuno straordinario programmato</div>
+          <div class="card" style="padding:14px 16px">
+            <div id="or-str-form-title" style="font-size:12px;font-weight:600;margin-bottom:10px">Aggiungi straordinario</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 2fr auto;gap:8px;align-items:end">
+              <div class="form-group" style="margin:0"><label style="font-size:11px">Dal</label><input type="date" id="or-str-dal" style="font-size:12px"></div>
+              <div class="form-group" style="margin:0"><label style="font-size:11px">Al (opzionale)</label><input type="date" id="or-str-al" style="font-size:12px"></div>
+              <div class="form-group" style="margin:0"><label style="font-size:11px">Ore extra / giorno</label><input type="number" id="or-str-ore" min="0.5" max="12" step="0.5" style="font-size:12px"></div>
+              <div class="form-group" style="margin:0"><label style="font-size:11px">Nota</label><input type="text" id="or-str-desc" placeholder="es. consegna urgente" style="font-size:12px"></div>
+              <div style="display:flex;gap:6px">
+                <button id="or-str-btn-salva" class="btn btn-secondary" style="font-size:12px;padding:7px 12px;white-space:nowrap" onclick="salvaStraordinario()">+ Aggiungi</button>
+                <button id="or-str-btn-annulla" class="btn btn-secondary" style="font-size:12px;padding:7px 12px;display:none" onclick="annullaModificaStraordinario()">Annulla</button>
+              </div>
+            </div>
+          </div>
+          <div style="height:20px"></div>
           <div class="card" style="padding:14px 16px">
             <div id="or-chiusura-form-title" style="font-size:12px;font-weight:600;margin-bottom:10px">Aggiungi chiusura</div>
             <div style="display:grid;grid-template-columns:1fr 1fr 2fr auto;gap:8px;align-items:end">
@@ -1952,6 +1984,10 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           </select>
         </div>
       </div>
+      <div class="form-group" id="op-ore-default-row" style="margin-top:4px">
+        <label>Ore al giorno <span style="color:var(--muted);font-weight:400">(vuoto = come da orario di lavoro)</span></label>
+        <input type="number" id="op-ore-default" min="0" max="24" step="0.5" placeholder="come da orario">
+      </div>
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-top:4px">
         <input type="checkbox" id="op-escluso-pianificazione">
         Escludi dalla pianificazione automatica
@@ -2114,6 +2150,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
 
 <script src="js/config.js"></script>
 <script src="js/etichette.js"></script>
+<script src="js/calendario.js"></script>
 <script>
 // ═══════════════════════════════════════════════
 // CONFIGURAZIONE SUPABASE
@@ -2145,7 +2182,6 @@ let currentOrdineId = null;
 let _realtimeChannel = null; // canale Realtime attivo (evita doppia sottoscrizione al ritorno dalla background)
 let faseMediaMinutiMap = {}; // fase_id -> avg minuti per pezzo
 let faseEsternaSet = new Set(); // fase_id (int) delle fasi con e_attesa_esterna=true
-let minutiGiornoGlobale = 480; // aggiornato da loadAvanzamenti e calcolaStimaSingoloOrdine
 let faseExtraMediaMinutiMap = {}; // nome_lower -> mediana minuti per unità (fasi_ordine_extra)
 let catalogoFasiExtra = []; // catalogo_fasi_extra in memoria
 let _etaMinutiCache = {}; // ordine_id -> minuti ETA equivalenti (critico interno + calendario esterno scalato)
@@ -2246,9 +2282,9 @@ async function postLogin() {
   document.getElementById('header-date').textContent = new Date().toLocaleDateString('it-IT', { weekday:'short', day:'numeric', month:'short' });
   verificaVersioneClient(); // non bloccante: le operazioni distruttive controllano clientObsoleto al click
   // Load fasi e tipi prodotto (devono precedere il resto)
-  await Promise.all([loadFasi(), loadTipiProdotto(), loadPrioritaConfig(), loadAttributiConfig(), loadLavorazioniCnc()]);
+  await Promise.all([loadFasi(), loadTipiProdotto(), loadPrioritaConfig(), loadAttributiConfig(), loadLavorazioniCnc(), Calendario.carica(sb, currentUserRow.id, null)]);
   // Load data
-  await Promise.all([loadOrdini(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadChiusureCache(), loadMacroFasi(), loadFaseMediaMinuti(), loadFaseExtraMediaMinuti(), caricaNomiFasiExtraStoria(), loadMacchine()]);
+  await Promise.all([loadOrdini(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadMacroFasi(), loadFaseMediaMinuti(), loadFaseExtraMediaMinuti(), caricaNomiFasiExtraStoria(), loadMacchine()]);
   // Check ordini in ritardo (solo responsabile)
   if (currentUserRow?.ruolo === 'responsabile') checkOrdiniInRitardo();
   // Realtime
@@ -2630,7 +2666,7 @@ function showSection(name) {
   else if (name === 'kpi-config') loadKpiConfig();
   else if (name === 'pianificazione') {
     const sel = document.getElementById('piano-data-sel');
-    if (sel && !sel.value) sel.value = new Date().toISOString().split('T')[0];
+    if (sel && !sel.value) sel.value = Calendario.oggiIso();
     caricaDisponibilitaPanel();
     renderPianificazione();
   }
@@ -2668,6 +2704,8 @@ function renderSistemaConfig() {
   el.innerHTML =
     riga('Indirizzo dell\'app', 'Usato nei link delle notifiche (sola lettura: si imposta in fase di installazione)', ro(_sistema.app_base_url)) +
     riga('Indirizzo delle funzioni server', 'Usato per le notifiche push (sola lettura: si imposta in fase di installazione)', ro(_sistema.edge_functions_base_url)) +
+    riga('Fuso orario dell\'azienda', 'Nome del fuso (es. Europe/Rome): decide "oggi", gli orari di lavoro e i promemoria, indipendentemente dal dispositivo',
+      `<input type="text" value="${escapeHtml(_sistema.fuso_orario || '')}" onchange="salvaSistema('fuso_orario', this.value.trim())" style="width:180px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">`) +
     riga('Fotocamera interna attiva', 'Se attiva l\'app operatore scatta le foto con la fotocamera interna anziché con quella di sistema',
       `<input type="checkbox" ${_sistema.fotocamera_interna_attiva === 'true' ? 'checked' : ''} onchange="salvaSistema('fotocamera_interna_attiva', this.checked ? 'true' : 'false')" style="width:18px;height:18px">`) +
     riga('Versione minima del client', 'I dispositivi con una versione più vecchia devono ricaricare l\'app prima di operazioni delicate (es. mango-v40)',
@@ -3030,7 +3068,7 @@ let _pianoDataSel = null;
 function aggiornaDataPiano() {
   const sel = document.getElementById('piano-data-sel');
   const val = sel?.value; // yyyy-mm-dd o ''
-  const oggi = new Date().toISOString().split('T')[0];
+  const oggi = Calendario.oggiIso();
   _pianoDataSel = (val && val !== oggi) ? val : null;
   const btn = document.getElementById('piano-anteprima-btn');
   if (btn) btn.style.display = _pianoDataSel ? '' : 'none';
@@ -3038,12 +3076,12 @@ function aggiornaDataPiano() {
 }
 
 async function caricaDisponibilitaPanel() {
-  const data = _pianoDataSel || new Date().toISOString().split('T')[0];
+  const data = _pianoDataSel || Calendario.oggiIso();
   const operatori = operatoriCache.filter(o => o.ruolo === 'operatore' && o.attivo);
 
   const { data: eccezioni } = await sb.from('disponibilita_giornaliera')
     .select('operatore_id, data, ore')
-    .gte('data', new Date().toISOString().split('T')[0])
+    .gte('data', Calendario.oggiIso())
     .lte('data', (() => { const d = new Date(); d.setDate(d.getDate()+14); return d.toISOString().split('T')[0]; })())
     .order('data');
 
@@ -3058,7 +3096,7 @@ async function caricaDisponibilitaPanel() {
   const panel = document.getElementById('piano-disp-panel');
   if (panel) {
     panel.innerHTML = operatori.map(op => {
-      const oreDefault = op.ore_default ?? 8.0;
+      const oreDefault = op.ore_default ?? oreGiornoDefault();
       const oreRiga = oreOggi[op.id];
       // Tratta come "nessuna eccezione" sia l'assenza di riga che una riga con ore = default
       const isEccezione = oreRiga !== undefined && Number(oreRiga) !== oreDefault;
@@ -3092,21 +3130,21 @@ async function caricaDisponibilitaPanel() {
   }
 
   // Lista eccezioni prossimi 14 giorni — esclude righe con ore = ore_default (non sono eccezioni reali)
-  const oggiStr = new Date().toISOString().split('T')[0];
+  const oggiStr = Calendario.oggiIso();
   const eccezioniList = document.getElementById('piano-eccezioni-list');
   if (eccezioniList) {
     const future = (eccezioni || []).filter(e => {
       if (e.data < oggiStr) return false;
       const op = operatoriCache.find(o => o.id === e.operatore_id);
       if (!op) return false;
-      return Number(e.ore) !== (op.ore_default ?? 8.0);
+      return Number(e.ore) !== (op.ore_default ?? oreGiornoDefault());
     });
     if (future.length) {
       eccezioniList.innerHTML = `<div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em">Eccezioni programmati — prossimi 14 giorni</div>
         <div style="display:flex;flex-direction:column;gap:3px">
           ${future.map(e => {
             const op = operatoriCache.find(o => o.id === e.operatore_id);
-            const oreDefault = op.ore_default ?? 8.0;
+            const oreDefault = op.ore_default ?? oreGiornoDefault();
             const ore = Number(e.ore);
             const label = ore === 0 ? 'Assente' : `${ore}h`;
             const color = ore === 0 ? 'var(--alert-ink-2)' : 'var(--warn-ink)';
@@ -3125,7 +3163,7 @@ async function caricaDisponibilitaPanel() {
 }
 
 async function impostaDisponibilita(operatoreId, ore, dataOverride) {
-  const data = dataOverride || _pianoDataSel || new Date().toISOString().split('T')[0];
+  const data = dataOverride || _pianoDataSel || Calendario.oggiIso();
   const { data: res } = await sb.rpc('imposta_disponibilita_giornaliera', {
     p_operatore_id:    operatoreId,
     p_data:            data,
@@ -3287,7 +3325,7 @@ async function renderPianificazione(p_data_override) {
                 ${ord.da_ieri ? `<span style="font-size:10px;background:var(--warn-soft);color:var(--warn-ink);padding:1px 5px;border-radius:3px;margin-left:4px;vertical-align:middle">DA IERI</span>` : ''}
               </td>
               <td style="padding:8px 10px">${escapeHtml(ord.cliente || '')}</td>
-              <td style="padding:8px 10px;text-align:center;color:${ord.scadenza && new Date().toISOString().split('T')[0] > ord.scadenza ? 'var(--alert-strong)' : 'inherit'}">${ord.scadenza ? formatDate(ord.scadenza) : '—'}</td>
+              <td style="padding:8px 10px;text-align:center;color:${ord.scadenza && Calendario.oggiIso() > ord.scadenza ? 'var(--alert-strong)' : 'inherit'}">${ord.scadenza ? formatDate(ord.scadenza) : '—'}</td>
               <td style="padding:8px 10px" onclick="event.stopPropagation()">
                 ${hasConflitto && opzioniCl.length
                   ? `<div style="display:flex;gap:4px;align-items:center">
@@ -3349,7 +3387,7 @@ async function renderPianificazione(p_data_override) {
                   ${ord.da_ieri ? `<span style="font-size:10px;background:var(--warn-soft);color:var(--warn-ink);padding:1px 5px;border-radius:3px;margin-left:4px;vertical-align:middle">DA IERI</span>` : ''}
                 </td>
                 <td style="padding:8px 10px">${escapeHtml(ord.cliente || '')}</td>
-                <td style="padding:8px 10px;text-align:center;color:${ord.scadenza && new Date().toISOString().split('T')[0] > ord.scadenza ? 'var(--alert-strong)' : 'inherit'}">${ord.scadenza ? formatDate(ord.scadenza) : '—'}</td>
+                <td style="padding:8px 10px;text-align:center;color:${ord.scadenza && Calendario.oggiIso() > ord.scadenza ? 'var(--alert-strong)' : 'inherit'}">${ord.scadenza ? formatDate(ord.scadenza) : '—'}</td>
                 <td style="padding:8px 10px">
                   <span style="color:${hasConflitto ? 'var(--alert-ink-2)' : 'var(--ink)'}">${escapeHtml(opNome)}</span>
                   ${hasConflitto ? `<div style="font-size:10px;color:var(--alert-ink-2);margin-top:2px">${escapeHtml(ord.motivazione || '')}</div>` : ''}
@@ -3443,7 +3481,7 @@ function _forzaRiassegna(ordineId, faseId, opId) {
 // DASHBOARD
 // ═══════════════════════════════════════════════
 function renderDashboard() {
-  const oggi = new Date().toISOString().split('T')[0];
+  const oggi = Calendario.oggiIso();
   const aperti = ordiniCache.filter(o => o.stato === 'aperto').length;
   const ritardo = ordiniCache.filter(o => o.stato === 'aperto' && o.scadenza && o.scadenza < oggi).length;
   const attesa = ordiniCache.filter(o => o.stato === 'attesa_spedizione').length;
@@ -3656,7 +3694,7 @@ async function rimuoviDalGruppoSpedizione(ordineId, codice) {
 
 function ordineRow(o, mini = false) {
   const scad = o.scadenza ? formatDate(o.scadenza) : '—';
-  const isLate = o.scadenza && o.scadenza < new Date().toISOString().split('T')[0] && o.stato === 'aperto';
+  const isLate = o.scadenza && o.scadenza < Calendario.oggiIso() && o.stato === 'aperto';
   const isAttesa = o.stato === 'attesa_spedizione';
   const isSosp = o.stato === 'sospeso';
   const rowClass = isAttesa ? 'style="background:var(--ok-bg)"' : isSosp ? 'style="background:var(--warn-bg);opacity:0.85"' : '';
@@ -3765,18 +3803,12 @@ async function loadAvanzamenti(ids) {
     const extraFallback = allExtraVals.length ? allExtraVals[Math.floor(allExtraVals.length / 2)] : 30;
     (data || []).filter(f => f.stato !== 'completata' && !f.e_attesa_esterna).forEach(f => {
       const med = faseExtraMediaMinutiMap[f.nome?.toLowerCase()] ?? extraFallback;
-      const contrib = f.stato === 'in_corso' ? med * 0.5 : med;
+      const contrib = f.stato === 'in_corso' ? med * Calendario.costante('fattore_fase_in_corso') : med;
       _etaMinutiCache[f.ordine_id] = (_etaMinutiCache[f.ordine_id] || 0) + contrib;
     });
   }
 
-  const minutiGiorno = (() => {
-    if (!orarioConfig) return 480;
-    const [hi, mi] = (orarioConfig.ora_inizio || '08:00').split(':').map(Number);
-    const [hf, mf] = (orarioConfig.ora_fine   || '17:00').split(':').map(Number);
-    return Math.max(60, (hf * 60 + mf) - (hi * 60 + mi));
-  })();
-  minutiGiornoGlobale = minutiGiorno;
+  const minutiGiorno = Calendario.minutiGiorno();   // giornata tipo dal calendario unico (server)
 
   // Costruisce fasiMap nel formato atteso da buildEtaFromFasi (con flag esterna)
   const fasiMap = {};
@@ -3835,7 +3867,7 @@ async function loadAvanzamenti(ids) {
     const minTotale = etaMinutiPerOrdine[id];
     if (minTotale > 0) {
       const giorniRimanenti = Math.ceil(minTotale / minutiGiorno);
-      const dataStimata = addGiorniLavorativi(new Date(), giorniRimanenti);
+      const dataStimata = Calendario.aggiungiGiorniLavorativi(Calendario.oggiIso(), giorniRimanenti);
       const dataStimataStr = dataStimata.toISOString().split('T')[0];
       const isRischio = ordine?.scadenza && dataStimataStr > ordine.scadenza;
       if (isRischio) tr.classList.add('scad-rischio');
@@ -3910,7 +3942,7 @@ async function renderDettaglioOrdine(id) {
   document.getElementById('det-title').textContent = `${ordine.cliente} — ${ordine.codice || ''}`;
 
   // Info
-  const oggi = new Date().toISOString().split('T')[0];
+  const oggi = Calendario.oggiIso();
   const isLate = ordine.scadenza && ordine.scadenza < oggi && ordine.stato === 'aperto';
   document.getElementById('det-info').innerHTML = `
     <div class="detail-field"><label>Cliente</label><span>${escapeHtml(ordine.cliente)}</span></div>
@@ -4714,6 +4746,7 @@ function openModalNuovoOperatore(ruolo) {
   document.getElementById('op-pin-label').textContent = 'PIN (4 cifre) *';
   document.getElementById('op-pin-hint').style.display = 'none';
   document.getElementById('op-escluso-pianificazione').checked = false;
+  document.getElementById('op-ore-default').value = '';
   const existingComp2 = document.getElementById('op-competenze-section');
   if (existingComp2) existingComp2.remove();
   const existingFerie2 = document.getElementById('op-ferie-section');
@@ -4734,6 +4767,7 @@ function openModalModificaOperatore(id) {
   document.getElementById('op-pin-label').textContent = 'Nuovo PIN (4 cifre)';
   document.getElementById('op-pin-hint').style.display = '';
   document.getElementById('op-escluso-pianificazione').checked = !!op.escluso_pianificazione;
+  document.getElementById('op-ore-default').value = op.ore_default ?? '';
 
   // Sezione competenze in sola lettura
   const fasiConOp = fasi.filter(f => (f.competenze || []).includes(id)).map(f => {
@@ -4831,7 +4865,9 @@ async function salvaOperatore() {
     if (pin && !/^\d{4}$/.test(pin)) { toast('Il PIN deve essere 4 cifre numeriche', 'err'); return; }
     const esclusoPianificazione = document.getElementById('op-escluso-pianificazione').checked;
     const opAttuale = operatoriCache.find(o => o.id === editId);
-    const oreDefaultAttuale = opAttuale?.ore_default ?? 8.0;
+    const oreInput = document.getElementById('op-ore-default').value.trim();
+    const oreDefaultAttuale = oreInput === '' ? null : numeroOLiteral(oreInput);   // vuoto = come da orario; 0 resta 0
+    if (oreInput !== '' && oreDefaultAttuale === null) { toast('Ore al giorno non valide', 'err'); return; }
 
     if (opAttuale && ruolo !== opAttuale.ruolo) {
       const conferma = confirm(`Stai cambiando il ruolo di ${nome} ${cognome} da ${opAttuale.ruolo} a ${ruolo}. Confermi?`);
@@ -4960,7 +4996,7 @@ function avviaModificaPermesso(operatoreId, inizio, fine, ore, motivo) {
 }
 
 async function caricaFerieOperatore(operatoreId) {
-  const oggi = new Date().toISOString().slice(0, 10);
+  const oggi = Calendario.oggiIso();
   const { data } = await sb.from('disponibilita_giornaliera')
     .select('id, data, ore, motivo')
     .eq('operatore_id', operatoreId)
@@ -4971,7 +5007,7 @@ async function caricaFerieOperatore(operatoreId) {
   if (!el) return;
 
   const op = operatoriCache.find(o => o.id === operatoreId);
-  const oreDefault = op?.ore_default ?? 8;
+  const oreDefault = op?.ore_default ?? oreGiornoDefault();
   const eccezioni = (data || []).filter(r => !!r.motivo);
 
   if (!eccezioni.length) {
@@ -5008,7 +5044,7 @@ async function aggiungiPermessoPeriodo(operatoreId) {
   if (isModifica) {
     const { dalOriginale, alOriginale } = _editPermesso;
     const op = operatoriCache.find(o => o.id === operatoreId);
-    const oreDefault = op?.ore_default ?? 8;
+    const oreDefault = op?.ore_default ?? oreGiornoDefault();
     if (dalOriginale !== dal || alOriginale !== al) {
       const { data: resetRes, error: resetErr } = await sb.rpc('imposta_permesso_periodo', {
         p_operatore_id:    operatoreId,
@@ -5047,7 +5083,7 @@ async function aggiungiPermessoPeriodo(operatoreId) {
 
 async function rimuoviPermessoPeriodo(operatoreId, dal, al) {
   const op = operatoriCache.find(o => o.id === operatoreId);
-  const oreDefault = op?.ore_default ?? 8;
+  const oreDefault = op?.ore_default ?? oreGiornoDefault();
   const { data, error } = await sb.rpc('imposta_permesso_periodo', {
     p_operatore_id:    operatoreId,
     p_data_inizio:     dal,
@@ -5122,11 +5158,9 @@ let _assSeq = 0;
 let _assRaggruppa = 'giorno';
 let _assFiltroOp = '';
 
-function _assGiornoLavorativo(iso, chiusure) {
-  const dow = new Date(iso + 'T12:00:00').getDay();
-  if (dow === 0) return false;
-  if (dow === 6 && !orarioConfig?.sabato_lavorativo) return false;
-  return !chiusure.some(c => iso >= c.data_inizio && iso <= c.data_fine);
+// Giorno lavorativo secondo il calendario unico del server (orario, sabato/domenica, chiusure, straordinari)
+function _assGiornoLavorativo(iso) {
+  return Calendario.giorni().includes(iso);
 }
 function _assGiorni(dal, al) {
   const out = [];
@@ -5190,7 +5224,7 @@ async function _caricaAssenze() {
   (dg.data || []).forEach(x => {
     const op = produzione.get(x.operatore_id);
     if (!op || !x.motivo || !String(x.motivo).trim()) return;
-    if (Number(x.ore) >= Number(op.ore_default ?? 8)) return;      // non è un'assenza (es. straordinario)
+    if (Number(x.ore) >= Number(op.ore_default ?? oreGiornoDefault())) return;      // non è un'assenza (es. straordinario)
     if (coperti.has(x.operatore_id + '|' + x.data)) return;          // già mostrato come richiesta
     (perOp[x.operatore_id] = perOp[x.operatore_id] || []).push(x);
   });
@@ -5340,17 +5374,11 @@ function apriRichiestaStorico(id) {
 // ═══════════════════════════════════════════════
 // ORARIO LAVORO
 // ═══════════════════════════════════════════════
-let orarioConfig = null;
-let chiusureAziendaliCache = []; // [{data_inizio, data_fine}] — caricato all'avvio per addGiorniLavorativi
+let orarioConfig = null;   // solo per la schermata Orario Lavoro: il calendario vero (giorni lavorativi, minuti, oggi) è in Calendario
 
 async function loadOrarioConfig() {
   const { data } = await sb.from('config_orario').select('*').single();
   orarioConfig = data;
-}
-
-async function loadChiusureCache() {
-  const { data } = await sb.from('chiusure_aziendali').select('data_inizio, data_fine');
-  chiusureAziendaliCache = data || [];
 }
 
 async function loadFaseMediaMinuti() {
@@ -5359,7 +5387,7 @@ async function loadFaseMediaMinuti() {
       .select('fase_id, tempo_accumulato_minuti, n_ordini_batch, ordini(quantita)')
       .eq('stato', 'completata')
       .gt('tempo_accumulato_minuti', 0)
-      .lt('tempo_accumulato_minuti', 20000)
+      .lt('tempo_accumulato_minuti', Calendario.costante('outlier_max_minuti') ?? 20000)
       .not('fase_id', 'is', null),
     sb.from('fasi').select('id, e_attesa_esterna'),
   ]);
@@ -5398,59 +5426,60 @@ async function loadFaseExtraMediaMinuti() {
   });
 }
 
+// Minuti netti di una fascia (inizio, fine, pausa): il riepilogo mostra solo ciò che viene digitato; il calcolo vero è nel server
+function _minutiFascia(inizio, fine, pausa) {
+  if (!inizio || !fine) return 0;
+  const [h1, m1] = inizio.split(':').map(Number);
+  const [h2, m2] = fine.split(':').map(Number);
+  return Math.max(0, (h2 * 60 + m2) - (h1 * 60 + m1) - (pausa || 0));
+}
+
 function aggiornaRiepilogoOrario() {
-  const inizio = document.getElementById('or-inizio').value;
-  const fine = document.getElementById('or-fine').value;
-  if (!inizio || !fine) return;
   const pausa = document.getElementById('or-pausa').checked;
   const minPausa = pausa ? (numeroOLiteral(document.getElementById('or-minuti-pausa').value) ?? 0) : 0;
   const sabato = document.getElementById('or-sabato').checked;
-  const oreSabato = numeroOLiteral(document.getElementById('or-ore-sabato').value) ?? 0;
   const domenica = document.getElementById('or-domenica').checked;
-  const oreDomenica = numeroOLiteral(document.getElementById('or-ore-domenica').value) ?? 0;
+  const minGiorno = _minutiFascia(document.getElementById('or-inizio').value, document.getElementById('or-fine').value, minPausa);
+  const minSabato = sabato ? _minutiFascia(document.getElementById('or-inizio-sabato').value, document.getElementById('or-fine-sabato').value, numeroOLiteral(document.getElementById('or-pausa-sabato').value) ?? 0) : 0;
+  const minDomenica = domenica ? _minutiFascia(document.getElementById('or-inizio-domenica').value, document.getElementById('or-fine-domenica').value, numeroOLiteral(document.getElementById('or-pausa-domenica').value) ?? 0) : 0;
 
-  const [h1, m1] = inizio.split(':').map(Number);
-  const [h2, m2] = fine.split(':').map(Number);
-  const minTotali = (h2 * 60 + m2) - (h1 * 60 + m1);
-  const oreGiorno = (minTotali - minPausa) / 60;
-
-  const fmtOre = h => {
-    const hh = Math.floor(h);
-    const mm = Math.round((h - hh) * 60);
+  const fmtOre = min => {
+    const hh = Math.floor(min / 60), mm = Math.round(min % 60);
     return mm > 0 ? `${hh}h ${mm}min` : `${hh}h`;
   };
-
-  let settimana = oreGiorno * 5;
-  if (sabato) settimana += oreSabato;
-  if (domenica) settimana += oreDomenica;
-
+  const cella = (titolo, valore, extra = '') => `<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">${titolo}</div><div style="font-weight:700;font-size:16px;${extra}">${valore}</div></div>`;
   let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">`;
-  html += `<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">Ore nette / giorno (lun–ven)</div><div style="font-weight:700;font-size:16px">${fmtOre(oreGiorno)}</div></div>`;
-  if (pausa) html += `<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">Di cui pausa</div><div style="font-weight:700;font-size:16px">${minPausa} min</div></div>`;
-  if (sabato) html += `<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">Sabato</div><div style="font-weight:700;font-size:16px">${fmtOre(oreSabato)}</div></div>`;
-  if (domenica) html += `<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">Domenica</div><div style="font-weight:700;font-size:16px">${fmtOre(oreDomenica)}</div></div>`;
-  html += `<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">Totale settimana</div><div style="font-weight:700;font-size:16px;color:var(--accent)">${fmtOre(settimana)}</div></div>`;
+  html += cella('Ore nette / giorno (lun–ven)', fmtOre(minGiorno));
+  if (pausa) html += cella('Di cui pausa', `${minPausa} min`);
+  if (sabato) html += cella('Sabato', fmtOre(minSabato));
+  if (domenica) html += cella('Domenica', fmtOre(minDomenica));
+  html += cella('Totale settimana', fmtOre(minGiorno * 5 + minSabato + minDomenica), 'color:var(--accent)');
   html += `</div>`;
   document.getElementById('or-riepilogo').innerHTML = html;
 }
 
 function renderOrarioConfig() {
   if (!orarioConfig) return;
-  document.getElementById('or-inizio').value = orarioConfig.ora_inizio?.slice(0,5) || '08:00';
-  document.getElementById('or-fine').value = orarioConfig.ora_fine?.slice(0,5) || '17:00';
+  const hm = v => (v || '').slice(0, 5);
+  document.getElementById('or-inizio').value = hm(orarioConfig.ora_inizio);
+  document.getElementById('or-fine').value = hm(orarioConfig.ora_fine);
   const pausa = orarioConfig.pausa_attiva ?? true;
   document.getElementById('or-pausa').checked = pausa;
   document.getElementById('or-minuti-pausa').value = orarioConfig.pausa_minuti ?? 0;   // ?? e non ||: 0 resta 0
   document.getElementById('or-pausa-hint').style.display = pausa ? '' : 'none';
   document.getElementById('or-sabato').checked = orarioConfig.sabato_lavorativo;
-  document.getElementById('or-ore-sabato').value = orarioConfig.ore_sabato ?? 0;
-  document.getElementById('or-fine-sabato').value = orarioConfig.ora_fine_sabato?.slice(0,5) || '13:00';
+  document.getElementById('or-inizio-sabato').value = hm(orarioConfig.ora_inizio_sabato);
+  document.getElementById('or-fine-sabato').value = hm(orarioConfig.ora_fine_sabato);
+  document.getElementById('or-pausa-sabato').value = orarioConfig.pausa_sabato_minuti ?? 0;
   document.getElementById('or-sabato-ore-row').style.display = orarioConfig.sabato_lavorativo ? 'grid' : 'none';
   document.getElementById('or-domenica').checked = orarioConfig.domenica_lavorativa;
-  document.getElementById('or-ore-domenica').value = orarioConfig.ore_domenica ?? 0;
-  document.getElementById('or-domenica-ore-row').style.display = orarioConfig.domenica_lavorativa ? '' : 'none';
+  document.getElementById('or-inizio-domenica').value = hm(orarioConfig.ora_inizio_domenica);
+  document.getElementById('or-fine-domenica').value = hm(orarioConfig.ora_fine_domenica);
+  document.getElementById('or-pausa-domenica').value = orarioConfig.pausa_domenica_minuti ?? 0;
+  document.getElementById('or-domenica-ore-row').style.display = orarioConfig.domenica_lavorativa ? 'grid' : 'none';
   aggiornaRiepilogoOrario();
   loadChiusureAziendali();
+  loadStraordinari();
 }
 
 function toggleOrarioPausa(cb) {
@@ -5462,10 +5491,78 @@ function toggleOrarioSabato(cb) {
   aggiornaRiepilogoOrario();
 }
 function toggleOrarioDomenica(cb) {
-  document.getElementById('or-domenica-ore-row').style.display = cb.checked ? '' : 'none';
+  document.getElementById('or-domenica-ore-row').style.display = cb.checked ? 'grid' : 'none';
   aggiornaRiepilogoOrario();
 }
+
+// ── Straordinari per giorni o periodi (tabella straordinari) ──
+let _straordinari = [];
+let _editStraordinario = null;
+
+async function loadStraordinari() {
+  const { data, error } = await sb.from('straordinari').select('id, data_inizio, data_fine, ore_extra, descrizione')
+    .gte('data_fine', Calendario.oggiIso()).order('data_inizio').order('id').limit(200);
+  const el = document.getElementById('or-straordinari-list');
+  if (!el) return;
+  if (error) { el.innerHTML = `<span style="color:var(--alert)">${escapeHtml(error.message)}</span>`; return; }
+  _straordinari = data || [];
+  el.innerHTML = _straordinari.length ? _straordinari.map(s => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <span style="font-size:13px;font-weight:600">${_dIt(s.data_inizio)}${s.data_fine !== s.data_inizio ? ' → ' + _dIt(s.data_fine) : ''}</span>
+      <span style="font-size:12px;background:var(--alert-soft);color:var(--alert-ink);padding:2px 8px;border-radius:6px">+${String(Number(s.ore_extra)).replace('.', ',')} h/giorno</span>
+      <span style="flex:1;font-size:12px;color:var(--muted)">${escapeHtml(s.descrizione || '')}</span>
+      <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="avviaModificaStraordinario('${s.id}')">Modifica</button>
+      <button class="btn btn-danger" style="padding:4px 10px;font-size:12px" onclick="eliminaStraordinario('${s.id}')" aria-label="Elimina">✕</button>
+    </div>`).join('') : 'Nessuno straordinario programmato';
+}
+
+function annullaModificaStraordinario() {
+  _editStraordinario = null;
+  ['or-str-dal', 'or-str-al', 'or-str-ore', 'or-str-desc'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('or-str-form-title').textContent = 'Aggiungi straordinario';
+  document.getElementById('or-str-btn-salva').textContent = '+ Aggiungi';
+  document.getElementById('or-str-btn-annulla').style.display = 'none';
+}
+
+function avviaModificaStraordinario(id) {
+  const s = _straordinari.find(x => x.id === id); if (!s) return;
+  _editStraordinario = id;
+  document.getElementById('or-str-dal').value = s.data_inizio;
+  document.getElementById('or-str-al').value = s.data_fine;
+  document.getElementById('or-str-ore').value = s.ore_extra;
+  document.getElementById('or-str-desc').value = s.descrizione || '';
+  document.getElementById('or-str-form-title').textContent = 'Modifica straordinario';
+  document.getElementById('or-str-btn-salva').textContent = '✓ Salva modifica';
+  document.getElementById('or-str-btn-annulla').style.display = '';
+}
+
+async function salvaStraordinario() {
+  const dal = document.getElementById('or-str-dal').value, al = document.getElementById('or-str-al').value || dal;
+  const ore = numeroOLiteral(document.getElementById('or-str-ore').value);
+  if (!dal || ore === null || ore <= 0) { toast('Indica il giorno (o il periodo) e le ore extra per giorno', 'err'); return; }
+  const { data, error } = await sb.rpc('imposta_straordinario', { p_id: _editStraordinario, p_data_inizio: dal, p_data_fine: al, p_ore_extra: ore,
+    p_descrizione: document.getElementById('or-str-desc').value, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) {
+    const msg = { periodo_sovrapposto: 'Il periodo si sovrappone a un altro straordinario', date_non_valide: 'Date non valide', ore_extra_non_valide: 'Ore extra non valide (da 0 a 12)' }[data?.errore];
+    toast(msg || 'Errore: ' + (data?.errore || error?.message || ''), 'err'); return;
+  }
+  annullaModificaStraordinario();
+  await Promise.all([loadStraordinari(), Calendario.carica(sb, currentUserRow.id, null)]);
+  toast('Straordinario salvato', 'ok');
+}
+
+async function eliminaStraordinario(id) {
+  if (!confirm('Eliminare questo straordinario?')) return;
+  const { data, error } = await sb.rpc('elimina_straordinario', { p_id: id, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
+  await Promise.all([loadStraordinari(), Calendario.carica(sb, currentUserRow.id, null)]);
+  toast('Straordinario eliminato', 'ok');
+}
+
 // Numero da un campo di testo: vuoto o non numerico = null (mai un valore di ripiego: 0 resta 0)
+// Ore di una giornata tipo dal calendario unico (server): nessun 8 scritto nel codice
+const oreGiornoDefault = () => (Calendario.minutiGiorno() || 0) / 60;
+
 function numeroOLiteral(v) {
   const t = String(v ?? '').trim().replace(',', '.');
   if (t === '') return null;
@@ -5783,10 +5880,11 @@ async function loadConfrontoTempiRiferimento() {
 async function salvaOrario() {
   // Nessun valore di ripiego: un campo vuoto o non numerico blocca il salvataggio, 0 resta 0; la validazione vera è nel server
   const pausa = numeroOLiteral(document.getElementById('or-minuti-pausa').value);
-  const oreSab = numeroOLiteral(document.getElementById('or-ore-sabato').value);
-  const oreDom = numeroOLiteral(document.getElementById('or-ore-domenica').value);
-  if (pausa === null || oreSab === null || oreDom === null || !document.getElementById('or-inizio').value || !document.getElementById('or-fine').value || !document.getElementById('or-fine-sabato').value) {
-    toast('Compila tutti i campi con valori numerici validi (0 è ammesso)', 'err'); return;
+  const pausaSab = numeroOLiteral(document.getElementById('or-pausa-sabato').value);
+  const pausaDom = numeroOLiteral(document.getElementById('or-pausa-domenica').value);
+  const orari = ['or-inizio', 'or-fine', 'or-inizio-sabato', 'or-fine-sabato', 'or-inizio-domenica', 'or-fine-domenica'].map(id => document.getElementById(id).value);
+  if (pausa === null || pausaSab === null || pausaDom === null || orari.some(v => !v)) {
+    toast('Compila tutti i campi con valori validi (0 è ammesso)', 'err'); return;
   }
   const payload = {
     ora_inizio: document.getElementById('or-inizio').value,
@@ -5794,14 +5892,17 @@ async function salvaOrario() {
     pausa_attiva: document.getElementById('or-pausa').checked,
     pausa_minuti: pausa,
     sabato_lavorativo: document.getElementById('or-sabato').checked,
-    ore_sabato: oreSab,
+    ora_inizio_sabato: document.getElementById('or-inizio-sabato').value,
     ora_fine_sabato: document.getElementById('or-fine-sabato').value,
+    pausa_sabato_minuti: pausaSab,
     domenica_lavorativa: document.getElementById('or-domenica').checked,
-    ore_domenica: oreDom,
+    ora_inizio_domenica: document.getElementById('or-inizio-domenica').value,
+    ora_fine_domenica: document.getElementById('or-fine-domenica').value,
+    pausa_domenica_minuti: pausaDom,
   };
   const { data, error } = await sb.rpc('imposta_config_orario', { p_dati: payload, p_responsabile_id: currentUserRow.id, p_session_token: null });
   if (error || !data?.ok) { toast('Salvataggio NON riuscito: ' + (data?.errore || error?.message || ''), 'err'); return; }
-  await loadOrarioConfig();
+  await Promise.all([loadOrarioConfig(), Calendario.carica(sb, currentUserRow.id, null)]);
   toast('Orario salvato', 'ok');
 }
 
@@ -5830,7 +5931,7 @@ function avviaModificaChiusura(id, dal, al, desc) {
 }
 
 async function loadChiusureAziendali() {
-  const oggi = new Date().toISOString().slice(0, 10);
+  const oggi = Calendario.oggiIso();
   const { data } = await sb.from('chiusure_aziendali')
     .select('id, data_inizio, data_fine, descrizione')
     .gte('data_fine', oggi)
@@ -6057,7 +6158,7 @@ function renderUfficio(ordini, ordFasi) {
 
     const isAttesa = o.stato === 'attesa_spedizione';
     const isSosp = o.stato === 'sospeso';
-    const oggi = new Date().toISOString().split('T')[0];
+    const oggi = Calendario.oggiIso();
     const inRitardo = o.scadenza && o.scadenza < oggi && !isAttesa;
 
     // Progresso per macro
@@ -8066,7 +8167,7 @@ async function inviaNotificaAResponsabile(tipo, testo, ordineId = null) {
 }
 
 async function checkOrdiniInRitardo() {
-  const oggi = new Date().toISOString().split('T')[0];
+  const oggi = Calendario.oggiIso();
   const inRitardo = ordiniCache.filter(o => o.stato === 'aperto' && o.scadenza && o.scadenza < oggi);
   for (const o of inRitardo) {
     // Controlla se già notificato oggi
@@ -8089,13 +8190,8 @@ async function calcolaStimaSingoloOrdine(id) {
   const minTotale = _etaMinutiCache[id];
   if (!minTotale) { el.textContent = 'Dati insufficienti'; el.style.color = 'var(--muted)'; return; }
 
-  const minutiGiorno = (() => {
-    if (!orarioConfig) return 480;
-    const [hi, mi] = (orarioConfig.ora_inizio || '08:00').split(':').map(Number);
-    const [hf, mf] = (orarioConfig.ora_fine   || '17:00').split(':').map(Number);
-    return Math.max(60, (hf * 60 + mf) - (hi * 60 + mi));
-  })();
-  minutiGiornoGlobale = minutiGiorno;
+  const minutiGiorno = Calendario.minutiGiorno();
+  if (!minutiGiorno) { el.textContent = 'Dati insufficienti'; el.style.color = 'var(--muted)'; return; }
 
   const giorni = Math.ceil(minTotale / minutiGiorno);
 
@@ -8105,7 +8201,7 @@ async function calcolaStimaSingoloOrdine(id) {
     const { data: dataDB } = await sb.rpc('data_consegna_stimata', { p_giorni_lavorativi_necessari: giorni });
     dataStimataStr = dataDB;
   } catch (_) {
-    dataStimataStr = addGiorniLavorativi(new Date(), giorni).toISOString().split('T')[0];
+    dataStimataStr = Calendario.aggiungiGiorniLavorativi(Calendario.oggiIso(), giorni).toISOString().split('T')[0];
   }
 
   const isRischio = ordine.scadenza && dataStimataStr > ordine.scadenza;
@@ -8123,7 +8219,7 @@ async function calcolaStimaSingoloOrdine(id) {
 // Il valore in _etaMinutiCache è in "minuti-lavorativi-equivalenti":
 //   diviso per minutiGiornoGlobale dà i giorni totali stimati per il cliente.
 function buildEtaFromFasi(ordiniList, fasiMap) {
-  const minGiorno = minutiGiornoGlobale || 480;
+  const minGiorno = Calendario.minutiGiorno() || Infinity;   // senza calendario caricato nessuna stima in giorni (mai un valore inventato)
 
   // Coda per fasi INTERNE (seriali per fase, condivise tra ordini)
   const faseQueue = {};
@@ -8136,7 +8232,7 @@ function buildEtaFromFasi(ordiniList, fasiMap) {
         const fid = parseInt(f.fase_id);
         const media = faseMediaMinutiMap[fid];
         if (!media) return;
-        const minuti = (f.stato === 'in_corso' ? media * 0.5 : media) * q;
+        const minuti = (f.stato === 'in_corso' ? media * Calendario.costante('fattore_fase_in_corso') : media) * q;
         if (!faseQueue[fid]) faseQueue[fid] = [];
         faseQueue[fid].push({ ordine_id: o.id, minuti, scad });
       });
@@ -8206,7 +8302,7 @@ function buildEtaFromFasi(ordiniList, fasiMap) {
         const fid = parseInt(f.fase_id);
         const media = faseMediaMinutiMap[fid];
         if (!media) return;
-        const minCal = f.inCorso ? media * 0.5 : media; // in_corso/in_attesa = metà restante
+        const minCal = f.inCorso ? media * Calendario.costante('fattore_fase_in_corso') : media; // in_corso/in_attesa = quota restante (kpi_config)
         extEquiv += minCal * (minGiorno / 1440);
       });
     if (extEquiv > 0) eta[o.id] = (eta[o.id] || 0) + extEquiv;
@@ -8214,22 +8310,6 @@ function buildEtaFromFasi(ordiniList, fasiMap) {
 
   Object.assign(_etaMinutiCache, eta);
   return eta;
-}
-
-function addGiorniLavorativi(dataInizio, giorni) {
-  const d = new Date(dataInizio);
-  if (giorni <= 0) return d;
-  let aggiunti = 0;
-  while (aggiunti < giorni) {
-    d.setDate(d.getDate() + 1);
-    const dow = d.getDay();
-    if (dow === 0) continue;
-    if (dow === 6 && !orarioConfig?.sabato_lavorativo) continue;
-    const iso = d.toISOString().split('T')[0];
-    if (chiusureAziendaliCache.some(c => iso >= c.data_inizio && iso <= c.data_fine)) continue;
-    aggiunti++;
-  }
-  return d;
 }
 
 function scadenzaClass(scadenza) {
@@ -8336,56 +8416,12 @@ async function eliminaOrdine(id) {
 // KPI
 // ═══════════════════════════════════════════════
 // Calcola ore lavorative effettive tra due timestamp, rispettando config_orario
-function calcolaOreEffettive(startIso, endIso) {
-  if (!startIso || !endIso) return 0;
-  const cfg = orarioConfig;
-  if (!cfg) return (new Date(endIso) - new Date(startIso)) / 3600000;
-
-  const [ih, im] = (cfg.ora_inizio || '08:00').split(':').map(Number);
-  const [fh, fm] = (cfg.ora_fine || '17:00').split(':').map(Number);
-  const inizioMin = ih * 60 + im;
-  const fineMin   = fh * 60 + fm;
-  const pausaMin  = cfg.pausa_attiva ? (cfg.pausa_minuti || 0) : 0;
-  const oreNetteGiorno = (fineMin - inizioMin - pausaMin) / 60;
-
-  const start = new Date(startIso);
-  const end   = new Date(endIso);
-  if (end <= start) return 0;
-
-  let totaleMin = 0;
-  const cur = new Date(start);
-  cur.setHours(0, 0, 0, 0);
-
-  while (cur < end) {
-    const dow = cur.getDay(); // 0=Dom, 6=Sab
-    const isLav = (dow >= 1 && dow <= 5) ||
-                  (dow === 6 && cfg.sabato_lavorativo) ||
-                  (dow === 0 && cfg.domenica_lavorativa);
-
-    if (isLav) {
-      const oreGiorno = (dow === 6) ? (cfg.ore_sabato || oreNetteGiorno)
-                      : (dow === 0) ? (cfg.ore_domenica || oreNetteGiorno)
-                      : oreNetteGiorno;
-
-      const dayStart = new Date(cur); dayStart.setHours(ih, im, 0, 0);
-      const dayEnd   = new Date(cur); dayEnd.setHours(fh, fm, 0, 0);
-
-      const effStart = new Date(Math.max(start, dayStart));
-      const effEnd   = new Date(Math.min(end, dayEnd));
-
-      if (effEnd > effStart) {
-        // minuti grezzi in questo giorno
-        let mins = (effEnd - effStart) / 60000;
-        // sottrai pausa proporzionalmente se il giorno è pieno
-        const frazioneGiorno = mins / ((fineMin - inizioMin) || 1);
-        mins -= pausaMin * frazioneGiorno;
-        // cap alle ore lavorative configurate per quel giorno
-        totaleMin += Math.min(Math.max(0, mins), oreGiorno * 60);
-      }
-    }
-    cur.setDate(cur.getDate() + 1);
-  }
-  return totaleMin / 60;
+// Ore lavorative tra due istanti: calcolate dal server (calendario unico) in una sola chiamata per tutte le coppie necessarie
+async function oreLavorativeBatch(coppie) {
+  if (!coppie.length) return [];
+  const { data, error } = await sb.rpc('ore_lavorative_tra_batch', { p_coppie: coppie, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { console.warn('ore_lavorative_tra_batch:', error?.message || data?.errore); return coppie.map(() => 0); }
+  return data.ore.map(Number);
 }
 
 // Legge TUTTE le righe che soddisfano una query, paginando con .range() finché una
@@ -8440,7 +8476,7 @@ async function loadKpi() {
 
   const tuttiOrdini = tuttiOrdiniArr;
   const fasiNomi = Object.fromEntries(fasiCfgArr.map(f => [f.id, f.nome]));
-  const oggi = new Date().toISOString().split('T')[0];
+  const oggi = Calendario.oggiIso();
 
   // ── Raggruppa fasi per ordine ──
   const perOrdine = {};
@@ -8453,6 +8489,14 @@ async function loadKpi() {
       if (f.completata_il && f.completata_il > perOrdine[oid].maxFine) perOrdine[oid].maxFine = f.completata_il;
     }
   });
+
+  // ── ore lavorative dal calendario unico del server: tutte le coppie (inizio, fine) in una sola chiamata ──
+  const _coppie = [], _idxCoppie = new Map();
+  const _servono = (a, b) => { if (a && b && !_idxCoppie.has(a + '|' + b)) { _idxCoppie.set(a + '|' + b, _coppie.length); _coppie.push([a, b]); } };
+  Object.values(perOrdine).forEach(o => _servono(o.minInizio, o.maxFine));
+  ordFasiArr.forEach(f => { if (f.fase_id && !(f.tempo_accumulato_minuti > 0)) _servono(f.iniziata_il, f.completata_il); });
+  const _oreCoppie = await oreLavorativeBatch(_coppie);
+  const calcolaOreEffettive = (a, b) => (a && b) ? (_oreCoppie[_idxCoppie.get(a + '|' + b)] ?? 0) : 0;
 
   // ── Tempo medio ciclo ordine (ore lavorative) ──
   const tempiCiclo = Object.values(perOrdine)
@@ -8495,10 +8539,7 @@ async function loadKpi() {
     .map(([id, ore]) => ({ id: parseInt(id), nome: fasiNomi[parseInt(id)] || `Fase ${id}`, media: ore.reduce((a,b)=>a+b,0)/ore.length, count: ore.length }))
     .sort((a,b) => b.media - a.media);
   const maxOre = faseTempoArr[0]?.media || 1;
-  const oreGiornoRef = calcolaOreEffettive(
-    new Date(2024,0,1,parseInt((orarioConfig?.ora_inizio||'08:00').split(':')[0]), parseInt((orarioConfig?.ora_inizio||'08:00').split(':')[1])).toISOString(),
-    new Date(2024,0,1,parseInt((orarioConfig?.ora_fine||'17:00').split(':')[0]),   parseInt((orarioConfig?.ora_fine||'17:00').split(':')[1])).toISOString()
-  ) || 8;
+  const oreGiornoRef = (Calendario.minutiGiorno() || 0) / 60;   // giornata tipo dal calendario unico
 
   // Conta fasi in coda (disponibile/in_corso) per fase — per collo di bottiglia. JOIN a ordini
   // ed esclusione eliminato=true: senza, il badge contava anche fasi di ordini che non esistono
@@ -8855,7 +8896,7 @@ async function renderSchedeKpi() {
   };
 
   el.innerHTML = data.map(s => {
-    const scarso = (s.n_campioni_correnti || 0) < 3;
+    const scarso = (s.n_campioni_correnti || 0) < (Calendario.costante('soglia_campioni_gen') ?? 0);
     return `<div style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
         <div>
@@ -9224,7 +9265,7 @@ function renderMacchine() {
         </div>
         <div class="form-group" style="flex:1;min-width:140px">
           <label style="font-size:12px;font-weight:600">Ore/giorno disponibili</label>
-          <input type="number" id="mac-ore-${m.id}" value="${m.ore_default}" min="0.5" max="24" step="0.5"
+          <input type="number" id="mac-ore-${m.id}" value="${m.ore_default ?? ''}" placeholder="come da orario" min="0.5" max="24" step="0.5"
             style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
         </div>
       </div>
@@ -9343,7 +9384,7 @@ function avviaNuovaMacchina() {
       </div>
       <div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:3px">Ore/giorno</div>
-        <input type="number" id="mac-new-ore" value="8" min="0.5" max="24" step="0.5"
+        <input type="number" id="mac-new-ore" value="" placeholder="come da orario" min="0.5" max="24" step="0.5"
           style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:90px">
       </div>
       <button class="btn btn-primary" onclick="confermaNuovaMacchina()">✓ Crea</button>
@@ -9356,7 +9397,7 @@ function avviaNuovaMacchina() {
 async function confermaNuovaMacchina() {
   const nome  = document.getElementById('mac-new-nome')?.value.trim();
   const stato = document.getElementById('mac-new-stato')?.value;
-  const ore   = parseFloat(document.getElementById('mac-new-ore')?.value) || 8;
+  const ore   = numeroOLiteral(document.getElementById('mac-new-ore')?.value);   // vuoto = come da orario
   if (!nome) { toast('Inserisci un nome', 'err'); return; }
   const { data } = await sb.rpc('imposta_macchina', {
     p_nome: nome, p_stato: stato, p_ore_default: ore,
@@ -9384,7 +9425,7 @@ async function salvaMacchina(macId) {
   if (!m) return;
   const nome  = document.getElementById(`mac-nome-${macId}`)?.value?.trim() || m.nome;
   const stato = document.getElementById(`mac-stato-${macId}`)?.value || m.stato;
-  const ore   = parseFloat(document.getElementById(`mac-ore-${macId}`)?.value) || m.ore_default;
+  const ore   = numeroOLiteral(document.getElementById(`mac-ore-${macId}`)?.value);   // vuoto = come da orario
   const [r1, r2, r3] = await Promise.all([
     sb.rpc('imposta_macchina', { p_id: macId, p_nome: nome, p_stato: stato, p_ore_default: ore, p_responsabile_id: currentUserRow.id, p_session_token: null }),
     sb.rpc('imposta_fasi_macchina', { p_macchina_id: macId, p_fase_ids: m.fase_ids, p_responsabile_id: currentUserRow.id, p_session_token: null }),
@@ -9500,7 +9541,7 @@ const RIC_ERRORI = {
 };
 const ricErrore = c => RIC_ERRORI[c] || c || 'Operazione non riuscita';
 const RIC_STATI = Etichette.STATI_RICHIESTA;
-const _isoOggi = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const _isoOggi = () => Calendario.oggiIso();   // "oggi" nel fuso aziendale, non quello del dispositivo
 const _isoSpost = (giorni) => { const d = new Date(_isoOggi() + 'T12:00:00'); d.setDate(d.getDate() + giorni); return d.toISOString().slice(0, 10); };
 const _dIt = iso => { if (!iso) return ''; const [y, m, d] = String(iso).slice(0, 10).split('-'); return `${d}/${m}/${y}`; };
 const _oraHm = t => t ? String(t).slice(0, 5) : '';

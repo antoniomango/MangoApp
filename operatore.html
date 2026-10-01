@@ -530,6 +530,7 @@ textarea:focus { border-color: var(--accent); }
 
 <script src="js/config.js"></script>
 <script src="js/etichette.js"></script>
+<script src="js/calendario.js"></script>
 <script>
 // ═══════════════════════════════════════════════
 // SUPABASE
@@ -558,8 +559,7 @@ let currentOrdineId = null;
 let currentFaseDetId = null; // ordine_fasi.id
 let _faseDetCorrente = null; // riga ordine_fasi renderizzata da renderFaseDetail() — usata da completaFase()
 let faseMediaMinutiMap = {};
-let orarioConfig = null;
-let chiusureAziendaliCache = [];
+let orarioConfig = null;   // solo per l'orario di fine turno (timer di aggiornamento); il calendario è in Calendario
 
 // ═══════════════════════════════════════════════
 // INDEXEDDB — OFFLINE QUEUE
@@ -933,9 +933,10 @@ async function showApp() {
 
   await loadFasi();
   await loadEtichette();
+  await loadCalendario();
   await loadOrdini();
   await loadNotificheOp();
-  await Promise.all([loadFaseMediaMinuti(), loadOrarioConfigOp(), loadChiusureCache()]);
+  await Promise.all([loadFaseMediaMinuti(), loadOrarioConfigOp()]);
   avviaPollingAggiornamenti();
   scheduleEndOfShiftRefreshOp();
   updateQueueBadge();
@@ -985,6 +986,15 @@ async function doLogout() {
 // DATA
 // ═══════════════════════════════════════════════
 // Etichette (tipi prodotto, attributi, priorità con colore/peso) da configurazione, con cache per l'uso offline
+// Calendario lavorativo (oggi nel fuso aziendale, giornata tipo, giorni lavorativi, costanti di stima) dal server, con cache per l'uso offline
+async function loadCalendario() {
+  if (isOnline && await Calendario.carica(sb, currentUser.id, sessionToken)) {
+    await cacheSet('calendario', Calendario.esporta());
+  } else {
+    Calendario.imposta(await cacheGet('calendario'));
+  }
+}
+
 async function loadEtichette() {
   if (isOnline && await Etichette.carica(sb, currentUser.id, sessionToken)) {
     await cacheSet('etichette', Etichette.esporta());
@@ -1223,7 +1233,7 @@ async function renderHome() {
       const fase_id = parseInt(f.fase_id);
       const media = faseMediaMinutiMap[fase_id];
       if (!media) return;
-      const minuti = (f.stato === 'in_corso' ? media * 0.5 : media) * q;
+      const minuti = (f.stato === 'in_corso' ? media * Calendario.costante('fattore_fase_in_corso') : media) * q;
       if (!faseQueue[fase_id]) faseQueue[fase_id] = [];
       faseQueue[fase_id].push({ ordine_id: o.id, minuti, scad });
     });
@@ -1274,7 +1284,7 @@ async function renderHome() {
       maxMinuti = Math.max(maxMinuti, calcolaFinish(parseInt(f.fase_id)));
     });
 
-    const oggi = new Date().toISOString().split('T')[0];
+    const oggi = Calendario.oggiIso();
     const isInRitardo = !!(o.scadenza && oggi > o.scadenza);
     if (maxMinuti > 0) {
       const giorni = Math.ceil(maxMinuti / minutiGiorno);
@@ -1522,7 +1532,7 @@ async function renderOrdineDetail(ordineId) {
   if (!ordine) { showScreen('home'); return; }
 
   document.getElementById('ord-det-title').textContent = `${ordine.cliente} — ${ordine.codice || ''}`;
-  const oggi = new Date().toISOString().split('T')[0];
+  const oggi = Calendario.oggiIso();
   const isLate = ordine.scadenza && ordine.scadenza < oggi;
   const fratelliGruppoDet = codiciFratelliGruppo(ordine);
   document.getElementById('ord-det-meta').innerHTML = `
@@ -1599,7 +1609,7 @@ async function renderOrdineDetail(ordineId) {
       ordFasi.forEach(f => {
         if (f.stato === 'completata' || f.stato === 'non_applicabile') return;
         const media = faseMediaMinutiMap[parseInt(f.fase_id)];
-        if (media) minRim += f.stato === 'in_corso' ? media * 0.5 : media;
+        if (media) minRim += f.stato === 'in_corso' ? media * Calendario.costante('fattore_fase_in_corso') : media;
       });
       if (minRim > 0) {
         const quantita = ordine.quantita || 1;
@@ -1608,7 +1618,7 @@ async function renderOrdineDetail(ordineId) {
         const stimaStr = dataStimata.toISOString().split('T')[0];
         const stimaFmt = dataStimata.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' });
         const isRischio = ordine.scadenza && stimaStr > ordine.scadenza;
-        const isInRitardo = ordine.scadenza && new Date().toISOString().split('T')[0] > ordine.scadenza;
+        const isInRitardo = ordine.scadenza && Calendario.oggiIso() > ordine.scadenza;
         stimaEl.textContent = stimaFmt + (isInRitardo ? ' ⚠️ IN RITARDO' : isRischio ? ' ⚠️ a rischio' : ' ✓');
         stimaEl.style.color = isInRitardo ? 'var(--alert-strong)' : isRischio ? 'var(--warn-ink-2)' : 'var(--ok-strong)';
         stimaEl.style.fontWeight = (isInRitardo || isRischio) ? '700' : '400';
@@ -3002,34 +3012,9 @@ async function loadOrarioConfigOp() {
   if (data) orarioConfig = data;
 }
 
-async function loadChiusureCache() {
-  if (!isOnline) return;
-  const { data } = await sb.from('chiusure_aziendali').select('data_inizio, data_fine');
-  chiusureAziendaliCache = data || [];
-}
-
-function getMinutiGiorno() {
-  if (!orarioConfig) return 480;
-  const [hi, mi] = (orarioConfig.ora_inizio || '08:00').split(':').map(Number);
-  const [hf, mf] = (orarioConfig.ora_fine   || '17:00').split(':').map(Number);
-  return (hf * 60 + mf) - (hi * 60 + mi);
-}
-
-function addGiorniLavorativi(dataInizio, giorni) {
-  const d = new Date(dataInizio);
-  if (giorni <= 0) return d;
-  let aggiunti = 0;
-  while (aggiunti < giorni) {
-    d.setDate(d.getDate() + 1);
-    const dow = d.getDay();
-    if (dow === 0) continue;
-    if (dow === 6 && !orarioConfig?.sabato_lavorativo) continue;
-    const iso = d.toISOString().split('T')[0];
-    if (chiusureAziendaliCache.some(c => iso >= c.data_inizio && iso <= c.data_fine)) continue;
-    aggiunti++;
-  }
-  return d;
-}
+// Calendario: nessuna regola nel client (vedi js/calendario.js)
+const getMinutiGiorno = () => Calendario.minutiGiorno();
+const addGiorniLavorativi = (da, giorni) => Calendario.aggiungiGiorniLavorativi(typeof da === 'string' ? da : Calendario.oggiIso(), giorni);
 
 async function loadFaseMediaMinuti() {
   if (!isOnline || !currentUser) return;

@@ -241,6 +241,7 @@ header {
 
 <script src="js/config.js"></script>
 <script src="js/etichette.js"></script>
+<script src="js/calendario.js"></script>
 <script>
 // SUPABASE_URL / SUPABASE_ANON arrivano da js/config.js (ambiente produzione/test)
 const { createClient } = supabase;
@@ -375,6 +376,7 @@ function doLogout() {
 // ── DATI META ──
 async function caricaMeta() {
   await Etichette.carica(sb, currentUser?.id, sessionToken);   // etichette da configurazione (tipi, strutture, materiali, priorità)
+  await Calendario.carica(sb, currentUser?.id, sessionToken);  // "oggi" nel fuso aziendale
   const [{ data: macro }, { data: fasi }] = await Promise.all([
     sb.from('macro_fasi').select('*').order('posizione').order('id'),
     sb.from('fasi').select('id, nome, posizione, macro_fase_id').order('posizione').order('id')
@@ -453,7 +455,7 @@ function renderLista() {
   const fasiExtraMap = {};
   allFasiExtra.forEach(f => { if (!fasiExtraMap[f.ordine_id]) fasiExtraMap[f.ordine_id] = []; fasiExtraMap[f.ordine_id].push(f); });
 
-  const oggi = new Date().toISOString().split('T')[0];
+  const oggi = Calendario.oggiIso();
   const oggiLabel = new Date().toLocaleDateString('it-IT', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
   const labelQ = filtrati.length !== 1
     ? (searchQuery ? 'ordini trovati' : 'ordini attivi')
@@ -652,7 +654,7 @@ function renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine, stats) {
   const isAttesa  = o.stato === 'attesa_spedizione';
   const isSpedito = o.stato === 'spedito';
   const isSosp    = o.stato === 'sospeso';
-  const oggi      = new Date().toISOString().split('T')[0];
+  const oggi      = Calendario.oggiIso();
   const inRitardo = o.scadenza && o.scadenza < oggi && !isAttesa && !isSpedito;
 
   const statoBadge = isSpedito
