@@ -591,7 +591,7 @@ function renderStorico() {
 function storCardHtml(o) {
   const dataSpedizione = o.spedito_il || o.completato_il;
   const isExtra = o.tipo === 'extra';
-  const dettagli = [o.tipo_prodotto ? Etichette.tipoProdotto(o.tipo_prodotto) : null, o.struttura ? Etichette.struttura(o.struttura) : null, o.materiale ? Etichette.materiale(o.materiale) : null]
+  const dettagli = [o.tipo_prodotto ? Etichette.tipoProdotto(o.tipo_prodotto) : null, o.struttura ? Etichette.struttura(o.struttura) : null, Etichette.attributiLato().length ? Etichette.attributiLato().map(a => Etichette.riepilogoLato(o, a.chiave)).filter(x => x && x !== '—').join(' · ') || null : null]
     .filter(Boolean).join(' · ');
   return `<div class="stor-card" onclick="apriDettaglioStorico('${esc(o.id)}')">
     <div class="stor-hdr">
@@ -669,7 +669,9 @@ function renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine, stats) {
   const metaItems = [];
   if (o.tipo_prodotto) metaItems.push(['Tipo prodotto', Etichette.tipoProdotto(o.tipo_prodotto)]);
   if (o.struttura)     metaItems.push(['Struttura', Etichette.struttura(o.struttura)]);
-  if (o.materiale)     metaItems.push(['Materiale', Etichette.materiale(o.materiale)]);
+  Etichette.valoriLatoOrdine(o).forEach(a => a.valori.forEach(v => metaItems.push([v.lato_etichetta ? v.lato_etichetta + ': ' + a.etichetta : a.etichetta, v.testo])));
+  const lavCnc = Etichette.lavorazioniCncOrdine(o);
+  if (lavCnc.length) metaItems.push(['Lavorazioni CNC', lavCnc.map(l => l.testo).join(' · ')]);
   Etichette.attributiOrdine(o).forEach(a => metaItems.push([a.etichetta, a.valore]));
   if (o.priorita)      metaItems.push(['Priorità', Etichette.prioritaEtichetta(o.priorita)]);
   if (o.quantita > 1)  metaItems.push(['Quantità', String(o.quantita)]);

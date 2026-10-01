@@ -681,8 +681,11 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       <div class="nav-item" onclick="showSection('notif-config')" id="nav-notif-config">
         <span class="icon"><i data-ic="campana"></i></span> Destinatari Notifiche
       </div>
+      <div class="nav-item" onclick="showSection('lati-config')" id="nav-lati-config">
+        <span class="icon"><i data-ic="chiave"></i></span> Lati dell'anta
+      </div>
       <div class="nav-item" onclick="showSection('lavorazioni-cnc-config')" id="nav-lavorazioni-cnc-config">
-        <span class="icon"><i data-ic="chiave"></i></span> Lavorazioni CNC
+        <span class="icon"><i data-ic="chiave"></i></span> Catalogo lavorazioni CNC
       </div>
       <div class="nav-item" onclick="showSection('tempi-rif-config')" id="nav-tempi-rif-config">
         <span class="icon"><i data-ic="timer"></i></span> Tempi di riferimento
@@ -1496,6 +1499,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
             <div class="form-group" style="margin:0"><label style="font-size:12px">Massimo</label><input type="number" id="na-max" step="1"></div>
             <div class="form-group" style="margin:0"><label style="font-size:12px">Predefinito</label><input type="number" id="na-def" step="1"></div>
           </div>
+          <div class="form-group" style="margin:0 0 10px"><label style="font-size:12px">Vale per</label><select id="na-ambito"><option value="anta">Anta intera (un solo valore)</option><option value="lato">Ogni lato dell'anta (un valore per lato)</option></select></div>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px"><input type="checkbox" id="na-obbl" checked> Obbligatorio in ogni ordine</label>
           <button class="btn btn-primary" onclick="creaAttributo()">+ Crea attributo</button>
         </div>
@@ -1546,20 +1550,27 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <div id="notif-config-body">Caricamento…</div>
       </section>
 
-      <section class="section" id="sec-lavorazioni-cnc-config">
+      <section class="section" id="sec-lati-config">
         <div class="page-hdr">
           <div>
-            <h1>Lavorazioni CNC</h1>
-            <div class="sub">Voci del menu "Lavorazione CNC" dell'ordine. Una voce usata da almeno un ordine non si elimina: si disattiva.</div>
+            <h1>Lati dell'anta</h1>
+            <div class="sub">Etichette dei lati usate ovunque l'app mostra un lato (materiale per lato, lavorazioni CNC per lato). Il codice interno dei lati non si modifica.</div>
           </div>
         </div>
         <div class="card" style="padding:20px;max-width:760px">
-          <div id="lavorazioni-cnc-body">Caricamento…</div>
-          <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
-            <input type="text" id="nuova-lavorazione-cnc" maxlength="80" placeholder="Nuova lavorazione (es. Squadratura + fresature)"
-              style="flex:1;min-width:220px;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-ctl);font-size:13px;background:var(--bg);color:var(--ink)">
-            <button class="btn btn-primary" onclick="aggiungiLavorazioneCnc()">+ Aggiungi</button>
+          <div id="lati-config-body">Caricamento…</div>
+        </div>
+      </section>
+
+      <section class="section" id="sec-lavorazioni-cnc-config">
+        <div class="page-hdr">
+          <div>
+            <h1>Catalogo lavorazioni CNC</h1>
+            <div class="sub">Lavorazioni singole selezionabili sull'ordine, con ambito (anta intera / per lato), minuti per 1 pezzo e prodotti applicabili. Il tempo della fase CNC è la somma delle lavorazioni scelte. Una lavorazione usata da almeno un ordine non si elimina: si disattiva.</div>
           </div>
+        </div>
+        <div style="max-width:820px">
+          <div id="lavorazioni-cnc-body">Caricamento…</div>
         </div>
       </section>
 
@@ -1711,19 +1722,14 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           </div>
           <div class="form-group">
             <label>Tipo Prodotto *</label>
-            <select id="ord-tipo-prodotto">
+            <select id="ord-tipo-prodotto" onchange="tipoProdottoOrdineCambiato('ord')">
             </select>
           </div>
         </div>
-        <div class="form-group">
-          <label>Materiale *</label>
-          <select id="ord-materiale"></select>
-        </div>
-        <div class="form-group">
-          <label>Lavorazione CNC</label>
-          <select id="ord-lavorazione-cnc"><option value="">Non indicata</option></select>
-        </div>
+        <div id="ord-attributi-lato"></div>
         <div id="ord-attributi-custom"></div>
+        <div class="form-group" id="ord-lavorazioni"></div>
+        <div id="ord-anteprima-cnc"></div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -1806,7 +1812,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       <div class="form-row" id="mod-row-tipo-struttura">
         <div class="form-group">
           <label>Tipo Prodotto</label>
-          <select id="mod-tipo-prodotto">
+          <select id="mod-tipo-prodotto" onchange="tipoProdottoOrdineCambiato('mod')">
           </select>
         </div>
         <div class="form-group">
@@ -1814,17 +1820,14 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           <select id="mod-struttura"></select>
         </div>
       </div>
-      <div class="form-row" id="mod-row-materiale">
-        <div class="form-group">
-          <label>Materiale</label>
-          <select id="mod-materiale"></select>
-        </div>
-        <div class="form-group">
-          <label>Lavorazione CNC</label>
-          <select id="mod-lavorazione-cnc"><option value="">Non indicata</option></select>
-        </div>
+      <div id="mod-row-materiale">
+        <div id="mod-attributi-lato"></div>
       </div>
       <div id="mod-attributi-custom"></div>
+      <div id="mod-row-lavorazioni">
+        <div class="form-group" id="mod-lavorazioni"></div>
+        <div id="mod-anteprima-cnc"></div>
+      </div>
       <div class="form-row">
         <div class="form-group">
           <label>Priorità</label>
@@ -2314,7 +2317,7 @@ async function postLogin() {
   document.getElementById('header-date').textContent = new Date().toLocaleDateString('it-IT', { weekday:'short', day:'numeric', month:'short' });
   verificaVersioneClient(); // non bloccante: le operazioni distruttive controllano clientObsoleto al click
   // Load fasi e tipi prodotto (devono precedere il resto)
-  await Promise.all([loadFasi(), loadTipiProdotto(), loadPrioritaConfig(), loadAttributiConfig(), loadLavorazioniCnc(), Calendario.carica(sb, currentUserRow.id, null)]);
+  await Promise.all([loadFasi(), loadTipiProdotto(), loadPrioritaConfig(), loadAttributiConfig(), loadLatiConfig(), loadLavorazioniCnc(), Calendario.carica(sb, currentUserRow.id, null)]);
   // Load data
   await Promise.all([loadOrdini(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadMacroFasi(), loadFaseMediaMinuti(), loadFaseExtraMediaMinuti(), caricaNomiFasiExtraStoria(), loadMacchine()]);
   // Check ordini in ritardo (solo responsabile)
@@ -2424,7 +2427,7 @@ function fasiAttive() { return fasi.filter(f => f.attiva !== false); }
 
 // Il responsabile legge le tabelle di configurazione; il modulo condiviso Etichette ne riceve una copia
 function sincronizzaEtichette() {
-  Etichette.imposta({ tipi_prodotto: tipiProdotto, attributi: attributiConfig, priorita: prioritaConfig });
+  Etichette.imposta({ tipi_prodotto: tipiProdotto, attributi: attributiConfig, priorita: prioritaConfig, lati: typeof latiConfig !== 'undefined' ? latiConfig : [] });
 }
 
 async function loadPrioritaConfig() {
@@ -2473,11 +2476,6 @@ function popolaAttributiSelects() {
       });
       const fltEl = document.getElementById('flt-struttura');
       if (fltEl) fltEl.innerHTML = `<option value="">Tutte le strutture</option>` + opts;
-    } else if (attr.chiave === 'materiale') {
-      ['ord-materiale', 'mod-materiale'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.innerHTML = opts;
-      });
     }
   });
 }
@@ -2716,6 +2714,7 @@ function showSection(name) {
   else if (name === 'attributi-config') { loadAttributiConfig().then(renderAttributiConfig); }
   else if (name === 'registro-config') { loadRegistroModifiche(true); }
   else if (name === 'lavorazioni-cnc-config') { loadLavorazioniCnc().then(renderLavorazioniCncConfig); }
+  else if (name === 'lati-config') { loadLatiConfig().then(renderLatiConfig); }
   else if (name === 'tempi-rif-config') { loadTempiRiferimento(); }
   else if (name === 'campi-profilo-config') { loadCampiProfilo(); }
   else if (name === 'tipi-richiesta-config') { loadTipiRichiesta(); }
@@ -4003,6 +4002,7 @@ async function openDettaglioOrdine(id) {
 async function renderDettaglioOrdine(id) {
   const ordine = [...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === id);
   if (!ordine) { showSection('dashboard'); return; }
+  await arricchisciOrdini([ordine]);
 
   document.getElementById('det-title').textContent = `${ordine.cliente} — ${ordine.codice || ''}`;
 
@@ -4016,9 +4016,8 @@ async function renderDettaglioOrdine(id) {
       ? `<div class="detail-field"><label>Tipo</label><span style="color:var(--extra);font-weight:600">Ordine Extra</span></div>`
       : `<div class="detail-field"><label>Struttura</label><span>${strutturaLabel(ordine.struttura)}</span></div>
     <div class="detail-field"><label>Tipo Prodotto</label><span>${tipoProdLabel(ordine.tipo_prodotto)}</span></div>
-    <div class="detail-field"><label>Materiale</label><span>${escapeHtml(materialeLabel(ordine.materiale))}</span></div>
     ${ordine.tipo === 'extra' ? '' : Etichette.attributiOrdine(ordine).map(a => `<div class="detail-field"><label>${escapeHtml(a.etichetta)}</label><span>${escapeHtml(a.valore)}</span></div>`).join('')}
-    <div class="detail-field"><label>Lavorazione CNC</label><span>${ordine.lavorazione_cnc_id ? escapeHtml(lavorazioneCncNome(ordine.lavorazione_cnc_id) || '—') : '<span style="color:var(--muted)">Non indicata</span>'}</span></div>`}
+    ${latiLavorazioniDettaglioHtml(ordine)}`}
     <div class="detail-field"><label>Priorità</label>${Etichette.badgePriorita(ordine.priorita)}</div>
     <div class="detail-field"><label>Stato</label><span class="badge badge-${ordine.stato}">${statoLabel(ordine.stato)}</span></div>
     <div class="detail-field"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}${ordine.scadenza ? ` · Settimana ${settimanaIsoDaData(ordine.scadenza)}` : ''}${isLate ? ' <i data-ic="avviso"></i> In ritardo' : ''}</span></div>
@@ -4552,12 +4551,10 @@ function openModalNuovoOrdine() {
   _suggerimentoGruppoId = null;
   const struEl = document.getElementById('ord-struttura');
   const tipoPEl = document.getElementById('ord-tipo-prodotto');
-  const matEl = document.getElementById('ord-materiale');
   if (struEl && struEl.options.length) struEl.selectedIndex = 0;
   if (tipoPEl && tipoPEl.options.length) tipoPEl.selectedIndex = 0;
-  if (matEl && matEl.options.length) matEl.selectedIndex = 0;
-  popolaLavorazioniCncSelect('ord-lavorazione-cnc', null);
   renderAttributiCustomForm('ord-attributi-custom', {});
+  inizializzaFormLatiLavorazioni('ord', null);
   setTipoOrdine('standard');
   // Reset esplicito fasi opzionali — setTipoOrdine le azzera solo quando tipo !== 'standard'
   fasiAttive().filter(f => f.opzionale).forEach(f => {
@@ -4628,8 +4625,7 @@ async function creaOrdine() {
   if (tipo === 'standard') {
     dati.struttura = document.getElementById('ord-struttura').value;
     dati.tipo_prodotto = document.getElementById('ord-tipo-prodotto').value;
-    dati.materiale = document.getElementById('ord-materiale').value;
-    dati.lavorazione_cnc_id = document.getElementById('ord-lavorazione-cnc').value || null;
+    Object.assign(dati, datiLatiLavorazioni('ord'));   // attributi_lato + lavorazioni_cnc: un solo payload, validato dal server
     dati.attributi = leggiAttributiCustom('ord-attributi-custom');
     // fasi aggiuntive e fasi opzionali scelte: create nella stessa transazione dell'ordine
     dati.fasi_aggiuntive = document.getElementById('ord-extra-toggle')?.checked
@@ -5703,16 +5699,48 @@ async function salvaKpiConfig() {
 }
 
 // ═══════════════════════════════════════════════
-// LAVORAZIONI CNC (catalogo) — tabella lavorazioni_cnc, RLS solo responsabile
-// ═══════════════════════════════════════════════
+// LATI DELL'ANTA (etichette configurabili) e CATALOGO LAVORAZIONI CNC
+// Tabelle lati_anta / lavorazioni_cnc / lavorazioni_cnc_tipi_prodotto: lettura solo responsabile, scritture solo via RPC con registro.
 // Stato in memoria (aggiornato a ogni onchange): i salvataggi non rileggono mai il DOM.
+// ═══════════════════════════════════════════════
+let latiConfig = [];
 let lavorazioniCnc = [];
+let lavBozze = {};          // id (o 'nuova') -> campi modificati non ancora salvati
+
+async function loadLatiConfig() {
+  const { data, error } = await sb.from('lati_anta').select('codice, etichetta, posizione, attivo').order('posizione').order('codice');
+  if (error) console.warn('loadLatiConfig:', error.message);
+  latiConfig = (data || []).map(l => ({ ...l, _etichetta: l.etichetta }));
+  sincronizzaEtichette();
+}
+
+function renderLatiConfig() {
+  const el = document.getElementById('lati-config-body');
+  if (!el) return;
+  el.innerHTML = latiConfig.map((l, i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--muted);font-family:monospace;min-width:70px" title="Codice interno: non modificabile">${escapeHtml(l.codice)}</span>
+      <input type="text" value="${escapeHtml(l._etichetta)}" maxlength="60" aria-label="Etichetta del lato" oninput="latiConfig[${i}]._etichetta=this.value"
+        style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-ctl);font-size:13px;background:var(--bg);color:var(--ink)">
+      <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px" onclick="salvaLatoEtichetta(${i})"><i data-ic="salva"></i> Salva etichetta</button>
+    </div>`).join('') || '<div class="empty-state"><p>Nessun lato configurato</p></div>';
+}
+
+async function salvaLatoEtichetta(i) {
+  const l = latiConfig[i]; if (!l) return;
+  const { data, error } = await sb.rpc('salva_lato_anta', { p_codice: l.codice, p_etichetta: l._etichetta, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
+  await loadLatiConfig(); renderLatiConfig();
+  toast('Etichetta salvata', 'ok');
+}
 
 async function loadLavorazioniCnc() {
-  const { data, error } = await sb.from('lavorazioni_cnc').select('id, nome, posizione, attivo').order('posizione').order('nome');
-  if (error) { console.warn('loadLavorazioniCnc:', error.message); lavorazioniCnc = []; }
-  else lavorazioniCnc = (data || []).map(l => ({ ...l, _nome: l.nome }));
-  popolaLavorazioniCncSelect('ord-lavorazione-cnc', null);
+  const [{ data, error }, { data: tp }] = await Promise.all([
+    sb.from('lavorazioni_cnc').select('id, nome, posizione, attivo, ambito, minuti_min, minuti_max, storica').order('posizione').order('nome'),
+    sb.from('lavorazioni_cnc_tipi_prodotto').select('lavorazione_id, tipo_prodotto_id'),
+  ]);
+  if (error) { console.warn('loadLavorazioniCnc:', error.message); lavorazioniCnc = []; return; }
+  lavorazioniCnc = (data || []).map(l => ({ ...l, tipi: (tp || []).filter(r => r.lavorazione_id === l.id).map(r => r.tipo_prodotto_id) }));
 }
 
 function lavorazioneCncNome(id) {
@@ -5720,87 +5748,286 @@ function lavorazioneCncNome(id) {
   return lavorazioniCnc.find(l => l.id === id)?.nome || null;
 }
 
-// Menu "Lavorazione CNC": voci attive in ordine di posizione. La voce già assegnata all'ordine
-// resta selezionabile anche se nel frattempo è stata disattivata (per non perderla salvando).
-function popolaLavorazioniCncSelect(selectId, valoreCorrente) {
-  const el = document.getElementById(selectId);
-  if (!el) return;
-  const voci = lavorazioniCnc.filter(l => l.attivo || l.id === valoreCorrente);
-  el.innerHTML = '<option value="">Non indicata</option>' + voci.map(l =>
-    `<option value="${escapeHtml(l.id)}">${escapeHtml(l.nome)}${l.attivo ? '' : ' (disattivata)'}</option>`).join('');
-  el.value = valoreCorrente || '';
+const AMBITO_LAV_LABEL = { anta: 'Anta intera', lato: 'Per lato' };
+const lavVal = (id, campo) => { const b = lavBozze[id]; if (b && campo in b) return b[campo]; if (id === 'nuova') return ({ nome: '', ambito: 'anta', minuti_min: '', minuti_max: '', attivo: true, tipi: [] })[campo]; return lavorazioniCnc.find(l => l.id === id)?.[campo]; };
+function lavSet(id, campo, valore, rerender) {
+  (lavBozze[id] = lavBozze[id] || {})[campo] = valore;
+  if (rerender) renderLavorazioniCncConfig();
+}
+function lavToggleTipo(id, tipo, on) {
+  const cur = [...(lavVal(id, 'tipi') || [])];
+  const i = cur.indexOf(tipo);
+  if (on && i < 0) cur.push(tipo);
+  if (!on && i >= 0) cur.splice(i, 1);
+  lavSet(id, 'tipi', cur, false);
+}
+
+function lavSchedaHtml(id) {
+  const k = escapeJsAttr(id);
+  const nuova = id === 'nuova';
+  const tipi = lavVal(id, 'tipi') || [];
+  const num = campo => `<input type="number" min="0" step="any" value="${escapeHtml(lavVal(id, campo) ?? '')}" oninput="lavSet('${k}','${campo}',this.value,false)" style="width:90px;padding:6px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-ctl);font-size:13px;background:var(--bg);color:var(--ink)">`;
+  return `<div class="card" style="padding:14px 16px;margin-bottom:10px;${!nuova && !lavVal(id, 'attivo') ? 'opacity:.7' : ''}">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      ${nuova ? '' : `<div style="display:flex;flex-direction:column;gap:2px">
+        <button class="fase-move-btn" onclick="spostaLavorazioneCnc('${k}',-1)" aria-label="Sposta su">▲</button>
+        <button class="fase-move-btn" onclick="spostaLavorazioneCnc('${k}',1)" aria-label="Sposta giù">▼</button></div>`}
+      <input type="text" value="${escapeHtml(lavVal(id, 'nome') || '')}" maxlength="80" placeholder="Nome (es. Squadratura)" oninput="lavSet('${k}','nome',this.value,false)"
+        style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-ctl);font-size:13px;background:var(--bg);color:var(--ink)">
+      <select onchange="lavSet('${k}','ambito',this.value,false)" aria-label="Ambito" style="padding:7px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-ctl);font-size:13px;background:var(--bg);color:var(--ink)">
+        ${Object.entries(AMBITO_LAV_LABEL).map(([v, t]) => `<option value="${v}" ${lavVal(id, 'ambito') === v ? 'selected' : ''}>${t}</option>`).join('')}
+      </select>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--muted)">
+      <label>Minimo (min) ${num('minuti_min')}</label><label>Massimo (min) ${num('minuti_max')}</label>
+      <span>Minuti per 1 pezzo; per le lavorazioni "Per lato" sono i minuti di UN lato.</span>
+    </div>
+    <div style="margin-top:10px"><div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px">Prodotti su cui è applicabile</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px">${tipiProdotto.map(t => `<label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="checkbox" ${tipi.includes(t.id) ? 'checked' : ''} onchange="lavToggleTipo('${k}','${escapeJsAttr(t.id)}',this.checked)"> ${escapeHtml(t.label)}</label>`).join('') || '<span style="font-size:12px;color:var(--muted)">Nessun tipo prodotto configurato</span>'}</div></div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" ${lavVal(id, 'attivo') ? 'checked' : ''} onchange="lavSet('${k}','attivo',this.checked,false)"> Attiva</label>
+      <button class="btn btn-primary" style="padding:6px 14px;font-size:12px" onclick="salvaLavorazioneCnc('${k}')">${nuova ? '+ Aggiungi' : 'Salva'}</button>
+      ${nuova ? '' : `<button class="btn btn-danger" style="padding:6px 10px;font-size:12px" onclick="eliminaLavorazioneCnc('${k}')" aria-label="Elimina"><i data-ic="cestino"></i></button>`}
+    </div></div>`;
 }
 
 function renderLavorazioniCncConfig() {
   const el = document.getElementById('lavorazioni-cnc-body');
   if (!el) return;
-  if (!lavorazioniCnc.length) { el.innerHTML = '<div class="empty-state"><p>Nessuna lavorazione configurata</p></div>'; return; }
-  el.innerHTML = lavorazioniCnc.map((l, i) => `
-    <div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
-      <div style="display:flex;flex-direction:column;gap:2px">
-        <button class="fase-move-btn" ${i === 0 ? 'disabled' : ''} onclick="spostaLavorazioneCnc(${i},-1)" aria-label="Sposta su">▲</button>
-        <button class="fase-move-btn" ${i === lavorazioniCnc.length - 1 ? 'disabled' : ''} onclick="spostaLavorazioneCnc(${i},1)" aria-label="Sposta giù">▼</button>
-      </div>
-      <input type="text" value="${escapeHtml(l._nome)}" maxlength="80" oninput="lavorazioniCnc[${i}]._nome=this.value"
-        style="flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-ctl);font-size:13px;background:var(--bg);color:var(--ink)">
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;white-space:nowrap">
-        <input type="checkbox" ${l.attivo ? 'checked' : ''} onchange="impostaAttivoLavorazioneCnc(${i}, this.checked)"> Attiva
-      </label>
-      <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px" onclick="rinominaLavorazioneCnc(${i})"><i data-ic="salva"></i> Salva nome</button>
-      <button class="btn btn-danger" style="padding:6px 10px;font-size:12px" onclick="eliminaLavorazioneCnc(${i})" aria-label="Elimina"><i data-ic="cestino"></i></button>
-    </div>`).join('');
+  const correnti = lavorazioniCnc.filter(l => !l.storica);
+  const storiche = lavorazioniCnc.filter(l => l.storica);
+  el.innerHTML = lavSchedaHtml('nuova')
+    + (correnti.length ? correnti.map(l => lavSchedaHtml(l.id)).join('') : '<div class="empty-state"><p>Nessuna lavorazione nel catalogo: creane una sopra.</p></div>')
+    + (storiche.length ? `<details style="margin-top:16px"><summary style="cursor:pointer;font-size:13px;font-weight:600">Voci storiche (${storiche.length}) — sola lettura</summary>
+        <div style="margin:8px 0;font-size:12px;color:var(--muted)">Lavorazioni combinate usate dagli ordini precedenti: restano collegate a quegli ordini ma non sono selezionabili per i nuovi.</div>
+        ${storiche.map(l => `<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">${escapeHtml(l.nome)}</div>`).join('')}</details>` : '');
 }
 
-async function aggiungiLavorazioneCnc() {
-  const input = document.getElementById('nuova-lavorazione-cnc');
-  const nome = (input?.value || '').trim();
-  if (!nome) { toast('Inserisci il nome della lavorazione', 'err'); return; }
-  const { data, error } = await sb.rpc('salva_lavorazione_cnc', { p_id: null, p_nome: nome, p_attivo: true, p_responsabile_id: currentUserRow.id, p_session_token: null });
-  if (error || !data?.ok) { toast(data?.errore === 'nome_duplicato' ? 'Esiste già una lavorazione con questo nome' : 'Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
-  input.value = '';
+const ERRORI_LAV = { nome_duplicato: 'Esiste già una lavorazione con questo nome', nome_obbligatorio: 'Inserisci il nome', minuti_non_validi: 'Minimo e massimo devono essere numeri ≥ 0',
+  minimo_maggiore_del_massimo: 'Il minimo non può superare il massimo', ambito_non_modificabile_in_uso: 'L\'ambito non si cambia: la lavorazione è già usata da ordini', lavorazione_storica: 'Voce storica: sola lettura' };
+
+async function salvaLavorazioneCnc(id) {
+  const nuova = id === 'nuova';
+  const dati = { nome: lavVal(id, 'nome'), ambito: lavVal(id, 'ambito'), minuti_min: lavVal(id, 'minuti_min'), minuti_max: lavVal(id, 'minuti_max'), attivo: !!lavVal(id, 'attivo'), tipi_prodotto: lavVal(id, 'tipi') || [] };
+  if (!String(dati.nome || '').trim()) { toast('Inserisci il nome della lavorazione', 'err'); return; }
+  if (dati.minuti_min === '' || dati.minuti_max === '' || dati.minuti_min == null || dati.minuti_max == null) { toast('Indica minimo e massimo', 'err'); return; }
+  const { data, error } = await sb.rpc('salva_lavorazione_cnc', { p_id: nuova ? null : id, p_dati: dati, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Errore: ' + (ERRORI_LAV[data?.errore] || data?.errore || error?.message || ''), 'err'); return; }
+  delete lavBozze[id];
   await loadLavorazioniCnc(); renderLavorazioniCncConfig();
-  toast('Lavorazione aggiunta', 'ok');
+  toast(nuova ? 'Lavorazione aggiunta' : 'Lavorazione salvata', 'ok');
 }
 
-async function rinominaLavorazioneCnc(i) {
-  const l = lavorazioniCnc[i]; if (!l) return;
-  const nome = (l._nome || '').trim();
-  if (!nome) { toast('Il nome non può essere vuoto', 'err'); return; }
-  const { data, error } = await sb.rpc('salva_lavorazione_cnc', { p_id: l.id, p_nome: nome, p_attivo: null, p_responsabile_id: currentUserRow.id, p_session_token: null });
-  if (error || !data?.ok) { toast(data?.errore === 'nome_duplicato' ? 'Esiste già una lavorazione con questo nome' : 'Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
-  await loadLavorazioniCnc(); renderLavorazioniCncConfig();
-  toast('Nome salvato', 'ok');
-}
-
-async function impostaAttivoLavorazioneCnc(i, attivo) {
-  const l = lavorazioniCnc[i]; if (!l) return;
-  const { data, error } = await sb.rpc('salva_lavorazione_cnc', { p_id: l.id, p_nome: l.nome, p_attivo: attivo, p_responsabile_id: currentUserRow.id, p_session_token: null });
-  const ko = error || !data?.ok;
-  if (ko) toast('Errore: ' + (data?.errore || error?.message || ''), 'err');
-  await loadLavorazioniCnc(); renderLavorazioniCncConfig();
-  if (!ko) toast(attivo ? 'Lavorazione attivata' : 'Lavorazione disattivata', 'ok');
-}
-
-async function spostaLavorazioneCnc(i, dir) {
-  const a = lavorazioniCnc[i], b = lavorazioniCnc[i + dir];
-  if (!a || !b) return;
-  // un solo riordino transazionale lato server
-  const ids = lavorazioniCnc.map(l => l.id);
-  [ids[i], ids[i + dir]] = [ids[i + dir], ids[i]];
+async function spostaLavorazioneCnc(id, dir) {
+  const correnti = lavorazioniCnc.filter(l => !l.storica);
+  const i = correnti.findIndex(l => l.id === id), j = i + dir;
+  if (i < 0 || j < 0 || j >= correnti.length) return;
+  [correnti[i], correnti[j]] = [correnti[j], correnti[i]];
+  const ids = [...correnti.map(l => l.id), ...lavorazioniCnc.filter(l => l.storica).map(l => l.id)];
   const { data, error: err } = await sb.rpc('riordina_config', { p_tabella: 'lavorazioni_cnc', p_ids_in_ordine: ids, p_responsabile_id: currentUserRow.id, p_session_token: null });
-  if (err || !data?.ok) toast('Errore: ' + (data?.errore || err?.message || ''), 'err');
+  if (err || !data?.ok) { toast('Errore: ' + (data?.errore || err?.message || ''), 'err'); return; }
   await loadLavorazioniCnc(); renderLavorazioniCncConfig();
 }
 
-async function eliminaLavorazioneCnc(i) {
-  const l = lavorazioniCnc[i]; if (!l) return;
-  // Una voce usata da almeno un ordine (o da un tempo di riferimento) non si elimina: si disattiva.
-  // Il vincolo ON DELETE RESTRICT nel database lo impedisce comunque; qui si spiega il perché.
+async function eliminaLavorazioneCnc(id) {
+  const l = lavorazioniCnc.find(x => x.id === id); if (!l) return;
   if (!confirm(`Eliminare la lavorazione "${l.nome}"?\nSe è già usata da ordini viene solo disattivata.`)) return;
-  const { data, error } = await sb.rpc('elimina_lavorazione_cnc', { p_id: l.id, p_responsabile_id: currentUserRow.id, p_session_token: null });
-  if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
+  const { data, error } = await sb.rpc('elimina_lavorazione_cnc', { p_id: id, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Errore: ' + (ERRORI_LAV[data?.errore] || data?.errore || error?.message || ''), 'err'); return; }
+  delete lavBozze[id];
   await loadLavorazioniCnc(); renderLavorazioniCncConfig();
   toast(data.esito === 'disattivata' ? 'Lavorazione in uso: disattivata' : 'Lavorazione eliminata', 'ok');
+}
+
+// ═══════════════════════════════════════════════
+// ORDINE: attributi per lato + lavorazioni CNC (form nuovo ordine "ord" e modifica ordine "mod")
+// Stato sempre in memoria (ordFormStato), mai riletto dal DOM al click di salvataggio.
+// ═══════════════════════════════════════════════
+const ordFormStato = { ord: { lati: {}, lav: [], ordineId: null }, mod: { lati: {}, lav: [], ordineId: null } };
+const _antTimer = {}, _antSeq = {};
+
+function latiAttiviCfg() { return latiConfig.filter(l => l.attivo); }
+function attributiLatoCfg() { return attributiConfig.filter(a => a.ambito === 'lato' && a.attivo); }
+
+// Valori iniziali: ordine nuovo = prima opzione attiva degli attributi per lato obbligatori (come faceva il menu Materiale); modifica = valori dell'ordine
+function inizializzaLatiForm(prefix, ordine) {
+  const st = ordFormStato[prefix]; st.lati = {};
+  latiAttiviCfg().forEach(l => {
+    st.lati[l.codice] = {};
+    attributiLatoCfg().forEach(a => {
+      let v = '';
+      if (ordine) {
+        const r = (ordine.attributi_lato || []).find(x => x.lato === l.codice && x.chiave === a.chiave);
+        v = r ? r.valore : (!(ordine.attributi_lato || []).some(x => x.chiave === a.chiave) && a.su_colonna && ordine[a.chiave]) || '';
+      } else if (a.obbligatorio) {
+        v = a.tipo === 'numero' ? (a.numero_default ?? '') : ((a.opzioni || []).filter(o => o.attivo !== false).sort((x, y) => (x.posizione || 0) - (y.posizione || 0))[0]?.valore || '');
+      } else if (a.tipo === 'numero') v = a.numero_default ?? '';
+      st.lati[l.codice][a.chiave] = v;
+    });
+  });
+}
+
+function renderLatiForm(prefix) {
+  const el = document.getElementById(prefix + '-attributi-lato');
+  if (!el) return;
+  const st = ordFormStato[prefix];
+  const lati = latiAttiviCfg();
+  el.innerHTML = attributiLatoCfg().map(a => `<div class="form-row">${lati.map(l => {
+    const cur = st.lati[l.codice]?.[a.chiave] ?? '';
+    const k = `'${prefix}','${escapeJsAttr(l.codice)}','${escapeJsAttr(a.chiave)}'`;
+    const etic = `${escapeHtml(l.etichetta)}: ${escapeHtml(a.etichetta)}${a.obbligatorio ? ' *' : ''}`;
+    if (a.tipo === 'numero') return `<div class="form-group"><label>${etic}</label><input type="number" min="${a.numero_min}" max="${a.numero_max}" step="1" value="${escapeHtml(cur)}" oninput="latoSet(${k},this.value)"></div>`;
+    const opz = (a.opzioni || []).filter(o => o.attivo !== false || o.valore === cur).sort((x, y) => (x.posizione || 0) - (y.posizione || 0));
+    return `<div class="form-group"><label>${etic}</label><select onchange="latoSet(${k},this.value)">${a.obbligatorio ? '' : '<option value="">—</option>'}${opz.map(o => `<option value="${escapeHtml(o.valore)}" ${o.valore === cur ? 'selected' : ''}>${escapeHtml(o.etichetta)}${o.attivo === false ? ' (non più disponibile)' : ''}</option>`).join('')}</select></div>`;
+  }).join('')}</div>`).join('');
+}
+
+function latoSet(prefix, lato, chiave, valore) {
+  (ordFormStato[prefix].lati[lato] = ordFormStato[prefix].lati[lato] || {})[chiave] = valore;
+  anteprimaCnc(prefix);
+}
+
+function tipoProdottoForm(prefix) { return document.getElementById(prefix + '-tipo-prodotto')?.value || null; }
+
+// Lavorazioni scegliibili: attive, non storiche, applicabili al tipo prodotto; la voce già scelta resta visibile (segnalata se non più valida)
+function lavorazioniScegliibili(prefix, rigaIdx) {
+  const tipo = tipoProdottoForm(prefix);
+  const st = ordFormStato[prefix];
+  const usate = st.lav.map((r, i) => i === rigaIdx ? null : r.lavorazione_id);
+  const corrente = st.lav[rigaIdx]?.lavorazione_id;
+  return lavorazioniCnc.filter(l => !usate.includes(l.id) && (l.id === corrente || (!l.storica && l.attivo && l.tipi.includes(tipo))));
+}
+const lavValida = (prefix, r) => { const l = lavorazioniCnc.find(x => x.id === r.lavorazione_id); return !!l && !l.storica && l.attivo && l.tipi.includes(tipoProdottoForm(prefix)); };
+
+function renderLavorazioniForm(prefix) {
+  const el = document.getElementById(prefix + '-lavorazioni');
+  if (!el) return;
+  const st = ordFormStato[prefix];
+  const lati = latiAttiviCfg();
+  const nonValide = [];
+  const righe = st.lav.map((r, i) => {
+    const l = lavorazioniCnc.find(x => x.id === r.lavorazione_id);
+    const valida = !r.lavorazione_id || lavValida(prefix, r);
+    if (!valida) nonValide.push(l?.nome || '?');
+    let latoSel = '';
+    if (l && l.ambito === 'lato') {
+      const sel = !r.lati || !r.lati.length ? '' : (r.lati.length === lati.length && lati.length > 1 ? '__tutti__' : r.lati[0]);
+      latoSel = `<select onchange="lavRigaLati(${i},'${prefix}',this.value)" aria-label="Lato">
+        <option value="" ${sel === '' ? 'selected' : ''} disabled>Scegli il lato…</option>
+        ${lati.map(x => `<option value="${escapeHtml(x.codice)}" ${sel === x.codice ? 'selected' : ''}>${escapeHtml(x.etichetta)}</option>`).join('')}
+        ${lati.length > 1 ? `<option value="__tutti__" ${sel === '__tutti__' ? 'selected' : ''}>Entrambi i lati</option>` : ''}</select>`;
+    }
+    return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;${valida ? '' : 'border-left:3px solid var(--alert);padding-left:6px'}">
+      <select onchange="lavRigaScelta(${i},'${prefix}',this.value)" aria-label="Lavorazione CNC" style="flex:1;min-width:180px">
+        <option value="" ${r.lavorazione_id ? '' : 'selected'} disabled>Scegli la lavorazione…</option>
+        ${lavorazioniScegliibili(prefix, i).map(x => `<option value="${escapeHtml(x.id)}" ${x.id === r.lavorazione_id ? 'selected' : ''}>${escapeHtml(x.nome)} (${escapeHtml(AMBITO_LAV_LABEL[x.ambito])})${x.storica ? ' — storica' : (!x.attivo ? ' — disattivata' : '')}</option>`).join('')}
+      </select>
+      ${latoSel}
+      <button type="button" class="btn btn-danger" style="padding:4px 10px;font-size:12px" onclick="lavRigaRimuovi(${i},'${prefix}')" aria-label="Rimuovi lavorazione">✕</button>
+      ${valida ? '' : '<span style="font-size:11px;color:var(--alert);flex-basis:100%">Non più valida per questo tipo di prodotto: rimuovila o cambia tipo</span>'}
+    </div>`;
+  }).join('');
+  const disponibili = lavorazioniCnc.filter(l => !l.storica && l.attivo && l.tipi.includes(tipoProdottoForm(prefix)) && !st.lav.some(r => r.lavorazione_id === l.id)).length;
+  el.innerHTML = `<label style="font-weight:600;font-size:13px">Lavorazioni CNC</label>
+    ${righe || '<div style="font-size:12px;color:var(--muted);margin:4px 0 8px">Nessuna lavorazione indicata.</div>'}
+    <button type="button" class="btn btn-secondary" style="padding:4px 12px;font-size:12px" ${disponibili ? '' : 'disabled'} onclick="lavRigaAggiungi('${prefix}')">+ Aggiungi lavorazione</button>
+    ${disponibili ? '' : '<span style="font-size:11px;color:var(--muted);margin-left:8px">Nessuna lavorazione disponibile per questo tipo di prodotto</span>'}`;
+  return nonValide;
+}
+
+function lavRigaAggiungi(prefix) { ordFormStato[prefix].lav.push({ lavorazione_id: '', lati: null }); renderLavorazioniForm(prefix); }
+function lavRigaRimuovi(i, prefix) { ordFormStato[prefix].lav.splice(i, 1); renderLavorazioniForm(prefix); anteprimaCnc(prefix); }
+function lavRigaScelta(i, prefix, id) {
+  const r = ordFormStato[prefix].lav[i]; r.lavorazione_id = id;
+  const l = lavorazioniCnc.find(x => x.id === id);
+  r.lati = l && l.ambito === 'lato' ? [] : null;
+  renderLavorazioniForm(prefix); anteprimaCnc(prefix);
+}
+function lavRigaLati(i, prefix, v) {
+  ordFormStato[prefix].lav[i].lati = v === '__tutti__' ? latiAttiviCfg().map(l => l.codice) : [v];
+  renderLavorazioniForm(prefix); anteprimaCnc(prefix);
+}
+
+// Cambio tipo prodotto: la lista delle lavorazioni si aggiorna; quelle già scelte e non più valide vengono segnalate
+function tipoProdottoOrdineCambiato(prefix) {
+  const nonValide = renderLavorazioniForm(prefix);
+  if (nonValide.length) toast('Attenzione: per questo tipo di prodotto non sono più valide: ' + nonValide.join(', '), 'err');
+  anteprimaCnc(prefix);
+}
+
+function inizializzaFormLatiLavorazioni(prefix, ordine) {
+  const st = ordFormStato[prefix];
+  st.ordineId = ordine?.id || null;
+  st.lav = (ordine?.lavorazioni_cnc || []).map(l => ({ lavorazione_id: l.lavorazione_id, lati: l.lati ? [...l.lati] : null }));
+  inizializzaLatiForm(prefix, ordine);
+  renderLatiForm(prefix);
+  renderLavorazioniForm(prefix);
+  const box = document.getElementById(prefix + '-anteprima-cnc'); if (box) box.innerHTML = '';
+  anteprimaCnc(prefix);
+}
+
+// Payload completo "lati + lavorazioni" per crea_ordine / modifica_ordine
+function datiLatiLavorazioni(prefix) {
+  const st = ordFormStato[prefix];
+  const attributi_lato = {};
+  Object.entries(st.lati).forEach(([lato, vals]) => {
+    attributi_lato[lato] = {};
+    Object.entries(vals).forEach(([k, v]) => {
+      const a = attributiConfig.find(x => x.chiave === k);
+      attributi_lato[lato][k] = v === '' ? null : (a?.tipo === 'numero' ? Number(v) : v);
+    });
+  });
+  const lavorazioni_cnc = st.lav.filter(r => r.lavorazione_id).map(r => ({ lavorazione_id: r.lavorazione_id, lati: r.lati }));
+  return { attributi_lato, lavorazioni_cnc };
+}
+
+// Anteprima dei tempi di riferimento: sempre calcolata dal server (anteprima_tempi_ordine, nessuna scrittura)
+function anteprimaCnc(prefix) {
+  clearTimeout(_antTimer[prefix]);
+  _antTimer[prefix] = setTimeout(() => eseguiAnteprimaCnc(prefix), 350);
+}
+async function eseguiAnteprimaCnc(prefix) {
+  const box = document.getElementById(prefix + '-anteprima-cnc');
+  if (!box) return;
+  const seq = _antSeq[prefix] = (_antSeq[prefix] || 0) + 1;
+  const st = ordFormStato[prefix];
+  const struttura = document.getElementById(prefix + '-struttura')?.value;
+  const dati = { ...datiLatiLavorazioni(prefix), tipo_prodotto: tipoProdottoForm(prefix), struttura,
+    quantita: parseInt(document.getElementById(prefix + '-quantita')?.value) || 1,
+    priorita: document.getElementById(prefix + '-prio')?.value };
+  const custom = leggiAttributiCustom(prefix + '-attributi-custom');
+  dati.attributi = custom;
+  const { data } = await sb.rpc('anteprima_tempi_ordine', { p_dati: dati, p_ordine_id: st.ordineId, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (seq !== _antSeq[prefix]) return;   // risposta superata da una richiesta più recente
+  if (!data?.ok) { box.innerHTML = `<div style="font-size:12px;color:var(--muted)">Tempo stimato non disponibile: ${escapeHtml(messaggioAttributo(data?.errore) || data?.errore || 'dati incompleti')}</div>`; return; }
+  const fm = n => (Math.round(Number(n) * 10) / 10).toString().replace('.', ',');
+  const righe = (data.fasi || []).filter(f => f.tempo_da_lavorazioni_cnc || f.ambito_tempo === 'lato').map(f => {
+    const d = f.dettaglio || {};
+    const voci = (d.voci || []).map(v => `${escapeHtml(v.nome)}${v.ambito === 'lato' ? ' — ' + escapeHtml((v.lati_etichette || []).join(' + ')) : ''}: ${fm(v.minuti_min)}–${fm(v.minuti_max)} min`).join(' · ');
+    const nota = d.tipo === 'per_lato' ? `${d.n_lati} ${d.n_lati === 1 ? 'lato' : 'lati'} × ${fm(d.minuti_tipici_unitari)}–${fm(d.minuti_max_unitari)} min` : '';
+    return `<div style="margin-top:3px"><b>${escapeHtml(f.fase_nome)}</b>: ${fm(f.minuti_tipici)}–${fm(f.minuti_max)} min${(d.quantita || 1) > 1 ? ` (quantità ${d.quantita})` : ''}${f.da_confermare ? ' <em>(da confermare)</em>' : ''}
+      ${voci || nota ? `<div style="color:var(--muted)">${voci || nota}</div>` : ''}</div>`;
+  }).join('');
+  box.innerHTML = righe ? `<div style="font-size:12px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface-2);margin:6px 0"><div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">Tempo stimato (calcolato dal server)</div>${righe}</div>` : '';
+}
+
+// Dettagli lati + lavorazioni degli ordini (lazy, a blocchi): gli ordini restano oggetti della cache
+async function arricchisciOrdini(arr) {
+  const da = (arr || []).filter(o => o && !o._extra && o.tipo !== 'extra');
+  for (let i = 0; i < da.length; i += 400) {
+    const blocco = da.slice(i, i + 400);
+    const { data } = await sb.rpc('dettagli_lati_lavorazioni_ordini', { p_ordine_ids: blocco.map(o => o.id), p_responsabile_id: currentUserRow.id, p_session_token: null });
+    if (!data?.ok) { console.warn('arricchisciOrdini:', data?.errore); continue; }
+    blocco.forEach(o => { Object.assign(o, data.dati[o.id] || { attributi_lato: [], lavorazioni_cnc: [] }); o._extra = true; });
+  }
+}
+
+// Campi di dettaglio (scheda ordine): materiale/attributi per lato e lavorazioni CNC con i lati
+function latiLavorazioniDettaglioHtml(ordine) {
+  const lati = Etichette.valoriLatoOrdine(ordine).map(a => a.valori.map(v =>
+    `<div class="detail-field"><label>${escapeHtml(v.lato_etichetta ? v.lato_etichetta + ': ' + a.etichetta : a.etichetta)}</label><span>${escapeHtml(v.testo)}</span></div>`).join('')).join('');
+  const lav = Etichette.lavorazioniCncOrdine(ordine, lavorazioneCncNome(ordine.lavorazione_cnc_id));
+  return lati + `<div class="detail-field"><label>Lavorazioni CNC</label><span>${lav.length ? lav.map(l => escapeHtml(l.testo)).join('<br>') : '<span style="color:var(--muted)">Non indicate</span>'}</span></div>`;
 }
 
 // ═══════════════════════════════════════════════
@@ -5840,7 +6067,7 @@ function renderTempiRiferimento() {
   if (!el) return;
   const optFasi = sel => '<option value="">— fase —</option>' + fasiAttive().map(f =>
     `<option value="${f.id}" ${f.id === sel ? 'selected' : ''}>${escapeHtml(f.nome)}</option>`).join('');
-  const optLav = sel => '<option value="">Senza lavorazione indicata</option>' + lavorazioniCnc
+  const optLav = sel => '<option value="">Senza lavorazione indicata</option>' + lavorazioniCnc.filter(l => l.storica)
     .filter(l => l.attivo || l.id === sel).map(l =>
     `<option value="${escapeHtml(l.id)}" ${l.id === sel ? 'selected' : ''}>${escapeHtml(l.nome)}${l.attivo ? '' : ' (disattivata)'}</option>`).join('');
   const cella = 'padding:6px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-ctl);font-size:13px;background:var(--bg);color:var(--ink)';
@@ -6456,7 +6683,9 @@ function generaPDFOrdine(ordine, fasiOrd, fasiExtra, logOrd, allegati) {
   if (ordine.tipo !== 'extra') {
     kv('Struttura', ordine.struttura);
     kv('Tipo Prodotto', ordine.tipo_prodotto);
-    kv('Materiale', materialeLabel(ordine.materiale));
+    Etichette.valoriLatoOrdine(ordine).forEach(a => a.valori.forEach(v => kv(v.lato_etichetta ? v.lato_etichetta + ': ' + a.etichetta : a.etichetta, v.testo)));
+    const lavPdf = Etichette.lavorazioniCncOrdine(ordine, lavorazioneCncNome(ordine.lavorazione_cnc_id));
+    if (lavPdf.length) kv('Lavorazioni CNC', lavPdf.map(l => l.testo).join('; '));
   }
   kv('Quantità', ordine.quantita);
   kv('Priorità', ordine.priorita);
@@ -6734,6 +6963,7 @@ async function _esportaOrdiniConVerifica(ordini) {
         }
 
         if (!scritturaFallita) {
+          await arricchisciOrdini([o]);
           const pdfBlob = generaPDFOrdine(o, fasiOrd, fasiExtra, logOrd, allegati);
           const okPdf = await _scriviEVerifica(subDir, 'scheda-ordine.pdf', pdfBlob);
           if (!okPdf) scritturaFallita = 'verifica su disco fallita per scheda-ordine.pdf';
@@ -6755,6 +6985,7 @@ async function _esportaOrdiniConVerifica(ordini) {
           scrittiVerificati++; idsVerificati.push(a.id);
         }
         if (!scritturaFallita) {
+          await arricchisciOrdini([o]);
           const pdfBlob = generaPDFOrdine(o, fasiOrd, fasiExtra, logOrd, allegati);
           if (!pdfBlob.size) { scritturaFallita = 'PDF generato vuoto'; }
           else {
@@ -6816,10 +7047,11 @@ async function _esportaOrdiniConVerifica(ordini) {
   // CSV riepilogo alla radice della cartella scelta (solo per esportazioni multiple)
   if (archiviati.length > 1 && dirHandle) {
     const headers = ['Codice', 'Cliente', 'Struttura', 'Tipo Prodotto', 'Materiale', 'Priorità', 'Stato', 'Creato il', 'Scadenza', 'Spedito il', 'Ore lavoro', 'Attesa esterna', 'N. operatori'];
+    await arricchisciOrdini(archiviati);
     const rows = archiviati.map(o => {
       const st = lavoroStatsCache[o.id];
       return [
-        o.codice, o.cliente, strutturaLabel(o.struttura), tipoProdLabel(o.tipo_prodotto), materialeLabel(o.materiale),
+        o.codice, o.cliente, strutturaLabel(o.struttura), tipoProdLabel(o.tipo_prodotto), Etichette.attributiLato().map(a => Etichette.riepilogoLato(o, a.chiave)).join(' | '),
         o.priorita, o.stato,
         formatDate(o.creato_il),
         o.scadenza ? o.scadenza.split('T')[0] : '',
@@ -7176,6 +7408,14 @@ function aggiornaContatoreBozzeFasi() {
   if (btn) btn.disabled = n === 0;
 }
 
+// true se la fase ha criteri su almeno un attributo con ambito "lato" (stato corrente, bozze incluse)
+function faseHaCriteriLato(f) {
+  return fasiCriteriDef().some(def => {
+    const chiave = def.campo === 'materiali' ? 'materiale' : def.campo === 'strutture' ? 'struttura' : def.campo.startsWith('attr_') ? def.campo.slice(5) : null;
+    return chiave && attributiConfig.find(a => a.chiave === chiave)?.ambito === 'lato' && (fasiVal(f, def.campo) || []).length > 0;
+  });
+}
+
 function etichettaCriterio(def, valore) {
   return def.opzioni.find(o => o.valore === valore)?.etichetta || valore;
 }
@@ -7271,6 +7511,17 @@ function renderFasiConfig() {
             <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer" title="Mostra il badge CNC sulla fase">
               <input type="checkbox" ${fasiVal(f, 'e_cnc') ? 'checked' : ''} onchange="fasiEdit(${f.id},'e_cnc',this.checked,false)" style="width:14px;height:14px;cursor:pointer"> CNC
             </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer" title="Il tempo di riferimento di questa fase è la somma delle lavorazioni CNC scelte sull'ordine (catalogo lavorazioni)">
+              <input type="checkbox" ${fasiVal(f, 'tempo_da_lavorazioni_cnc') ? 'checked' : ''} onchange="fasiEdit(${f.id},'tempo_da_lavorazioni_cnc',this.checked,false); if (this.checked) fasiEdit(${f.id},'ambito_tempo','anta')" style="width:14px;height:14px;cursor:pointer"> Il tempo è la somma delle lavorazioni CNC dell'ordine
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap" title="Anta intera: il tempo vale una volta per pezzo. 1 lato: il tempo vale per ogni lato che soddisfa i criteri della fase sugli attributi per lato">
+              Il tempo vale per:
+              <select onchange="fasiEdit(${f.id},'ambito_tempo',this.value)" ${fasiVal(f, 'tempo_da_lavorazioni_cnc') ? 'disabled' : ''} style="font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--surface)">
+                <option value="anta" ${fasiVal(f, 'ambito_tempo') !== 'lato' ? 'selected' : ''}>Anta intera</option>
+                <option value="lato" ${fasiVal(f, 'ambito_tempo') === 'lato' ? 'selected' : ''}>1 lato</option>
+              </select>
+            </label>
+            ${fasiVal(f, 'ambito_tempo') === 'lato' && !faseHaCriteriLato(f) ? '<span style="font-size:11px;color:var(--warn-ink-2)">⚠ Nessun criterio sugli attributi per lato: il tempo varrà per tutti i lati (moltiplicato per il numero di lati).</span>' : ''}
             <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer" title="Alla chiusura l'operatore può completare tutti gli ordini della stessa spedizione unica">
               <input type="checkbox" ${fasiVal(f, 'gruppo_spedizione') ? 'checked' : ''} onchange="fasiEdit(${f.id},'gruppo_spedizione',this.checked,false)" style="width:14px;height:14px;cursor:pointer"> Gruppo spedizione
             </label>
@@ -9070,7 +9321,7 @@ function renderAttributiConfig() {
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <input type="text" value="${escapeHtml(a.etichetta)}" aria-label="Nome" onchange="aggiornaAttributo('${escapeJsAttr(a.chiave)}', { etichetta: this.value })" style="flex:1;min-width:180px;font-weight:600;padding:6px 10px;border:1px solid var(--border);border-radius:8px">
         <span style="font-size:11px;color:var(--muted);font-family:monospace">${escapeHtml(a.chiave)}</span>
-        <span style="font-size:11px;background:var(--fill);padding:2px 8px;border-radius:6px">${a.tipo === 'numero' ? 'Numero intero' : 'Scelta'}${a.su_colonna ? ' · di sistema' : ''}</span>
+        <span style="font-size:11px;background:var(--fill);padding:2px 8px;border-radius:6px">${a.tipo === 'numero' ? 'Numero intero' : 'Scelta'}${a.su_colonna ? ' · di sistema' : ''}${a.ambito === 'lato' ? ' · per lato' : ''}</span>
         ${a.su_colonna ? '' : `
         <label style="font-size:12px;display:flex;align-items:center;gap:4px"><input type="checkbox" ${a.obbligatorio ? 'checked' : ''} onchange="aggiornaAttributo('${escapeJsAttr(a.chiave)}', { obbligatorio: this.checked })"> obbligatorio</label>
         <label style="font-size:12px;display:flex;align-items:center;gap:4px"><input type="checkbox" ${a.attivo ? 'checked' : ''} onchange="aggiornaAttributo('${escapeJsAttr(a.chiave)}', { attivo: this.checked })"> attivo</label>
@@ -9091,7 +9342,7 @@ async function aggiornaAttributo(chiave, dati) {
 }
 
 async function creaAttributo() {
-  const dati = { etichetta: document.getElementById('na-etichetta').value.trim(), tipo: document.getElementById('na-tipo').value, obbligatorio: document.getElementById('na-obbl').checked };
+  const dati = { etichetta: document.getElementById('na-etichetta').value.trim(), tipo: document.getElementById('na-tipo').value, ambito: document.getElementById('na-ambito').value, obbligatorio: document.getElementById('na-obbl').checked };
   if (!dati.etichetta) { toast('Indica il nome dell\'attributo', 'err'); return; }
   if (dati.tipo === 'numero') {
     dati.numero_min = numeroOLiteral(document.getElementById('na-min').value); dati.numero_max = numeroOLiteral(document.getElementById('na-max').value); dati.numero_default = numeroOLiteral(document.getElementById('na-def').value);
@@ -9139,10 +9390,20 @@ function leggiAttributiCustom(containerId) {
 
 // Errori di validazione server degli attributi (attributo_obbligatorio: chiave, valore_non_valido: chiave = x)
 function messaggioAttributo(err) {
-  const m = /^(attributo_obbligatorio|valore_non_valido): ([a-z0-9_]+)/.exec(err || '');
-  if (!m) return null;
-  const etichetta = attributiConfig.find(a => a.chiave === m[2])?.etichetta || m[2];
-  return m[1] === 'attributo_obbligatorio' ? `compila "${etichetta}"` : `valore non valido per "${etichetta}"`;
+  const m = /^(attributo_obbligatorio|valore_non_valido): ([a-z0-9_]+)(?: \(([a-z0-9_]+)\))?/.exec(err || '');
+  if (m) {
+    const etichetta = attributiConfig.find(a => a.chiave === m[2])?.etichetta || m[2];
+    const lato = m[3] ? (latiConfig.find(l => l.codice === m[3])?.etichetta || m[3]) + ': ' : '';
+    return m[1] === 'attributo_obbligatorio' ? `compila "${lato}${etichetta}"` : `valore non valido per "${etichetta}"`;
+  }
+  const c = /^(lavorazione_non_applicabile|lavorazione_storica|lavorazione_non_attiva|lavorazione_duplicata|lati_obbligatori|lati_non_ammessi|lato_non_valido): ?(.*)$/.exec(err || '');
+  if (c) {
+    const nome = c[2] || '';
+    return { lavorazione_non_applicabile: `la lavorazione "${nome}" non è applicabile a questo tipo di prodotto`, lavorazione_storica: `la lavorazione "${nome}" è storica e non si può più scegliere`,
+      lavorazione_non_attiva: `la lavorazione "${nome}" è disattivata`, lavorazione_duplicata: `la lavorazione "${nome}" è indicata due volte`,
+      lati_obbligatori: `scegli il lato per "${nome}"`, lati_non_ammessi: `"${nome}" vale per l'anta intera: nessun lato`, lato_non_valido: 'lato non valido' }[c[1]];
+  }
+  return null;
 }
 
 // Seleziona il valore in una <select>; se non è tra le opzioni (disattivata/storica) la aggiunge come voce temporanea
@@ -9158,20 +9419,23 @@ function impostaSelectConValore(selectId, valore) {
   el.value = valore || '';
 }
 
-function openModificaOrdine(id) {
+async function openModificaOrdine(id) {
   const ordine = [...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === id);
   if (!ordine) return;
+  await arricchisciOrdini([ordine]);
   const isExtra = ordine.tipo === 'extra';
   document.getElementById('mod-row-tipo-struttura').style.display = isExtra ? 'none' : '';
   document.getElementById('mod-row-materiale').style.display = isExtra ? 'none' : '';
+  document.getElementById('mod-row-lavorazioni').style.display = isExtra ? 'none' : '';
   document.getElementById('mod-cliente').value = ordine.cliente || '';
   document.getElementById('mod-codice').value = ordine.codice || '';
   // Nessun valore di ripiego: se il valore dell'ordine non è più tra le opzioni attive (disattivato/storico) resta selezionabile così com'è
   impostaSelectConValore('mod-tipo-prodotto', ordine.tipo_prodotto);
   impostaSelectConValore('mod-struttura', ordine.struttura);
-  impostaSelectConValore('mod-materiale', ordine.materiale);
-  popolaLavorazioniCncSelect('mod-lavorazione-cnc', ordine.lavorazione_cnc_id || null);
   renderAttributiCustomForm('mod-attributi-custom', ordine.attributi || {});
+  document.getElementById('mod-quantita').value = ordine.quantita || 1;
+  document.getElementById('mod-prio').value = ordine.priorita || 'normale';
+  if (!isExtra) inizializzaFormLatiLavorazioni('mod', ordine);
   document.getElementById('mod-attributi-custom').style.display = isExtra ? 'none' : '';
   document.getElementById('mod-prio').value = ordine.priorita || 'normale';
   document.getElementById('mod-quantita').value = ordine.quantita || 1;
@@ -9199,7 +9463,6 @@ async function salvaModificaOrdine() {
   const isExtra = document.getElementById('modal-modifica').dataset.isExtra === 'true';
   const nuovoTipo = document.getElementById('mod-tipo-prodotto').value;
   const nuovaStruttura = document.getElementById('mod-struttura').value;
-  const nuovoMateriale = document.getElementById('mod-materiale').value;
 
   const payload = {
     cliente,
@@ -9212,8 +9475,7 @@ async function salvaModificaOrdine() {
   if (!isExtra) {
     payload.tipo_prodotto = nuovoTipo;
     payload.struttura = nuovaStruttura;
-    payload.materiale = nuovoMateriale;
-    payload.lavorazione_cnc_id = document.getElementById('mod-lavorazione-cnc').value || null;
+    Object.assign(payload, datiLatiLavorazioni('mod'));   // attributi_lato + lavorazioni_cnc nello stesso payload
     payload.attributi = leggiAttributiCustom('mod-attributi-custom');
 
   }
