@@ -110,13 +110,22 @@ nav { background: var(--surface); border-right: 1px solid var(--border); padding
 .nav-item:hover { background: var(--phase-bg); color: var(--ink); }
 .nav-item.active { background: var(--phase-bg); color: var(--accent); border-left-color: var(--accent); }
 .nav-item .icon { width: 16px; text-align: center; font-size: 15px; }
-/* ── IMPOSTAZIONI ACCORDION ── */
-.nav-section-collapsible { cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center; }
-.nav-section-collapsible:hover { color: var(--ink); }
-.nav-chevron { font-size: 9px; transition: transform 0.2s ease; opacity: 0.6; }
-.nav-section-collapsible.open .nav-chevron { transform: rotate(90deg); }
-.nav-impostazioni-items { overflow: hidden; max-height: 0; transition: max-height 0.25s ease; }
-.nav-impostazioni-items.open { max-height: 660px; }
+/* ── MENU A TENDINA (gruppi e sottogruppi) ── */
+nav { max-height: calc(100vh - 52px); overflow-y: auto; }
+.nav-gruppo-testa { display: flex; align-items: center; gap: 8px; width: 100%; background: none; border: none; font: inherit; cursor: pointer; text-align: left;
+  font-family: var(--font-mono); font-size: 10px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; padding: 12px 20px 8px; user-select: none; }
+.nav-gruppo-testa:hover { color: var(--ink); }
+.nav-gruppo-testa:focus-visible, .nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.nav-gruppo-testa > span:first-child { flex: 1; }
+.nav-gruppo-testa .nav-conta { margin-left: 0; }
+.nav-chevron { font-size: 9px; transition: transform 0.2s ease; opacity: 0.6; display: inline-flex; }
+.nav-gruppo.aperto > .nav-gruppo-testa > .nav-chevron { transform: rotate(90deg); }
+.nav-gruppo-corpo { display: grid; grid-template-rows: 0fr; visibility: hidden; transition: grid-template-rows 0.2s ease, visibility 0s linear 0.2s; }
+.nav-gruppo.aperto > .nav-gruppo-corpo { grid-template-rows: 1fr; visibility: visible; transition-delay: 0s; }
+.nav-gruppo-interno { overflow: hidden; min-height: 0; }
+.nav-sotto > .nav-gruppo-testa { text-transform: none; letter-spacing: 0.02em; font-family: inherit; font-size: 12px; font-weight: 600; padding: 8px 20px 6px 28px; }
+.nav-sotto .nav-item { padding-left: 36px; }
+@media (prefers-reduced-motion: reduce) { .nav-gruppo-corpo, .nav-chevron { transition: none; } }
 
 /* ── MAIN ── */
 main { padding: 28px; overflow-y: auto; max-height: calc(100vh - 52px); }
@@ -475,7 +484,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
   #menu-laterale > * { flex-shrink: 0; }   /* il pannello scorre: le voci non si schiacciano né si sovrappongono */
   body.altro-aperto .altro-sfondo { display: block; position: fixed; inset: 0; z-index: 150; background: var(--overlay); }
   .nav-item { min-height: 44px; }
-  .nav-impostazioni-items.open { max-height: none; }
+  .nav-gruppo-testa { min-height: 44px; }
   .nav-mobile-fondo { display: flex; flex-direction: column; gap: 8px; padding: 14px 20px 4px; border-top: 1px solid var(--border); margin-top: 8px; }
   .nav-mobile-utente { font-size: 12px; color: var(--muted); font-family: var(--font-mono); }
 
@@ -612,94 +621,77 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
 
   <div class="shell">
     <nav id="menu-laterale" aria-label="Sezioni">
-      <div class="nav-section">Produzione</div>
-      <div class="nav-item active" onclick="showSection('dashboard')" id="nav-dashboard">
-        <span class="icon"><i data-ic="grafico"></i></span> Dashboard
+      <div class="nav-gruppo" data-gruppo="produzione">
+        <button type="button" class="nav-gruppo-testa" aria-expanded="false" aria-controls="ng-produzione" onclick="navToggle('produzione')"><span>Produzione</span><span class="nav-chevron"><i data-ic="chevron"></i></span></button>
+        <div class="nav-gruppo-corpo" id="ng-produzione"><div class="nav-gruppo-interno">
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('dashboard')" id="nav-dashboard"><span class="icon"><i data-ic="grafico"></i></span> Dashboard</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('kpi')" id="nav-kpi"><span class="icon"><i data-ic="trend"></i></span> KPI &amp; Analisi</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('pianificazione')" id="nav-pianificazione"><span class="icon"><i data-ic="calendario"></i></span> Pianificazione</div>
+        </div></div>
       </div>
-      <div class="nav-item" onclick="showSection('kpi')" id="nav-kpi">
-        <span class="icon"><i data-ic="trend"></i></span> KPI & Analisi
+      <div class="nav-gruppo" data-gruppo="gestione">
+        <button type="button" class="nav-gruppo-testa" aria-expanded="false" aria-controls="ng-gestione" onclick="navToggle('gestione')"><span>Gestione</span><span class="nav-conta" id="richieste-badge-gruppo" hidden title="Richieste in attesa">0</span><span class="nav-chevron"><i data-ic="chevron"></i></span></button>
+        <div class="nav-gruppo-corpo" id="ng-gestione"><div class="nav-gruppo-interno">
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('operatori')" id="nav-operatori"><span class="icon"><i data-ic="persone"></i></span> Operatori
+            <span class="nav-conta" id="richieste-badge" hidden title="Richieste in attesa">0</span></div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('archivio')" id="nav-archivio"><span class="icon"><i data-ic="pacco"></i></span> Archivio</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('notifiche')" id="nav-notifiche"><span class="icon"><i data-ic="campana"></i></span> Notifiche</div>
+        </div></div>
       </div>
-      <div class="nav-item" onclick="showSection('pianificazione')" id="nav-pianificazione">
-        <span class="icon"><i data-ic="calendario"></i></span> Pianificazione
+      <div class="nav-gruppo" data-gruppo="config-produzione">
+        <button type="button" class="nav-gruppo-testa" aria-expanded="false" aria-controls="ng-config-produzione" onclick="navToggle('config-produzione')"><span>Configurazione produzione</span><span class="nav-chevron"><i data-ic="chevron"></i></span></button>
+        <div class="nav-gruppo-corpo" id="ng-config-produzione"><div class="nav-gruppo-interno">
+      <div class="nav-gruppo nav-sotto" data-gruppo="cfg-prodotti">
+        <button type="button" class="nav-gruppo-testa" aria-expanded="false" aria-controls="ng-cfg-prodotti" onclick="navToggle('cfg-prodotti')"><span>Prodotti</span><span class="nav-chevron"><i data-ic="chevron"></i></span></button>
+        <div class="nav-gruppo-corpo" id="ng-cfg-prodotti"><div class="nav-gruppo-interno">
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('tipi-prodotto-config')" id="nav-tipi-prodotto-config"><span class="icon"><i data-ic="etichetta"></i></span> Tipi prodotto</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('strutture-config')" id="nav-strutture-config"><span class="icon"><i data-ic="strati"></i></span> Strutture</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('materiali-config')" id="nav-materiali-config"><span class="icon"><i data-ic="tavola"></i></span> Materiali</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('attributi-config')" id="nav-attributi-config"><span class="icon"><i data-ic="tavola"></i></span> Attributi ordine</div>
+        </div></div>
       </div>
-      <div class="nav-section">Gestione</div>
-      <div class="nav-item" onclick="showSection('operatori')" id="nav-operatori">
-        <span class="icon"><i data-ic="persone"></i></span> Operatori
-        <span class="nav-conta" id="richieste-badge" hidden title="Richieste in attesa">0</span>
+      <div class="nav-gruppo nav-sotto" data-gruppo="cfg-fasi">
+        <button type="button" class="nav-gruppo-testa" aria-expanded="false" aria-controls="ng-cfg-fasi" onclick="navToggle('cfg-fasi')"><span>Fasi e lavorazioni</span><span class="nav-chevron"><i data-ic="chevron"></i></span></button>
+        <div class="nav-gruppo-corpo" id="ng-cfg-fasi"><div class="nav-gruppo-interno">
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('fasi-config')" id="nav-fasi-config"><span class="icon"><i data-ic="ingranaggio"></i></span> Fasi</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('macro-config')" id="nav-macro-config"><span class="icon"><i data-ic="grafico"></i></span> Macro fasi</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('fasi-extra-config')" id="nav-fasi-extra-config"><span class="icon"><i data-ic="matita"></i></span> Fasi extra</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('lavorazioni-cnc-config')" id="nav-lavorazioni-cnc-config"><span class="icon"><i data-ic="chiave"></i></span> Catalogo lavorazioni CNC</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('tempi-rif-config')" id="nav-tempi-rif-config"><span class="icon"><i data-ic="timer"></i></span> Tempi di riferimento</div>
+        </div></div>
       </div>
-      <div class="nav-item" onclick="showSection('archivio')" id="nav-archivio">
-        <span class="icon"><i data-ic="pacco"></i></span> Archivio
+      <div class="nav-gruppo nav-sotto" data-gruppo="cfg-risorse">
+        <button type="button" class="nav-gruppo-testa" aria-expanded="false" aria-controls="ng-cfg-risorse" onclick="navToggle('cfg-risorse')"><span>Risorse e calendario</span><span class="nav-chevron"><i data-ic="chevron"></i></span></button>
+        <div class="nav-gruppo-corpo" id="ng-cfg-risorse"><div class="nav-gruppo-interno">
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('macchine-config')" id="nav-macchine-config"><span class="icon"><i data-ic="chiave"></i></span> Macchine</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('orario-config')" id="nav-orario-config"><span class="icon"><i data-ic="orologio"></i></span> Orario di lavoro</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('priorita-config')" id="nav-priorita-config"><span class="icon"><i data-ic="fulmine"></i></span> Priorità ordini</div>
+        </div></div>
       </div>
-      <div class="nav-item" onclick="showSection('notifiche')" id="nav-notifiche">
-        <span class="icon"><i data-ic="campana"></i></span> Notifiche
+        </div></div>
       </div>
-
-      <div class="nav-section nav-section-collapsible" id="nav-section-impostazioni" onclick="toggleImpostazioni()">
-        <span>Impostazioni</span>
-        <span class="nav-chevron"><i data-ic="chevron"></i></span>
+      <div class="nav-gruppo" data-gruppo="impostazioni">
+        <button type="button" class="nav-gruppo-testa" aria-expanded="false" aria-controls="ng-impostazioni" onclick="navToggle('impostazioni')"><span>Impostazioni</span><span class="nav-chevron"><i data-ic="chevron"></i></span></button>
+        <div class="nav-gruppo-corpo" id="ng-impostazioni"><div class="nav-gruppo-interno">
+      <div class="nav-gruppo nav-sotto" data-gruppo="imp-squadra">
+        <button type="button" class="nav-gruppo-testa" aria-expanded="false" aria-controls="ng-imp-squadra" onclick="navToggle('imp-squadra')"><span>Squadra</span><span class="nav-chevron"><i data-ic="chevron"></i></span></button>
+        <div class="nav-gruppo-corpo" id="ng-imp-squadra"><div class="nav-gruppo-interno">
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('campi-profilo-config')" id="nav-campi-profilo-config"><span class="icon"><i data-ic="persona"></i></span> Campi del profilo</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('tipi-richiesta-config')" id="nav-tipi-richiesta-config"><span class="icon"><i data-ic="appunti"></i></span> Tipi di richiesta</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('notif-config')" id="nav-notif-config"><span class="icon"><i data-ic="campana"></i></span> Destinatari notifiche</div>
+        </div></div>
       </div>
-      <div class="nav-impostazioni-items" id="impostazioni-items">
-      <div class="nav-item" onclick="showSection('fasi-config')" id="nav-fasi-config">
-        <span class="icon"><i data-ic="ingranaggio"></i></span> Config. Fasi
+      <div class="nav-gruppo nav-sotto" data-gruppo="imp-app">
+        <button type="button" class="nav-gruppo-testa" aria-expanded="false" aria-controls="ng-imp-app" onclick="navToggle('imp-app')"><span>App</span><span class="nav-chevron"><i data-ic="chevron"></i></span></button>
+        <div class="nav-gruppo-corpo" id="ng-imp-app"><div class="nav-gruppo-interno">
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('aspetto')" id="nav-aspetto"><span class="icon"><i data-ic="tema"></i></span> Aspetto</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('kpi-config')" id="nav-kpi-config"><span class="icon"><i data-ic="ingranaggio"></i></span> Soglie KPI</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('sistema-config')" id="nav-sistema-config"><span class="icon"><i data-ic="ingranaggio"></i></span> Sistema</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('registro-config')" id="nav-registro-config"><span class="icon"><i data-ic="appunti"></i></span> Registro modifiche</div>
+        </div></div>
       </div>
-      <div class="nav-item" onclick="showSection('tipi-prodotto-config')" id="nav-tipi-prodotto-config">
-        <span class="icon"><i data-ic="etichetta"></i></span> Tipi Prodotto
+        </div></div>
       </div>
-      <div class="nav-item" onclick="showSection('strutture-config')" id="nav-strutture-config">
-        <span class="icon"><i data-ic="strati"></i></span> Strutture
-      </div>
-      <div class="nav-item" onclick="showSection('materiali-config')" id="nav-materiali-config">
-        <span class="icon"><i data-ic="tavola"></i></span> Materiali
-      </div>
-      <div class="nav-item" onclick="showSection('attributi-config')" id="nav-attributi-config">
-        <span class="icon"><i data-ic="tavola"></i></span> Attributi ordine
-      </div>
-      <div class="nav-item" onclick="showSection('priorita-config')" id="nav-priorita-config">
-        <span class="icon"><i data-ic="fulmine"></i></span> Priorità
-      </div>
-      <div class="nav-item" onclick="showSection('macro-config')" id="nav-macro-config">
-        <span class="icon"><i data-ic="grafico"></i></span> Macro Fasi
-      </div>
-      <div class="nav-item" onclick="showSection('orario-config')" id="nav-orario-config">
-        <span class="icon"><i data-ic="orologio"></i></span> Orario Lavoro
-      </div>
-      <div class="nav-item" onclick="showSection('kpi-config')" id="nav-kpi-config">
-        <span class="icon"><i data-ic="ingranaggio"></i></span> Soglie KPI
-      </div>
-      <div class="nav-item" onclick="showSection('macchine-config')" id="nav-macchine-config">
-        <span class="icon"><i data-ic="chiave"></i></span> Macchine
-      </div>
-      <div class="nav-item" onclick="showSection('fasi-extra-config')" id="nav-fasi-extra-config">
-        <span class="icon"><i data-ic="matita"></i></span> Fasi Extra
-      </div>
-      <div class="nav-item" onclick="showSection('sistema-config')" id="nav-sistema-config">
-        <span class="icon"><i data-ic="ingranaggio"></i></span> Sistema
-      </div>
-      <div class="nav-item" onclick="showSection('registro-config')" id="nav-registro-config">
-        <span class="icon"><i data-ic="appunti"></i></span> Registro modifiche
-      </div>
-      <div class="nav-item" onclick="showSection('notif-config')" id="nav-notif-config">
-        <span class="icon"><i data-ic="campana"></i></span> Destinatari Notifiche
-      </div>
-      <div class="nav-item" onclick="showSection('lati-config')" id="nav-lati-config">
-        <span class="icon"><i data-ic="chiave"></i></span> Lati dell'anta
-      </div>
-      <div class="nav-item" onclick="showSection('lavorazioni-cnc-config')" id="nav-lavorazioni-cnc-config">
-        <span class="icon"><i data-ic="chiave"></i></span> Catalogo lavorazioni CNC
-      </div>
-      <div class="nav-item" onclick="showSection('tempi-rif-config')" id="nav-tempi-rif-config">
-        <span class="icon"><i data-ic="timer"></i></span> Tempi di riferimento
-      </div>
-      <div class="nav-item" onclick="showSection('campi-profilo-config')" id="nav-campi-profilo-config">
-        <span class="icon"><i data-ic="persona"></i></span> Campi del profilo
-      </div>
-      <div class="nav-item" onclick="showSection('tipi-richiesta-config')" id="nav-tipi-richiesta-config">
-        <span class="icon"><i data-ic="appunti"></i></span> Tipi di richiesta
-      </div>
-      <div class="nav-item" onclick="showSection('aspetto')" id="nav-aspetto">
-        <span class="icon"><i data-ic="tema"></i></span> Aspetto
-      </div>
-      </div><!-- /nav-impostazioni-items -->
       <div class="nav-mobile-fondo">
         <span class="nav-mobile-utente" id="nav-mobile-utente"></span>
         <div class="avviso-notifiche compatto" id="avviso-notifiche-altro" role="status" hidden></div>
@@ -1354,13 +1346,25 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       <section class="section" id="sec-tipi-prodotto-config">
         <div class="page-hdr">
           <div>
-            <h1>Tipi Prodotto</h1>
-            <div class="sub">Gestisci i tipi di prodotto disponibili — si aggiornano ovunque in automatico</div>
+            <h1>Tipi prodotto</h1>
+            <div class="sub" id="tp-sub">Gestisci i tipi di prodotto disponibili — si aggiornano ovunque in automatico</div>
           </div>
-          <button class="btn btn-primary" onclick="openModalNuovoTipoProdotto()">+ Nuovo Tipo</button>
+          <button class="btn btn-primary" id="tp-nuovo-btn" onclick="openModalNuovoTipoProdotto()">+ Nuovo Tipo</button>
         </div>
-        <div class="card" style="padding:4px 20px 16px">
-          <div id="tipi-prodotto-list">Caricamento…</div>
+        <div class="ric-tabs" role="tablist" aria-label="Schede tipi prodotto" id="tp-tabs" onkeydown="tabsTastiera(event, tipiScheda)">
+          <button type="button" role="tab" id="tp-tab-tipi" data-tab="tipi" aria-controls="tp-pan-tipi" onclick="tipiScheda('tipi')">Tipi prodotto</button>
+          <button type="button" role="tab" id="tp-tab-lati" data-tab="lati" aria-controls="tp-pan-lati" onclick="tipiScheda('lati')">Lati dell'anta</button>
+        </div>
+        <div id="tp-pan-tipi" role="tabpanel" aria-labelledby="tp-tab-tipi">
+          <div class="card" style="padding:4px 20px 16px">
+            <div id="tipi-prodotto-list">Caricamento…</div>
+          </div>
+        </div>
+        <div id="tp-pan-lati" role="tabpanel" aria-labelledby="tp-tab-lati" hidden>
+          <div class="card" style="padding:20px;max-width:760px">
+            <div class="sub" style="margin-bottom:12px">Etichette dei lati usate ovunque l'app mostra un lato (materiale per lato, lavorazioni CNC per lato). Il codice interno dei lati non si modifica.</div>
+            <div id="lati-config-body">Caricamento…</div>
+          </div>
         </div>
       </section>
 
@@ -1550,18 +1554,6 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <div id="notif-config-body">Caricamento…</div>
       </section>
 
-      <section class="section" id="sec-lati-config">
-        <div class="page-hdr">
-          <div>
-            <h1>Lati dell'anta</h1>
-            <div class="sub">Etichette dei lati usate ovunque l'app mostra un lato (materiale per lato, lavorazioni CNC per lato). Il codice interno dei lati non si modifica.</div>
-          </div>
-        </div>
-        <div class="card" style="padding:20px;max-width:760px">
-          <div id="lati-config-body">Caricamento…</div>
-        </div>
-      </section>
-
       <section class="section" id="sec-lavorazioni-cnc-config">
         <div class="page-hdr">
           <div>
@@ -1578,14 +1570,16 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <div class="page-hdr">
           <div>
             <h1>Tempi di riferimento</h1>
-            <div class="sub">Tempo per 1 pezzo (lavoro + spostamento), tipico e massimo, per fase e tipo prodotto. Servono solo al confronto nei KPI: non cambiano pianificatore né stime.</div>
+            <div class="sub">Tempo per 1 pezzo (lavoro + spostamento), minimo e massimo, per fase e tipo prodotto. Servono solo al confronto nei KPI: non cambiano pianificatore né stime. Il tempo delle fasi che sono la somma delle lavorazioni CNC si imposta nel Catalogo lavorazioni CNC.</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center">
             <select id="tempi-rif-tipo" onchange="loadTempiRiferimento()" style="padding:7px 10px;border:1px solid var(--border-strong);border-radius:var(--radius-ctl);background:var(--bg);color:var(--ink);font-size:13px"></select>
             <button class="btn btn-primary" style="white-space:nowrap" onclick="aggiungiTempoRiferimento()">+ Aggiungi riga</button>
           </div>
         </div>
+        <div id="tempi-rif-note"></div>
         <div class="card" style="padding:12px 16px"><div id="tempi-rif-body">Caricamento…</div></div>
+        <div id="tempi-rif-storico"></div>
       </section>
 
       <section class="section" id="sec-campi-profilo-config">
@@ -2630,16 +2624,32 @@ function setupRealtime() {
 // ═══════════════════════════════════════════════
 // NAVIGAZIONE
 // ═══════════════════════════════════════════════
-const IMPOSTAZIONI_SECTIONS = ['fasi-config','tipi-prodotto-config','strutture-config','materiali-config','priorita-config','macro-config','orario-config','kpi-config','macchine-config','fasi-extra-config','notif-config','aspetto','lavorazioni-cnc-config','tempi-rif-config','campi-profilo-config','tipi-richiesta-config','sistema-config','registro-config','attributi-config'];
-
-function toggleImpostazioni(force) {
-  const el  = document.getElementById('impostazioni-items');
-  const hdr = document.getElementById('nav-section-impostazioni');
-  if (!el || !hdr) return;
-  const open = force !== undefined ? force : !el.classList.contains('open');
-  el.classList.toggle('open', open);
-  hdr.classList.toggle('open', open);
+// ── Menu a tendina: gruppi e sottogruppi (data-gruppo), stato ricordato per dispositivo ──
+const NAV_STATO_CHIAVE = 'mangoapp-responsabile-menu';
+let _navStato = (() => {
+  try { const s = JSON.parse(localStorage.getItem(NAV_STATO_CHIAVE) || 'null'); if (s && typeof s === 'object') return s; } catch (e) { /* storage non disponibile */ }
+  return { produzione: true };   // primo accesso: Produzione aperta, gli altri chiusi
+})();
+function navSalvaStato() { try { localStorage.setItem(NAV_STATO_CHIAVE, JSON.stringify(_navStato)); } catch (e) { /* storage non disponibile */ } }
+function navImposta(id, aperto, salva = true) {
+  const g = document.querySelector(`.nav-gruppo[data-gruppo="${id}"]`);
+  if (!g) return;
+  g.classList.toggle('aperto', !!aperto);
+  g.querySelector(':scope > .nav-gruppo-testa')?.setAttribute('aria-expanded', aperto ? 'true' : 'false');
+  _navStato[id] = !!aperto;
+  if (salva) navSalvaStato();
 }
+function navToggle(id) { navImposta(id, !_navStato[id]); }
+function navInizializza() { document.querySelectorAll('.nav-gruppo').forEach(g => navImposta(g.dataset.gruppo, !!_navStato[g.dataset.gruppo], false)); }
+// Apre il gruppo e il sottogruppo della pagina corrente
+function navApriPerSezione(name) {
+  let g = document.getElementById('nav-' + name)?.closest('.nav-gruppo');
+  while (g) { navImposta(g.dataset.gruppo, true); g = g.parentElement?.closest('.nav-gruppo'); }
+}
+document.addEventListener('keydown', e => {   // voci del menu da tastiera
+  if ((e.key === 'Enter' || e.key === ' ') && e.target?.classList?.contains('nav-item')) { e.preventDefault(); e.target.click(); }
+});
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', navInizializza); else navInizializza();
 
 // ── Telefono: barra in basso e pannello "Altro" (il menu laterale) ──
 function _barraAttiva(voce) {
@@ -2675,16 +2685,30 @@ function _faseAttualeHtml(s) {
   return nome ? `<div class="solo-mobile prog-fase">${r.inCorso ? 'In corso' : 'Prossima'}: ${escapeHtml(nome)}</div>` : '';
 }
 
+// Schede della pagina Tipi prodotto: "Tipi prodotto" | "Lati dell'anta"
+function tipiScheda(v) {
+  if (v !== 'lati') v = 'tipi';
+  _selezionaTab(['tipi', 'lati'], v, x => 'tp-tab-' + x, x => 'tp-pan-' + x);
+  const nuovo = document.getElementById('tp-nuovo-btn'); if (nuovo) nuovo.hidden = v === 'lati';
+  const sub = document.getElementById('tp-sub');
+  if (sub) sub.textContent = v === 'lati' ? "Lati dell'anta: etichette configurabili" : 'Gestisci i tipi di prodotto disponibili — si aggiornano ovunque in automatico';
+  if (v === 'lati') loadLatiConfig().then(renderLatiConfig);
+}
+
 function showSection(name) {
   // Alias storici: Richieste e Assenze squadra sono ora schede della sezione Operatori
   if (name === 'richieste' || name === 'assenze') { _opsScheda = name; _opsSalvaScheda(name); name = 'operatori'; }
   chiudiAltro();
   _barraAttiva(name);
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  // Alias: la vecchia sezione "Lati dell'anta" è ora una scheda di Tipi prodotto
+  const _vaiLati = name === 'lati-config';
+  if (_vaiLati) name = 'tipi-prodotto-config';
+  document.querySelectorAll('.nav-item').forEach(n => { n.classList.remove('active'); n.removeAttribute('aria-current'); });
   document.getElementById('sec-' + name)?.classList.add('active');
-  document.getElementById('nav-' + name)?.classList.add('active');
-  if (IMPOSTAZIONI_SECTIONS.includes(name)) toggleImpostazioni(true);
+  const _voce = document.getElementById('nav-' + name);
+  if (_voce) { _voce.classList.add('active'); _voce.setAttribute('aria-current', 'page'); }
+  navApriPerSezione(name);
 
   if (name === 'dashboard') renderDashboard();
   else if (name === 'ordini') renderOrdiniTable();
@@ -2703,7 +2727,7 @@ function showSection(name) {
     caricaDisponibilitaPanel();
     renderPianificazione();
   }
-  else if (name === 'tipi-prodotto-config') renderTipiProdottoConfig();
+  else if (name === 'tipi-prodotto-config') { renderTipiProdottoConfig(); tipiScheda(_vaiLati ? 'lati' : 'tipi'); }
   else if (name === 'strutture-config') renderAttributoConfig('struttura');
   else if (name === 'materiali-config') renderAttributoConfig('materiale');
   else if (name === 'priorita-config') renderPrioritaConfig();
@@ -2714,7 +2738,6 @@ function showSection(name) {
   else if (name === 'attributi-config') { loadAttributiConfig().then(renderAttributiConfig); }
   else if (name === 'registro-config') { loadRegistroModifiche(true); }
   else if (name === 'lavorazioni-cnc-config') { loadLavorazioniCnc().then(renderLavorazioniCncConfig); }
-  else if (name === 'lati-config') { loadLatiConfig().then(renderLatiConfig); }
   else if (name === 'tempi-rif-config') { loadTempiRiferimento(); }
   else if (name === 'campi-profilo-config') { loadCampiProfilo(); }
   else if (name === 'tipi-richiesta-config') { loadTipiRichiesta(); }
@@ -6036,6 +6059,8 @@ function latiLavorazioniDettaglioHtml(ordine) {
 // ═══════════════════════════════════════════════
 let tempiRif = [];            // righe del tipo prodotto selezionato (+ bozze non salvate, id null)
 let tempiRifTipo = null;
+let tempiRifStorico = [];     // righe storiche (con lavorazione_cnc_id o di fasi il cui tempo viene dal catalogo): sola lettura
+const faseTempoDaCatalogo = id => !!fasi.find(f => f.id === id)?.tempo_da_lavorazioni_cnc;
 
 async function loadTempiRiferimento() {
   const sel = document.getElementById('tempi-rif-tipo');
@@ -6044,45 +6069,69 @@ async function loadTempiRiferimento() {
   }
   if (!lavorazioniCnc.length) await loadLavorazioniCnc();
   tempiRifTipo = sel?.value || tipiProdotto[0]?.id || null;
-  if (!tempiRifTipo) { tempiRif = []; renderTempiRiferimento(); return; }
+  if (!tempiRifTipo) { tempiRif = []; tempiRifStorico = []; renderTempiRiferimento(); return; }
   const { data, error } = await sb.from('tempi_riferimento')
     .select('id, fase_id, tipo_prodotto, lavorazione_cnc_id, materiale, struttura, moltiplica_per_attributo, da_confermare, minuti_tipici, minuti_max, note, aggiornato_il')
     .eq('tipo_prodotto', tempiRifTipo).order('fase_id').order('id');
-  if (error) { toast('Errore caricamento tempi: ' + error.message, 'err'); tempiRif = []; }
-  else tempiRif = (data || []).map(r => ({ ...r }));
+  if (error) { toast('Errore caricamento tempi: ' + error.message, 'err'); tempiRif = []; tempiRifStorico = []; }
+  else {
+    const tutte = (data || []).map(r => ({ ...r }));
+    tempiRifStorico = tutte.filter(r => r.lavorazione_cnc_id || faseTempoDaCatalogo(r.fase_id));
+    tempiRif = tutte.filter(r => !(r.lavorazione_cnc_id || faseTempoDaCatalogo(r.fase_id)));
+  }
   const posFase = id => fasi.find(f => f.id === id)?.posizione ?? 9999;
   tempiRif.sort((a, b) => posFase(a.fase_id) - posFase(b.fase_id));
+  tempiRifStorico.sort((a, b) => posFase(a.fase_id) - posFase(b.fase_id));
   renderTempiRiferimento();
 }
 
 function tempiRifSet(i, campo, valore) {
   const r = tempiRif[i]; if (!r) return;
   if (campo === 'fase_id') r.fase_id = valore ? parseInt(valore, 10) : null;
-  else if (campo === 'lavorazione_cnc_id') r.lavorazione_cnc_id = valore || null;
   else r[campo] = valore;
 }
 
+// Note per le fasi a tempo da lavorazioni e riquadro storico (sola lettura, chiuso di default)
+function renderTempiRifExtra() {
+  const note = document.getElementById('tempi-rif-note');
+  if (note) note.innerHTML = fasiAttive().filter(f => f.tempo_da_lavorazioni_cnc).map(f =>
+    `<div class="avviso-notifiche" style="margin-bottom:12px">Il tempo di <b>${escapeHtml(f.nome)}</b> è la somma delle lavorazioni scelte sull'ordine: si imposta nel <a href="#" onclick="showSection('lavorazioni-cnc-config'); return false" style="color:inherit;font-weight:600">Catalogo lavorazioni CNC</a>.</div>`).join('');
+  const box = document.getElementById('tempi-rif-storico');
+  if (!box) return;
+  if (!tempiRifStorico.length) { box.innerHTML = ''; return; }
+  const optLabel = (chiave, v) => v ? Etichette.opzione(chiave, v) : '—';
+  const fm = v => (v === null || v === undefined) ? '—' : Number(v).toLocaleString('it-IT', { maximumFractionDigits: 1 });
+  const td = 'padding:6px 8px';
+  box.innerHTML = `<details class="card" style="padding:12px 16px;margin-top:12px"><summary style="cursor:pointer;font-size:13px;font-weight:600">Storico (ordini inseriti prima del catalogo lavorazioni) — ${tempiRifStorico.length} ${tempiRifStorico.length === 1 ? 'riga' : 'righe'}, sola lettura</summary>
+    <div style="font-size:12px;color:var(--muted);margin:8px 0">Restano in uso per gli ordini precedenti al catalogo e non si modificano.</div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em">
+      <th style="padding:8px">Fase</th><th style="padding:8px">Lavorazione</th><th style="padding:8px">Materiale</th><th style="padding:8px">Struttura</th><th style="padding:8px">Minimo (min)</th><th style="padding:8px">Massimo (min)</th><th style="padding:8px">Note</th></tr></thead>
+      <tbody>${tempiRifStorico.map(r => `<tr style="border-top:1px solid var(--border)">
+        <td style="${td}">${escapeHtml(fasi.find(x => x.id === r.fase_id)?.nome || '—')}</td>
+        <td style="${td}">${r.lavorazione_cnc_id ? escapeHtml(lavorazioneCncNome(r.lavorazione_cnc_id) || '—') : '<span style="color:var(--muted)">—</span>'}</td>
+        <td style="${td}">${escapeHtml(optLabel('materiale', r.materiale))}</td><td style="${td}">${escapeHtml(optLabel('struttura', r.struttura))}</td>
+        <td style="${td};font-family:var(--font-mono)">${fm(r.minuti_tipici)}</td><td style="${td};font-family:var(--font-mono)">${fm(r.minuti_max)}</td>
+        <td style="${td}">${escapeHtml(r.note || '')}</td></tr>`).join('')}</tbody></table></div></details>`;
+}
+
 function renderTempiRiferimento() {
+  renderTempiRifExtra();
   const el = document.getElementById('tempi-rif-body');
   if (!el) return;
-  const optFasi = sel => '<option value="">— fase —</option>' + fasiAttive().map(f =>
+  const optFasi = sel => '<option value="">— fase —</option>' + fasiAttive().filter(f => !f.tempo_da_lavorazioni_cnc).map(f =>
     `<option value="${f.id}" ${f.id === sel ? 'selected' : ''}>${escapeHtml(f.nome)}</option>`).join('');
-  const optLav = sel => '<option value="">Senza lavorazione indicata</option>' + lavorazioniCnc.filter(l => l.storica)
-    .filter(l => l.attivo || l.id === sel).map(l =>
-    `<option value="${escapeHtml(l.id)}" ${l.id === sel ? 'selected' : ''}>${escapeHtml(l.nome)}${l.attivo ? '' : ' (disattivata)'}</option>`).join('');
   const cella = 'padding:6px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-ctl);font-size:13px;background:var(--bg);color:var(--ink)';
   el.innerHTML = `
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em">
-        <th style="padding:8px">Fase</th><th style="padding:8px">Lavorazione CNC</th><th style="padding:8px">Materiale</th><th style="padding:8px">Struttura</th>
+        <th style="padding:8px">Fase</th><th style="padding:8px">Materiale</th><th style="padding:8px">Struttura</th>
         <th style="padding:8px" title="Il tempo è per unità dell'attributo (es. per faccia) e viene moltiplicato per il valore dell'ordine">Per…</th><th style="padding:8px" title="Tempo non ancora validato con la squadra">Da confermare</th>
-        <th style="padding:8px">Tipico (min)</th><th style="padding:8px">Massimo (min)</th><th style="padding:8px">Note</th><th></th>
+        <th style="padding:8px">Minimo (min)</th><th style="padding:8px">Massimo (min)</th><th style="padding:8px">Note</th><th></th>
       </tr></thead>
       <tbody>${tempiRif.length ? tempiRif.map((r, i) => `
         <tr style="border-top:1px solid var(--border)">
           <td style="padding:6px 8px"><select style="${cella};min-width:150px;max-width:220px" onchange="tempiRifSet(${i},'fase_id',this.value)">${optFasi(r.fase_id)}</select></td>
-          <td style="padding:6px 8px"><select style="${cella};min-width:140px;max-width:210px" onchange="tempiRifSet(${i},'lavorazione_cnc_id',this.value)">${optLav(r.lavorazione_cnc_id)}</select></td>
           <td style="padding:6px 8px"><select style="${cella};min-width:110px" onchange="tempiRifSet(${i},'materiale',this.value)"><option value="">Tutti</option>${(attributiConfig.find(a => a.chiave === 'materiale')?.opzioni || []).filter(o => o.attivo !== false || o.valore === r.materiale).map(o => `<option value="${escapeHtml(o.valore)}" ${o.valore === r.materiale ? 'selected' : ''}>${escapeHtml(o.etichetta)}</option>`).join('')}</select></td>
           <td style="padding:6px 8px"><select style="${cella};min-width:110px" onchange="tempiRifSet(${i},'struttura',this.value)"><option value="">Tutte</option>${(attributiConfig.find(a => a.chiave === 'struttura')?.opzioni || []).filter(o => o.attivo !== false || o.valore === r.struttura).map(o => `<option value="${escapeHtml(o.valore)}" ${o.valore === r.struttura ? 'selected' : ''}>${escapeHtml(o.etichetta)}</option>`).join('')}</select></td>
           <td style="padding:6px 8px"><select style="${cella};min-width:110px" onchange="tempiRifSet(${i},'moltiplica_per_attributo',this.value)"><option value="">Per ordine</option>${attributiConfig.filter(a => a.tipo === 'numero' && !a.su_colonna).map(a => `<option value="${escapeHtml(a.chiave)}" ${a.chiave === r.moltiplica_per_attributo ? 'selected' : ''}>Per ${escapeHtml(a.etichetta.toLowerCase())}</option>`).join('')}</select></td>
@@ -6094,14 +6143,14 @@ function renderTempiRiferimento() {
             <button class="btn btn-secondary" style="padding:6px 10px;font-size:12px" onclick="salvaTempoRiferimento(${i})"><i data-ic="salva"></i> Salva</button>
             <button class="btn btn-danger" style="padding:6px 10px;font-size:12px" onclick="eliminaTempoRiferimento(${i})" aria-label="Elimina"><i data-ic="cestino"></i></button>
           </td>
-        </tr>`).join('') : '<tr><td colspan="10" style="padding:16px;color:var(--muted)">Nessun tempo di riferimento per questo tipo prodotto</td></tr>'}
+        </tr>`).join('') : '<tr><td colspan="9" style="padding:16px;color:var(--muted)">Nessun tempo di riferimento per questo tipo prodotto</td></tr>'}
       </tbody>
     </table></div>`;
 }
 
 function aggiungiTempoRiferimento() {
   if (!tempiRifTipo) { toast('Nessun tipo prodotto selezionato', 'err'); return; }
-  tempiRif.push({ id: null, fase_id: null, tipo_prodotto: tempiRifTipo, lavorazione_cnc_id: null, minuti_tipici: '', minuti_max: '', note: '' });
+  tempiRif.push({ id: null, fase_id: null, tipo_prodotto: tempiRifTipo, minuti_tipici: '', minuti_max: '', note: '' });
   renderTempiRiferimento();
 }
 
@@ -6115,16 +6164,17 @@ async function salvaTempoRiferimento(i) {
   const r = tempiRif[i]; if (!r) return;
   const tip = _numeroValido(r.minuti_tipici), max = _numeroValido(r.minuti_max);
   if (!r.fase_id) { toast('Scegli la fase', 'err'); return; }
-  if (tip === null || tip <= 0) { toast('Il tempo tipico deve essere un numero maggiore di 0', 'err'); return; }
+  if (tip === null || tip <= 0) { toast('Il tempo minimo deve essere un numero maggiore di 0', 'err'); return; }
   if (max === null || max <= 0) { toast('Il tempo massimo deve essere un numero maggiore di 0', 'err'); return; }
-  if (max < tip) { toast('Il tempo massimo non può essere minore del tipico', 'err'); return; }
-  const payload = { fase_id: r.fase_id, tipo_prodotto: r.tipo_prodotto, lavorazione_cnc_id: r.lavorazione_cnc_id || null,
+  if (max < tip) { toast('Il tempo massimo non può essere minore del minimo', 'err'); return; }
+  if (faseTempoDaCatalogo(r.fase_id)) { toast('Il tempo di questa fase è la somma delle lavorazioni: si imposta nel Catalogo lavorazioni CNC', 'err'); return; }
+  const payload = { fase_id: r.fase_id, tipo_prodotto: r.tipo_prodotto,
     materiale: r.materiale || null, struttura: r.struttura || null, moltiplica_per_attributo: r.moltiplica_per_attributo || null, da_confermare: !!r.da_confermare,
     minuti_tipici: tip, minuti_max: max, note: (r.note || '').trim() || null };
   const { data, error } = await sb.rpc('salva_tempo_riferimento', { p_dati: { ...payload, id: r.id || null }, p_responsabile_id: currentUserRow.id, p_session_token: null });
   if (error || !data?.ok) {
-    const msg = data?.errore === 'riga_gia_esistente' ? 'Esiste già un tempo per questa fase e lavorazione'
-      : data?.errore === 'minuti_non_validi' ? 'Valori non validi (tipico > 0, massimo ≥ tipico)' : 'Errore: ' + (data?.errore || error?.message || '');
+    const msg = data?.errore === 'riga_gia_esistente' ? 'Esiste già un tempo per questa fase con gli stessi criteri'
+      : data?.errore === 'minuti_non_validi' ? 'Valori non validi (minimo > 0, massimo ≥ minimo)' : (data?.messaggio || 'Errore: ' + (data?.errore || error?.message || ''));
     toast(msg, 'err'); return;
   }
   await loadTempiRiferimento();
@@ -6152,14 +6202,14 @@ async function loadConfrontoTempiRiferimento() {
   if (error || !data?.ok) { el.innerHTML = `<div style="color:var(--alert);font-size:12px">Errore: ${escapeHtml(error?.message || data?.errore || 'sconosciuto')}</div>`; return; }
   const righe = data.righe || [];
   const fmt = v => (v === null || v === undefined) ? '—' : Number(v).toLocaleString('it-IT', { maximumFractionDigits: 1 });
-  const soglie = `Fuori scala: sotto il ${fmt(Number(data.soglia_sotto_tipico) * 100)}% del tipico o sopra ${fmt(data.soglia_sopra_massimo)}× il massimo · giornata ${fmt(data.giornata_minuti)} min`;
+  const soglie = `Fuori scala: sotto il ${fmt(Number(data.soglia_sotto_tipico) * 100)}% del minimo o sopra ${fmt(data.soglia_sopra_massimo)}× il massimo · giornata ${fmt(data.giornata_minuti)} min`;
   if (!righe.length) { el.innerHTML = `<div style="color:var(--muted);font-size:12px">${escapeHtml(soglie)}<br>Nessun tempo di riferimento né fase registrata.</div>`; return; }
   let tipoCorrente = null;
   el.innerHTML = `<div style="font-size:11px;color:var(--muted);margin-bottom:10px">${escapeHtml(soglie)}</div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
     <thead><tr style="text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em">
       <th style="padding:6px 8px">Fase</th><th style="padding:6px 8px">Lavorazione CNC</th>
-      <th style="padding:6px 8px;text-align:right">Riferimento tipico / max</th>
+      <th style="padding:6px 8px;text-align:right">Riferimento minimo / max</th>
       <th style="padding:6px 8px;text-align:right">Mediana</th><th style="padding:6px 8px;text-align:right">75° perc.</th>
       <th style="padding:6px 8px;text-align:right">Fasi</th><th style="padding:6px 8px;text-align:right">Fuori scala</th>
     </tr></thead><tbody>${righe.map(r => {
@@ -10020,7 +10070,7 @@ async function aggiornaBadgeRichieste() {
   const { count, error } = await sb.from('richieste_assenza').select('id', { count: 'exact', head: true }).eq('stato', 'in_attesa');
   if (error) return;
   // Contatore sulla voce di menu Operatori e sulla scheda Richieste (nascosti se 0)
-  ['richieste-badge', 'ops-tab-ric-conta', 'barra-conta-ric'].forEach(id => {
+  ['richieste-badge', 'richieste-badge-gruppo', 'ops-tab-ric-conta', 'barra-conta-ric'].forEach(id => {
     const b = document.getElementById(id);
     if (!b) return;
     b.textContent = String(count || 0);
