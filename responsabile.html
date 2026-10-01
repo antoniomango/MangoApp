@@ -8842,7 +8842,7 @@ async function loadKpi() {
     let lastFase = null;
     opData.forEach(r => {
       const isNewFase = r.fase_nome !== lastFase;
-      const scarso = r.campioni < 5 || r.mediana_min == null;
+      const scarso = r.campioni < (Calendario.costante('soglia_campioni_op') ?? 0) || r.mediana_min == null;
       const medianaStr = r.mediana_min != null ? `${r.mediana_min} min` : 'dati insuff.';
       html += `<tr>
         <td style="color:${isNewFase ? 'var(--ink)' : 'transparent'};font-weight:${isNewFase ? '600' : '400'}">${isNewFase ? escapeHtml(r.fase_nome) : '↳'}</td>
