@@ -1481,14 +1481,14 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <div class="page-hdr">
           <div>
             <h1>Attributi dell'ordine</h1>
-            <div class="sub">Dati aggiuntivi da compilare in ogni ordine (es. facce da lavorare): possono essere criteri delle fasi e moltiplicatori dei tempi di riferimento</div>
+            <div class="sub">Dati aggiuntivi da compilare in ogni ordine: possono essere criteri delle fasi e moltiplicatori dei tempi di riferimento</div>
           </div>
         </div>
         <div id="attributi-config-body">Caricamento…</div>
         <div class="card" style="padding:16px 20px;margin-top:16px;max-width:760px">
           <div style="font-size:13px;font-weight:700;margin-bottom:10px">Nuovo attributo</div>
           <div style="display:grid;grid-template-columns:2fr 1.2fr;gap:10px;margin-bottom:10px">
-            <div class="form-group" style="margin:0"><label style="font-size:12px">Nome</label><input type="text" id="na-etichetta" placeholder="es. Facce da lavorare"></div>
+            <div class="form-group" style="margin:0"><label style="font-size:12px">Nome</label><input type="text" id="na-etichetta" placeholder="es. Spessore dell'anta"></div>
             <div class="form-group" style="margin:0"><label style="font-size:12px">Tipo</label><select id="na-tipo" onchange="document.getElementById('na-numeri').style.display = this.value === 'numero' ? 'grid' : 'none'"><option value="select_singola">Scelta fra opzioni</option><option value="numero">Numero intero</option></select></div>
           </div>
           <div id="na-numeri" style="display:none;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
@@ -2751,18 +2751,18 @@ function renderSistemaConfig() {
       `<input type="number" min="1" step="1" value="${escapeHtml(_sistema.limite_db_mb || '')}" onchange="salvaSistema('limite_db_mb', this.value.trim())" style="width:110px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">`) +
     riga('Notifiche push — ID app', 'Identificativo dell\'app di notifiche (OneSignal); vuoto = notifiche push disattivate',
       `<input type="text" value="${escapeHtml(_sistema.onesignal_app_id || '')}" onchange="salvaSistema('onesignal_app_id', this.value.trim())" style="width:270px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
-    riga('PIN — tentativi errati consentiti', 'Dopo questo numero di errori nella finestra, l\'accesso si blocca (da 3 a 10)',
-      `<input type="number" min="3" max="10" step="1" value="${escapeHtml(_sistema.pin_tentativi_max || '')}" onchange="salvaSistema('pin_tentativi_max', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
-    riga('PIN — finestra dei tentativi (minuti)', 'Intervallo in cui si contano i tentativi errati (da 5 a 120)',
-      `<input type="number" min="5" max="120" step="1" value="${escapeHtml(_sistema.pin_finestra_minuti || '')}" onchange="salvaSistema('pin_finestra_minuti', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
-    riga('PIN — primo blocco (minuti)', 'Durata del primo blocco; raddoppia a ogni blocco consecutivo (da 5 a 120)',
-      `<input type="number" min="5" max="120" step="1" value="${escapeHtml(_sistema.pin_blocco_base_minuti || '')}" onchange="salvaSistema('pin_blocco_base_minuti', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
-    riga('PIN — blocco massimo (minuti)', 'Tetto alla durata del blocco (da 60 a 10080)',
-      `<input type="number" min="60" max="10080" step="1" value="${escapeHtml(_sistema.pin_blocco_max_minuti || '')}" onchange="salvaSistema('pin_blocco_max_minuti', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
-    riga('PIN — avviso al responsabile dopo N blocchi', 'Dopo questo numero di blocchi consecutivi il responsabile riceve una notifica (da 1 a 10)',
-      `<input type="number" min="1" max="10" step="1" value="${escapeHtml(_sistema.pin_blocchi_alert || '')}" onchange="salvaSistema('pin_blocchi_alert', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
-    riga('Durata della sessione operatore (ore)', 'Dopo questo tempo l\'operatore deve rifare il PIN (da 1 a 72)',
-      `<input type="number" min="1" max="72" step="1" value="${escapeHtml(_sistema.sessione_ore || '')}" onchange="salvaSistema('sessione_ore', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`);
+    riga('PIN — tentativi errati consentiti', 'Dopo questo numero di errori nella finestra, l\'accesso si blocca (da 3 a 5)',
+      `<input type="number" min="3" max="5" step="1" value="${escapeHtml(_sistema.pin_tentativi_max || '')}" onchange="salvaSistema('pin_tentativi_max', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
+    riga('PIN — finestra dei tentativi (minuti)', 'Intervallo in cui si contano i tentativi errati (da 15 a 120)',
+      `<input type="number" min="15" max="120" step="1" value="${escapeHtml(_sistema.pin_finestra_minuti || '')}" onchange="salvaSistema('pin_finestra_minuti', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
+    riga('PIN — primo blocco (minuti)', 'Durata del primo blocco; raddoppia a ogni blocco consecutivo (da 15 a 120)',
+      `<input type="number" min="15" max="120" step="1" value="${escapeHtml(_sistema.pin_blocco_base_minuti || '')}" onchange="salvaSistema('pin_blocco_base_minuti', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
+    riga('PIN — blocco massimo (minuti)', 'Tetto alla durata del blocco (da 1440 a 10080)',
+      `<input type="number" min="1440" max="10080" step="1" value="${escapeHtml(_sistema.pin_blocco_max_minuti || '')}" onchange="salvaSistema('pin_blocco_max_minuti', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
+    riga('PIN — avviso al responsabile dopo N blocchi', 'Dopo questo numero di blocchi consecutivi il responsabile riceve una notifica (da 1 a 3)',
+      `<input type="number" min="1" max="3" step="1" value="${escapeHtml(_sistema.pin_blocchi_alert || '')}" onchange="salvaSistema('pin_blocchi_alert', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
+    riga('Durata della sessione operatore (ore)', 'Dopo questo tempo l\'operatore deve rifare il PIN (da 1 a 24)',
+      `<input type="number" min="1" max="24" step="1" value="${escapeHtml(_sistema.sessione_ore || '')}" onchange="salvaSistema('sessione_ore', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`);
 }
 
 // Job pianificati sul server (sola lettura: gli orari si cambiano solo in installazione, vedi documentazione)
