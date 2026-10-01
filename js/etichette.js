@@ -63,6 +63,18 @@ const Etichette = (() => {
   const struttura = v => opzione('struttura', v);
   const materiale = v => opzione('materiale', v);
 
+  // Attributi d'ordine aggiuntivi (non colonne di ordini): configurabili dal responsabile, salvati in ordini.attributi
+  const attributiCustom = () => attributi.filter(a => !a.su_colonna);
+  function valoreAttributoCustom(a, valore) {
+    if (valore === null || valore === undefined || valore === '') return a.tipo === 'numero' && a.numero_default != null ? String(a.numero_default) : '—';
+    return a.tipo === 'numero' ? String(valore) : opzione(a.chiave, String(valore));
+  }
+  // Elenco {etichetta, valore} degli attributi custom di un ordine, per le schermate di dettaglio
+  function attributiOrdine(o) {
+    return attributiCustom().filter(a => a.attivo || (o?.attributi || {})[a.chiave] != null)
+      .map(a => ({ chiave: a.chiave, etichetta: a.etichetta, valore: valoreAttributoCustom(a, (o?.attributi || {})[a.chiave]) }));
+  }
+
   function prio(id) { return priorita.find(p => p.id === id) || null; }
   const prioritaEtichetta = id => prio(id)?.etichetta || vuoto(id);
   const prioritaPeso = id => prio(id)?.peso ?? 0;
@@ -77,7 +89,7 @@ const Etichette = (() => {
 
   return {
     PALETTE, imposta, esporta, carica,
-    tipoProdotto, attributo, opzione, struttura, materiale,
+    tipoProdotto, attributo, opzione, struttura, materiale, attributiCustom, valoreAttributoCustom, attributiOrdine,
     priorita: () => priorita, tipi: () => tipi, attributi: () => attributi,
     prioritaEtichetta, prioritaPeso, confrontaPriorita, colorePriorita, badgePriorita,
     statoOrdine: s => STATI_ORDINE[s] || vuoto(s),

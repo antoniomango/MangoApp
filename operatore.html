@@ -1538,6 +1538,7 @@ async function renderOrdineDetail(ordineId) {
   document.getElementById('ord-det-meta').innerHTML = `
     <div class="meta-item"><label>Struttura</label><span>${strutturaLabel(ordine.struttura)}</span></div>
     <div class="meta-item"><label>Tipo</label><span>${tipoProdLabel(ordine.tipo_prodotto)}</span></div>
+    ${ordine.tipo === 'extra' ? '' : `<div class="meta-item"><label>Materiale</label><span>${escapeHtml(materialeLabel(ordine.materiale))}</span></div>` + Etichette.attributiOrdine(ordine).map(a => `<div class="meta-item"><label>${escapeHtml(a.etichetta)}</label><span>${escapeHtml(a.valore)}</span></div>`).join('')}
     <div class="meta-item"><label>Priorità</label>${Etichette.badgePriorita(ordine.priorita)}</div>
     <div class="meta-item"><label>Stato</label><span class="badge badge-${ordine.stato}">${Etichette.statoOrdine(ordine.stato)}</span></div>
     <div class="meta-item"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}${ordine.scadenza ? ` · Settimana ${settimanaIsoDaData(ordine.scadenza)}` : ''}</span></div>

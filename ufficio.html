@@ -669,6 +669,7 @@ function renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine, stats) {
   if (o.tipo_prodotto) metaItems.push(['Tipo prodotto', Etichette.tipoProdotto(o.tipo_prodotto)]);
   if (o.struttura)     metaItems.push(['Struttura', Etichette.struttura(o.struttura)]);
   if (o.materiale)     metaItems.push(['Materiale', Etichette.materiale(o.materiale)]);
+  Etichette.attributiOrdine(o).forEach(a => metaItems.push([a.etichetta, a.valore]));
   if (o.priorita)      metaItems.push(['Priorità', Etichette.prioritaEtichetta(o.priorita)]);
   if (o.quantita > 1)  metaItems.push(['Quantità', String(o.quantita)]);
   const dataSpedizione = o.spedito_il || o.completato_il;

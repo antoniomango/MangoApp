@@ -651,6 +651,9 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       <div class="nav-item" onclick="showSection('materiali-config')" id="nav-materiali-config">
         <span class="icon"><i data-ic="tavola"></i></span> Materiali
       </div>
+      <div class="nav-item" onclick="showSection('attributi-config')" id="nav-attributi-config">
+        <span class="icon"><i data-ic="tavola"></i></span> Attributi ordine
+      </div>
       <div class="nav-item" onclick="showSection('priorita-config')" id="nav-priorita-config">
         <span class="icon"><i data-ic="fulmine"></i></span> Priorità
       </div>
@@ -1473,6 +1476,31 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       </section>
 
       <!-- DESTINATARI NOTIFICHE -->
+      <!-- ATTRIBUTI D'ORDINE -->
+      <section class="section" id="sec-attributi-config">
+        <div class="page-hdr">
+          <div>
+            <h1>Attributi dell'ordine</h1>
+            <div class="sub">Dati aggiuntivi da compilare in ogni ordine (es. facce da lavorare): possono essere criteri delle fasi e moltiplicatori dei tempi di riferimento</div>
+          </div>
+        </div>
+        <div id="attributi-config-body">Caricamento…</div>
+        <div class="card" style="padding:16px 20px;margin-top:16px;max-width:760px">
+          <div style="font-size:13px;font-weight:700;margin-bottom:10px">Nuovo attributo</div>
+          <div style="display:grid;grid-template-columns:2fr 1.2fr;gap:10px;margin-bottom:10px">
+            <div class="form-group" style="margin:0"><label style="font-size:12px">Nome</label><input type="text" id="na-etichetta" placeholder="es. Facce da lavorare"></div>
+            <div class="form-group" style="margin:0"><label style="font-size:12px">Tipo</label><select id="na-tipo" onchange="document.getElementById('na-numeri').style.display = this.value === 'numero' ? 'grid' : 'none'"><option value="select_singola">Scelta fra opzioni</option><option value="numero">Numero intero</option></select></div>
+          </div>
+          <div id="na-numeri" style="display:none;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+            <div class="form-group" style="margin:0"><label style="font-size:12px">Minimo</label><input type="number" id="na-min" step="1"></div>
+            <div class="form-group" style="margin:0"><label style="font-size:12px">Massimo</label><input type="number" id="na-max" step="1"></div>
+            <div class="form-group" style="margin:0"><label style="font-size:12px">Predefinito</label><input type="number" id="na-def" step="1"></div>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px"><input type="checkbox" id="na-obbl" checked> Obbligatorio in ogni ordine</label>
+          <button class="btn btn-primary" onclick="creaAttributo()">+ Crea attributo</button>
+        </div>
+      </section>
+
       <!-- SISTEMA -->
       <section class="section" id="sec-sistema-config">
         <div class="page-hdr">
@@ -1694,6 +1722,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           <label>Lavorazione CNC</label>
           <select id="ord-lavorazione-cnc"><option value="">Non indicata</option></select>
         </div>
+        <div id="ord-attributi-custom"></div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -1794,6 +1823,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           <select id="mod-lavorazione-cnc"><option value="">Non indicata</option></select>
         </div>
       </div>
+      <div id="mod-attributi-custom"></div>
       <div class="form-row">
         <div class="form-group">
           <label>Priorità</label>
@@ -2359,7 +2389,7 @@ async function caricaNomiFasiExtraStoria() {
 }
 
 async function loadFasi() {
-  const [{ data: fasiData }, { data: tipiCriteri }, { data: materCriteri }, { data: strutCriteri }, { data: competenzeData }, { data: dipData }, { data: modiData }] = await Promise.all([
+  const [{ data: fasiData }, { data: tipiCriteri }, { data: materCriteri }, { data: strutCriteri }, { data: competenzeData }, { data: dipData }, { data: modiData }, { data: attrCriteri }] = await Promise.all([
     sb.from('fasi').select('*, tipo_gestione').order('posizione').order('id'),
     sb.from('fase_tipi_prodotto').select('fase_id, tipo_prodotto_id'),
     sb.from('fase_materiali').select('fase_id, materiale_valore'),
@@ -2367,6 +2397,7 @@ async function loadFasi() {
     sb.from('competenze_operatore_fase').select('fase_id, operatore_id, priorita').order('priorita'),
     sb.from('fase_dipendenze').select('fase_id, dipende_da_fase_id'),
     sb.from('fase_criteri_modo').select('fase_id, attributo_chiave, modo'),
+    sb.from('fase_criteri_attributi').select('fase_id, attributo_chiave, valore'),
   ]);
   const modoDi = (faseId, chiave) => (modiData || []).find(r => r.fase_id === faseId && r.attributo_chiave === chiave)?.modo || 'solo';
   fasi = (fasiData || []).map(f => ({
@@ -2375,6 +2406,8 @@ async function loadFasi() {
     modo_tipi:         modoDi(f.id, 'tipo_prodotto'),
     modo_materiali:    modoDi(f.id, 'materiale'),
     modo_strutture:    modoDi(f.id, 'struttura'),
+    criteri_attributi: (attrCriteri || []).filter(r => r.fase_id === f.id).reduce((m, r) => { (m[r.attributo_chiave] ||= []).push(r.valore); return m; }, {}),
+    modi_attr:         Object.fromEntries((modiData || []).filter(r => r.fase_id === f.id && !['tipo_prodotto', 'materiale', 'struttura'].includes(r.attributo_chiave)).map(r => [r.attributo_chiave, r.modo])),
     criteri_tipi:      (tipiCriteri  || []).filter(r => r.fase_id === f.id).map(r => r.tipo_prodotto_id),
     criteri_materiali: (materCriteri || []).filter(r => r.fase_id === f.id).map(r => r.materiale_valore),
     criteri_strutture: (strutCriteri || []).filter(r => r.fase_id === f.id).map(r => r.struttura_valore),
@@ -2597,7 +2630,7 @@ function setupRealtime() {
 // ═══════════════════════════════════════════════
 // NAVIGAZIONE
 // ═══════════════════════════════════════════════
-const IMPOSTAZIONI_SECTIONS = ['fasi-config','tipi-prodotto-config','strutture-config','materiali-config','priorita-config','macro-config','orario-config','kpi-config','macchine-config','fasi-extra-config','notif-config','aspetto','lavorazioni-cnc-config','tempi-rif-config','campi-profilo-config','tipi-richiesta-config','sistema-config','registro-config'];
+const IMPOSTAZIONI_SECTIONS = ['fasi-config','tipi-prodotto-config','strutture-config','materiali-config','priorita-config','macro-config','orario-config','kpi-config','macchine-config','fasi-extra-config','notif-config','aspetto','lavorazioni-cnc-config','tempi-rif-config','campi-profilo-config','tipi-richiesta-config','sistema-config','registro-config','attributi-config'];
 
 function toggleImpostazioni(force) {
   const el  = document.getElementById('impostazioni-items');
@@ -2678,6 +2711,7 @@ function showSection(name) {
   else if (name === 'fasi-extra-config') { loadCatalogoFasiExtra(); }
   else if (name === 'notif-config') { loadNotifDestinatari(); }
   else if (name === 'sistema-config') { loadSistemaConfig(); }
+  else if (name === 'attributi-config') { loadAttributiConfig().then(renderAttributiConfig); }
   else if (name === 'registro-config') { loadRegistroModifiche(true); }
   else if (name === 'lavorazioni-cnc-config') { loadLavorazioniCnc().then(renderLavorazioniCncConfig); }
   else if (name === 'tempi-rif-config') { loadTempiRiferimento(); }
@@ -3952,6 +3986,7 @@ async function renderDettaglioOrdine(id) {
       : `<div class="detail-field"><label>Struttura</label><span>${strutturaLabel(ordine.struttura)}</span></div>
     <div class="detail-field"><label>Tipo Prodotto</label><span>${tipoProdLabel(ordine.tipo_prodotto)}</span></div>
     <div class="detail-field"><label>Materiale</label><span>${escapeHtml(materialeLabel(ordine.materiale))}</span></div>
+    ${ordine.tipo === 'extra' ? '' : Etichette.attributiOrdine(ordine).map(a => `<div class="detail-field"><label>${escapeHtml(a.etichetta)}</label><span>${escapeHtml(a.valore)}</span></div>`).join('')}
     <div class="detail-field"><label>Lavorazione CNC</label><span>${ordine.lavorazione_cnc_id ? escapeHtml(lavorazioneCncNome(ordine.lavorazione_cnc_id) || '—') : '<span style="color:var(--muted)">Non indicata</span>'}</span></div>`}
     <div class="detail-field"><label>Priorità</label>${Etichette.badgePriorita(ordine.priorita)}</div>
     <div class="detail-field"><label>Stato</label><span class="badge badge-${ordine.stato}">${statoLabel(ordine.stato)}</span></div>
@@ -4491,6 +4526,7 @@ function openModalNuovoOrdine() {
   if (tipoPEl && tipoPEl.options.length) tipoPEl.selectedIndex = 0;
   if (matEl && matEl.options.length) matEl.selectedIndex = 0;
   popolaLavorazioniCncSelect('ord-lavorazione-cnc', null);
+  renderAttributiCustomForm('ord-attributi-custom', {});
   setTipoOrdine('standard');
   // Reset esplicito fasi opzionali — setTipoOrdine le azzera solo quando tipo !== 'standard'
   fasiAttive().filter(f => f.opzionale).forEach(f => {
@@ -4563,6 +4599,7 @@ async function creaOrdine() {
     dati.tipo_prodotto = document.getElementById('ord-tipo-prodotto').value;
     dati.materiale = document.getElementById('ord-materiale').value;
     dati.lavorazione_cnc_id = document.getElementById('ord-lavorazione-cnc').value || null;
+    dati.attributi = leggiAttributiCustom('ord-attributi-custom');
     // fasi aggiuntive e fasi opzionali scelte: create nella stessa transazione dell'ordine
     dati.fasi_aggiuntive = document.getElementById('ord-extra-toggle')?.checked
       ? Array.from(document.querySelectorAll('.extra-std-row input')).map(i => i.value.trim()).filter(Boolean) : [];
@@ -4570,7 +4607,7 @@ async function creaOrdine() {
   }
   const { data: esito, error } = await sb.rpc('crea_ordine', { p_dati: dati, p_responsabile_id: currentUserRow.id, p_session_token: null });
   if (error || !esito?.ok) {
-    const msg = { codice_duplicato: 'Esiste già un ordine con questo numero', priorita_non_valida: 'Priorità non valida' }[esito?.errore];
+    const msg = { codice_duplicato: 'Esiste già un ordine con questo numero', priorita_non_valida: 'Priorità non valida' }[esito?.errore] || messaggioAttributo(esito?.errore);
     toast('Errore: ' + (msg || esito?.errore || error?.message || ''), 'err'); return;
   }
   const newOrdine = { id: esito.ordine_id };
@@ -5748,7 +5785,7 @@ async function loadTempiRiferimento() {
   tempiRifTipo = sel?.value || tipiProdotto[0]?.id || null;
   if (!tempiRifTipo) { tempiRif = []; renderTempiRiferimento(); return; }
   const { data, error } = await sb.from('tempi_riferimento')
-    .select('id, fase_id, tipo_prodotto, lavorazione_cnc_id, minuti_tipici, minuti_max, note, aggiornato_il')
+    .select('id, fase_id, tipo_prodotto, lavorazione_cnc_id, materiale, struttura, moltiplica_per_attributo, da_confermare, minuti_tipici, minuti_max, note, aggiornato_il')
     .eq('tipo_prodotto', tempiRifTipo).order('fase_id').order('id');
   if (error) { toast('Errore caricamento tempi: ' + error.message, 'err'); tempiRif = []; }
   else tempiRif = (data || []).map(r => ({ ...r }));
@@ -5777,13 +5814,18 @@ function renderTempiRiferimento() {
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em">
-        <th style="padding:8px">Fase</th><th style="padding:8px">Lavorazione CNC</th>
+        <th style="padding:8px">Fase</th><th style="padding:8px">Lavorazione CNC</th><th style="padding:8px">Materiale</th><th style="padding:8px">Struttura</th>
+        <th style="padding:8px" title="Il tempo è per unità dell'attributo (es. per faccia) e viene moltiplicato per il valore dell'ordine">Per…</th><th style="padding:8px" title="Tempo non ancora validato con la squadra">Da confermare</th>
         <th style="padding:8px">Tipico (min)</th><th style="padding:8px">Massimo (min)</th><th style="padding:8px">Note</th><th></th>
       </tr></thead>
       <tbody>${tempiRif.length ? tempiRif.map((r, i) => `
         <tr style="border-top:1px solid var(--border)">
           <td style="padding:6px 8px"><select style="${cella};min-width:150px;max-width:220px" onchange="tempiRifSet(${i},'fase_id',this.value)">${optFasi(r.fase_id)}</select></td>
           <td style="padding:6px 8px"><select style="${cella};min-width:140px;max-width:210px" onchange="tempiRifSet(${i},'lavorazione_cnc_id',this.value)">${optLav(r.lavorazione_cnc_id)}</select></td>
+          <td style="padding:6px 8px"><select style="${cella};min-width:110px" onchange="tempiRifSet(${i},'materiale',this.value)"><option value="">Tutti</option>${(attributiConfig.find(a => a.chiave === 'materiale')?.opzioni || []).filter(o => o.attivo !== false || o.valore === r.materiale).map(o => `<option value="${escapeHtml(o.valore)}" ${o.valore === r.materiale ? 'selected' : ''}>${escapeHtml(o.etichetta)}</option>`).join('')}</select></td>
+          <td style="padding:6px 8px"><select style="${cella};min-width:110px" onchange="tempiRifSet(${i},'struttura',this.value)"><option value="">Tutte</option>${(attributiConfig.find(a => a.chiave === 'struttura')?.opzioni || []).filter(o => o.attivo !== false || o.valore === r.struttura).map(o => `<option value="${escapeHtml(o.valore)}" ${o.valore === r.struttura ? 'selected' : ''}>${escapeHtml(o.etichetta)}</option>`).join('')}</select></td>
+          <td style="padding:6px 8px"><select style="${cella};min-width:110px" onchange="tempiRifSet(${i},'moltiplica_per_attributo',this.value)"><option value="">Per ordine</option>${attributiConfig.filter(a => a.tipo === 'numero' && !a.su_colonna).map(a => `<option value="${escapeHtml(a.chiave)}" ${a.chiave === r.moltiplica_per_attributo ? 'selected' : ''}>Per ${escapeHtml(a.etichetta.toLowerCase())}</option>`).join('')}</select></td>
+          <td style="padding:6px 8px;text-align:center"><input type="checkbox" ${r.da_confermare ? 'checked' : ''} onchange="tempiRifSet(${i},'da_confermare',this.checked)"></td>
           <td style="padding:6px 8px"><input type="number" min="0.1" step="0.5" value="${escapeHtml(r.minuti_tipici ?? '')}" style="${cella};width:72px" onchange="tempiRifSet(${i},'minuti_tipici',this.value)"></td>
           <td style="padding:6px 8px"><input type="number" min="0.1" step="0.5" value="${escapeHtml(r.minuti_max ?? '')}" style="${cella};width:72px" onchange="tempiRifSet(${i},'minuti_max',this.value)"></td>
           <td style="padding:6px 8px"><input type="text" maxlength="200" value="${escapeHtml(r.note || '')}" style="${cella};width:100%;min-width:90px" onchange="tempiRifSet(${i},'note',this.value)"></td>
@@ -5791,7 +5833,7 @@ function renderTempiRiferimento() {
             <button class="btn btn-secondary" style="padding:6px 10px;font-size:12px" onclick="salvaTempoRiferimento(${i})"><i data-ic="salva"></i> Salva</button>
             <button class="btn btn-danger" style="padding:6px 10px;font-size:12px" onclick="eliminaTempoRiferimento(${i})" aria-label="Elimina"><i data-ic="cestino"></i></button>
           </td>
-        </tr>`).join('') : '<tr><td colspan="6" style="padding:16px;color:var(--muted)">Nessun tempo di riferimento per questo tipo prodotto</td></tr>'}
+        </tr>`).join('') : '<tr><td colspan="10" style="padding:16px;color:var(--muted)">Nessun tempo di riferimento per questo tipo prodotto</td></tr>'}
       </tbody>
     </table></div>`;
 }
@@ -5816,6 +5858,7 @@ async function salvaTempoRiferimento(i) {
   if (max === null || max <= 0) { toast('Il tempo massimo deve essere un numero maggiore di 0', 'err'); return; }
   if (max < tip) { toast('Il tempo massimo non può essere minore del tipico', 'err'); return; }
   const payload = { fase_id: r.fase_id, tipo_prodotto: r.tipo_prodotto, lavorazione_cnc_id: r.lavorazione_cnc_id || null,
+    materiale: r.materiale || null, struttura: r.struttura || null, moltiplica_per_attributo: r.moltiplica_per_attributo || null, da_confermare: !!r.da_confermare,
     minuti_tipici: tip, minuti_max: max, note: (r.note || '').trim() || null };
   const { data, error } = await sb.rpc('salva_tempo_riferimento', { p_dati: { ...payload, id: r.id || null }, p_responsabile_id: currentUserRow.id, p_session_token: null });
   if (error || !data?.ok) {
@@ -7036,21 +7079,35 @@ function fasiCriteriDef() {
                  opzioni: tipiProdotto.map(t => ({ valore: t.id, etichetta: t.label, attivo: true })) }];
   const per = { materiale: ['materiali', 'modo_materiali'], struttura: ['strutture', 'modo_strutture'] };
   attributiConfig.forEach(a => {
-    if (!per[a.chiave]) return;
-    def.push({ campo: per[a.chiave][0], modo: per[a.chiave][1], titolo: a.etichetta, tutti: `tutti i valori di ${a.etichetta.toLowerCase()}`, opzioni: a.opzioni || [] });
+    if (per[a.chiave]) {
+      def.push({ campo: per[a.chiave][0], modo: per[a.chiave][1], titolo: a.etichetta, tutti: `tutti i valori di ${a.etichetta.toLowerCase()}`, opzioni: a.opzioni || [] });
+    } else if (!a.su_colonna && a.attivo) {
+      // attributo d'ordine aggiuntivo: select (opzioni) o numero intero (un valore per ogni numero dell'intervallo)
+      const opzioni = a.tipo === 'numero'
+        ? Array.from({ length: Math.max(0, a.numero_max - a.numero_min + 1) }, (_, i) => ({ valore: String(a.numero_min + i), etichetta: String(a.numero_min + i), attivo: true }))
+        : (a.opzioni || []);
+      def.push({ campo: 'attr_' + a.chiave, modo: 'modo_attr_' + a.chiave, titolo: a.etichetta, tutti: `tutti i valori di ${a.etichetta.toLowerCase()}`, opzioni });
+    }
   });
   return def;
 }
 
+// Valore salvato di un campo della fase (i criteri sugli attributi aggiuntivi vivono in f.criteri_attributi / f.modi_attr)
+function fasiOrig(f, campo) {
+  if (campo.startsWith('modo_attr_')) return (f.modi_attr || {})[campo.slice(10)] || 'solo';
+  if (campo.startsWith('attr_')) return (f.criteri_attributi || {})[campo.slice(5)] || [];
+  return f[FASI_CAMPO_ORIG[campo] || campo];
+}
+
 function fasiVal(f, campo) {
   const b = fasiBozze[f.id];
-  return (b && campo in b) ? b[campo] : f[FASI_CAMPO_ORIG[campo] || campo];
+  return (b && campo in b) ? b[campo] : fasiOrig(f, campo);
 }
 
 function fasiEdit(id, campo, valore, rerender = true) {
   const f = fasi.find(x => x.id === id);
   if (!f) return;
-  const orig = f[FASI_CAMPO_ORIG[campo] || campo];
+  const orig = fasiOrig(f, campo);
   const uguale = Array.isArray(valore)
     ? JSON.stringify([...valore].sort()) === JSON.stringify([...(orig || [])].sort())
     : (valore === orig || (valore === '' && (orig == null || orig === '')));
@@ -7322,6 +7379,7 @@ function aggiungiNuovaFase() {
     macro_fase_id: '', tipo_gestione: 'standard', e_attesa_esterna: false, avvio_automatico: false, opzionale: false, e_cnc: false, gruppo_spedizione: false,
     tipi: [], materiali: [], strutture: [], modo_tipi: 'solo', modo_materiali: 'solo', modo_strutture: 'solo', dipendenze: [],
   };
+  fasiCriteriDef().forEach(d => { nuovaFase[d.campo] ||= []; nuovaFase[d.modo] ||= 'solo'; });
   renderNuovaFase();
   document.getElementById('modal-nuova-fase').classList.add('open');
 }
@@ -7414,6 +7472,7 @@ async function confermaNuovaFase() {
     tipi: nf.tipi, materiali: nf.materiali, strutture: nf.strutture,
     modo_tipi: nf.modo_tipi, modo_materiali: nf.modo_materiali, modo_strutture: nf.modo_strutture,
     dipendenze: nf.dipendenze,
+    ..._raccogliAttributiBozza(Object.fromEntries(Object.entries(nf).filter(([k]) => k.startsWith('attr_') || k.startsWith('modo_attr_')))),
   };
   const { data, error } = await sb.rpc('crea_fase', { p_dati: dati, p_responsabile_id: currentUserRow.id, p_session_token: null });
   if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
@@ -7449,8 +7508,19 @@ async function riattivaFase(id) {
 }
 
 // ─── Salvataggio configurazione fasi: solo le fasi modificate, con anteprima dei cambi sugli ordini aperti ───
+// Le bozze dei criteri sugli attributi aggiuntivi (attr_x / modo_attr_x) diventano {attributi:{x:[...]}, modi_attributi:{x:modo}} per il server
+function _raccogliAttributiBozza(src) {
+  const out = {};
+  Object.entries(src).forEach(([k, v]) => {
+    if (k.startsWith('modo_attr_')) (out.modi_attributi ||= {})[k.slice(10)] = v;
+    else if (k.startsWith('attr_')) (out.attributi ||= {})[k.slice(5)] = v;
+    else out[k] = v;
+  });
+  return out;
+}
+
 function modifichePendentiFasi() {
-  return Object.entries(fasiBozze).map(([id, b]) => ({ id: Number(id), ...b }));
+  return Object.entries(fasiBozze).map(([id, b]) => ({ id: Number(id), ..._raccogliAttributiBozza(b) }));
 }
 
 async function salvaFasiConfig() {
@@ -7573,7 +7643,7 @@ async function eliminaTipoProdotto(id) {
 // STRUTTURE / MATERIALI (attributi_prodotto_config)
 // ═══════════════════════════════════════════════
 function renderAttributoConfig(chiave) {
-  const elId = chiave === 'struttura' ? 'strutture-config-list' : 'materiali-config-list';
+  const elId = chiave === 'struttura' ? 'strutture-config-list' : chiave === 'materiale' ? 'materiali-config-list' : 'attr-opz-' + chiave;
   const el = document.getElementById(elId);
   if (!el) return;
   const attr = attributiConfig.find(a => a.chiave === chiave);
@@ -8953,6 +9023,91 @@ function formatOre(h) {
   return gg + 'g ' + (rem > 0 ? rem + 'h' : '');
 }
 
+// ── Gestione attributi d'ordine (pagina Attributi ordine) ──
+function renderAttributiConfig() {
+  const el = document.getElementById('attributi-config-body');
+  if (!el) return;
+  const campoNum = (a, campo, titolo) => `<label style="font-size:11px;color:var(--muted)">${titolo} <input type="number" step="1" value="${a[campo]}" style="width:70px;padding:4px 6px;border:1px solid var(--border);border-radius:6px" onchange="aggiornaAttributo('${escapeJsAttr(a.chiave)}', { ${campo}: numeroOLiteral(this.value) })"></label>`;
+  el.innerHTML = attributiConfig.map(a => `
+    <div class="card" style="padding:14px 18px;margin-bottom:12px;max-width:760px;${a.attivo ? '' : 'opacity:.65'}">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <input type="text" value="${escapeHtml(a.etichetta)}" aria-label="Nome" onchange="aggiornaAttributo('${escapeJsAttr(a.chiave)}', { etichetta: this.value })" style="flex:1;min-width:180px;font-weight:600;padding:6px 10px;border:1px solid var(--border);border-radius:8px">
+        <span style="font-size:11px;color:var(--muted);font-family:monospace">${escapeHtml(a.chiave)}</span>
+        <span style="font-size:11px;background:var(--fill);padding:2px 8px;border-radius:6px">${a.tipo === 'numero' ? 'Numero intero' : 'Scelta'}${a.su_colonna ? ' · di sistema' : ''}</span>
+        ${a.su_colonna ? '' : `
+        <label style="font-size:12px;display:flex;align-items:center;gap:4px"><input type="checkbox" ${a.obbligatorio ? 'checked' : ''} onchange="aggiornaAttributo('${escapeJsAttr(a.chiave)}', { obbligatorio: this.checked })"> obbligatorio</label>
+        <label style="font-size:12px;display:flex;align-items:center;gap:4px"><input type="checkbox" ${a.attivo ? 'checked' : ''} onchange="aggiornaAttributo('${escapeJsAttr(a.chiave)}', { attivo: this.checked })"> attivo</label>
+        <button class="btn btn-danger" style="padding:4px 10px;font-size:12px" onclick="eliminaAttributo('${escapeJsAttr(a.chiave)}')" aria-label="Elimina">✕</button>`}
+      </div>
+      ${a.tipo === 'numero' && !a.su_colonna ? `<div style="display:flex;gap:14px;margin-top:10px">${campoNum(a, 'numero_min', 'Minimo')}${campoNum(a, 'numero_max', 'Massimo')}${campoNum(a, 'numero_default', 'Predefinito')}</div>` : ''}
+      ${a.tipo === 'select_singola' && !a.su_colonna ? `<div id="attr-opz-${escapeHtml(a.chiave)}" style="margin-top:10px"></div>` : ''}
+      ${a.su_colonna ? `<div style="font-size:11px;color:var(--muted);margin-top:6px">Le opzioni si gestiscono nelle pagine ${a.chiave === 'materiale' ? 'Materiali' : 'Strutture'}.</div>` : ''}
+    </div>`).join('') || '<p style="color:var(--muted)">Nessun attributo.</p>';
+  attributiConfig.filter(a => a.tipo === 'select_singola' && !a.su_colonna).forEach(a => renderAttributoConfig(a.chiave));
+}
+
+async function aggiornaAttributo(chiave, dati) {
+  const { data, error } = await sb.rpc('salva_attributo', { p_chiave: chiave, p_dati: dati, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) toast('Errore: ' + ({ valori_esistenti_fuori_intervallo: 'Ci sono ordini con valori fuori dal nuovo intervallo', intervallo_non_valido: 'Intervallo non valido' }[data?.errore] || data?.errore || error?.message || ''), 'err');
+  else toast('Attributo aggiornato', 'ok');
+  await loadAttributiConfig(); renderAttributiConfig(); await loadFasi();
+}
+
+async function creaAttributo() {
+  const dati = { etichetta: document.getElementById('na-etichetta').value.trim(), tipo: document.getElementById('na-tipo').value, obbligatorio: document.getElementById('na-obbl').checked };
+  if (!dati.etichetta) { toast('Indica il nome dell\'attributo', 'err'); return; }
+  if (dati.tipo === 'numero') {
+    dati.numero_min = numeroOLiteral(document.getElementById('na-min').value); dati.numero_max = numeroOLiteral(document.getElementById('na-max').value); dati.numero_default = numeroOLiteral(document.getElementById('na-def').value);
+    if ([dati.numero_min, dati.numero_max, dati.numero_default].some(v => v === null)) { toast('Indica minimo, massimo e predefinito', 'err'); return; }
+  }
+  const { data, error } = await sb.rpc('salva_attributo', { p_chiave: null, p_dati: dati, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
+  document.getElementById('na-etichetta').value = '';
+  toast('Attributo creato', 'ok');
+  await loadAttributiConfig(); renderAttributiConfig(); await loadFasi();
+}
+
+async function eliminaAttributo(chiave) {
+  const a = attributiConfig.find(x => x.chiave === chiave);
+  if (!confirm(`Eliminare l'attributo "${a?.etichetta || chiave}"?\nSe è già usato da ordini, criteri di fase o tempi viene solo disattivato.`)) return;
+  const { data, error } = await sb.rpc('elimina_attributo', { p_chiave: chiave, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
+  toast(data.esito === 'disattivato' ? 'Attributo in uso: disattivato' : 'Attributo eliminato', 'ok');
+  await loadAttributiConfig(); renderAttributiConfig(); await loadFasi();
+}
+
+// ── Attributi d'ordine aggiuntivi (configurabili, ordini.attributi) ──
+function renderAttributiCustomForm(containerId, valori) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  const attrs = attributiConfig.filter(a => !a.su_colonna && (a.attivo || (valori || {})[a.chiave] != null));
+  el.innerHTML = attrs.map(a => {
+    const v = (valori || {})[a.chiave];
+    const req = a.obbligatorio && a.attivo;
+    const k = escapeHtml(a.chiave);
+    if (a.tipo === 'numero') {
+      const val = v ?? a.numero_default ?? '';
+      return `<div class="form-group"><label>${escapeHtml(a.etichetta)}${req ? ' *' : ''}</label><input type="number" data-attr="${k}" min="${a.numero_min}" max="${a.numero_max}" step="1" value="${escapeHtml(val)}"></div>`;
+    }
+    const opz = (a.opzioni || []).filter(o => o.attivo !== false || o.valore === v);
+    return `<div class="form-group"><label>${escapeHtml(a.etichetta)}${req ? ' *' : ''}</label><select data-attr="${k}">${req ? '' : '<option value="">—</option>'}${opz.map(o => `<option value="${escapeHtml(o.valore)}" ${o.valore === v ? 'selected' : ''}>${escapeHtml(o.etichetta)}</option>`).join('')}</select></div>`;
+  }).join('');
+}
+
+function leggiAttributiCustom(containerId) {
+  const out = {};
+  document.querySelectorAll(`#${containerId} [data-attr]`).forEach(e => { if (e.value !== '') out[e.dataset.attr] = e.type === 'number' ? Number(e.value) : e.value; });
+  return out;
+}
+
+// Errori di validazione server degli attributi (attributo_obbligatorio: chiave, valore_non_valido: chiave = x)
+function messaggioAttributo(err) {
+  const m = /^(attributo_obbligatorio|valore_non_valido): ([a-z0-9_]+)/.exec(err || '');
+  if (!m) return null;
+  const etichetta = attributiConfig.find(a => a.chiave === m[2])?.etichetta || m[2];
+  return m[1] === 'attributo_obbligatorio' ? `compila "${etichetta}"` : `valore non valido per "${etichetta}"`;
+}
+
 // Seleziona il valore in una <select>; se non è tra le opzioni (disattivata/storica) la aggiunge come voce temporanea
 function impostaSelectConValore(selectId, valore) {
   const el = document.getElementById(selectId);
@@ -8979,6 +9134,8 @@ function openModificaOrdine(id) {
   impostaSelectConValore('mod-struttura', ordine.struttura);
   impostaSelectConValore('mod-materiale', ordine.materiale);
   popolaLavorazioniCncSelect('mod-lavorazione-cnc', ordine.lavorazione_cnc_id || null);
+  renderAttributiCustomForm('mod-attributi-custom', ordine.attributi || {});
+  document.getElementById('mod-attributi-custom').style.display = isExtra ? 'none' : '';
   document.getElementById('mod-prio').value = ordine.priorita || 'normale';
   document.getElementById('mod-quantita').value = ordine.quantita || 1;
   document.getElementById('mod-scadenza').value = ordine.scadenza || '';
@@ -9020,12 +9177,13 @@ async function salvaModificaOrdine() {
     payload.struttura = nuovaStruttura;
     payload.materiale = nuovoMateriale;
     payload.lavorazione_cnc_id = document.getElementById('mod-lavorazione-cnc').value || null;
+    payload.attributi = leggiAttributiCustom('mod-attributi-custom');
 
   }
 
   const { data: esMod, error } = await sb.rpc('modifica_ordine', { p_ordine_id: id, p_dati: payload, p_responsabile_id: currentUserRow.id, p_session_token: null });
   if (error || !esMod?.ok) {
-    const msg = { codice_duplicato: 'Esiste già un ordine con questo numero' }[esMod?.errore];
+    const msg = { codice_duplicato: 'Esiste già un ordine con questo numero' }[esMod?.errore] || messaggioAttributo(esMod?.errore);
     toast('Errore: ' + (msg || esMod?.errore || error?.message || ''), 'err'); return;
   }
 
