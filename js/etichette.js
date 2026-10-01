@@ -37,13 +37,15 @@ const Etichette = (() => {
   let tipi = [];        // [{id, label, posizione}]
   let attributi = [];   // [{chiave, etichetta, tipo, opzioni:[{valore, etichetta, posizione, attivo}], ...}]
   let priorita = [];    // [{id, etichetta, peso, posizione, attivo, colore}]
+  let lati = [];        // [{codice, etichetta, posizione, attivo}] lati dell'anta (etichette configurabili)
 
   function imposta(cat) {
     tipi = cat?.tipi_prodotto || [];
     attributi = cat?.attributi || [];
     priorita = cat?.priorita || [];
+    lati = cat?.lati || [];
   }
-  const esporta = () => ({ tipi_prodotto: tipi, attributi, priorita });
+  const esporta = () => ({ tipi_prodotto: tipi, attributi, priorita, lati });
 
   // Carica dal database: RPC config_catalogo (sessione PIN per operatore/ufficio, Supabase Auth per il responsabile).
   async function carica(sb, utenteId, sessionToken) {
@@ -64,7 +66,10 @@ const Etichette = (() => {
   const materiale = v => opzione('materiale', v);
 
   // Attributi d'ordine aggiuntivi (non colonne di ordini): configurabili dal responsabile, salvati in ordini.attributi
-  const attributiCustom = () => attributi.filter(a => !a.su_colonna);
+  const attributiCustom = () => attributi.filter(a => !a.su_colonna && a.ambito !== 'lato');
+  const attributiLato = () => attributi.filter(a => a.ambito === 'lato');
+  const latoEtichetta = codice => lati.find(l => l.codice === codice)?.etichetta || vuoto(codice);
+  const latiAttivi = () => lati.filter(l => l.attivo);
   function valoreAttributoCustom(a, valore) {
     if (valore === null || valore === undefined || valore === '') return a.tipo === 'numero' && a.numero_default != null ? String(a.numero_default) : '—';
     return a.tipo === 'numero' ? String(valore) : opzione(a.chiave, String(valore));
@@ -73,6 +78,32 @@ const Etichette = (() => {
   function attributiOrdine(o) {
     return attributiCustom().filter(a => a.attivo || (o?.attributi || {})[a.chiave] != null)
       .map(a => ({ chiave: a.chiave, etichetta: a.etichetta, valore: valoreAttributoCustom(a, (o?.attributi || {})[a.chiave]) }));
+  }
+
+  // Valori per lato di un ordine: attributi_lato [{lato, lato_etichetta, chiave, valore}] (ordini nuovi e migrati), con fallback
+  // alla colonna storica. Restituisce [{chiave, etichetta, valori:[{lato, lato_etichetta, valore, testo}]}].
+  function valoriLatoOrdine(o) {
+    const righe = o?.attributi_lato || [];
+    return attributiLato().filter(a => a.attivo || righe.some(r => r.chiave === a.chiave) || (a.su_colonna && o?.[a.chiave]))
+      .map(a => {
+        let valori = righe.filter(r => r.chiave === a.chiave).map(r => ({ lato: r.lato, lato_etichetta: latoEtichetta(r.lato), valore: r.valore }));
+        if (!valori.length && a.su_colonna && o?.[a.chiave]) valori = [{ lato: null, lato_etichetta: null, valore: o[a.chiave] }];
+        return { chiave: a.chiave, etichetta: a.etichetta,
+          valori: valori.map(v => ({ ...v, testo: a.tipo === 'numero' ? String(v.valore) : opzione(a.chiave, v.valore) })) };
+      }).filter(x => x.valori.length);
+  }
+  // Testo breve per elenchi/export: "HDF" se uguale su tutti i lati, altrimenti "Lato interno: HDF · Lato esterno: Placcato"
+  function riepilogoLato(o, chiave) {
+    const x = valoriLatoOrdine(o).find(y => y.chiave === chiave);
+    if (!x) return '—';
+    const tutti = new Set(x.valori.map(v => v.testo));
+    return (tutti.size === 1 || x.valori.every(v => !v.lato)) ? x.valori[0].testo : x.valori.map(v => v.lato_etichetta + ': ' + v.testo).join(' · ');
+  }
+  // Lavorazioni CNC dell'ordine: [{nome, ambito, lati, testo}] ("Doghe — Lato esterno"); per gli ordini vecchi la lavorazione combinata storica
+  function lavorazioniCncOrdine(o, nomeStorica) {
+    const v = (o?.lavorazioni_cnc || []).map(l => ({ nome: l.nome, ambito: l.ambito, lati: l.lati_etichette || [], testo: l.ambito === 'lato' ? l.nome + ' — ' + (l.lati_etichette || []).join(' + ') : l.nome }));
+    if (!v.length && o?.lavorazione_cnc_id && nomeStorica) v.push({ nome: nomeStorica, ambito: 'anta', lati: [], testo: nomeStorica });
+    return v;
   }
 
   function prio(id) { return priorita.find(p => p.id === id) || null; }
@@ -89,8 +120,8 @@ const Etichette = (() => {
 
   return {
     PALETTE, imposta, esporta, carica,
-    tipoProdotto, attributo, opzione, struttura, materiale, attributiCustom, valoreAttributoCustom, attributiOrdine,
-    priorita: () => priorita, tipi: () => tipi, attributi: () => attributi,
+    tipoProdotto, attributo, opzione, struttura, materiale, attributiCustom, attributiLato, latoEtichetta, latiAttivi, valoriLatoOrdine, riepilogoLato, lavorazioniCncOrdine, valoreAttributoCustom, attributiOrdine,
+    priorita: () => priorita, lati: () => lati, tipi: () => tipi, attributi: () => attributi,
     prioritaEtichetta, prioritaPeso, confrontaPriorita, colorePriorita, badgePriorita,
     statoOrdine: s => STATI_ORDINE[s] || vuoto(s),
     statoFase: s => STATI_FASE[s] || vuoto(s),
