@@ -7239,6 +7239,17 @@ function renderFasiConfig() {
               Avvio automatico alla creazione ordine
             </label>
           </div>
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer" title="Mostra il badge CNC sulla fase">
+              <input type="checkbox" ${fasiVal(f, 'e_cnc') ? 'checked' : ''} onchange="fasiEdit(${f.id},'e_cnc',this.checked,false)" style="width:14px;height:14px;cursor:pointer"> CNC
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer" title="Alla chiusura l'operatore può completare tutti gli ordini della stessa spedizione unica">
+              <input type="checkbox" ${fasiVal(f, 'gruppo_spedizione') ? 'checked' : ''} onchange="fasiEdit(${f.id},'gruppo_spedizione',this.checked,false)" style="width:14px;height:14px;cursor:pointer"> Gruppo spedizione
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer" title="Non si attiva da sola: si abilita manualmente dall'ordine">
+              <input type="checkbox" ${fasiVal(f, 'opzionale') ? 'checked' : ''} onchange="fasiEdit(${f.id},'opzionale',this.checked,false)" style="width:14px;height:14px;cursor:pointer"> Opzionale
+            </label>
+          </div>
         </div>
         <!-- OPERATORI COMPETENTI -->
         <div style="margin-top:10px;padding:8px 10px;background:var(--ext-bg);border:1px solid var(--ext-line);border-radius:6px">
@@ -7371,7 +7382,7 @@ function aggiungiNuovaFase() {
   const lista = fasiAttive();
   nuovaFase = {
     nome: '', descrizione: '', dopo: lista.length ? String(lista[lista.length - 1].id) : 'top',
-    macro_fase_id: '', tipo_gestione: 'standard', e_attesa_esterna: false, avvio_automatico: false, opzionale: false,
+    macro_fase_id: '', tipo_gestione: 'standard', e_attesa_esterna: false, avvio_automatico: false, opzionale: false, e_cnc: false, gruppo_spedizione: false,
     tipi: [], materiali: [], strutture: [], modo_tipi: 'solo', modo_materiali: 'solo', modo_strutture: 'solo', dipendenze: [],
   };
   renderNuovaFase();
@@ -7440,6 +7451,8 @@ function renderNuovaFase() {
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;${vincolato ? 'opacity:.65' : ''}"><input type="checkbox" ${nf.e_attesa_esterna ? 'checked' : ''} ${vincolato ? 'disabled' : ''} onchange="nfSet('e_attesa_esterna', this.checked, false)"> Attesa esterna (escludi da stime ore interne)</label>
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" ${nf.avvio_automatico ? 'checked' : ''} onchange="nfSet('avvio_automatico', this.checked, false)"> Avvio automatico alla creazione ordine</label>
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" ${nf.opzionale ? 'checked' : ''} onchange="nfSet('opzionale', this.checked, false)"> Opzionale (si attiva solo manualmente dall'ordine)</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" ${nf.e_cnc ? 'checked' : ''} onchange="nfSet('e_cnc', this.checked, false)"> CNC (badge CNC sulla fase)</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" ${nf.gruppo_spedizione ? 'checked' : ''} onchange="nfSet('gruppo_spedizione', this.checked, false)"> Gruppo spedizione (completamento per spedizione unica)</label>
     </div>
     <div style="font-size:13px;font-weight:700;margin:6px 0 8px">Criteri di applicabilità</div>
     ${criteri}
@@ -7460,6 +7473,7 @@ async function confermaNuovaFase() {
     nome: nf.nome.trim(), descrizione: nf.descrizione.trim(), dopo_fase_id: nf.dopo === 'top' ? null : parseInt(nf.dopo),
     macro_fase_id: nf.macro_fase_id === '' ? null : parseInt(nf.macro_fase_id),
     tipo_gestione: nf.tipo_gestione, e_attesa_esterna: nf.e_attesa_esterna, avvio_automatico: nf.avvio_automatico, opzionale: nf.opzionale,
+    e_cnc: nf.e_cnc, gruppo_spedizione: nf.gruppo_spedizione,
     tipi: nf.tipi, materiali: nf.materiali, strutture: nf.strutture,
     modo_tipi: nf.modo_tipi, modo_materiali: nf.modo_materiali, modo_strutture: nf.modo_strutture,
     dipendenze: nf.dipendenze,
@@ -8439,8 +8453,9 @@ function getFaseNome(faseId) {
   const f = fasi.find(x => x.id === faseId);
   return f ? f.nome : `Fase ${faseId}`;
 }
-const isCNC = (id) => [3, 6, 14, 19].includes(id);
-const isEsterna = (id) => id === 9;
+// Proprietà di fase lette dalla configurazione (fasi.e_cnc, fasi.e_attesa_esterna, fasi.gruppo_spedizione)
+const isCNC = (id) => fasi.find(f => f.id === id)?.e_cnc === true;
+const isEsterna = (id) => fasi.find(f => f.id === id)?.e_attesa_esterna === true;
 
 async function eliminaOrdine(id) {
   const ordine = [...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === id);

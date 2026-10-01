@@ -2266,9 +2266,7 @@ async function uniscitiAFase(ordFaseId, ordineId) {
   renderHome();
 }
 
-// Fasi finali di imballo/pedana per cui ha senso "spedizione unica": id fase 16
-// (Imballaggio Pronto Consegna) e 21 (Preparazione pedana), entrambe tipo_gestione='standard'.
-const FASI_GRUPPO_SPEDIZIONE = [16, 21];
+// "Spedizione unica": la scelta compare solo per le fasi con la proprietà fasi.gruppo_spedizione (configurabile dal responsabile).
 
 // Dialog "solo questo ordine / tutti gli ordini del gruppo" — risolve a 'solo', 'tutti' o
 // null (annullato, non completare nulla).
@@ -2300,7 +2298,7 @@ async function completaFase(ordFaseId, ordineId) {
   // se completare solo questo ordine o tutti quelli della stessa spedizione. Solo online: la
   // scelta richiede di conoscere i fratelli del gruppo, già disponibili in ordiniCache.
   let modalitaGruppo = false;
-  if (isOnline && _faseDetCorrente?.id === ordFaseId && FASI_GRUPPO_SPEDIZIONE.includes(_faseDetCorrente.fase_id)) {
+  if (isOnline && _faseDetCorrente?.id === ordFaseId && faseGruppoSpedizione(_faseDetCorrente.fase_id)) {
     const ordine = ordiniCache.find(o => o.id === ordineId);
     if (ordine?.gruppo_spedizione_id) {
       const codiciFratelli = ordiniCache
@@ -2949,8 +2947,10 @@ function getFaseNome(faseId) {
   const f = fasi.find(x => x.id === faseId);
   return f ? f.nome : `Fase ${faseId}`;
 }
-const isCNC = (id) => [3, 6, 14, 19].includes(id);
-const isEsterna = (id) => id === 9;
+// Proprietà di fase lette dalla configurazione (fasi.e_cnc, fasi.e_attesa_esterna, fasi.gruppo_spedizione)
+const isCNC = (id) => fasi.find(f => f.id === id)?.e_cnc === true;
+const isEsterna = (id) => fasi.find(f => f.id === id)?.e_attesa_esterna === true;
+const faseGruppoSpedizione = (id) => fasi.find(f => f.id === id)?.gruppo_spedizione === true;
 function scadenzaClass(scadenza) {
   if (!scadenza) return '';
   const oggi = new Date(); oggi.setHours(0,0,0,0);
