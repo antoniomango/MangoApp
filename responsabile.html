@@ -1485,13 +1485,15 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
             <h1>Configurazione Fasi</h1>
             <div class="sub">Rinomina le fasi standard — le modifiche si riflettono ovunque</div>
           </div>
-          <div style="display:flex;gap:8px">
+          <div style="display:flex;gap:8px;align-items:center">
+            <span id="fasi-bozze-count" style="font-size:12px;color:var(--indigo);font-weight:600"></span>
             <button class="btn btn-secondary" onclick="aggiungiNuovaFase()">+ Nuova Fase</button>
-            <button class="btn btn-primary" onclick="saveFasiConfig()">Salva modifiche</button>
+            <button class="btn btn-primary" id="fasi-salva-btn" onclick="salvaFasiConfig()" disabled>Salva modifiche</button>
           </div>
         </div>
         <div class="card" style="padding:4px 20px 16px">
           <div id="fasi-config-list">Caricamento…</div>
+          <div id="fasi-disattivate"></div>
         </div>
       </section>
 
@@ -2150,30 +2152,25 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       <h3>Nuova Fase</h3>
       <button class="modal-close" onclick="closeModal('modal-nuova-fase')" aria-label="Chiudi">✕</button>
     </div>
-    <div class="modal-body">
-      <div class="form-row">
-        <div class="form-group">
-          <label>Nome fase *</label>
-          <input type="text" id="nf-nome" placeholder="es. Preparazione ferramenta">
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Descrizione <span style="color:var(--muted);font-weight:400">(opzionale)</span></label>
-        <input type="text" id="nf-desc" placeholder="Descrizione breve">
-      </div>
-      <div class="form-group">
-        <label>Inserisci dopo la fase *</label>
-        <select id="nf-posizione">
-          <option value="0">— In cima alla lista</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <div style="font-size:11px;color:var(--muted)">I criteri di applicabilità (tipo prodotto e materiale) si configurano nella lista "Configurazione Fasi" dopo aver aggiunto la fase.</div>
-      </div>
-    </div>
+    <div class="modal-body" id="nf-body"></div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-nuova-fase')">Annulla</button>
-      <button class="btn btn-primary" onclick="confermaNuovaFase()">Aggiungi fase</button>
+      <button class="btn btn-primary" onclick="confermaNuovaFase()">Crea fase</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODALE ANTEPRIMA CONFIGURAZIONE FASI -->
+<div class="modal-overlay" id="modal-anteprima-fasi">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-hdr">
+      <h3>Conferma modifica fasi</h3>
+      <button class="modal-close" onclick="closeModal('modal-anteprima-fasi')" aria-label="Chiudi">✕</button>
+    </div>
+    <div class="modal-body" id="anteprima-fasi-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-anteprima-fasi')">Annulla</button>
+      <button class="btn btn-primary" onclick="confermaSalvaFasiConfig()">Conferma e salva</button>
     </div>
   </div>
 </div>
@@ -2304,7 +2301,8 @@ let catalogoFasiExtra = []; // catalogo_fasi_extra in memoria
 let _etaMinutiCache = {}; // ordine_id -> minuti ETA equivalenti (critico interno + calendario esterno scalato)
 let currentFaseId = null; // per riassegna
 let prioritaConfig = []; // [{id, etichetta, peso, posizione, attivo}] da priorita_ordine_config
-let attributiConfig = []; // [{chiave, etichetta, opzioni:[{valore,etichetta,posizione}]}] da attributi_prodotto_config
+let attributiConfig = []; // [{chiave, etichetta, opzioni:[{valore,etichetta,posizione,attivo}]}] da attributi_prodotto_config + attributo_opzioni
+let fasiBozze = {}; // modifiche non ancora salvate della Configurazione fasi: { faseId: {campo: valore} }
 let riassegnaOrdFaseId = null;
 
 // ═══════════════════════════════════════════════
@@ -2475,16 +2473,22 @@ async function caricaNomiFasiExtraStoria() {
 }
 
 async function loadFasi() {
-  const [{ data: fasiData }, { data: tipiCriteri }, { data: materCriteri }, { data: strutCriteri }, { data: competenzeData }, { data: dipData }] = await Promise.all([
+  const [{ data: fasiData }, { data: tipiCriteri }, { data: materCriteri }, { data: strutCriteri }, { data: competenzeData }, { data: dipData }, { data: modiData }] = await Promise.all([
     sb.from('fasi').select('*, tipo_gestione').order('posizione').order('id'),
     sb.from('fase_tipi_prodotto').select('fase_id, tipo_prodotto_id'),
     sb.from('fase_materiali').select('fase_id, materiale_valore'),
     sb.from('fase_strutture').select('fase_id, struttura_valore'),
     sb.from('competenze_operatore_fase').select('fase_id, operatore_id, priorita').order('priorita'),
     sb.from('fase_dipendenze').select('fase_id, dipende_da_fase_id'),
+    sb.from('fase_criteri_modo').select('fase_id, attributo_chiave, modo'),
   ]);
+  const modoDi = (faseId, chiave) => (modiData || []).find(r => r.fase_id === faseId && r.attributo_chiave === chiave)?.modo || 'solo';
   fasi = (fasiData || []).map(f => ({
     ...f,
+    attiva:            f.attiva !== false,
+    modo_tipi:         modoDi(f.id, 'tipo_prodotto'),
+    modo_materiali:    modoDi(f.id, 'materiale'),
+    modo_strutture:    modoDi(f.id, 'struttura'),
     criteri_tipi:      (tipiCriteri  || []).filter(r => r.fase_id === f.id).map(r => r.tipo_prodotto_id),
     criteri_materiali: (materCriteri || []).filter(r => r.fase_id === f.id).map(r => r.materiale_valore),
     criteri_strutture: (strutCriteri || []).filter(r => r.fase_id === f.id).map(r => r.struttura_valore),
@@ -2494,6 +2498,9 @@ async function loadFasi() {
   renderFasiOpzionaliForm();
 }
 
+// Fasi attive (le disattivate restano in `fasi` solo per risolvere i nomi dello storico)
+function fasiAttive() { return fasi.filter(f => f.attiva !== false); }
+
 async function loadPrioritaConfig() {
   const { data } = await sb.from('priorita_ordine_config').select('*').order('posizione');
   prioritaConfig = data || [];
@@ -2501,8 +2508,14 @@ async function loadPrioritaConfig() {
 }
 
 async function loadAttributiConfig() {
-  const { data } = await sb.from('attributi_prodotto_config').select('*').order('posizione');
-  attributiConfig = data || [];
+  const [{ data }, { data: opz }] = await Promise.all([
+    sb.from('attributi_prodotto_config').select('*').order('posizione'),
+    sb.from('attributo_opzioni').select('attributo_chiave, valore, etichetta, posizione, attivo').order('posizione'),
+  ]);
+  attributiConfig = (data || []).map(a => ({
+    ...a,
+    opzioni: (opz || []).filter(o => o.attributo_chiave === a.chiave).sort((x, y) => (x.posizione || 0) - (y.posizione || 0)),
+  }));
   popolaAttributiSelects();
 }
 
@@ -2521,7 +2534,7 @@ function popolaPrioritaSelects() {
 
 function popolaAttributiSelects() {
   attributiConfig.forEach(attr => {
-    const sorted = [...(attr.opzioni || [])].sort((a, b) => (a.posizione||0) - (b.posizione||0));
+    const sorted = [...(attr.opzioni || [])].filter(o => o.attivo !== false).sort((a, b) => (a.posizione||0) - (b.posizione||0));
     const opts = sorted.map(o =>
       `<option value="${escapeHtml(o.valore)}">${escapeHtml(o.etichetta)}</option>`
     ).join('');
@@ -2544,7 +2557,7 @@ function popolaAttributiSelects() {
 function renderFasiOpzionaliForm() {
   const container = document.getElementById('std-fasi-opzionali-container');
   if (!container) return;
-  const fasiOp = fasi.filter(f => f.opzionale);
+  const fasiOp = fasiAttive().filter(f => f.opzionale);
   if (!fasiOp.length) { container.style.display = 'none'; return; }
   container.innerHTML = fasiOp.map(f => `
     <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;font-weight:600;margin-bottom:4px">
@@ -4366,7 +4379,7 @@ function setTipoOrdine(tipo) {
   document.getElementById('std-fasi-opzionali-container').style.display = tipo === 'standard' ? '' : 'none';
   if (tipo !== 'standard') {
     document.getElementById('ord-extra-toggle').checked = false;
-    fasi.filter(f => f.opzionale).forEach(f => {
+    fasiAttive().filter(f => f.opzionale).forEach(f => {
       const el = document.getElementById(`ord-fase-opz-${f.id}`);
       if (el) el.checked = false;
     });
@@ -4551,7 +4564,7 @@ function openModalNuovoOrdine() {
   popolaLavorazioniCncSelect('ord-lavorazione-cnc', null);
   setTipoOrdine('standard');
   // Reset esplicito fasi opzionali — setTipoOrdine le azzera solo quando tipo !== 'standard'
-  fasi.filter(f => f.opzionale).forEach(f => {
+  fasiAttive().filter(f => f.opzionale).forEach(f => {
     const el = document.getElementById(`ord-fase-opz-${f.id}`);
     if (el) el.checked = false;
   });
@@ -4652,7 +4665,7 @@ async function creaOrdine() {
 
   // Attiva fasi opzionali selezionate
   if (tipo === 'standard') {
-    for (const f of fasi.filter(f => f.opzionale)) {
+    for (const f of fasiAttive().filter(f => f.opzionale)) {
       if (document.getElementById(`ord-fase-opz-${f.id}`)?.checked) {
         await sb.rpc('imposta_fase_ordine', {
           p_ordine_id: newOrdine.id,
@@ -4664,13 +4677,7 @@ async function creaOrdine() {
     }
   }
 
-  // Fix gap: applica subito trigger_tipo_prodotto per ordini standard
-  if (tipo === 'standard') {
-    const tipoProd = document.getElementById('ord-tipo-prodotto')?.value || '';
-    const struttura = document.getElementById('ord-struttura')?.value || '';
-    const materiale = document.getElementById('ord-materiale')?.value || '';
-    await ricalcolaFasiNA(newOrdine.id, tipoProd, struttura, materiale);
-  }
+  // Le fasi applicabili le decide solo il database (trigger sull'inserimento dell'ordine)
 
   await sb.from('archivio_log').insert({ ordine_id: newOrdine.id, utente_id: currentUserRow.id, azione: 'ordine_creato' });
   await inviaNotificaATutti('ordine_creato',
@@ -5817,7 +5824,7 @@ function tempiRifSet(i, campo, valore) {
 function renderTempiRiferimento() {
   const el = document.getElementById('tempi-rif-body');
   if (!el) return;
-  const optFasi = sel => '<option value="">— fase —</option>' + fasi.map(f =>
+  const optFasi = sel => '<option value="">— fase —</option>' + fasiAttive().map(f =>
     `<option value="${f.id}" ${f.id === sel ? 'selected' : ''}>${escapeHtml(f.nome)}</option>`).join('');
   const optLav = sel => '<option value="">Senza lavorazione indicata</option>' + lavorazioniCnc
     .filter(l => l.attivo || l.id === sel).map(l =>
@@ -6066,7 +6073,7 @@ function renderMacroConfig() {
     return;
   }
   el.innerHTML = macroFasiCache.map((m, idx) => {
-    const checklist = fasi.map(f => `
+    const checklist = fasiAttive().map(f => `
       <label>
         <input type="checkbox" data-macro="${m.id}" data-fase="${f.id}"
           ${m.fasi.includes(f.id) ? 'checked' : ''}>
@@ -7083,51 +7090,120 @@ async function riaprieFaseExtraResp(faseExtraId, ordineId) {
 // ═══════════════════════════════════════════════
 // CONFIGURAZIONE FASI
 // ═══════════════════════════════════════════════
+// Stato delle modifiche non salvate: sempre in memoria (fasiBozze), mai letto dal DOM al momento del click.
+const FASI_CAMPO_ORIG = { tipi: 'criteri_tipi', materiali: 'criteri_materiali', strutture: 'criteri_strutture' };
+
+// Criteri di applicabilità: tipo prodotto + attributi a opzioni (materiale, struttura, ...), tutti da configurazione.
+function fasiCriteriDef() {
+  const def = [{ campo: 'tipi', modo: 'modo_tipi', titolo: 'Tipi prodotto', tutti: 'tutti i tipi prodotto',
+                 opzioni: tipiProdotto.map(t => ({ valore: t.id, etichetta: t.label, attivo: true })) }];
+  const per = { materiale: ['materiali', 'modo_materiali'], struttura: ['strutture', 'modo_strutture'] };
+  attributiConfig.forEach(a => {
+    if (!per[a.chiave]) return;
+    def.push({ campo: per[a.chiave][0], modo: per[a.chiave][1], titolo: a.etichetta, tutti: `tutti i valori di ${a.etichetta.toLowerCase()}`, opzioni: a.opzioni || [] });
+  });
+  return def;
+}
+
+function fasiVal(f, campo) {
+  const b = fasiBozze[f.id];
+  return (b && campo in b) ? b[campo] : f[FASI_CAMPO_ORIG[campo] || campo];
+}
+
+function fasiEdit(id, campo, valore, rerender = true) {
+  const f = fasi.find(x => x.id === id);
+  if (!f) return;
+  const orig = f[FASI_CAMPO_ORIG[campo] || campo];
+  const uguale = Array.isArray(valore)
+    ? JSON.stringify([...valore].sort()) === JSON.stringify([...(orig || [])].sort())
+    : (valore === orig || (valore === '' && (orig == null || orig === '')));
+  const b = fasiBozze[id] = fasiBozze[id] || {};
+  if (uguale) delete b[campo]; else b[campo] = valore;
+  if (!Object.keys(b).length) delete fasiBozze[id];
+  aggiornaContatoreBozzeFasi();
+  if (rerender) renderFasiConfig();
+}
+
+function fasiToggle(id, campo, valore, on) {
+  const f = fasi.find(x => x.id === id);
+  if (!f) return;
+  const cur = [...(fasiVal(f, campo) || [])];
+  const i = cur.indexOf(valore);
+  if (on && i < 0) cur.push(valore);
+  if (!on && i >= 0) cur.splice(i, 1);
+  fasiEdit(id, campo, cur);
+}
+
+function fasiCambiaGestione(id, tg) {
+  fasiEdit(id, 'tipo_gestione', tg, false);
+  if (tg === 'conferma_ricezione' || tg === 'spedizione_esterna') fasiEdit(id, 'e_attesa_esterna', true, false);
+  renderFasiConfig();
+}
+
+function aggiornaContatoreBozzeFasi() {
+  const n = Object.keys(fasiBozze).length;
+  const el = document.getElementById('fasi-bozze-count');
+  if (el) el.textContent = n ? `${n} ${n === 1 ? 'fase modificata' : 'fasi modificate'}` : '';
+  const btn = document.getElementById('fasi-salva-btn');
+  if (btn) btn.disabled = n === 0;
+}
+
+function etichettaCriterio(def, valore) {
+  return def.opzioni.find(o => o.valore === valore)?.etichetta || valore;
+}
+
+// Riepilogo in linguaggio semplice dei criteri di una fase (usato nel badge)
+function riepilogoCriteriFase(f) {
+  const parti = [];
+  fasiCriteriDef().forEach(def => {
+    const sel = fasiVal(f, def.campo) || [];
+    if (!sel.length) return;
+    const modo = fasiVal(f, def.modo) === 'tutti_tranne' ? 'Tutti tranne ' : '';
+    parti.push(modo + sel.map(v => etichettaCriterio(def, v)).join(', '));
+  });
+  return parti;
+}
+
 function renderFasiConfig() {
   const el = document.getElementById('fasi-config-list');
-  const n = fasi.length;
-  const matOpz  = attributiConfig.find(a => a.chiave === 'materiale')?.opzioni  || [];
-  const struOpz = attributiConfig.find(a => a.chiave === 'struttura')?.opzioni  || [];
-  el.innerHTML = fasi.map((f, i) => {
-    const hasTipi = (f.criteri_tipi      || []).length > 0;
-    const hasMat  = (f.criteri_materiali  || []).length > 0;
-    const hasStru = (f.criteri_strutture  || []).length > 0;
+  if (!el) return;
+  const lista = fasiAttive();
+  const n = lista.length;
+  const defs = fasiCriteriDef();
+  el.innerHTML = lista.map((f, i) => {
+    const modificata = !!fasiBozze[f.id];
+    const parti = riepilogoCriteriFase(f);
+    const badgeHtml = parti.length
+      ? `<span style="font-size:11px;font-weight:600;background:var(--indigo-bg);color:var(--indigo-ink);padding:2px 7px;border-radius:4px;white-space:nowrap">${parti.map(p => escapeHtml(p)).join(' + ')}</span>`
+      : `<span style="font-size:11px;color:var(--muted)">Tutti</span>`;
 
-    // Badge riepilogativo
-    let badgeHtml;
-    if (!hasTipi && !hasMat && !hasStru) {
-      badgeHtml = `<span style="font-size:11px;color:var(--muted)">Tutti</span>`;
-    } else {
-      const parts = [];
-      if (hasTipi) parts.push(f.criteri_tipi.map(id => tipoProdLabel(id)).join(', '));
-      if (hasMat)  parts.push(f.criteri_materiali.map(v => matOpz.find(o => o.valore === v)?.etichetta || v).join(', '));
-      if (hasStru) parts.push(f.criteri_strutture.map(v => struOpz.find(o => o.valore === v)?.etichetta || v).join(', '));
-      badgeHtml = `<span style="font-size:11px;font-weight:600;background:var(--indigo-bg);color:var(--indigo-ink);padding:2px 7px;border-radius:4px;white-space:nowrap">Solo: ${parts.join(' + ')}</span>`;
-    }
+    const criteriHtml = defs.map(def => {
+      const sel = fasiVal(f, def.campo) || [];
+      const modo = fasiVal(f, def.modo) || 'solo';
+      const opzioni = def.opzioni.filter(o => o.attivo !== false || sel.includes(o.valore));
+      const checkboxes = opzioni.map(o =>
+        `<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap">
+          <input type="checkbox" ${sel.includes(o.valore) ? 'checked' : ''} onchange="fasiToggle(${f.id},'${def.campo}','${escapeJsAttr(o.valore)}',this.checked)">
+          ${escapeHtml(o.etichetta)}${o.attivo === false ? ' <em style="color:var(--muted)">(disattivata)</em>' : ''}
+        </label>`).join('');
+      return `<div>
+        <div style="font-size:11px;font-weight:500;color:var(--muted);margin-bottom:4px">${escapeHtml(def.titolo)} <em style="font-weight:400">(nessuno = tutti)</em></div>
+        <select onchange="fasiEdit(${f.id},'${def.modo}',this.value)" style="font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--surface);margin-bottom:4px">
+          <option value="solo" ${modo === 'solo' ? 'selected' : ''}>Solo questi</option>
+          <option value="tutti_tranne" ${modo === 'tutti_tranne' ? 'selected' : ''}>Tutti tranne questi</option>
+        </select>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">${checkboxes || '<span style="font-size:11px;color:var(--muted)">—</span>'}</div>
+        ${!sel.length ? `<div style="font-size:11px;color:var(--ok-strong);margin-top:3px">✓ ${escapeHtml(def.tutti)}</div>` : ''}
+      </div>`;
+    }).join('');
 
-    const tipiCheckboxes = tipiProdotto.map(t =>
-      `<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap">
-        <input type="checkbox" data-fase="${f.id}" data-tipo="${escapeHtml(t.id)}" ${(f.criteri_tipi||[]).includes(t.id) ? 'checked' : ''}>
-        ${escapeHtml(t.label)}
-      </label>`).join('');
-
-    const matCheckboxes = matOpz.map(m =>
-      `<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap">
-        <input type="checkbox" data-fase="${f.id}" data-mat="${escapeHtml(m.valore)}" ${(f.criteri_materiali||[]).includes(m.valore) ? 'checked' : ''}>
-        ${escapeHtml(m.etichetta)}
-      </label>`).join('');
-
-    const struCheckboxes = struOpz.map(s =>
-      `<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap">
-        <input type="checkbox" data-fase="${f.id}" data-stru="${escapeHtml(s.valore)}" ${(f.criteri_strutture||[]).includes(s.valore) ? 'checked' : ''}>
-        ${escapeHtml(s.etichetta)}
-      </label>`).join('');
-
-    // Stato iniziale checkbox attesa esterna (vincolato se tipo_gestione non standard)
-    const tgVincolato = f.tipo_gestione === 'conferma_ricezione' || f.tipo_gestione === 'spedizione_esterna';
+    const tg = fasiVal(f, 'tipo_gestione') || 'standard';
+    const tgVincolato = tg === 'conferma_ricezione' || tg === 'spedizione_esterna';
+    const deps = fasiVal(f, 'dipendenze') || [];
+    const altre = lista.filter(alt => alt.id !== f.id);
 
     return `
-    <div class="fase-config-item" id="fase-cfg-row-${f.id}">
+    <div class="fase-config-item" id="fase-cfg-row-${f.id}" ${modificata ? 'style="border-left:3px solid var(--indigo)"' : ''}>
       <div class="fase-move-btns">
         <button class="fase-move-btn" onclick="spostaFase(${f.id},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
         <button class="fase-move-btn" onclick="spostaFase(${f.id},1)" ${i === n-1 ? 'disabled' : ''}>▼</button>
@@ -7135,49 +7211,35 @@ function renderFasiConfig() {
       <span class="fase-config-num" title="ID interno: ${f.id}">${i + 1}</span>
       <div class="fase-config-inputs">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-          <input type="text" id="fase-nome-${f.id}" value="${escapeHtml(f.nome)}" placeholder="Nome fase" style="flex:1;min-width:140px">
+          <input type="text" id="fase-nome-${f.id}" value="${escapeHtml(fasiVal(f, 'nome') || '')}" oninput="fasiEdit(${f.id},'nome',this.value,false)" placeholder="Nome fase" style="flex:1;min-width:140px">
           ${badgeHtml}
+          ${modificata ? '<span style="font-size:10px;color:var(--indigo);font-weight:600">modificata</span>' : ''}
         </div>
-        <input type="text" id="fase-desc-${f.id}" value="${escapeHtml(f.descrizione || '')}" placeholder="Descrizione (opzionale)">
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:6px;padding:8px;background:var(--surface-2);border-radius:6px;border:1px solid var(--border)">
-          <div>
-            <div style="font-size:11px;font-weight:500;color:var(--muted);margin-bottom:4px">Tipi prodotto <em style="font-weight:400">(vuoto = tutti)</em></div>
-            <div style="display:flex;flex-wrap:wrap;gap:6px">${tipiCheckboxes || '<span style="font-size:11px;color:var(--muted)">—</span>'}</div>
-            ${!hasTipi ? `<div style="font-size:11px;color:var(--ok-strong);margin-top:3px">✓ tutti i tipi prodotto</div>` : ''}
-          </div>
-          <div>
-            <div style="font-size:11px;font-weight:500;color:var(--muted);margin-bottom:4px">Materiali <em style="font-weight:400">(vuoto = tutti)</em></div>
-            <div style="display:flex;flex-wrap:wrap;gap:6px">${matCheckboxes || '<span style="font-size:11px;color:var(--muted)">—</span>'}</div>
-            ${!hasMat ? `<div style="font-size:11px;color:var(--ok-strong);margin-top:3px">✓ tutti i materiali</div>` : ''}
-          </div>
-          <div>
-            <div style="font-size:11px;font-weight:500;color:var(--muted);margin-bottom:4px">Strutture <em style="font-weight:400">(vuoto = tutti)</em></div>
-            <div style="display:flex;flex-wrap:wrap;gap:6px">${struCheckboxes || '<span style="font-size:11px;color:var(--muted)">—</span>'}</div>
-            ${!hasStru ? `<div style="font-size:11px;color:var(--ok-strong);margin-top:3px">✓ tutte le strutture</div>` : ''}
-          </div>
+        <input type="text" id="fase-desc-${f.id}" value="${escapeHtml(fasiVal(f, 'descrizione') || '')}" oninput="fasiEdit(${f.id},'descrizione',this.value,false)" placeholder="Descrizione (opzionale)">
+        <div style="display:grid;grid-template-columns:repeat(${defs.length},1fr);gap:8px;margin-top:6px;padding:8px;background:var(--surface-2);border-radius:6px;border:1px solid var(--border)">
+          ${criteriHtml}
         </div>
         <div style="display:flex;align-items:center;gap:16px;margin-top:6px;flex-wrap:wrap">
           <div style="display:flex;align-items:center;gap:8px">
             <span style="font-size:11px;color:var(--muted)">Gestione:</span>
-            <select id="fase-tg-${f.id}" onchange="aggiornaAttesaEsterna(${f.id})" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface)">
-              <option value="standard" ${(f.tipo_gestione||'standard')==='standard' ? 'selected' : ''}>Standard</option>
-              <option value="conferma_ricezione" ${f.tipo_gestione==='conferma_ricezione' ? 'selected' : ''}>Conferma ricezione</option>
-              <option value="spedizione_esterna" ${f.tipo_gestione==='spedizione_esterna' ? 'selected' : ''}>Spedizione esterna</option>
+            <select id="fase-tg-${f.id}" onchange="fasiCambiaGestione(${f.id}, this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface)">
+              <option value="standard" ${tg === 'standard' ? 'selected' : ''}>Standard</option>
+              <option value="conferma_ricezione" ${tg === 'conferma_ricezione' ? 'selected' : ''}>Conferma ricezione</option>
+              <option value="spedizione_esterna" ${tg === 'spedizione_esterna' ? 'selected' : ''}>Spedizione esterna</option>
             </select>
           </div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;${tgVincolato ? 'opacity:0.65' : 'cursor:pointer'}">
-              <input type="checkbox" id="fase-esterna-${f.id}" ${f.e_attesa_esterna ? 'checked' : ''} ${tgVincolato ? 'disabled' : ''} style="width:14px;height:14px;${tgVincolato ? '' : 'cursor:pointer'}">
+              <input type="checkbox" id="fase-esterna-${f.id}" ${fasiVal(f, 'e_attesa_esterna') ? 'checked' : ''} ${tgVincolato ? 'disabled' : ''} onchange="fasiEdit(${f.id},'e_attesa_esterna',this.checked,false)" style="width:14px;height:14px;${tgVincolato ? '' : 'cursor:pointer'}">
               Attesa esterna (escludi da stime ore interne)
             </label>
-            <span id="fase-esterna-nota-${f.id}" style="font-size:10px;color:var(--indigo);font-style:italic;${tgVincolato ? '' : 'display:none'}">Impostata automaticamente da Tipo gestione</span>
+            <span style="font-size:10px;color:var(--indigo);font-style:italic;${tgVincolato ? '' : 'display:none'}">Impostata automaticamente da Tipo gestione</span>
             <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer" title="Se attivo, alla creazione di un ordine questa fase parte automaticamente in attesa, senza presa in carico manuale">
-              <input type="checkbox" id="fase-avvio-auto-${f.id}" ${f.avvio_automatico ? 'checked' : ''} style="width:14px;height:14px;cursor:pointer">
+              <input type="checkbox" id="fase-avvio-auto-${f.id}" ${fasiVal(f, 'avvio_automatico') ? 'checked' : ''} onchange="fasiEdit(${f.id},'avvio_automatico',this.checked,false)" style="width:14px;height:14px;cursor:pointer">
               Avvio automatico alla creazione ordine
             </label>
           </div>
         </div>
-      </div>
         <!-- OPERATORI COMPETENTI -->
         <div style="margin-top:10px;padding:8px 10px;background:var(--ext-bg);border:1px solid var(--ext-line);border-radius:6px">
           <div style="font-size:11px;font-weight:600;color:var(--ext);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em">Operatori competenti <em style="font-weight:400;text-transform:none;letter-spacing:0">(ordine = priorità assegnazione)</em></div>
@@ -7210,39 +7272,51 @@ function renderFasiConfig() {
         <!-- DIPENDENZE -->
         <div style="margin-top:10px;padding:8px 10px;background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:6px">
           <div style="font-size:11px;font-weight:600;color:var(--warn-ink-2);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em">Fasi da completare prima <em style="font-weight:400;text-transform:none;letter-spacing:0">(dipendenze)</em></div>
-          ${fasi.filter(alt => alt.id !== f.id).length === 0
+          ${altre.length === 0
             ? `<span style="font-size:12px;color:var(--muted);font-style:italic">Nessun'altra fase configurata</span>`
-            : `<div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px">
-              ${fasi.filter(alt => alt.id !== f.id).map(alt =>
+            : `<div style="display:flex;flex-direction:column;gap:4px">
+              ${altre.map(alt =>
                 `<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-                  <input type="checkbox" data-fase-dep="${f.id}" data-dep-di="${alt.id}" ${(f.dipendenze||[]).includes(alt.id) ? 'checked' : ''} style="width:13px;height:13px;cursor:pointer">
+                  <input type="checkbox" ${deps.includes(alt.id) ? 'checked' : ''} onchange="fasiToggle(${f.id},'dipendenze',${alt.id},this.checked)" style="width:13px;height:13px;cursor:pointer">
                   <span style="color:var(--muted);font-family:var(--font-mono);font-size:11px;min-width:22px">${alt.posizione}.</span>
                   ${escapeHtml(alt.nome)}
                 </label>`).join('')}
-            </div>
-            <button onclick="salvaDipendenzeFase(${f.id})" style="border:1px solid var(--warn-ink-2);background:var(--warn-ink-2);color:var(--on-warn);border-radius:4px;padding:3px 10px;font-size:12px;cursor:pointer">✓ Salva dipendenze</button>`
+            </div>`
           }
         </div>
       </div>
       <button class="fase-del-btn" title="Elimina fase" onclick="eliminaFase(${f.id})" aria-label="Elimina fase">✕</button>
     </div>`;
   }).join('');
+
+  // Fasi disattivate (storico conservato): si possono riattivare
+  const disattivate = fasi.filter(f => f.attiva === false);
+  const box = document.getElementById('fasi-disattivate');
+  if (box) {
+    box.innerHTML = disattivate.length ? `
+      <details style="margin-top:16px"><summary style="cursor:pointer;font-size:13px;font-weight:600">Fasi disattivate (${disattivate.length})</summary>
+        <div style="margin-top:8px;font-size:12px;color:var(--muted)">Escluse da nuovi ordini, dall'app operatore e dai ricalcoli; lo storico degli ordini già eseguiti è conservato.</div>
+        ${disattivate.map(f => `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
+          <span style="flex:1;font-size:13px">${escapeHtml(f.nome)}</span>
+          <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="riattivaFase(${f.id})">Riattiva</button>
+        </div>`).join('')}
+      </details>` : '';
+  }
+  aggiornaContatoreBozzeFasi();
 }
 
 async function spostaFase(id, dir) {
-  const idx = fasi.findIndex(f => f.id === id);
+  const lista = fasiAttive();
+  const idx = lista.findIndex(f => f.id === id);
   const swapIdx = idx + dir;
-  if (swapIdx < 0 || swapIdx >= fasi.length) return;
-  // Salva prima nome/descrizione correnti per non perderli
-  await saveFasiConfig(true);
-  // Scambia le posizioni tra le due fasi
-  const posA = fasi[idx].posizione;
-  const posB = fasi[swapIdx].posizione;
-  await Promise.all([
-    sb.from('fasi').update({ posizione: posB }).eq('id', fasi[idx].id),
-    sb.from('fasi').update({ posizione: posA }).eq('id', fasi[swapIdx].id),
-  ]);
+  if (idx < 0 || swapIdx < 0 || swapIdx >= lista.length) return;
+  const ordine = lista.map(f => f.id);
+  [ordine[idx], ordine[swapIdx]] = [ordine[swapIdx], ordine[idx]];
+  const { data, error } = await sb.rpc('riordina_fasi', { p_ids_in_ordine: ordine, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Errore riordino fasi: ' + (data?.errore || error?.message || ''), 'err'); return; }
+  const bozze = fasiBozze;   // le modifiche non salvate restano
   await loadFasi();
+  fasiBozze = bozze;
   renderFasiConfig();
 }
 
@@ -7290,165 +7364,174 @@ async function rimuoviCompetenza(faseId, opId) {
   if (ok) renderFasiConfig();
 }
 
-async function salvaDipendenzeFase(faseId) {
-  const checked = [...document.querySelectorAll(`input[data-fase-dep="${faseId}"]:checked`)]
-    .map(el => parseInt(el.dataset.depDi));
-  const { data } = await sb.rpc('imposta_dipendenze_fase', {
-    p_fase_id: faseId,
-    p_dipende_da_ids: checked,
-    p_responsabile_id: currentUserRow.id,
-    p_session_token: null,
-  });
-  if (!data?.ok) {
-    toast(data?.errore === 'dipendenza_circolare' ? 'Dipendenza circolare — operazione annullata' : (data?.errore || 'Errore'), 'err');
-    return;
-  }
-  const f = fasi.find(x => x.id === faseId);
-  if (f) f.dipendenze = checked;
-  toast('Dipendenze salvate');
-}
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── NUOVA FASE: un'unica scheda (nome, posizione, macro-fase, gestione, criteri, dipendenze) ───
+let nuovaFase = null;
 
 function aggiungiNuovaFase() {
-  // Popola select posizione
-  const sel = document.getElementById('nf-posizione');
-  if (sel) {
-    sel.innerHTML = '<option value="0">— In cima alla lista</option>' +
-      fasi.map((f, i) => `<option value="${i + 1}">${i + 1}. ${escapeHtml(f.nome)}</option>`).join('');
-  }
-  // Reset campi
-  ['nf-nome','nf-desc'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  const lista = fasiAttive();
+  nuovaFase = {
+    nome: '', descrizione: '', dopo: lista.length ? String(lista[lista.length - 1].id) : 'top',
+    macro_fase_id: '', tipo_gestione: 'standard', e_attesa_esterna: false, avvio_automatico: false, opzionale: false,
+    tipi: [], materiali: [], strutture: [], modo_tipi: 'solo', modo_materiali: 'solo', modo_strutture: 'solo', dipendenze: [],
+  };
+  renderNuovaFase();
   document.getElementById('modal-nuova-fase').classList.add('open');
 }
 
-async function confermaNuovaFase() {
-  const nome = document.getElementById('nf-nome')?.value.trim();
-  if (!nome) { toast('Inserisci il nome della fase', 'err'); return; }
-  const desc = document.getElementById('nf-desc')?.value.trim() || null;
-  const sceltaIdx = parseInt(document.getElementById('nf-posizione')?.value ?? '0');
-
-  await normalizzaPosizioni();
-  await loadFasi();
-
-  let nuovaPosizione;
-  if (sceltaIdx === 0) {
-    nuovaPosizione = (fasi[0]?.posizione ?? 10) - 5;
-  } else {
-    const dopo = fasi[sceltaIdx - 1]?.posizione ?? (sceltaIdx * 10);
-    const successiva = fasi[sceltaIdx]?.posizione ?? (dopo + 10);
-    nuovaPosizione = Math.round((dopo + successiva) / 2);
-  }
-
-  const nextId = Math.max(...fasi.map(f => f.id), 0) + 1;
-  const { error } = await sb.from('fasi').insert({
-    id: nextId,
-    nome,
-    descrizione: desc,
-    posizione: nuovaPosizione,
-  });
-  if (error) { toast('Errore: ' + error.message, 'err'); return; }
-
-  await loadFasi();
-  await normalizzaPosizioni();
-
-  // Aggiungi la fase agli ordini attivi rispettando il trigger (whitelist)
-  const ordiniAttivi = ordiniCache.filter(o => o.stato !== 'spedito' && !o.eliminato);
-  if (ordiniAttivi.length) {
-    const righe = ordiniAttivi.map(o => ({
-      ordine_id: o.id, fase_id: nextId, stato: 'disponibile'
-    }));
-    const { error: insErr } = await sb.from('ordine_fasi').insert(righe);
-    if (insErr) toast(`Fase creata ma errore su ordini: ${insErr.message}`, 'err');
-    else {
-      const naCount = righe.filter(r => r.stato === 'non_applicabile').length;
-      const dispCount = righe.length - naCount;
-      toast(`Fase aggiunta a ${dispCount} ordini (disponibile)`, 'ok');
-    }
-  } else {
-    toast('Fase aggiunta', 'ok');
-  }
-
-  closeModal('modal-nuova-fase');
-  await loadFasi();
-  renderFasiConfig();
+function nfSet(campo, valore, rerender = true) {
+  if (!nuovaFase) return;
+  nuovaFase[campo] = valore;
+  if (campo === 'tipo_gestione' && (valore === 'conferma_ricezione' || valore === 'spedizione_esterna')) nuovaFase.e_attesa_esterna = true;
+  if (rerender) renderNuovaFase();
 }
 
-async function normalizzaPosizioni() {
-  // Riassegna posizioni 10, 20, 30... mantenendo l'ordine corrente
-  for (let i = 0; i < fasi.length; i++) {
-    await sb.from('fasi').update({ posizione: (i + 1) * 10 }).eq('id', fasi[i].id);
-  }
+function nfToggle(campo, valore, on) {
+  const cur = nuovaFase[campo];
+  const i = cur.indexOf(valore);
+  if (on && i < 0) cur.push(valore);
+  if (!on && i >= 0) cur.splice(i, 1);
+  renderNuovaFase();
+}
+
+function renderNuovaFase() {
+  const el = document.getElementById('nf-body');
+  if (!el || !nuovaFase) return;
+  const nf = nuovaFase;
+  const lista = fasiAttive();
+  const vincolato = nf.tipo_gestione === 'conferma_ricezione' || nf.tipo_gestione === 'spedizione_esterna';
+  const criteri = fasiCriteriDef().map(def => `
+    <div style="margin-bottom:10px">
+      <div style="font-size:12px;font-weight:600;margin-bottom:4px">${escapeHtml(def.titolo)} <em style="font-weight:400;color:var(--muted)">(nessuno = tutti)</em></div>
+      <select onchange="nfSet('${def.modo}', this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);margin-bottom:4px">
+        <option value="solo" ${nf[def.modo] === 'solo' ? 'selected' : ''}>Solo questi</option>
+        <option value="tutti_tranne" ${nf[def.modo] === 'tutti_tranne' ? 'selected' : ''}>Tutti tranne questi</option>
+      </select>
+      <div style="display:flex;flex-wrap:wrap;gap:10px">
+        ${def.opzioni.filter(o => o.attivo !== false).map(o => `<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+          <input type="checkbox" ${nf[def.campo].includes(o.valore) ? 'checked' : ''} onchange="nfToggle('${def.campo}','${escapeJsAttr(o.valore)}',this.checked)"> ${escapeHtml(o.etichetta)}</label>`).join('')}
+      </div>
+    </div>`).join('');
+  el.innerHTML = `
+    <div class="form-group"><label>Nome fase *</label>
+      <input type="text" id="nf-nome" value="${escapeHtml(nf.nome)}" oninput="nfSet('nome', this.value, false)" placeholder="es. Preparazione ferramenta"></div>
+    <div class="form-group"><label>Descrizione <span style="color:var(--muted);font-weight:400">(opzionale)</span></label>
+      <input type="text" id="nf-desc" value="${escapeHtml(nf.descrizione)}" oninput="nfSet('descrizione', this.value, false)" placeholder="Descrizione breve"></div>
+    <div class="form-row">
+      <div class="form-group"><label>Inserisci dopo la fase</label>
+        <select id="nf-posizione" onchange="nfSet('dopo', this.value, false)">
+          <option value="top" ${nf.dopo === 'top' ? 'selected' : ''}>— In cima alla lista</option>
+          ${lista.map((f, i) => `<option value="${f.id}" ${String(f.id) === nf.dopo ? 'selected' : ''}>${i + 1}. ${escapeHtml(f.nome)}</option>`).join('')}
+        </select></div>
+      <div class="form-group"><label>Macro-fase</label>
+        <select id="nf-macro" onchange="nfSet('macro_fase_id', this.value, false)">
+          <option value="">— nessuna</option>
+          ${macroFasiCache.map(m => `<option value="${m.id}" ${String(m.id) === String(nf.macro_fase_id) ? 'selected' : ''}>${escapeHtml(m.nome)}</option>`).join('')}
+        </select></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Tipo di gestione</label>
+        <select id="nf-tg" onchange="nfSet('tipo_gestione', this.value)">
+          <option value="standard" ${nf.tipo_gestione === 'standard' ? 'selected' : ''}>Standard</option>
+          <option value="conferma_ricezione" ${nf.tipo_gestione === 'conferma_ricezione' ? 'selected' : ''}>Conferma ricezione</option>
+          <option value="spedizione_esterna" ${nf.tipo_gestione === 'spedizione_esterna' ? 'selected' : ''}>Spedizione esterna</option>
+        </select></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;font-size:13px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;${vincolato ? 'opacity:.65' : ''}"><input type="checkbox" ${nf.e_attesa_esterna ? 'checked' : ''} ${vincolato ? 'disabled' : ''} onchange="nfSet('e_attesa_esterna', this.checked, false)"> Attesa esterna (escludi da stime ore interne)</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" ${nf.avvio_automatico ? 'checked' : ''} onchange="nfSet('avvio_automatico', this.checked, false)"> Avvio automatico alla creazione ordine</label>
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" ${nf.opzionale ? 'checked' : ''} onchange="nfSet('opzionale', this.checked, false)"> Opzionale (si attiva solo manualmente dall'ordine)</label>
+    </div>
+    <div style="font-size:13px;font-weight:700;margin:6px 0 8px">Criteri di applicabilità</div>
+    ${criteri}
+    <div style="font-size:13px;font-weight:700;margin:12px 0 6px">Fasi da completare prima (dipendenze)</div>
+    <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto">
+      ${lista.map(f => `<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+        <input type="checkbox" ${nf.dipendenze.includes(f.id) ? 'checked' : ''} onchange="nfToggle('dipendenze', ${f.id}, this.checked)"> ${escapeHtml(f.nome)}</label>`).join('')}
+    </div>`;
+}
+
+async function confermaNuovaFase() {
+  const nf = nuovaFase;
+  if (!nf) return;
+  if (!nf.nome.trim()) { toast('Inserisci il nome della fase', 'err'); return; }
+  if (!nf.dipendenze.length &&
+      !confirm('Questa fase non ha dipendenze: potrà essere avviata subito, senza attendere nessuna altra fase.\n\nProcedere comunque?')) return;
+  const dati = {
+    nome: nf.nome.trim(), descrizione: nf.descrizione.trim(), dopo_fase_id: nf.dopo === 'top' ? null : parseInt(nf.dopo),
+    macro_fase_id: nf.macro_fase_id === '' ? null : parseInt(nf.macro_fase_id),
+    tipo_gestione: nf.tipo_gestione, e_attesa_esterna: nf.e_attesa_esterna, avvio_automatico: nf.avvio_automatico, opzionale: nf.opzionale,
+    tipi: nf.tipi, materiali: nf.materiali, strutture: nf.strutture,
+    modo_tipi: nf.modo_tipi, modo_materiali: nf.modo_materiali, modo_strutture: nf.modo_strutture,
+    dipendenze: nf.dipendenze,
+  };
+  const { data, error } = await sb.rpc('crea_fase', { p_dati: dati, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
+  closeModal('modal-nuova-fase');
+  nuovaFase = null;
+  const bozze = fasiBozze;
+  await Promise.all([loadFasi(), loadMacroFasi()]);
+  fasiBozze = bozze;
+  renderFasiConfig();
+  toast(`Fase creata e applicata a ${data.ordini_popolati || 0} ordini aperti`, 'ok');
 }
 
 async function eliminaFase(id) {
   const nomeFase = fasi.find(f => f.id === id)?.nome || `Fase ${id}`;
-  // Controlla se qualche ordine ha la fase già iniziata o completata
-  const { data: usate } = await sb.from('ordine_fasi')
-    .select('stato')
-    .eq('fase_id', id)
-    .neq('stato', 'disponibile')
-    .neq('stato', 'non_applicabile');
-  if (usate?.length) {
-    toast(`Impossibile eliminare: la fase è in lavorazione o già completata in ${usate.length} ordini`, 'err');
-    return;
-  }
-  if (!confirm(`Eliminare "${nomeFase}" (fase ${id})?\nVerrà rimossa anche da tutti gli ordini attivi dove è ancora disponibile.`)) return;
-  // Rimuovi dai ordini attivi dove è ancora disponibile/non_applicabile
-  await sb.from('ordine_fasi').delete().eq('fase_id', id).in('stato', ['disponibile', 'non_applicabile']);
-  const { error } = await sb.from('fasi').delete().eq('id', id);
-  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+  if (!confirm(`Eliminare "${nomeFase}"?\n\nSe la fase ha già uno storico (ordini spediti o lavorazioni eseguite) viene solo DISATTIVATA: esce da nuovi ordini, app operatore e ricalcoli, ma lo storico resta intatto. Se non è mai stata usata viene cancellata.`)) return;
+  const { data, error } = await sb.rpc('elimina_fase', { p_fase_id: id, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
+  const bozze = fasiBozze; delete bozze[id];
   await loadFasi();
+  fasiBozze = bozze;
   renderFasiConfig();
-  toast(`Fase ${id} eliminata e rimossa dagli ordini attivi`, 'ok');
+  toast(data.esito === 'disattivata' ? `"${nomeFase}" disattivata (storico conservato)` : `"${nomeFase}" eliminata`, 'ok');
 }
 
-async function saveFasiConfig(silent = false) {
-  const updates = fasi.map(f => ({
-    id: f.id,
-    nome: document.getElementById(`fase-nome-${f.id}`)?.value.trim() || f.nome,
-    descrizione: document.getElementById(`fase-desc-${f.id}`)?.value.trim() || null,
-    e_attesa_esterna: document.getElementById(`fase-esterna-${f.id}`)?.checked ?? f.e_attesa_esterna,
-    avvio_automatico: document.getElementById(`fase-avvio-auto-${f.id}`)?.checked ?? f.avvio_automatico,
-    tipo_gestione: document.getElementById(`fase-tg-${f.id}`)?.value || 'standard',
-    tipi:   Array.from(document.querySelectorAll(`input[data-fase="${f.id}"][data-tipo]:checked`)).map(el => el.dataset.tipo),
-    mats:   Array.from(document.querySelectorAll(`input[data-fase="${f.id}"][data-mat]:checked`)).map(el => el.dataset.mat),
-    struts: Array.from(document.querySelectorAll(`input[data-fase="${f.id}"][data-stru]:checked`)).map(el => el.dataset.stru),
-    deps:   Array.from(document.querySelectorAll(`input[data-fase-dep="${f.id}"]:checked`)).map(el => parseInt(el.dataset.depDi)),
-  }));
-  const risultati = await Promise.all(updates.map(u => Promise.all([
-    sb.from('fasi').update({ nome: u.nome, descrizione: u.descrizione, e_attesa_esterna: u.e_attesa_esterna, avvio_automatico: u.avvio_automatico, tipo_gestione: u.tipo_gestione }).eq('id', u.id),
-    sb.rpc('aggiorna_criteri_fase', { p_fase_id: u.id, p_tipi_prodotto: u.tipi, p_materiali: u.mats, p_strutture: u.struts, p_responsabile_id: currentUserRow.id }),
-    sb.rpc('imposta_dipendenze_fase', { p_fase_id: u.id, p_dipende_da_ids: u.deps, p_responsabile_id: currentUserRow.id, p_session_token: null }),
-  ])));
+async function riattivaFase(id) {
+  const { data, error } = await sb.rpc('imposta_fase_attiva', { p_fase_id: id, p_attiva: true, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
+  const bozze = fasiBozze;
   await loadFasi();
-  if (!silent) {
-    // Controlla errori dipendenze (es. ciclo rilevato)
-    const erroriDep = risultati.flatMap(([, , depRes]) =>
-      depRes?.data?.ok === false ? [depRes.data.errore] : []
-    );
-    if (erroriDep.length) {
-      toast('Dipendenze: ' + (erroriDep.includes('dipendenza_circolare') ? 'dipendenza circolare rilevata — alcune dipendenze non salvate' : erroriDep[0]), 'err');
-    }
-    // Aggrega il riepilogo ricalcolo da tutte le fasi modificate
-    let attivate = 0, disattivate = 0, saltate = 0;
-    risultati.forEach(([, rpcRes]) => {
-      const ric = rpcRes?.data?.ricalcolo;
-      if (ric && !ric.saltato) {
-        attivate    += ric.attivate    || 0;
-        disattivate += ric.disattivate || 0;
-        saltate     += ric.saltate_stato_avanzato || 0;
-      }
-    });
-    if (attivate > 0 || disattivate > 0) {
-      const parti = [];
-      if (attivate > 0)    parti.push(`${attivate} attivat${attivate === 1 ? 'a' : 'e'}`);
-      if (disattivate > 0) parti.push(`${disattivate} disattivat${disattivate === 1 ? 'a' : 'e'}`);
-      if (saltate > 0)     parti.push(`${saltate} in lavorazione (lasciata invariata)`);
-      toast(`Vincoli aggiornati: ${parti.join(', ')}`, 'ok');
-    } else {
-      toast('Configurazione fasi salvata', 'ok');
-    }
-  }
+  fasiBozze = bozze;
+  renderFasiConfig();
+  toast('Fase riattivata', 'ok');
+}
+
+// ─── Salvataggio configurazione fasi: solo le fasi modificate, con anteprima dei cambi sugli ordini aperti ───
+function modifichePendentiFasi() {
+  return Object.entries(fasiBozze).map(([id, b]) => ({ id: Number(id), ...b }));
+}
+
+async function salvaFasiConfig() {
+  const modifiche = modifichePendentiFasi();
+  if (!modifiche.length) { toast('Nessuna modifica da salvare', 'ok'); return; }
+  const { data, error } = await sb.rpc('salva_configurazione_fasi', {
+    p_modifiche: modifiche, p_solo_anteprima: true, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
+  if (!data.n_cambi) { await confermaSalvaFasiConfig(); return; }
+  const righe = (data.cambi || []).map(c => `<tr><td>${escapeHtml(c.codice || '')}</td><td>${escapeHtml(c.fase_nome || '')}</td>
+    <td>${escapeHtml(etichettaStatoFase(c.da))} → <b>${escapeHtml(etichettaStatoFase(c.a))}</b></td></tr>`).join('');
+  document.getElementById('anteprima-fasi-body').innerHTML = `
+    <p style="font-size:14px;margin-bottom:10px">Questa modifica cambia <b>${data.n_cambi}</b> ${data.n_cambi === 1 ? 'fase' : 'fasi'} su <b>${data.n_ordini}</b> ${data.n_ordini === 1 ? 'ordine aperto' : 'ordini aperti'}.
+    Le fasi già iniziate o completate e gli ordini spediti non vengono toccati.</p>
+    <div style="max-height:320px;overflow:auto"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Ordine</th><th>Fase</th><th>Stato</th></tr></thead><tbody>${righe}</tbody></table></div>`;
+  document.getElementById('modal-anteprima-fasi').classList.add('open');
+}
+
+async function confermaSalvaFasiConfig() {
+  const modifiche = modifichePendentiFasi();
+  const { data, error } = await sb.rpc('salva_configurazione_fasi', {
+    p_modifiche: modifiche, p_solo_anteprima: false, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  closeModal('modal-anteprima-fasi');
+  if (error || !data?.ok) { toast('Salvataggio NON riuscito: ' + (data?.errore || error?.message || 'errore sconosciuto'), 'err'); return; }
+  fasiBozze = {};
+  await loadFasi();
+  renderFasiConfig();
+  toast(data.n_cambi ? `Configurazione fasi salvata: ${data.n_cambi} fasi aggiornate su ${data.n_ordini} ordini` : 'Configurazione fasi salvata', 'ok');
+}
+
+function etichettaStatoFase(s) {
+  return ({ disponibile: 'Disponibile', non_applicabile: 'Non applicabile', in_attesa: 'In attesa', in_corso: 'In corso', completata: 'Completata', assente: 'Assente' })[s] || s;
 }
 
 // ═══════════════════════════════════════════════
@@ -7545,49 +7628,55 @@ function renderAttributoConfig(chiave) {
   const attr = attributiConfig.find(a => a.chiave === chiave);
   const opzioni = attr ? [...(attr.opzioni || [])].sort((a,b) => (a.posizione||0)-(b.posizione||0)) : [];
   el.innerHTML = (opzioni.length ? opzioni.map(o => `
-    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
-      <span style="font-size:13px;font-weight:600;flex:1">${escapeHtml(o.etichetta)}</span>
-      <span style="font-size:11px;color:var(--muted);font-family:monospace">${escapeHtml(o.valore)}</span>
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);${o.attivo === false ? 'opacity:.6' : ''}">
+      <input type="text" value="${escapeHtml(o.etichetta)}" aria-label="Etichetta"
+             onchange="rinominaOpzioneAttributo('${chiave}','${escapeJsAttr(o.valore)}',this.value)"
+             style="flex:1;font-size:13px;font-weight:600;padding:5px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface)">
+      <span style="font-size:11px;color:var(--muted);font-family:monospace" title="Codice interno (non modificabile)">${escapeHtml(o.valore)}</span>
+      <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" ${o.attivo !== false ? 'checked' : ''}
+             onchange="attivaOpzioneAttributo('${chiave}','${escapeJsAttr(o.valore)}',this.checked)"> attiva</label>
       <button class="btn btn-danger" style="padding:4px 10px;font-size:12px" onclick="rimuoviOpzioneAttributo('${chiave}','${escapeJsAttr(o.valore)}')" aria-label="Rimuovi">✕</button>
     </div>
   `).join('') : '<p style="color:var(--muted);padding:12px 0">Nessuna opzione.</p>') + `
     <div style="display:flex;gap:8px;margin-top:14px;align-items:flex-end">
       <div class="form-group" style="margin:0;flex:1">
-        <label style="font-size:12px">Valore interno</label>
-        <input type="text" id="new-opt-valore-${chiave}" placeholder="es. verniciato" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface)">
-      </div>
-      <div class="form-group" style="margin:0;flex:1">
-        <label style="font-size:12px">Etichetta</label>
+        <label style="font-size:12px">Etichetta della nuova opzione <span style="color:var(--muted);font-weight:400">(il codice interno viene generato e non cambia più)</span></label>
         <input type="text" id="new-opt-etichetta-${chiave}" placeholder="es. Verniciato" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--surface)">
       </div>
       <button class="btn btn-primary" style="padding:7px 14px;font-size:13px;white-space:nowrap" onclick="aggiungiOpzioneAttributo('${chiave}')">+ Aggiungi</button>
     </div>`;
 }
 
-async function rimuoviOpzioneAttributo(chiave, valore) {
-  if (!confirm(`Rimuovere "${valore}" da ${chiave}?`)) return;
-  const attr = attributiConfig.find(a => a.chiave === chiave);
-  const nuove = (attr?.opzioni || []).filter(o => o.valore !== valore);
-  const { error } = await sb.from('attributi_prodotto_config').update({ opzioni: nuove }).eq('chiave', chiave);
-  if (error) { toast('Errore: ' + error.message, 'err'); return; }
+async function _opzioneAttributoRpc(nome, params, chiave, msgOk) {
+  const { data, error } = await sb.rpc(nome, { ...params, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); await loadAttributiConfig(); renderAttributoConfig(chiave); return null; }
   await loadAttributiConfig();
   renderAttributoConfig(chiave);
-  toast('Opzione rimossa', 'ok');
+  if (msgOk) toast(typeof msgOk === 'function' ? msgOk(data) : msgOk, 'ok');
+  return data;
+}
+
+async function rimuoviOpzioneAttributo(chiave, valore) {
+  const o = attributiConfig.find(a => a.chiave === chiave)?.opzioni.find(x => x.valore === valore);
+  if (!confirm(`Rimuovere "${o?.etichetta || valore}"?\nSe è già usata da ordini o da criteri di fase viene solo disattivata (non selezionabile per nuovi ordini).`)) return;
+  await _opzioneAttributoRpc('elimina_opzione_attributo', { p_chiave: chiave, p_valore: valore }, chiave,
+    d => d.esito === 'disattivata' ? 'Opzione in uso: disattivata' : 'Opzione rimossa');
+  await loadFasi(); // i criteri delle fasi possono essere cambiati
+}
+
+async function rinominaOpzioneAttributo(chiave, valore, etichetta) {
+  if (!etichetta.trim()) { toast('L\'etichetta non può essere vuota', 'err'); renderAttributoConfig(chiave); return; }
+  await _opzioneAttributoRpc('imposta_opzione_attributo', { p_chiave: chiave, p_valore: valore, p_etichetta: etichetta }, chiave, 'Etichetta aggiornata');
+}
+
+async function attivaOpzioneAttributo(chiave, valore, attivo) {
+  await _opzioneAttributoRpc('imposta_opzione_attributo', { p_chiave: chiave, p_valore: valore, p_attivo: attivo }, chiave, attivo ? 'Opzione attivata' : 'Opzione disattivata');
 }
 
 async function aggiungiOpzioneAttributo(chiave) {
-  const valore = document.getElementById(`new-opt-valore-${chiave}`)?.value.trim();
   const etichetta = document.getElementById(`new-opt-etichetta-${chiave}`)?.value.trim();
-  if (!valore || !etichetta) { toast('Inserisci valore e etichetta', 'err'); return; }
-  const attr = attributiConfig.find(a => a.chiave === chiave);
-  if ((attr?.opzioni || []).some(o => o.valore === valore)) { toast('Valore già esistente', 'err'); return; }
-  const maxPos = Math.max(...(attr?.opzioni || []).map(o => o.posizione||0), 0);
-  const nuove = [...(attr?.opzioni || []), { valore, etichetta, posizione: maxPos + 10 }];
-  const { error } = await sb.from('attributi_prodotto_config').update({ opzioni: nuove }).eq('chiave', chiave);
-  if (error) { toast('Errore: ' + error.message, 'err'); return; }
-  await loadAttributiConfig();
-  renderAttributoConfig(chiave);
-  toast('Opzione aggiunta', 'ok');
+  if (!etichetta) { toast('Inserisci l\'etichetta', 'err'); return; }
+  await _opzioneAttributoRpc('crea_opzione_attributo', { p_chiave: chiave, p_etichetta: etichetta }, chiave, 'Opzione aggiunta');
 }
 
 // ═══════════════════════════════════════════════
@@ -8962,6 +9051,19 @@ function formatOre(h) {
   return gg + 'g ' + (rem > 0 ? rem + 'h' : '');
 }
 
+// Seleziona il valore in una <select>; se non è tra le opzioni (disattivata/storica) la aggiunge come voce temporanea
+function impostaSelectConValore(selectId, valore) {
+  const el = document.getElementById(selectId);
+  if (!el) return;
+  if (valore && ![...el.options].some(o => o.value === valore)) {
+    const o = document.createElement('option');
+    o.value = valore;
+    o.textContent = `${valore} (non più disponibile)`;
+    el.appendChild(o);
+  }
+  el.value = valore || '';
+}
+
 function openModificaOrdine(id) {
   const ordine = [...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === id);
   if (!ordine) return;
@@ -8970,9 +9072,10 @@ function openModificaOrdine(id) {
   document.getElementById('mod-row-materiale').style.display = isExtra ? 'none' : '';
   document.getElementById('mod-cliente').value = ordine.cliente || '';
   document.getElementById('mod-codice').value = ordine.codice || '';
-  document.getElementById('mod-tipo-prodotto').value = ordine.tipo_prodotto || 'portoncino';
-  document.getElementById('mod-struttura').value = ordine.struttura || '';
-  document.getElementById('mod-materiale').value = ordine.materiale || '';
+  // Nessun valore di ripiego: se il valore dell'ordine non è più tra le opzioni attive (disattivato/storico) resta selezionabile così com'è
+  impostaSelectConValore('mod-tipo-prodotto', ordine.tipo_prodotto);
+  impostaSelectConValore('mod-struttura', ordine.struttura);
+  impostaSelectConValore('mod-materiale', ordine.materiale);
   popolaLavorazioniCncSelect('mod-lavorazione-cnc', ordine.lavorazione_cnc_id || null);
   document.getElementById('mod-prio').value = ordine.priorita || 'normale';
   document.getElementById('mod-quantita').value = ordine.quantita || 1;
@@ -8980,9 +9083,6 @@ function openModificaOrdine(id) {
   document.getElementById('mod-note').value = ordine.note_generali || '';
   document.getElementById('modal-modifica').dataset.ordineId = id;
   document.getElementById('modal-modifica').dataset.isExtra = isExtra ? 'true' : 'false';
-  document.getElementById('modal-modifica').dataset.tipoProdOld = ordine.tipo_prodotto || 'portoncino';
-  document.getElementById('modal-modifica').dataset.strutturaOld = ordine.struttura || 'quattro_lati';
-  document.getElementById('modal-modifica').dataset.materialeOld = ordine.materiale || 'placcato';
   // Sezione fasi extra — visibile su tutti gli ordini
   document.getElementById('mod-section-fasi-extra').style.display = '';
   document.getElementById('mod-aggiungi-fase-form').style.display = 'none';
@@ -9004,9 +9104,6 @@ async function salvaModificaOrdine() {
   const nuovoTipo = document.getElementById('mod-tipo-prodotto').value;
   const nuovaStruttura = document.getElementById('mod-struttura').value;
   const nuovoMateriale = document.getElementById('mod-materiale').value;
-  const vecchioTipo = document.getElementById('modal-modifica').dataset.tipoProdOld;
-  const vecchiaStruttura = document.getElementById('modal-modifica').dataset.strutturaOld;
-  const vecchioMateriale = document.getElementById('modal-modifica').dataset.materialeOld;
 
   const payload = {
     cliente,
@@ -9027,10 +9124,7 @@ async function salvaModificaOrdine() {
   const { error } = await sb.from('ordini').update(payload).eq('id', id);
   if (error) { toast('Errore: ' + error.message, 'err'); return; }
 
-  // Ricalcola fasi N/A se tipo_prodotto, struttura o materiale sono cambiati (solo ordini standard)
-  if (!isExtra && (nuovoTipo !== vecchioTipo || nuovaStruttura !== vecchiaStruttura || nuovoMateriale !== vecchioMateriale)) {
-    await ricalcolaFasiNA(id, nuovoTipo, nuovaStruttura, nuovoMateriale);
-  }
+  // Se tipo prodotto, struttura o materiale cambiano, il database ricalcola da solo le fasi (trigger sull'ordine)
 
   await sb.from('archivio_log').insert({ ordine_id: id, utente_id: currentUserRow.id, azione: 'ordine_modificato' });
   closeModal('modal-modifica');
@@ -9197,45 +9291,6 @@ async function aggiungiExtraFase() {
   await caricaFasiExtraModal(ordineId);
 }
 
-// Ricalcola fasi N/A dopo cambio tipo_prodotto, struttura o materiale
-// Non tocca fasi in_corso, in_attesa o completata
-async function ricalcolaFasiNA(ordineId, tipoProd, struttura, materiale) {
-  const { data: fasiOrdine } = await sb.from('ordine_fasi')
-    .select('id, fase_id, stato')
-    .eq('ordine_id', ordineId);
-  if (!fasiOrdine) return;
-
-  const isBarraOComp = struttura === 'barra_l' || struttura === 'complanare';
-  const isMdf        = (materiale || '').toLowerCase().includes('hdf');
-
-  for (const f of fasiOrdine) {
-    let dovrebbeEssereNA = false;
-
-    // Regole hardcoded struttura/materiale (invariate)
-    if (f.fase_id === 8 && isMdf) dovrebbeEssereNA = true;
-    if ((f.fase_id === 9 || f.fase_id === 11) && isBarraOComp) dovrebbeEssereNA = true;
-
-    // Criteri configurabili dalle tabelle di collegamento
-    const faseDef = fasi.find(x => x.id === f.fase_id);
-    if (faseDef?.criteri_tipi?.length && !faseDef.criteri_tipi.includes(tipoProd)) {
-      dovrebbeEssereNA = true;
-    }
-    if (faseDef?.criteri_materiali?.length && !faseDef.criteri_materiali.includes(materiale)) {
-      dovrebbeEssereNA = true;
-    }
-    if (faseDef?.criteri_strutture?.length && !faseDef.criteri_strutture.includes(struttura)) {
-      dovrebbeEssereNA = true;
-    }
-
-    const eNA = f.stato === 'non_applicabile';
-    if (dovrebbeEssereNA && !eNA && f.stato === 'disponibile') {
-      await sb.from('ordine_fasi').update({ stato: 'non_applicabile' }).eq('id', f.id);
-    } else if (!dovrebbeEssereNA && eNA && !faseDef?.opzionale) {
-      await sb.from('ordine_fasi').update({ stato: 'disponibile' }).eq('id', f.id);
-    }
-  }
-}
-
 function aggiornaAttesaEsterna(faseId) {
   const tg = document.getElementById(`fase-tg-${faseId}`)?.value;
   const cb = document.getElementById(`fase-esterna-${faseId}`);
@@ -9314,7 +9369,7 @@ function renderMacchine() {
       <div style="background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:10px;padding:14px;margin-bottom:14px">
         <div style="font-size:12px;font-weight:600;color:var(--warn-ink);margin-bottom:10px">Fasi che richiedono questa macchina</div>
         <div style="display:flex;flex-wrap:wrap;gap:10px">
-          ${fasi.map(f => `
+          ${fasiAttive().map(f => `
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
               <input type="checkbox"
                 ${m.fase_ids.includes(f.id)?'checked':''}
