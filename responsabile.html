@@ -2867,7 +2867,7 @@ function renderOggiResp() {
       ${cella('Attività', `${av.fatte} di ${av.totali}`, 'fatte / totali')}
       ${cella('Minuti stimati', `${_fmtMin(p.minuti_fatti)} <span style="font-size:13px;font-weight:600;color:var(--muted)">/ ${_fmtMin(p.minuti_pianificati)}</span>`, `${pctMin}% del piano`)}
       ${cella('Capacità del giorno', _fmtMin(p.minuti_capacita), `${p.n_persone} persone presenti · ${_fmtOre(p.ore_persone_presenti)}`)}
-      ${cella('Tetto in uso', `${_fmtOre(p.tetto_ore)} <span style="font-size:13px;font-weight:600;color:var(--muted)">a persona</span>`, 'regolato ogni settimana')}
+      ${cella('Tetto in uso', `${_fmtOre(p.tetto_ore)} <span style="font-size:13px;font-weight:600;color:var(--muted)">di lavorazioni per persona presente</span>`, 'regolato ogni settimana')}
       ${cella('Riempimenti', String(p.n_riempimenti || 0), p.n_riempimenti ? 'attività aggiunte in giornata' : 'nessuna aggiunta finora')}
       ${cella('Generato', p.generato_da === 'responsabile' ? 'a mano' : 'automatico', new Date(p.generato_il).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }))}
     </div>`;
@@ -2971,7 +2971,7 @@ function renderPianoConfig() {
   const ur = st.ultima_regolazione, um = st.ultima_modifica_tetto, po = st.piano_oggi;
   const fmtData = (d) => new Date(d).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
   const statoRiga = [
-    `<strong>Tetto in uso:</strong> ${_fmtOre(st.tetto_in_uso)} per persona`,
+    `<strong>Tetto in uso:</strong> ${_fmtOre(st.tetto_in_uso)} di lavorazioni per persona presente`,
     ur ? `<strong>Ultima regolazione:</strong> ${fmtData(ur.data + 'T12:00:00')} — ${escapeHtml(ur.motivo)}` : '<strong>Ultima regolazione:</strong> nessuna ancora (la prima avviene nel giorno impostato, se ci sono abbastanza giorni con un piano)',
     um ? `<strong>Ultima modifica del tetto:</strong> ${fmtData(um.data)} da ${_pNum(um.da)} a ${_pNum(um.a)} h — ${escapeHtml(um.motivo)}` : '',
     po ? `<strong>Piano di oggi:</strong> generato (${_fmtMin(po.minuti_capacita)} di capacità, ${po.n_persone} persone, ${po.n_riempimenti} riempimenti)` : (st.oggi_lavorativo ? '<strong>Piano di oggi:</strong> non ancora generato' : '<strong>Piano di oggi:</strong> giorno non lavorativo'),
@@ -2980,7 +2980,7 @@ function renderPianoConfig() {
   let html = `<div class="card" style="padding:18px 22px">
       <h3 style="font-size:15px;margin-bottom:8px">Come funziona</h3>
       <ol style="padding-left:20px;font-size:13px;line-height:1.55;margin-bottom:12px">
-        <li><strong>Piano iniziale.</strong> All'inizio di ogni turno il sistema costruisce la lista delle attività del giorno: prende le fasi aperte nell'ordine di priorità degli ordini (scadenza e urgenza), rispetta le dipendenze fra le fasi e si ferma quando la somma delle stime raggiunge la capacità: le ore di ogni persona presente, per il tetto. Una macchina è un posto di lavoro e non può superare le ore di una persona.</li>
+        <li><strong>Piano iniziale.</strong> All'inizio di ogni turno il sistema costruisce la lista delle attività del giorno: prende le fasi aperte nell'ordine di priorità degli ordini (scadenza e urgenza), rispetta le dipendenze fra le fasi e si ferma quando la somma delle stime raggiunge la capacità, cioè le ore di lavorazioni per persona presente (il tetto) moltiplicate per le persone presenti. Le ore di lavorazioni sono la somma dei tempi di riferimento delle fasi: il tempo di una fase fatta in due conta una volta sola, il tetto lo assorbe. Esempio: 4 persone e tetto 3,5 = 14 ore di lavorazioni. Una macchina è un posto di lavoro e non può superare le ore di una persona.</li>
         <li><strong>Riempimento in giornata.</strong> Se la squadra completa gran parte della lista prima del previsto, la lista si allunga da sola con altre attività. Gli ordini nuovi o urgenti entrano al riempimento successivo, o subito se li aggiungi tu dalla pagina Oggi.</li>
         <li><strong>Regolazione del tetto, una volta a settimana.</strong> Il sistema guarda le ultime giornate: se la lista era spesso troppo corta alza il tetto di un passo, se era spesso troppo lunga lo abbassa. Sempre dentro il minimo e il massimo che imposti tu. È l'unica regolazione automatica: non si correggono più i tempi delle singole fasi.</li>
       </ol>
