@@ -233,6 +233,10 @@ textarea:focus { border-color: var(--accent); }
 .oggi-voce .ov-azioni { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .oggi-voce .ov-azioni .btn { width: auto; flex: 1; min-width: 96px; padding: 10px 12px; font-size: 14px; }
 .oggi-voce .ov-azioni .btn.piccolo { flex: 0 0 auto; min-width: 48px; }
+.oggi-inarrivo { display: flex; align-items: center; gap: 10px; margin: 22px 0 12px; color: var(--ink-2); font-family: var(--font-mono); font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+.oggi-inarrivo::before, .oggi-inarrivo::after { content: ''; flex: 1; height: 2px; background: var(--border-strong); }
+.oggi-arrivo-card { background: var(--phase-bg); }
+.oggi-arrivo-fase { padding: 10px 16px 0; font-size: 13px; font-weight: 700; color: var(--muted); }
 .oggi-segno { font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--info-ink); background: var(--info-soft); border-radius: 20px; padding: 2px 7px; white-space: nowrap; }
 .oggi-pezzi { font-family: var(--font-mono); font-size: 14px; font-weight: 700; min-width: 64px; text-align: center; }
 .oggi-sel { width: 22px; height: 22px; flex-shrink: 0; cursor: pointer; }
@@ -2625,18 +2629,30 @@ function renderOggi() {
       <div class="progress-bar-wrap"><div class="progress-bar-fill ${av.totali && av.fatte === av.totali ? 'done' : ''}" style="width:${pct}%"></div></div>
     </div>`;
 
-  const gruppo = oggiFaseAperta ? (oggiDati.gruppi || []).find(g => g.chiave === oggiFaseAperta) : null;
+  const gruppo = oggiFaseAperta ? oggiPartiziona().principali.find(g => g.chiave === oggiFaseAperta) : null;
   if (oggiFaseAperta && !gruppo) { oggiFaseAperta = null; oggiSelezione.clear(); oggiModoMultiplo = false; }
   corpo.innerHTML = gruppo ? renderOggiGruppo(gruppo, solaLettura) : renderOggiElenco();
 }
 
+// voci eseguibili adesso (dipendenze soddisfatte) e voci ancora bloccate ("in arrivo"), raggruppate per fase
+const oggiBloccata = (v) => !v.fatta && v.bloccata_da && v.bloccata_da.length;
+function oggiPartiziona() {
+  const principali = [], inArrivo = [];
+  (oggiDati.gruppi || []).forEach(g => {
+    const ok = g.voci.filter(v => !oggiBloccata(v)), bl = g.voci.filter(oggiBloccata);
+    if (ok.length) principali.push({ ...g, voci: ok, fatte: ok.filter(v => v.fatta).length, totali: ok.length });
+    if (bl.length) inArrivo.push({ ...g, voci: bl, fatte: 0, totali: bl.length });
+  });
+  return { principali, inArrivo };
+}
+
 function renderOggiElenco() {
-  const gruppi = oggiDati.gruppi || [];
+  const { principali, inArrivo } = oggiPartiziona();
   let html = '';
-  if (!gruppi.length) {
-    html += '<div class="empty-state"><div class="icon"><i data-ic="spunta"></i></div><p>Nessuna attività in elenco per oggi</p></div>';
+  if (!principali.length) {
+    html += '<div class="empty-state"><div class="icon"><i data-ic="spunta"></i></div><p>Nessuna attività eseguibile adesso</p></div>';
   } else {
-    html += '<div class="section-title">Fasi di oggi</div><div class="card">' + gruppi.map(g => {
+    html += '<div class="section-title">Fasi di oggi</div><div class="card">' + principali.map(g => {
       const finito = g.totali > 0 && g.fatte === g.totali;
       return `<div class="oggi-gruppo ${finito ? 'finito' : ''}" role="button" tabindex="0" onclick="oggiApriGruppo('${escapeJsAttr(g.chiave)}')" onkeydown="if(event.key==='Enter')this.click()">
         <div class="og-nome">${escapeHtml(g.fase_nome)}</div>
@@ -2644,6 +2660,13 @@ function renderOggiElenco() {
         <span class="arrow">›</span>
       </div>`;
     }).join('') + '</div>';
+  }
+  if (inArrivo.length) {
+    html += '<div class="oggi-inarrivo" role="separator" aria-label="In arrivo"><span>In arrivo</span></div>';
+    html += inArrivo.map(g => `<div class="card oggi-arrivo-card"><div class="oggi-arrivo-fase">${escapeHtml(g.fase_nome)}</div>` + g.voci.map(v => {
+      const o = v.ordine || {};
+      return `<div class="oggi-voce bloccata" aria-disabled="true"><div class="ov-titolo">${escapeHtml(o.cliente || '')} — ${escapeHtml(o.codice || '')}</div><div class="ov-sub">dopo ${escapeHtml(v.bloccata_da.join(', '))}</div></div>`;
+    }).join('') + '</div>').join('');
   }
   const esterne = oggiDati.esterne || [];
   if (esterne.length) {

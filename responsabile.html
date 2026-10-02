@@ -2885,7 +2885,21 @@ function renderOggiResp() {
     </tr>`;
   };
   const tabella = (voci) => `<div style="overflow-x:auto"><table><thead><tr><th>Ordine</th><th>Stima</th><th>Pezzi</th><th>Stato</th><th></th></tr></thead><tbody>${voci.map(riga).join('')}</tbody></table></div>`;
-  let html = (d.gruppi || []).map(g => `<div class="card"><div class="card-hdr"><h3>${escapeHtml(g.fase_nome)}</h3><span style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${g.fatte} di ${g.totali}</span></div>${tabella(g.voci)}</div>`).join('');
+  // eseguibili adesso / in arrivo (ancora bloccate da una fase precedente), per fase
+  const blocc = (v) => !v.fatta && v.bloccata_da && v.bloccata_da.length;
+  const principali = [], inArrivo = [];
+  (d.gruppi || []).forEach(g => {
+    const ok = g.voci.filter(v => !blocc(v)), bl = g.voci.filter(blocc);
+    if (ok.length) principali.push({ ...g, voci: ok, fatte: ok.filter(v => v.fatta).length, totali: ok.length });
+    if (bl.length) inArrivo.push({ ...g, voci: bl, fatte: 0, totali: bl.length });
+  });
+  let html = principali.map(g => `<div class="card"><div class="card-hdr"><h3>${escapeHtml(g.fase_nome)}</h3><span style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${g.fatte} di ${g.totali}</span></div>${tabella(g.voci)}</div>`).join('');
+  if (!principali.length) html = '<div class="empty-state"><p>Nessuna attività eseguibile adesso.</p></div>';
+  if (inArrivo.length) {
+    const minArrivo = inArrivo.reduce((t, g) => t + g.voci.reduce((u, v) => u + (Number(v.minuti_stimati) || 0), 0), 0);
+    html += `<div role="separator" style="display:flex;align-items:center;gap:10px;margin:22px 0 12px;color:var(--ink-2);font-family:var(--font-mono);font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase"><span style="flex:1;height:2px;background:var(--border-strong)"></span><span>In arrivo · ${_fmtMin(minArrivo)}</span><span style="flex:1;height:2px;background:var(--border-strong)"></span></div>`;
+    html += inArrivo.map(g => `<div class="card" style="background:var(--phase-bg)"><div class="card-hdr"><h3>${escapeHtml(g.fase_nome)}</h3><span style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${g.totali} in attesa</span></div>${tabella(g.voci)}</div>`).join('');
+  }
   if (!(d.gruppi || []).length) html = '<div class="empty-state"><p>Nessuna attività nel piano di oggi.</p></div>';
   if ((d.esterne || []).length) {
     html += `<div class="card"><div class="card-hdr"><h3>Spedizioni e ricezioni</h3><span style="font-size:12px;color:var(--muted)">non consumano capacità</span></div>${tabella(d.esterne.map(v => ({ ...v, minuti_stimati: 0 })))}</div>`;
