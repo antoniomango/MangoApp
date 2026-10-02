@@ -21,6 +21,7 @@
 <script src="js/tema.js"></script>
 <script src="js/icone.js" defer></script>
 <script src="js/pin-pad.js"></script>
+<script src="js/regole-pin.js"></script>
 <script src="js/accesso.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js" integrity="sha384-JBR+x8blGwjDRO63aHCGiZMD4VNiTR4ZUGA+N6ZKLf3zNt1fK8IBpcgPaMrxqWBp" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="css/tema.css">
@@ -322,6 +323,7 @@ function preparaLoginDispositivo() {
     pannello: document.getElementById('login-dispositivo'),
     nascondi: [document.querySelector('#login-screen .accesso-nome'), document.getElementById('pinpad')],
     suApprovato: caricaElencoLogin,
+    suSceltaPin: (esito) => concludiLogin(esito.data),   // PIN scelto dalla persona: entra direttamente
   });
 }
 
@@ -350,11 +352,15 @@ async function doLogin(pin) {
   // accesso dal server: dispositivo approvato, PIN, eventuale cambio PIN obbligatorio (4 → 6 cifre)
   const esito = await MangoAccesso.accedi(sb, userId, pin);
   if (!esito.ok) {
-    if (esito.data?.errore === 'dispositivo_non_approvato') preparaLoginDispositivo();
+    if (['dispositivo_non_approvato', 'pin_da_reimpostare'].includes(esito.data?.errore)) preparaLoginDispositivo();   // ricontrolla: può essere aperta la scelta del PIN
     if (esito.data?.errore !== 'annullato') showErr(messaggioErrorePin(esito.data));
     return { ok: false, bloccatoFino: esito.data?.bloccato_fino || null };
   }
-  const data = esito.data;
+  await concludiLogin(esito.data);
+  return { ok: true };
+}
+
+async function concludiLogin(data) {
 
   // La vista ufficio non gestisce push: l'alias push segreto restituito da verifica_pin non si conserva
   const { push_alias: _nonSalvato, ...utente } = data.user || {};
@@ -366,7 +372,6 @@ async function doLogin(pin) {
   await caricaMeta();
   await aggiornaUfficio();
   refreshTimer = setInterval(aggiornaUfficio, 120000);
-  return { ok: true };
 }
 
 function mostraApp() {

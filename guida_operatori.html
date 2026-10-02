@@ -148,6 +148,8 @@
     .no-print { display: none; }
     .cover { margin: 0; height: 100vh; }
   }
+.regole-pin { text-align: left; font-size: 13.5px; line-height: 1.45; background: #f7f7f7; border: 1px solid #ddd; border-radius: 10px; padding: 12px 16px; margin: 10px 0 14px; }
+.regole-pin p { margin: 0 0 8px; } .regole-pin ul { margin: 0 0 8px; padding-left: 20px; }
 </style>
 </head>
 <body>
@@ -195,12 +197,15 @@
 <!-- SEZIONE 1: ACCESSO -->
 <div class="page">
   <div class="section-header"><div class="section-num">1</div><h2>Accesso all'applicazione</h2></div>
-  <p>L'accesso avviene tramite <strong>nome</strong> e <strong>PIN personale</strong> a 4 cifre assegnato dal responsabile. Non è richiesta una password email.</p>
+  <p>L'accesso avviene tramite <strong>nome</strong> e <strong>PIN personale</strong> a 6 cifre. Non è richiesta una password email. Il tuo telefono deve essere stato approvato dal responsabile: la prima volta compare un codice da comunicargli, e appena approva potrai scegliere il tuo PIN.</p>
   <div class="steps">
     <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Seleziona il tuo nome</strong><span>Tocca il menu a tendina e scegli il tuo nome dall'elenco operatori.</span></div></div>
-    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Inserisci il PIN</strong><span>Digita le 4 cifre del tuo PIN personale. I caratteri sono nascosti per privacy.</span></div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Inserisci il PIN</strong><span>Digita le 6 cifre del tuo PIN personale. I caratteri sono nascosti per privacy.</span></div></div>
     <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Premi "Accedi"</strong><span>Se il PIN è corretto entri direttamente nella schermata principale.</span></div></div>
   </div>
+  <h3>Scegliere il PIN</h3>
+  <p>Quando il responsabile approva il tuo telefono, l'app ti chiede di scegliere da solo il tuo PIN (due volte). Ecco le regole:</p>
+  <div id="guida-regole-pin"></div>
   <div class="info-box warn"><strong>⚠ PIN errato</strong>Se il PIN non viene riconosciuto compare un messaggio rosso. Controlla di aver selezionato il nome giusto. In caso di problemi rivolgiti al responsabile.</div>
   <div class="info-box ok"><strong>✓ Sessione salvata</strong>L'app ricorda la tua sessione: se chiudi e riapri il browser non devi rifare il login, a meno che tu non abbia fatto il logout manuale.</div>
   <h3>Logout</h3>
@@ -503,6 +508,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js" integrity="sha384-JBR+x8blGwjDRO63aHCGiZMD4VNiTR4ZUGA+N6ZKLf3zNt1fK8IBpcgPaMrxqWBp" crossorigin="anonymous"></script>
 <script src="js/config.deploy.js"></script>
 <script src="js/config.js"></script>
+<script src="js/regole-pin.js"></script>
+<script>MangoRegolePin.rendi(document.getElementById('guida-regole-pin'));</script>
 <script>
 // Tabella delle fasi generata dalla configurazione (RPC guida_fasi): nomi, ordine e criteri in linguaggio semplice.
 (async () => {

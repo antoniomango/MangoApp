@@ -21,6 +21,7 @@
 <script src="js/tema.js"></script>
 <script src="js/icone.js" defer></script>
 <script src="js/pin-pad.js"></script>
+<script src="js/regole-pin.js"></script>
 <script src="js/accesso.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js" integrity="sha384-JBR+x8blGwjDRO63aHCGiZMD4VNiTR4ZUGA+N6ZKLf3zNt1fK8IBpcgPaMrxqWBp" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="css/tema.css">
@@ -482,7 +483,7 @@ textarea:focus { border-color: var(--accent); }
         <div class="card"><div class="card-body">
           <div id="cp-pad"></div>
           <div id="cp-msg" class="prof-err" aria-live="assertive" style="text-align:center"></div>
-          <div style="font-size:12px;color:var(--muted);text-align:center">6 cifre, non banali: niente cifre uguali, sequenze, ripetizioni o date (es. di nascita).</div>
+          <div id="cp-regole"></div>
         </div></div>
       </div>
     </div>
@@ -844,6 +845,7 @@ function preparaLoginDispositivo() {
     pannello: document.getElementById('login-dispositivo'),
     nascondi: [document.querySelector('#login-screen .accesso-nome'), document.getElementById('pinpad')],
     suApprovato: caricaElencoLogin,
+    suSceltaPin: (esito) => concludiLoginOnline(esito.data.user.id, esito.data, esito.pin),   // PIN scelto dalla persona: entra direttamente
   });
 }
 
@@ -881,17 +883,12 @@ async function doLoginPin(pin) {
     // accesso dal server: telefono approvato, PIN, eventuale cambio PIN obbligatorio (4 → 6 cifre)
     const esito = await MangoAccesso.accedi(sb, userId, pin);
     if (!esito.ok) {
-      if (esito.data?.errore === 'dispositivo_non_approvato') preparaLoginDispositivo();
+      if (['dispositivo_non_approvato', 'pin_da_reimpostare'].includes(esito.data?.errore)) preparaLoginDispositivo();   // ricontrolla: può essere aperta la scelta del PIN
       if (esito.data?.errore !== 'annullato') showErr(messaggioErrorePin(esito.data));
       return { ok: false, bloccatoFino: esito.data?.bloccato_fino || null };
     }
-    const data = esito.data;
-    pin = esito.pin;   // il nuovo PIN, se è stato appena cambiato
-    currentUser = data.user;
-    await cacheSet('current-user', currentUser);
-    await cacheSet('current-pin-hash', null); // non salviamo PIN in chiaro
-    await _salvaPinHashLocale(userId, pin); // hash locale per un eventuale login offline, vedi sopra
-    if (data.session_token) { sessionToken = data.session_token; await cacheSet('current-session-token', data.session_token); }
+    await concludiLoginOnline(userId, esito.data, esito.pin);   // pin: il nuovo, se è stato appena cambiato o scelto
+    return { ok: true };
   } else {
     const cached = await cacheGet('current-user');
     if (!cached || cached.id !== userId) {
@@ -901,15 +898,29 @@ async function doLoginPin(pin) {
     currentUser = cached;
     await cacheSet('current-user', currentUser); // rinnova la finestra SESSIONE_OFFLINE_TTL_MS
   }
+  entraNellApp();
+  return { ok: true };
+}
+
+// accesso riuscito dal server: salva utente, sessione e impronta locale del PIN, poi entra
+async function concludiLoginOnline(userId, data, pin) {
+  currentUser = data.user;
+  await cacheSet('current-user', currentUser);
+  await cacheSet('current-pin-hash', null); // non salviamo PIN in chiaro
+  await _salvaPinHashLocale(userId, pin); // hash locale per un eventuale login offline, vedi sopra
+  if (data.session_token) { sessionToken = data.session_token; await cacheSet('current-session-token', data.session_token); }
+  entraNellApp();
+}
+
+function entraNellApp() {
   if (currentUser?.ruolo === 'sola_lettura') {
     // La vista ufficio non gestisce push: l'alias segreto non va salvato
     const { push_alias: _nonSalvato, ...utenteUfficio } = currentUser;
     localStorage.setItem('ufficio-user', JSON.stringify(utenteUfficio));
     window.location.href = 'ufficio.html';
-    return { ok: true };
+    return;
   }
   showApp();
-  return { ok: true };
 }
 
 // Cambio nome: PIN azzerato e messaggio pulito.
@@ -2852,6 +2863,7 @@ async function start() {
 }
 
 MangoTema.montaSelettore(document.getElementById('tema-selettore-op'));
+MangoRegolePin.rendi(document.getElementById('cp-regole'));
 window.pinPad = MangoPinPad.monta({
   contenitore: document.getElementById('pinpad'),
   messaggio: document.getElementById('login-err'),
@@ -3241,7 +3253,7 @@ async function _cpInvia(pin) {
   // nuovo PIN rifiutato: si reinserisce solo il nuovo (l'attuale resta in memoria);
   // PIN attuale errato o altro: si ricomincia dal PIN attuale
   _cpVaiA(['pin_nuovo_troppo_semplice', 'pin_nuovo_non_valido', 'pin_nuovo_uguale'].includes(data?.errore) ? 1 : 0);
-  _cpMsg(profErrore(data?.errore));
+  _cpMsg(MangoRegolePin.messaggio(data) || profErrore(data?.errore));
   return { ok: false };
 }
 </script>

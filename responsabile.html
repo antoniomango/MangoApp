@@ -2068,6 +2068,9 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           <label id="op-pin-label">PIN (6 cifre) *</label>
           <input type="password" id="op-pin" placeholder="••••••" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" autocomplete="off">
           <div id="op-pin-hint" style="display:none;font-size:11px;color:var(--muted);margin-top:4px">Lascia vuoto per non cambiare il PIN</div>
+          <div id="op-pin-regole" style="margin-top:8px"></div>
+          <button type="button" class="btn btn-secondary" id="op-scelta-pin-btn" style="display:none;margin-top:10px" onclick="abilitaSceltaPin()">Nuovo PIN scelto dall'operatore</button>
+          <div id="op-scelta-pin-nota" style="display:none;font-size:11px;color:var(--muted);margin-top:4px"></div>
         </div>
         <div class="form-group">
           <label>Ruolo</label>
@@ -2223,6 +2226,31 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
 </div>
 
 <!-- MODALE RIASSEGNA FASE -->
+<div class="modal-overlay" id="modal-approva-disp">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-hdr">
+      <h3 id="disp-modal-titolo">Approva telefono</h3>
+      <button class="modal-close" onclick="closeModal('modal-approva-disp')" aria-label="Chiudi">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="disp-modal-id">
+      <div class="form-group">
+        <label for="disp-modal-persona">Di chi è questo telefono? *</label>
+        <select id="disp-modal-persona"></select>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Se la persona deve scegliere il PIN, potrà farlo da questo telefono nelle 24 ore successive.</div>
+      </div>
+      <div class="form-group">
+        <label for="disp-modal-etichetta">Nome del telefono (facoltativo)</label>
+        <input type="text" id="disp-modal-etichetta" maxlength="60" placeholder="es. Telefono di Mario">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('modal-approva-disp')">Annulla</button>
+      <button class="btn btn-ok" onclick="confermaApprovaDispositivo()">Approva</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-riassegna">
   <div class="modal" style="max-width:420px">
     <div class="modal-hdr">
@@ -2259,6 +2287,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
 
 <script src="js/config.deploy.js"></script>
 <script src="js/config.js"></script>
+<script src="js/regole-pin.js"></script>
 <script src="js/etichette.js"></script>
 <script src="js/calendario.js"></script>
 <script>
@@ -2667,7 +2696,7 @@ async function loadOrdini() {
 
 async function loadOperatori() {
   const { data } = await sb.from('users')
-    .select('id, nome, cognome, ruolo, attivo, ore_default, escluso_pianificazione, pin_da_cambiare, pin_da_reimpostare')
+    .select('id, nome, cognome, ruolo, attivo, ore_default, escluso_pianificazione, pin_da_cambiare, pin_da_reimpostare, pin_scelta_scadenza')
     .in('ruolo', ['operatore', 'sola_lettura'])
     .neq('eliminato', true)
     .order('cognome');
@@ -5255,6 +5284,7 @@ async function confermRiassegna() {
 // OPERATORI
 // ═══════════════════════════════════════════════
 function _etichettaPin(op) {
+  if (op.pin_da_reimpostare && op.pin_scelta_scadenza && new Date(op.pin_scelta_scadenza) > new Date()) return `<div class="op-etichette"><span class="op-etichetta attesa" title="Può scegliere il PIN dal suo telefono approvato">Sta per scegliere il PIN (fino a ${escapeHtml(formatDateTime(op.pin_scelta_scadenza))})</span></div>`;
   if (op.pin_da_reimpostare) return `<div class="op-etichette"><button type="button" class="op-etichetta assenza" title="Il PIN era troppo facile: l'accesso è bloccato finché non imposti un nuovo PIN" onclick="openModalModificaOperatore('${escapeJsAttr(op.id)}')">PIN da reimpostare: accesso bloccato</button></div>`;
   if (op.pin_da_cambiare) return `<div class="op-etichette"><span class="op-etichetta attesa" title="Al prossimo accesso sceglierà un PIN a 6 cifre">PIN da cambiare al prossimo accesso</span></div>`;
   return '';
@@ -5324,6 +5354,9 @@ function openModalNuovoOperatore(ruolo) {
   document.getElementById('op-modal-btn').textContent = 'Crea';
   document.getElementById('op-pin-label').textContent = 'PIN (6 cifre) *';
   document.getElementById('op-pin-hint').style.display = 'none';
+  MangoRegolePin.rendi(document.getElementById('op-pin-regole'));
+  document.getElementById('op-scelta-pin-btn').style.display = 'none';
+  document.getElementById('op-scelta-pin-nota').style.display = 'none';
   document.getElementById('op-escluso-pianificazione').checked = false;
   document.getElementById('op-ore-default').value = '';
   const existingComp2 = document.getElementById('op-competenze-section');
@@ -5345,6 +5378,12 @@ function openModalModificaOperatore(id) {
   document.getElementById('op-modal-btn').textContent = 'Salva';
   document.getElementById('op-pin-label').textContent = 'Nuovo PIN (6 cifre)';
   document.getElementById('op-pin-hint').style.display = '';
+  MangoRegolePin.rendi(document.getElementById('op-pin-regole'));
+  document.getElementById('op-scelta-pin-btn').style.display = '';
+  const _nota = document.getElementById('op-scelta-pin-nota');
+  const _aperta = op.pin_scelta_scadenza && new Date(op.pin_scelta_scadenza) > new Date();
+  _nota.textContent = _aperta ? 'Scelta del PIN aperta fino a ' + formatDateTime(op.pin_scelta_scadenza) + ' (dal telefono approvato)' : 'Serve un telefono già approvato e assegnato a questa persona; la scelta resta aperta 24 ore.';
+  _nota.style.display = '';
   document.getElementById('op-escluso-pianificazione').checked = !!op.escluso_pianificazione;
   document.getElementById('op-ore-default').value = op.ore_default ?? '';
 
@@ -5429,7 +5468,7 @@ async function salvaOperatore() {
     if (pin) {
       // Aggiorna PIN via RPC (il PIN è hashato nel DB)
       const { data: pinData } = await sb.rpc('aggiorna_pin_operatore', { p_operatore_id: editId, p_nuovo_pin: pin, p_responsabile_id: currentUserRow.id });
-      if (!pinData?.ok) { toast(messaggioPin(pinData?.errore) || 'Errore aggiornamento PIN', 'err'); return; }
+      if (!pinData?.ok) { toast(messaggioPin(pinData) || 'Errore aggiornamento PIN', 'err'); return; }
     }
     const { data, error } = await sb.rpc('aggiorna_operatore', {
       p_operatore_id: editId,
@@ -5447,7 +5486,7 @@ async function salvaOperatore() {
   } else {
     // CREAZIONE
     const { data, error } = await sb.rpc('crea_operatore', { p_nome: nome, p_cognome: cognome, p_pin: pin, p_ruolo: ruolo, p_responsabile_id: currentUserRow.id });
-    if (error || !data?.ok) { toast(messaggioPin(data?.errore) || error?.message || data?.errore || 'Errore', 'err'); return; }
+    if (error || !data?.ok) { toast(messaggioPin(data) || error?.message || data?.errore || 'Errore', 'err'); return; }
     closeModal('modal-operatore');
     toast('Operatore creato', 'ok');
   }
@@ -5458,9 +5497,23 @@ async function salvaOperatore() {
 
 // Le regole di formato del PIN vivono solo sul server (valida_formato_pin): qui si mostra solo l'esito
 function messaggioPin(err) {
-  if (err === 'pin_non_valido') return 'PIN non valido: servono 6 cifre numeriche';
-  if (err === 'pin_troppo_semplice') return 'PIN troppo facile: niente cifre uguali, sequenze, ripetizioni o date (es. di nascita)';
+  const d = (err && typeof err === 'object') ? err : { errore: err };
+  const m = MangoRegolePin.messaggio(d);
+  if (m) return m;
   return null;
+}
+
+async function abilitaSceltaPin() {
+  const id = document.getElementById('op-edit-id').value;
+  const op = operatoriCache.find(o => o.id === id);
+  if (!id || !op) return;
+  if (!confirm(`${op.nome} ${op.cognome} verrà disconnesso/a e potrà scegliersi un nuovo PIN dal suo telefono approvato nelle prossime 24 ore. Il PIN attuale smette di funzionare. Confermi?`)) return;
+  const { data, error } = await sb.rpc('abilita_scelta_pin', { p_operatore_id: id, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast(data?.errore === 'nessun_telefono_approvato' ? 'Prima approva un telefono assegnato a questa persona (scheda Telefoni)' : 'Operazione non riuscita', 'err'); return; }
+  closeModal('modal-operatore');
+  toast('Scelta del PIN aperta per 24 ore', 'ok');
+  await loadOperatori();
+  renderOperatori();
 }
 
 async function toggleOperatore(id, attivo) {
@@ -5644,23 +5697,37 @@ function renderDispositivi() {
     return `<div class="op-card ${d.stato === 'revocato' ? 'inactive' : ''}">
       <div class="op-name">${escapeHtml(d.etichetta || 'Telefono nuovo')}</div>
       <div class="op-role" style="color:${c};font-weight:600">${escapeHtml(t)}</div>
+      ${d.assegnato_a ? `<div style="font-size:13px;margin-top:4px">Assegnato a: <strong>${escapeHtml(d.assegnato_a)}</strong></div>` : (d.stato === 'approvato' ? '<div style="font-size:12px;color:var(--warn-ink);margin-top:4px">Non assegnato a nessuna persona</div>' : '')}
       ${d.stato === 'in_attesa' ? `<div style="margin:8px 0;font-size:12px;color:var(--muted)">Codice sul telefono: <strong style="font-family:var(--font-mono);font-size:20px;color:var(--ink);letter-spacing:.1em">${escapeHtml(d.codice || '')}</strong></div>` : ''}
       <div style="font-size:12px;color:var(--muted);margin-top:6px">Richiesto: ${escapeHtml(dt(d.creato_il))}${d.stato !== 'in_attesa' ? `<br>Ultimo uso: ${escapeHtml(dt(d.ultimo_uso))}${d.ultimo_utente ? ' · ' + escapeHtml(d.ultimo_utente) : ''}` : ''}</div>
       <div class="op-actions" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
-        ${d.stato !== 'approvato' ? `<button class="btn btn-ok" style="padding:5px 10px;font-size:12px" onclick="approvaDispositivo('${id}')">${d.stato === 'revocato' ? 'Riapprova' : 'Approva'}</button>` : `<button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="approvaDispositivo('${id}')">Rinomina</button><button class="btn" style="padding:5px 10px;font-size:12px;background:var(--warn-strong);color:var(--on-warn)" onclick="revocaDispositivo('${id}')">Blocca</button>`}
+        ${d.stato !== 'approvato' ? `<button class="btn btn-ok" style="padding:5px 10px;font-size:12px" onclick="approvaDispositivo('${id}')">${d.stato === 'revocato' ? 'Riapprova' : 'Approva'}</button>` : `<button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="approvaDispositivo('${id}')">Persona e nome</button><button class="btn" style="padding:5px 10px;font-size:12px;background:var(--warn-strong);color:var(--on-warn)" onclick="revocaDispositivo('${id}')">Blocca</button>`}
         <button class="btn" style="padding:5px 10px;font-size:12px;background:var(--alert);color:var(--on-alert)" onclick="eliminaDispositivo('${id}')" aria-label="Rimuovi"><i data-ic="cestino"></i></button>
       </div>
     </div>`;
   }).join('') + '</div>';
 }
-async function approvaDispositivo(id) {
+function approvaDispositivo(id) {
   const d = _dispositivi.find(x => x.id === id);
-  const nome = prompt('Come vuoi chiamare questo telefono? (es. "Telefono di Mario")', d?.etichetta || '');
-  if (nome === null) return;
-  const { data, error } = await sb.rpc('dispositivo_approva', { p_dispositivo_id: id, p_etichetta: nome, p_responsabile_id: currentUserRow.id, p_session_token: null });
-  if (error || !data?.ok) { toast(data?.errore === 'etichetta_non_valida' ? 'Scrivi un nome (massimo 60 caratteri)' : 'Operazione non riuscita', 'err'); return; }
-  toast('Telefono approvato', 'ok');
+  document.getElementById('disp-modal-id').value = id;
+  document.getElementById('disp-modal-titolo').textContent = d?.stato === 'approvato' ? 'Telefono: persona e nome' : 'Approva telefono';
+  const sel = document.getElementById('disp-modal-persona');
+  const persone = operatoriCache.filter(o => o.attivo && ['operatore', 'sola_lettura'].includes(o.ruolo));
+  sel.innerHTML = '<option value="">— Scegli la persona —</option>' + persone.map(o => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.cognome)} ${escapeHtml(o.nome)}${o.ruolo === 'sola_lettura' ? ' (ufficio)' : ''}</option>`).join('');
+  sel.value = d?.utente_assegnato || '';
+  document.getElementById('disp-modal-etichetta').value = d?.stato === 'approvato' ? (d.etichetta || '') : '';
+  document.getElementById('modal-approva-disp').classList.add('open');
+}
+async function confermaApprovaDispositivo() {
+  const id = document.getElementById('disp-modal-id').value;
+  const utente = document.getElementById('disp-modal-persona').value;
+  if (!utente) { toast('Scegli di chi è il telefono', 'err'); return; }
+  const { data, error } = await sb.rpc('dispositivo_approva', { p_dispositivo_id: id, p_utente_id: utente, p_etichetta: document.getElementById('disp-modal-etichetta').value.trim() || null, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast(data?.errore === 'etichetta_non_valida' ? 'Il nome del telefono è troppo lungo (massimo 60 caratteri)' : data?.errore === 'utente_non_valido' ? 'La persona scelta non è valida' : 'Operazione non riuscita', 'err'); return; }
+  closeModal('modal-approva-disp');
+  toast(data.finestra_pin ? 'Telefono approvato: la persona può scegliere il suo PIN (24 ore)' : 'Telefono approvato', 'ok');
   caricaDispositivi();
+  loadOperatori().then(renderOperatori);
 }
 async function revocaDispositivo(id) {
   if (!confirm('Bloccare questo telefono? Chi lo sta usando viene disconnesso subito e non potrà più entrare finché non lo riapprovi.')) return;

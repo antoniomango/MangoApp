@@ -346,8 +346,13 @@ i[data-ic] > svg { width: 100%; height: 100%; display: block; }
 .accesso-dispositivo h2 { margin: 0; font-size: 18px; }
 .accesso-dispositivo p { margin: 0; font-size: 14px; color: var(--muted); }
 .accesso-dispositivo .codice-disp { font-family: var(--font-mono); font-size: 34px; font-weight: 700; letter-spacing: .12em; color: var(--ink); }
-.accesso-overlay { position: fixed; inset: 0; z-index: 9600; background: var(--bg); display: none; align-items: center; justify-content: center; padding: 20px; overflow: auto; }
+.accesso-overlay { position: fixed; inset: 0; z-index: 9600; background: var(--bg); display: none; align-items: flex-start; justify-content: center; padding: 20px; overflow: auto; }
 .accesso-overlay.open { display: flex; }
-.accesso-overlay .box { width: 100%; max-width: 360px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.accesso-overlay .box { margin: auto; width: 100%; max-width: 360px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
 .accesso-overlay h2 { margin: 0; font-size: 18px; }
 .accesso-overlay p { margin: 0; font-size: 14px; color: var(--muted); }
+.regole-pin { text-align: left; font-size: 13px; line-height: 1.4; color: var(--ink-2); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; max-width: 360px; width: 100%; box-sizing: border-box; }
+.regole-pin p { margin: 0 0 8px; font-size: 13px; color: var(--ink-2); }
+.regole-pin p:last-child { margin-bottom: 0; }
+.regole-pin ul { margin: 0 0 8px; padding-left: 18px; }
+.regole-pin li { margin-bottom: 3px; }

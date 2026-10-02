@@ -1,4 +1,4 @@
-// js/accesso.js — telefono autorizzato e cambio PIN obbligatorio (operatore.html, ufficio.html).
+// js/accesso.js — telefono autorizzato, scelta del PIN e cambio PIN obbligatorio (operatore.html, ufficio.html).
 //
 // Script classico, nessuna libreria; DOM costruito solo con createElement + textContent.
 // Ogni telefono (o PC) ha un segreto casuale salvato in localStorage; il server ne conserva solo l'impronta.
@@ -30,7 +30,7 @@
     return { p_dispositivo_id: (d && d.id) || null, p_dispositivo_segreto: (d && d.segreto) || null };
   }
 
-  // registra il dispositivo se serve e ne legge lo stato: { stato: 'approvato' | 'in_attesa' | 'revocato' | 'errore', codice }
+  // registra il dispositivo se serve e ne legge lo stato: { stato: 'approvato' | 'in_attesa' | 'revocato' | 'errore', codice, scelta_pin }
   async function assicura(sb) {
     var d = leggi() || {};
     if (!d.segreto) d.segreto = segreto64();
@@ -38,17 +38,17 @@
       if (d.id) {
         var r = await sb.rpc('stato_dispositivo', { p_id: d.id, p_segreto: d.segreto });
         if (r.error) throw r.error;
-        if (r.data && r.data.stato && r.data.stato !== 'sconosciuto') { salva(d); return { stato: r.data.stato, codice: r.data.codice || null }; }
+        if (r.data && r.data.stato && r.data.stato !== 'sconosciuto') { salva(d); return { stato: r.data.stato, codice: r.data.codice || null, scelta_pin: r.data.scelta_pin || null }; }
         d.id = null;   // il server non lo conosce più (richiesta scaduta o eliminata): si registra di nuovo
       }
       var g = await sb.rpc('registra_dispositivo', { p_segreto: d.segreto });
       if (g.error || !g.data || !g.data.ok) throw (g.error || new Error('registrazione non riuscita'));
       d.id = g.data.id;
       salva(d);
-      return { stato: g.data.stato, codice: g.data.codice || null };
+      return { stato: g.data.stato, codice: g.data.codice || null, scelta_pin: null };
     } catch (e) {
       salva(d);
-      return { stato: 'errore', codice: null };
+      return { stato: 'errore', codice: null, scelta_pin: null };
     }
   }
 
@@ -72,7 +72,7 @@
     pannello.appendChild(b);
   }
 
-  // Prepara la schermata di accesso. opz: { sb, pannello, nascondi: [elementi], suApprovato: async fn }
+  // Prepara la schermata di accesso. opz: { sb, pannello, nascondi: [elementi], suApprovato: async fn, suSceltaPin: async fn(esito) }
   async function preparaLogin(opz) {
     clearInterval(_timer);
     var mostra = function (si) { (opz.nascondi || []).forEach(function (e) { if (e) e.style.display = si ? '' : 'none'; }); };
@@ -82,6 +82,13 @@
         clearInterval(_timer);
         opz.pannello.style.display = 'none';
         mostra(true);
+        // la persona a cui è assegnato questo telefono può scegliersi subito il PIN (finestra aperta dal responsabile)
+        if (info.scelta_pin && opz.suSceltaPin) {
+          mostra(false);
+          var esito = await scegliPin(opz.sb, info.scelta_pin);
+          mostra(true);
+          if (esito && esito.data && esito.data.ok) { await opz.suSceltaPin(esito); return; }
+        }
         if (opz.suApprovato) await opz.suApprovato();
         return;
       }
@@ -98,10 +105,10 @@
     var codici = {
       pin_errato: 'PIN errato', utente_non_trovato: 'Utente non trovato', troppi_tentativi: 'Troppi tentativi errati',
       dispositivo_non_approvato: 'Questo telefono non è ancora autorizzato', annullato: '',
-      pin_nuovo_troppo_semplice: 'PIN troppo facile (cifre uguali, sequenze, date, ripetizioni): scegline un altro',
-      pin_nuovo_non_valido: 'Il PIN deve avere 6 cifre', pin_nuovo_uguale: 'Il nuovo PIN deve essere diverso dal vecchio'
+      scelta_non_consentita: 'La scelta del PIN non è più disponibile: rivolgiti al responsabile',
+      pin_nuovo_uguale: 'Il nuovo PIN deve essere diverso dal vecchio'
     };
-    var msg = (data && data.messaggio) || codici[data && data.errore] || (data && data.errore) || 'PIN errato';
+    var msg = (data && window.MangoRegolePin && window.MangoRegolePin.messaggio(data)) || (data && data.messaggio) || codici[data && data.errore] || (data && data.errore) || 'PIN errato';
     if (data && data.bloccato_fino) {
       var ora = new Date(data.bloccato_fino).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
       msg += ' — riprova dopo le ' + ora;
@@ -109,74 +116,102 @@
     return msg;
   }
 
-  // ── cambio PIN obbligatorio (PIN a 4 cifre ancora da sostituire) ──
-  var _ov = null, _pad = null, _ctx = null;
-
-  function costruisciOverlay() {
-    if (_ov) return;
-    _ov = el('div', 'accesso-overlay');
-    _ov.setAttribute('role', 'dialog');
-    _ov.setAttribute('aria-modal', 'true');
+  // ── schermata "scegli il PIN" (due inserimenti): usata per il cambio obbligatorio e per la scelta iniziale ──
+  // invia(nuovoPin) restituisce { fine: true, esito } oppure { messaggio, bloccatoFino } oppure { annulla: true, esito }
+  function creaSchermata() {
+    var ov = el('div', 'accesso-overlay');
+    ov.setAttribute('role', 'dialog');
+    ov.setAttribute('aria-modal', 'true');
     var box = el('div', 'box');
-    box.appendChild(el('h2', null, 'Scegli il tuo nuovo PIN'));
-    box.appendChild(el('p', null, 'Da ora il PIN ha 6 cifre. Scegline uno che non sia una data, una sequenza o cifre ripetute.'));
+    var titolo = el('h2', null, '');
+    var regole = el('div', null);
+    window.MangoRegolePin.rendi(regole);
     var padEl = el('div', null);
     var err = el('div', 'err');
     err.setAttribute('aria-live', 'assertive');
     var ann = el('button', 'btn btn-secondary', 'Annulla');
     ann.type = 'button';
-    ann.addEventListener('click', function () { chiudi({ annullato: true, data: { errore: 'annullato' } }); });
+    box.appendChild(titolo);
+    box.appendChild(regole);
     box.appendChild(padEl);
     box.appendChild(ann);
-    _ov.appendChild(box);
-    document.body.appendChild(_ov);
-    _pad = window.MangoPinPad.monta({
-      contenitore: padEl,
-      messaggio: err,
-      titolo: 'Nuovo PIN (6 cifre)',
-      lunghezza: 6,
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+    var ctx = null;
+    var pad = null;
+
+    function chiudi(esito) {
+      if (!ctx) return;
+      var c = ctx;
+      ctx = null;
+      ov.classList.remove('open');
+      if (pad) pad.fermaTastiera();
+      if (window.pinPad) window.pinPad.azzera();   // torna al tastierino della pagina
+      c.risolvi(esito);
+    }
+    ann.addEventListener('click', function () { chiudi({ annullato: true, data: { errore: 'annullato' } }); });
+
+    async function inviaPin(pin) {
+      var c = ctx;
+      if (!c) return { ok: false };
+      err.textContent = '';
+      if (c.passo === 0) { c.nuovo = pin; c.passo = 1; pad.impostaTitolo('Ripeti il PIN'); return { ok: true, continua: true }; }
+      if (pin !== c.nuovo) { c.passo = 0; c.nuovo = null; pad.impostaTitolo('Nuovo PIN (6 cifre)'); err.textContent = 'I due PIN non coincidono, riprova'; return { ok: false }; }
+      var nuovo = c.nuovo;
+      var r = await c.invia(nuovo);
+      c.nuovo = null; c.passo = 0;
+      if (r.fine) { chiudi(r.esito); return { ok: true }; }
+      if (r.annulla) { chiudi(r.esito); return { ok: false }; }
+      pad.impostaTitolo('Nuovo PIN (6 cifre)');
+      err.textContent = r.messaggio || '';
+      return { ok: false, bloccatoFino: r.bloccatoFino || null };
+    }
+    pad = window.MangoPinPad.monta({
+      contenitore: padEl, messaggio: err, titolo: 'Nuovo PIN (6 cifre)', lunghezza: 6,
       nomeSelezionato: function () { return true; },
       mostraErrore: function (t) { err.textContent = t; },
-      visibile: function () { return _ov.classList.contains('open'); },
-      invia: inviaCambio
+      visibile: function () { return ov.classList.contains('open'); },
+      invia: inviaPin
+    });
+
+    return {
+      apri: function (testoTitolo, invia) {
+        return new Promise(function (risolvi) {
+          ctx = { passo: 0, nuovo: null, invia: invia, risolvi: risolvi };
+          titolo.textContent = testoTitolo;
+          err.textContent = '';
+          pad.impostaTitolo('Nuovo PIN (6 cifre)');
+          if (window.pinPad) window.pinPad.fermaTastiera();   // la tastiera fisica è solo del tastierino in primo piano
+          pad.azzera();
+          ov.classList.add('open');
+        });
+      }
+    };
+  }
+
+  var _schCambio = null, _schScelta = null;
+
+  // cambio obbligatorio: PIN a 4 cifre ancora da sostituire
+  function cambioObbligatorio(sb, userId, pinAttuale) {
+    if (!_schCambio) _schCambio = creaSchermata();
+    return _schCambio.apri('Scegli il tuo nuovo PIN', async function (nuovo) {
+      var r = await sb.rpc('cambia_pin_primo_accesso', Object.assign({ p_user_id: userId, p_pin_attuale: pinAttuale, p_pin_nuovo: nuovo }, parametri()));
+      var data = r.data;
+      if (data && data.ok) return { fine: true, esito: { data: data, pinNuovo: nuovo } };
+      if (data && (data.errore === 'dispositivo_non_approvato' || data.errore === 'pin_da_reimpostare' || data.errore === 'utente_non_trovato')) return { annulla: true, esito: { annullato: true, data: data } };
+      return { messaggio: messaggio(data), bloccatoFino: (data && data.bloccato_fino) || null };
     });
   }
 
-  function chiudi(esito) {
-    if (!_ctx) return;
-    var c = _ctx;
-    _ctx = null;
-    _ov.classList.remove('open');
-    if (_pad) _pad.fermaTastiera();
-    if (window.pinPad) window.pinPad.azzera();   // torna al tastierino della pagina
-    c.risolvi(esito);
-  }
-
-  async function inviaCambio(pin) {
-    var c = _ctx;
-    if (!c) return { ok: false };
-    var err = _ov.querySelector('.err');
-    err.textContent = '';
-    if (c.passo === 0) { c.nuovo = pin; c.passo = 1; _pad.impostaTitolo('Ripeti il nuovo PIN'); return { ok: true, continua: true }; }
-    if (pin !== c.nuovo) { c.passo = 0; c.nuovo = null; _pad.impostaTitolo('Nuovo PIN (6 cifre)'); err.textContent = 'I due PIN non coincidono: ricomincia'; return { ok: false }; }
-    var r = await c.sb.rpc('cambia_pin_primo_accesso', Object.assign({ p_user_id: c.userId, p_pin_attuale: c.attuale, p_pin_nuovo: c.nuovo }, parametri()));
-    var data = r.data;
-    if (data && data.ok) { chiudi({ data: data, pinNuovo: c.nuovo }); return { ok: true }; }
-    c.passo = 0; c.nuovo = null; _pad.impostaTitolo('Nuovo PIN (6 cifre)');
-    if (data && (data.errore === 'dispositivo_non_approvato' || data.errore === 'pin_da_reimpostare' || data.errore === 'utente_non_trovato')) { chiudi({ annullato: true, data: data }); return { ok: false }; }
-    err.textContent = messaggio(data);
-    return { ok: false, bloccatoFino: (data && data.bloccato_fino) || null };
-  }
-
-  function cambioObbligatorio(sb, userId, pinAttuale) {
-    return new Promise(function (risolvi) {
-      costruisciOverlay();
-      _ctx = { sb: sb, userId: userId, attuale: pinAttuale, nuovo: null, passo: 0, risolvi: risolvi };
-      _ov.querySelector('.err').textContent = '';
-      _pad.impostaTitolo('Nuovo PIN (6 cifre)');
-      if (window.pinPad) window.pinPad.fermaTastiera();   // la tastiera fisica è solo del tastierino in primo piano
-      _pad.azzera();
-      _ov.classList.add('open');
+  // scelta iniziale: il responsabile ha approvato il telefono e aperto la finestra per questa persona
+  function scegliPin(sb, persona) {
+    if (!_schScelta) _schScelta = creaSchermata();
+    return _schScelta.apri('Ciao ' + persona.nome + ', scegli il tuo PIN', async function (nuovo) {
+      var r = await sb.rpc('scegli_pin_iniziale', Object.assign({ p_user_id: persona.user_id, p_pin_nuovo: nuovo }, parametri()));
+      var data = r.data;
+      if (data && data.ok) return { fine: true, esito: { data: data, pin: nuovo } };
+      if (!data || data.errore === 'scelta_non_consentita' || data.errore === 'dispositivo_non_approvato') return { annulla: true, esito: { annullato: true, data: data || { errore: 'scelta_non_consentita' } } };
+      return { messaggio: messaggio(data) };
     });
   }
 
