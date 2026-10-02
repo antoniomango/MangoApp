@@ -636,6 +636,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <button type="button" class="nav-gruppo-testa" aria-expanded="false" aria-controls="ng-produzione" onclick="navToggle('produzione')"><span>Produzione</span><span class="nav-chevron"><i data-ic="chevron"></i></span></button>
         <div class="nav-gruppo-corpo" id="ng-produzione"><div class="nav-gruppo-interno">
           <div class="nav-item" role="link" tabindex="0" onclick="showSection('dashboard')" id="nav-dashboard"><span class="icon"><i data-ic="grafico"></i></span> Dashboard</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('oggi')" id="nav-oggi"><span class="icon"><i data-ic="appunti"></i></span> Oggi</div>
           <div class="nav-item" role="link" tabindex="0" onclick="showSection('kpi')" id="nav-kpi"><span class="icon"><i data-ic="trend"></i></span> KPI &amp; Analisi</div>
           <div class="nav-item" role="link" tabindex="0" onclick="showSection('pianificazione')" id="nav-pianificazione"><span class="icon"><i data-ic="calendario"></i></span> Pianificazione</div>
         </div></div>
@@ -677,6 +678,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           <div class="nav-item" role="link" tabindex="0" onclick="showSection('macchine-config')" id="nav-macchine-config"><span class="icon"><i data-ic="chiave"></i></span> Macchine</div>
           <div class="nav-item" role="link" tabindex="0" onclick="showSection('orario-config')" id="nav-orario-config"><span class="icon"><i data-ic="orologio"></i></span> Orario di lavoro</div>
           <div class="nav-item" role="link" tabindex="0" onclick="showSection('priorita-config')" id="nav-priorita-config"><span class="icon"><i data-ic="fulmine"></i></span> Priorità ordini</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('piano-config')" id="nav-piano-config"><span class="icon"><i data-ic="bersaglio"></i></span> Piano del giorno</div>
         </div></div>
       </div>
         </div></div>
@@ -1004,6 +1006,22 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         <div id="piano-content"><div class="empty-state"><div class="icon"><i data-ic="calendario"></i></div><p>Caricamento...</p></div></div>
       </section>
 
+      <!-- OGGI — piano del giorno (vista del responsabile: stessa della squadra, più minuti stimati e comandi) -->
+      <section class="section" id="sec-oggi">
+        <div class="page-hdr">
+          <div>
+            <h1>Oggi</h1>
+            <div class="sub" id="oggi-r-sub">Il piano del giorno, aggiornato in tempo reale</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-secondary" onclick="apriAggiungiAlPiano()">+ Aggiungi al piano</button>
+            <button class="btn btn-secondary" onclick="rigeneraPianoOggi()"><i data-ic="aggiorna"></i> Rigenera piano di oggi</button>
+          </div>
+        </div>
+        <div id="oggi-r-riepilogo"></div>
+        <div id="oggi-r-corpo"><div class="empty-state"><div class="icon"><i data-ic="calendario"></i></div><p>Caricamento…</p></div></div>
+      </section>
+
       <!-- KPI -->
       <section class="section" id="sec-kpi">
         <div class="page-hdr">
@@ -1019,6 +1037,8 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
             <button class="btn btn-secondary" onclick="loadKpi()" style="padding:7px 14px;font-size:13px">↻ Aggiorna</button>
           </div>
         </div>
+
+        <div id="kpi-nota-tempi" hidden style="font-size:12px;color:var(--warn-ink);background:var(--warn-soft);border:1px solid var(--warn-line);border-radius:10px;padding:10px 14px;margin-bottom:16px"></div>
 
         <!-- CARD RIEPILOGO -->
         <div id="kpi-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:24px"></div>
@@ -1324,6 +1344,21 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       </section>
 
       <!-- KPI CONFIG -->
+      <!-- PIANO DEL GIORNO — parametri, spiegazioni e simulazione -->
+      <section class="section" id="sec-piano-config">
+        <div class="page-hdr">
+          <div>
+            <h1>Piano del giorno</h1>
+            <div class="sub">Come il sistema costruisce la lista delle attività di ogni giornata e come regola il carico</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-secondary" onclick="simulaPiano()"><i data-ic="previsione"></i> Simula</button>
+            <button class="btn btn-primary" onclick="salvaPianoParametri()"><i data-ic="salva"></i> Salva modifiche</button>
+          </div>
+        </div>
+        <div id="piano-cfg-corpo" style="max-width:860px"><div class="empty-state"><p>Caricamento…</p></div></div>
+      </section>
+
       <section class="section" id="sec-kpi-config">
         <div class="page-hdr">
           <div>
@@ -2080,6 +2115,22 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
   </div>
 </div>
 
+<!-- MODALE AGGIUNGI AL PIANO -->
+<div class="modal-overlay" id="modal-aggiungi-piano">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-hdr">
+      <h3>Aggiungi al piano di oggi</h3>
+      <button class="modal-close" onclick="closeModal('modal-aggiungi-piano')" aria-label="Chiudi">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="text" id="agg-piano-cerca" placeholder="Cerca cliente, codice o fase…" oninput="renderAggiungiAlPiano()"
+        style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--bg);color:var(--ink);margin-bottom:10px">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Fasi aperte che oggi non sono nel piano, in ordine di priorità. Una voce aggiunta a mano è segnata come tale.</div>
+      <div id="agg-piano-lista" style="max-height:50vh;overflow:auto"></div>
+    </div>
+  </div>
+</div>
+
 <!-- MODALE ANTEPRIMA CONFIGURAZIONE FASI -->
 <div class="modal-overlay" id="modal-anteprima-fasi">
   <div class="modal" style="max-width:640px">
@@ -2621,7 +2672,10 @@ function setupRealtime() {
         calcolaStimaSingoloOrdine(currentOrdineId);
         renderDettaglioOrdine(currentOrdineId);
       }
+      produzioneCambiata();      // Oggi e Pianificazione si aggiornano da sole quando cambia lo stato di una fase
     })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'piano_giorno_voci' }, () => produzioneCambiata())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'piano_giorno' }, () => produzioneCambiata())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'notifiche' }, async () => {
       await loadNotifiche();
       renderNotifiche();
@@ -2742,6 +2796,8 @@ function showSection(name) {
   else if (name === 'strutture-config') renderAttributoConfig('struttura');
   else if (name === 'materiali-config') renderAttributoConfig('materiale');
   else if (name === 'priorita-config') renderPrioritaConfig();
+  else if (name === 'oggi') loadOggiResp();
+  else if (name === 'piano-config') loadPianoConfig();
   else if (name === 'macchine-config') { loadMacchine().then(renderMacchine); }
   else if (name === 'fasi-extra-config') { loadCatalogoFasiExtra(); }
   else if (name === 'notif-config') { loadNotifDestinatari(); }
@@ -2752,6 +2808,275 @@ function showSection(name) {
   else if (name === 'tempi-rif-config') { loadTempiRiferimento(); }
   else if (name === 'campi-profilo-config') { loadCampiProfilo(); }
   else if (name === 'tipi-richiesta-config') { loadTipiRichiesta(); }
+}
+
+// ═══════════════════════════════════════════════
+// OGGI + PIANO DEL GIORNO (mango-v45)
+// ═══════════════════════════════════════════════
+// Piano generato dal server a inizio turno (tetto giornaliero per persona, priorità, dipendenze, macchine), allungato in giornata se la squadra
+// va più veloce, con il tetto regolato ogni settimana. Qui: la vista "Oggi" con minuti e capacità, i comandi (rigenera / aggiungi / togli) e la
+// pagina dei parametri con spiegazioni e simulazione. Tutto via RPC con registro; nessun valore di configurazione scritto nel codice.
+let oggiR = null;            // risposta di piano_oggi_responsabile
+let _oggiRTimer = null;
+let _prodDebounce = null;
+
+const _fmtMin = (m) => {
+  const n = Math.round(Number(m) || 0);
+  return n >= 90 ? `${Math.floor(n / 60)} h ${String(n % 60).padStart(2, '0')} min` : `${n} min`;
+};
+const _fmtOre = (h) => `${String(Math.round(Number(h) * 100) / 100).replace('.', ',')} h`;
+
+async function loadOggiResp() {
+  const { data, error } = await sb.rpc('piano_oggi_responsabile', { p_responsabile_id: currentUserRow.id, p_session_token: null, p_data: null });
+  if (error || !data?.ok) { document.getElementById('oggi-r-corpo').innerHTML = `<div class="empty-state"><p>Piano non disponibile: ${escapeHtml(data?.errore || error?.message || '')}</p></div>`; return; }
+  oggiR = data;
+  renderOggiResp();
+}
+
+// ridisegno ritardato: Realtime e aggiornamento periodico possono arrivare a raffica
+function produzioneCambiata() {
+  clearTimeout(_prodDebounce);
+  _prodDebounce = setTimeout(() => {
+    if (document.getElementById('sec-oggi')?.classList.contains('active')) loadOggiResp();
+    if (document.getElementById('sec-pianificazione')?.classList.contains('active')) renderPianificazione();
+  }, 700);
+}
+// rete di sicurezza se Realtime non fosse connesso: aggiornamento leggero mentre una di queste due viste è aperta
+setInterval(() => {
+  if (document.hidden || typeof currentUserRow === 'undefined' || !currentUserRow) return;
+  if (document.getElementById('sec-oggi')?.classList.contains('active') || document.getElementById('sec-pianificazione')?.classList.contains('active')) produzioneCambiata();
+}, 30000);
+
+function renderOggiResp() {
+  const riep = document.getElementById('oggi-r-riepilogo'), corpo = document.getElementById('oggi-r-corpo'), sub = document.getElementById('oggi-r-sub');
+  if (!riep || !corpo || !oggiR) return;
+  const d = oggiR;
+  const dataTesto = new Date(d.data + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  sub.textContent = dataTesto.charAt(0).toUpperCase() + dataTesto.slice(1);
+  if (!d.piano_presente) {
+    riep.innerHTML = '';
+    corpo.innerHTML = `<div class="empty-state"><div class="icon"><i data-ic="calendario"></i></div>
+      <p>${d.lavorativo ? 'Il piano di oggi non è ancora stato generato: nasce all\'inizio del turno. Puoi crearlo subito con "Rigenera piano di oggi".' : 'Oggi non è un giorno lavorativo: nessun piano.'}</p></div>`;
+    return;
+  }
+  const p = d.piano || {};
+  const av = d.avanzamento || { fatte: 0, totali: 0 };
+  const pctMin = p.minuti_pianificati ? Math.round(p.minuti_fatti / p.minuti_pianificati * 100) : 0;
+  const cella = (titolo, valore, nota) => `<div class="card" style="padding:14px 16px;margin-bottom:0"><div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">${titolo}</div><div style="font-size:20px;font-weight:700;margin-top:4px">${valore}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${nota || ''}</div></div>`;
+  riep.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px">
+      ${cella('Attività', `${av.fatte} di ${av.totali}`, 'fatte / totali')}
+      ${cella('Minuti stimati', `${_fmtMin(p.minuti_fatti)} <span style="font-size:13px;font-weight:600;color:var(--muted)">/ ${_fmtMin(p.minuti_pianificati)}</span>`, `${pctMin}% del piano`)}
+      ${cella('Capacità del giorno', _fmtMin(p.minuti_capacita), `${p.n_persone} persone presenti · ${_fmtOre(p.ore_persone_presenti)}`)}
+      ${cella('Tetto in uso', `${_fmtOre(p.tetto_ore)} <span style="font-size:13px;font-weight:600;color:var(--muted)">a persona</span>`, 'regolato ogni settimana')}
+      ${cella('Riempimenti', String(p.n_riempimenti || 0), p.n_riempimenti ? 'attività aggiunte in giornata' : 'nessuna aggiunta finora')}
+      ${cella('Generato', p.generato_da === 'responsabile' ? 'a mano' : 'automatico', new Date(p.generato_il).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }))}
+    </div>`;
+  const tag = (v) => v.origine === 'riempimento' ? '<span class="badge" style="background:var(--info-soft);color:var(--info-ink)">riempimento</span>'
+    : v.origine === 'responsabile' ? '<span class="badge" style="background:var(--warn-soft);color:var(--warn-ink)">aggiunta a mano</span>' : '';
+  const riga = (v) => {
+    const o = v.ordine || {};
+    const bl = v.bloccata_da && v.bloccata_da.length ? `<div style="font-size:11px;color:var(--violet)">dopo: ${escapeHtml(v.bloccata_da.join(', '))}</div>` : '';
+    return `<tr style="${v.fatta ? 'background:var(--ok-bg)' : ''}">
+      <td><div style="font-weight:600">${escapeHtml(o.cliente || '')} — ${escapeHtml(o.codice || '')}</div><div style="font-size:11px;color:var(--muted)">${o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo'}${v.macchina ? ' · ' + escapeHtml(v.macchina) : ''}</div>${bl}</td>
+      <td style="white-space:nowrap">${v.esterna ? '—' : _fmtMin(v.minuti_stimati)}</td>
+      <td style="white-space:nowrap">${v.pezzi ? `${v.pezzi.fatti} di ${v.pezzi.totali}` : ''}</td>
+      <td>${v.fatta ? '<span class="badge" style="background:var(--ok-soft);color:var(--ok-ink)">✓ fatta</span>' : '<span style="color:var(--muted)">da fare</span>'} ${tag(v)}</td>
+      <td style="text-align:right">${v.fatta ? '' : `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="togliDalPiano('${escapeJsAttr(v.voce_id)}')">Togli dal piano</button>`}</td>
+    </tr>`;
+  };
+  const tabella = (voci) => `<div style="overflow-x:auto"><table><thead><tr><th>Ordine</th><th>Stima</th><th>Pezzi</th><th>Stato</th><th></th></tr></thead><tbody>${voci.map(riga).join('')}</tbody></table></div>`;
+  let html = (d.gruppi || []).map(g => `<div class="card"><div class="card-hdr"><h3>${escapeHtml(g.fase_nome)}</h3><span style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${g.fatte} di ${g.totali}</span></div>${tabella(g.voci)}</div>`).join('');
+  if (!(d.gruppi || []).length) html = '<div class="empty-state"><p>Nessuna attività nel piano di oggi.</p></div>';
+  if ((d.esterne || []).length) {
+    html += `<div class="card"><div class="card-hdr"><h3>Spedizioni e ricezioni</h3><span style="font-size:12px;color:var(--muted)">non consumano capacità</span></div>${tabella(d.esterne.map(v => ({ ...v, minuti_stimati: 0 })))}</div>`;
+  }
+  corpo.innerHTML = html;
+}
+
+async function rigeneraPianoOggi() {
+  if (!confirm('Rigenerare il piano di oggi?\n\nLe attività già completate restano; tutte le altre voci vengono ricalcolate con le presenze, il tetto e le priorità di adesso (anche quelle tolte a mano tornano candidate).')) return;
+  const { data, error } = await sb.rpc('piano_rigenera_oggi', { p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Piano non rigenerato: ' + (data?.errore || error?.message || ''), 'err'); return; }
+  oggiR = data; renderOggiResp();
+  toast('Piano di oggi rigenerato', 'ok');
+}
+
+async function togliDalPiano(voceId) {
+  if (!confirm('Togliere questa attività dal piano di oggi?')) return;
+  const { data, error } = await sb.rpc('piano_togli_voce', { p_responsabile_id: currentUserRow.id, p_session_token: null, p_voce_id: voceId });
+  if (error || !data?.ok) { toast('Non riuscito: ' + (data?.errore || error?.message || ''), 'err'); return; }
+  await loadOggiResp();
+  toast('Attività tolta dal piano', 'ok');
+}
+
+let _candidatiPiano = [];
+async function apriAggiungiAlPiano() {
+  const { data, error } = await sb.rpc('piano_candidati_aggiunta', { p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Elenco non disponibile: ' + (data?.errore || error?.message || ''), 'err'); return; }
+  _candidatiPiano = data.candidati || [];
+  document.getElementById('agg-piano-cerca').value = '';
+  renderAggiungiAlPiano();
+  document.getElementById('modal-aggiungi-piano').classList.add('open');
+}
+function renderAggiungiAlPiano() {
+  const q = (document.getElementById('agg-piano-cerca')?.value || '').toLowerCase().trim();
+  const el = document.getElementById('agg-piano-lista');
+  const lista = _candidatiPiano.filter(c => !q || `${c.cliente} ${c.codice} ${c.fase_nome}`.toLowerCase().includes(q)).slice(0, 200);
+  el.innerHTML = lista.length ? lista.map(c => `<div style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--border)">
+      <div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">${escapeHtml(c.cliente || '')} — ${escapeHtml(c.codice || '')}</div><div style="font-size:12px;color:var(--muted)">${escapeHtml(c.fase_nome || '')}${c.esterna ? ' · esterna' : ''}</div></div>
+      <button class="btn btn-primary" style="padding:5px 12px;font-size:12px" onclick="aggiungiAlPiano('${escapeJsAttr(c.ordine_fase_id || '')}','${escapeJsAttr(c.fase_extra_id || '')}')">Aggiungi</button>
+    </div>`).join('') : '<div style="color:var(--muted);font-size:13px;padding:12px 4px">Nessuna fase da aggiungere.</div>';
+}
+async function aggiungiAlPiano(ordineFaseId, faseExtraId) {
+  const { data, error } = await sb.rpc('piano_aggiungi_voce', { p_responsabile_id: currentUserRow.id, p_session_token: null,
+    p_ordine_fase_id: ordineFaseId || null, p_fase_extra_id: faseExtraId || null });
+  if (error || !data?.ok) { toast('Non aggiunta: ' + (data?.errore || error?.message || ''), 'err'); return; }
+  closeModal('modal-aggiungi-piano');
+  await loadOggiResp();
+  toast('Attività aggiunta al piano', 'ok');
+}
+
+// ── pagina "Piano del giorno": parametri ──
+let pianoCfg = null;          // risposta di piano_parametri_elenco
+let pianoBozza = {};          // chiave -> valore numerico in modifica (tenuto in memoria a ogni cambio, mai letto dal DOM al salvataggio)
+let pianoSimulazione = null;
+const _GIORNI_SETT = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
+const _PIANO_ERRORI = {
+  tetto_minimo_maggiore_del_massimo: 'Il tetto minimo non può superare il massimo.',
+  tetto_attuale_fuori_da_minimo_e_massimo: 'Il tetto in uso deve restare fra il minimo e il massimo.',
+  giorni_minimi_maggiori_della_finestra: 'I giorni che devono dare lo stesso segnale non possono superare i giorni considerati.',
+  soglia_scarsa_non_minore_della_piena: 'La soglia "lista troppo lunga" deve essere più bassa della soglia "lista troppo corta".',
+};
+function _pianoErrore(d, e) {
+  if (d?.errore === 'valore_fuori_intervallo') return `«${d.etichetta}»: valore fuori dai limiti (${d.min}–${d.max}).`;
+  if (d?.errore === 'valore_non_multiplo_del_passo') return `«${d.etichetta}»: il valore deve essere un multiplo di ${d.passo}.`;
+  if (d?.errore === 'valore_mancante' || d?.errore === 'valore_non_numerico') return `«${d.etichetta || d.chiave}»: inserisci un numero.`;
+  return _PIANO_ERRORI[d?.errore] || d?.errore || e?.message || 'errore';
+}
+
+async function loadPianoConfig() {
+  const { data, error } = await sb.rpc('piano_parametri_elenco', { p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { document.getElementById('piano-cfg-corpo').innerHTML = `<div class="empty-state"><p>Parametri non disponibili: ${escapeHtml(data?.errore || error?.message || '')}</p></div>`; return; }
+  pianoCfg = data; pianoBozza = {}; pianoSimulazione = null;
+  renderPianoConfig();
+}
+
+const _pVal = (p) => (p.chiave in pianoBozza ? pianoBozza[p.chiave] : Number(p.valore));
+const _pNum = (n) => String(Math.round(Number(n) * 1000) / 1000).replace('.', ',');
+
+function renderPianoConfig() {
+  const el = document.getElementById('piano-cfg-corpo');
+  if (!el || !pianoCfg) return;
+  const st = pianoCfg.stato || {};
+  const ur = st.ultima_regolazione, um = st.ultima_modifica_tetto, po = st.piano_oggi;
+  const fmtData = (d) => new Date(d).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
+  const statoRiga = [
+    `<strong>Tetto in uso:</strong> ${_fmtOre(st.tetto_in_uso)} per persona`,
+    ur ? `<strong>Ultima regolazione:</strong> ${fmtData(ur.data + 'T12:00:00')} — ${escapeHtml(ur.motivo)}` : '<strong>Ultima regolazione:</strong> nessuna ancora (la prima avviene nel giorno impostato, se ci sono abbastanza giorni con un piano)',
+    um ? `<strong>Ultima modifica del tetto:</strong> ${fmtData(um.data)} da ${_pNum(um.da)} a ${_pNum(um.a)} h — ${escapeHtml(um.motivo)}` : '',
+    po ? `<strong>Piano di oggi:</strong> generato (${_fmtMin(po.minuti_capacita)} di capacità, ${po.n_persone} persone, ${po.n_riempimenti} riempimenti)` : (st.oggi_lavorativo ? '<strong>Piano di oggi:</strong> non ancora generato' : '<strong>Piano di oggi:</strong> giorno non lavorativo'),
+  ].filter(Boolean).map(x => `<li style="margin-bottom:4px">${x}</li>`).join('');
+  const senzaTempo = (pianoCfg.fasi_senza_tempo || []);
+  let html = `<div class="card" style="padding:18px 22px">
+      <h3 style="font-size:15px;margin-bottom:8px">Come funziona</h3>
+      <ol style="padding-left:20px;font-size:13px;line-height:1.55;margin-bottom:12px">
+        <li><strong>Piano iniziale.</strong> All'inizio di ogni turno il sistema costruisce la lista delle attività del giorno: prende le fasi aperte nell'ordine di priorità degli ordini (scadenza e urgenza), rispetta le dipendenze fra le fasi e si ferma quando la somma delle stime raggiunge la capacità: le ore di ogni persona presente, per il tetto. Una macchina è un posto di lavoro e non può superare le ore di una persona.</li>
+        <li><strong>Riempimento in giornata.</strong> Se la squadra completa gran parte della lista prima del previsto, la lista si allunga da sola con altre attività. Gli ordini nuovi o urgenti entrano al riempimento successivo, o subito se li aggiungi tu dalla pagina Oggi.</li>
+        <li><strong>Regolazione del tetto, una volta a settimana.</strong> Il sistema guarda le ultime giornate: se la lista era spesso troppo corta alza il tetto di un passo, se era spesso troppo lunga lo abbassa. Sempre dentro il minimo e il massimo che imposti tu. È l'unica regolazione automatica: non si correggono più i tempi delle singole fasi.</li>
+      </ol>
+      <ul style="list-style:none;padding:12px 14px;background:var(--phase-bg);border-radius:8px;font-size:13px;margin:0">${statoRiga}</ul>
+    </div>`;
+  if (senzaTempo.length) {
+    html += `<div class="card" style="padding:14px 20px;border-color:var(--warn-line);background:var(--warn-bg)"><div style="font-size:13px"><strong><i data-ic="avviso"></i> ${senzaTempo.length} fasi senza tempo di riferimento</strong> — nel piano pesano quanto "Stima per fasi senza tempo": ${senzaTempo.map(f => escapeHtml(f.nome)).join(', ')}. Dai loro un tempo in <a href="#" onclick="showSection('tempi-rif-config');return false">Tempi di riferimento</a>.</div></div>`;
+  }
+  let gruppo = null;
+  (pianoCfg.parametri || []).forEach(p => {
+    if (p.gruppo !== gruppo) {
+      gruppo = p.gruppo;
+      html += `<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:20px 0 10px">${escapeHtml(gruppo)}</div>`;
+    }
+    const v = _pVal(p);
+    let campo;
+    if (p.tipo === 'si_no') campo = `<select onchange="pianoImposta('${escapeJsAttr(p.chiave)}', Number(this.value))" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--ink)"><option value="1" ${v >= 1 ? 'selected' : ''}>Sì</option><option value="0" ${v < 1 ? 'selected' : ''}>No</option></select>`;
+    else if (p.tipo === 'giorno_settimana') campo = `<select onchange="pianoImposta('${escapeJsAttr(p.chiave)}', Number(this.value))" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--ink)">${_GIORNI_SETT.map((n, i) => `<option value="${i}" ${Number(v) === i ? 'selected' : ''}>${n}</option>`).join('')}</select>`;
+    else campo = `<input type="number" value="${escapeHtml(String(v))}" min="${p.min_valore}" max="${p.max_valore}" step="${p.step}" oninput="pianoImposta('${escapeJsAttr(p.chiave)}', this.value === '' ? NaN : Number(this.value))"
+        style="width:96px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--ink)">`;
+    const limiti = p.tipo === 'numero' ? `Limiti: ${_pNum(p.min_valore)}–${_pNum(p.max_valore)}${p.unita ? ' ' + escapeHtml(p.unita) : ''} · predefinito ${_pNum(p.default_valore)}` : `Predefinito: ${p.tipo === 'si_no' ? (p.default_valore >= 1 ? 'Sì' : 'No') : _GIORNI_SETT[p.default_valore]}`;
+    const riga = (etichetta, testo) => testo ? `<div style="font-size:12px;margin-top:4px"><strong style="color:var(--ink-2)">${etichetta}</strong> ${escapeHtml(testo)}</div>` : '';
+    html += `<div class="card" style="padding:16px 20px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:6px">
+        <div style="flex:1;min-width:220px"><div style="font-size:14px;font-weight:600">${escapeHtml(p.etichetta)}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${limiti}</div></div>
+        <div>${campo}${p.unita && p.tipo === 'numero' ? ` <span style="font-size:12px;color:var(--muted)">${escapeHtml(p.unita)}</span>` : ''}</div>
+      </div>
+      <div style="font-size:12px;color:var(--ink-2);line-height:1.5">${escapeHtml(p.cosa_fa)}</div>
+      ${riga('Se lo alzi:', p.se_alzi)}${riga('Se lo abbassi:', p.se_abbassi)}
+      <div style="font-size:12px;color:var(--muted);margin-top:6px;font-style:italic">Esempio: ${escapeHtml(p.esempio || '')}</div>
+    </div>`;
+  });
+  html += `<div id="piano-simulazione">${renderPianoSimulazione()}</div>`;
+  el.innerHTML = html;
+}
+
+function pianoImposta(chiave, valore) {
+  const p = (pianoCfg?.parametri || []).find(x => x.chiave === chiave);
+  if (p && Number(p.valore) === valore) delete pianoBozza[chiave]; else pianoBozza[chiave] = valore;
+}
+
+function _pianoValoriDaInviare() {
+  const out = {};
+  for (const [k, v] of Object.entries(pianoBozza)) {
+    if (!Number.isFinite(v)) return { errore: `Inserisci un numero valido in «${(pianoCfg.parametri.find(p => p.chiave === k) || {}).etichetta || k}».` };
+    out[k] = v;
+  }
+  return { valori: out };
+}
+
+async function salvaPianoParametri() {
+  const r = _pianoValoriDaInviare();
+  if (r.errore) { toast(r.errore, 'err'); return; }
+  if (!Object.keys(r.valori).length) { toast('Nessuna modifica da salvare', 'ok'); return; }
+  const { data, error } = await sb.rpc('piano_parametri_salva', { p_valori: r.valori, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Salvataggio NON riuscito: ' + _pianoErrore(data, error), 'err'); return; }
+  await loadPianoConfig();
+  toast('Piano del giorno: parametri salvati', 'ok');
+}
+
+async function simulaPiano() {
+  const r = _pianoValoriDaInviare();
+  if (r.errore) { toast(r.errore, 'err'); return; }
+  const { data, error } = await sb.rpc('piano_simula', { p_valori: r.valori, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Simulazione non riuscita: ' + _pianoErrore(data, error), 'err'); return; }
+  pianoSimulazione = data;
+  const box = document.getElementById('piano-simulazione');
+  if (box) { box.innerHTML = renderPianoSimulazione(); box.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+}
+
+function renderPianoSimulazione() {
+  const s = pianoSimulazione;
+  if (!s) return `<div class="card" style="padding:16px 20px;margin-top:8px"><div style="font-size:13px;color:var(--muted)"><strong style="color:var(--ink)">Simula</strong> — cambia i valori qui sopra e premi "Simula": vedrai cosa sarebbe successo negli ultimi giorni registrati (tetto risultante, giorni "lista troppo corta" e "troppo lunga") senza salvare nulla.</div></div>`;
+  const classe = { corta: 'lista troppo corta', lunga: 'lista troppo lunga', giusta: 'lista giusta', vuoto: 'nessuna attività' };
+  const colore = { corta: 'var(--info-ink)', lunga: 'var(--warn-ink)', giusta: 'var(--ok-ink)', vuoto: 'var(--muted)' };
+  const riga = (g) => `<tr><td>${new Date(g.data + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' })}</td><td>${g.completato_pct == null ? '—' : String(g.completato_pct).replace('.', ',') + '%'}</td><td>${g.riempimenti || 0}</td><td style="color:${colore[g.classe]};font-weight:600">${classe[g.classe]}</td></tr>`;
+  const cambia = Number(s.tetto_dopo) !== Number(s.tetto_prima);
+  return `<div class="card" style="padding:16px 20px;margin-top:8px;border-color:var(--accent)">
+    <h3 style="font-size:15px;margin-bottom:6px">Simulazione (non salvata)</h3>
+    <div style="font-size:13px;margin-bottom:6px">Con questi valori la regolazione di oggi darebbe: <strong>${s.esito === 'alzato' ? 'tetto in aumento' : s.esito === 'abbassato' ? 'tetto in diminuzione' : s.esito === 'dati_insufficienti' ? 'nessun cambiamento (giorni insufficienti)' : 'tetto invariato'}</strong>
+      — da ${_pNum(s.tetto_prima)} h a <strong>${_pNum(s.tetto_dopo)} h</strong>${cambia ? '' : ' (stesso valore)'}.</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${escapeHtml(s.motivo)} ${s.automatica_attiva ? '' : 'La regolazione automatica è disattivata: il tetto cambierebbe solo a mano.'}</div>
+    <div style="font-size:13px;margin-bottom:8px"><strong>${s.n_giorni}</strong> giorni registrati considerati: <strong>${s.n_corti}</strong> "lista troppo corta", <strong>${s.n_lunghi}</strong> "lista troppo lunga".</div>
+    ${(s.giorni || []).length ? `<div style="overflow-x:auto"><table><thead><tr><th>Giorno</th><th>Completato del piano iniziale</th><th>Riempimenti</th><th>Esito</th></tr></thead><tbody>${s.giorni.map(riga).join('')}</tbody></table></div>` : '<div style="font-size:12px;color:var(--muted)">Nessun giorno registrato: la simulazione diventa utile dopo qualche giornata con il piano attivo.</div>'}
+  </div>`;
+}
+
+// nota sui KPI che usano i tempi registrati: da quel giorno i tempi non si registrano più
+async function mostraNotaTempiKpi() {
+  const el = document.getElementById('kpi-nota-tempi');
+  if (!el) return;
+  const { data } = await sb.from('config_sistema').select('valore').eq('chiave', 'tempi_non_registrati_dal').maybeSingle();
+  if (!data?.valore) { el.hidden = true; return; }
+  const dt = new Date(data.valore + 'T12:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
+  el.innerHTML = `<i data-ic="avviso"></i> I KPI basati sui tempi registrati (tempi medi per fase, riferimento vs registrato) sono dati storici <strong>fino al ${dt}</strong>: da allora gli operatori segnano solo "Completata" e i tempi per fase non si registrano più.`;
+  el.hidden = false;
 }
 
 // ═══════════════════════════════════════════════
@@ -5386,6 +5711,14 @@ async function loadFaseMediaMinuti() {
   Object.entries(map).forEach(([id, vals]) => {
     faseMediaMinutiMap[parseInt(id)] = vals.reduce((a, b) => a + b, 0) / vals.length;
   });
+  // mango-v45: i tempi per fase non si registrano più. Le stime (ETA di dashboard e ordini) usano gli stessi tempi di riferimento del piano del giorno;
+  // la mediana storica resta solo per le fasi senza tempo di riferimento.
+  const { data: rif } = await sb.rpc('stime_fasi_riferimento', { p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (rif?.ok) {
+    Object.entries(rif.fasi || {}).forEach(([id, v]) => {
+      if (!v.senza_tempo || !faseMediaMinutiMap[parseInt(id)]) faseMediaMinutiMap[parseInt(id)] = Number(v.minuti_pezzo);
+    });
+  }
 }
 
 async function loadFaseExtraMediaMinuti() {
@@ -8795,6 +9128,7 @@ async function fetchAllRows(queryBuilderFn, pageSize = 1000) {
 }
 
 async function loadKpi() {
+  mostraNotaTempiKpi();
   loadConfrontoTempiRiferimento();   // indipendente dal periodo selezionato (ha la sua data)
   const giorni = parseInt(document.getElementById('kpi-periodo').value);
   const dal = giorni > 0 ? new Date(Date.now() - giorni * 86400000).toISOString() : null;
