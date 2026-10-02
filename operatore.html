@@ -197,6 +197,12 @@ textarea:focus { border-color: var(--accent); }
 #foto-cam-progress { display:none; color:var(--media-ink); text-align:center; padding:6px; background:var(--media-bar); font-size:13px; flex:0 0 auto; }
 
 /* ── DIALOG SPEDIZIONE UNICA (completamento fase di gruppo) ── */
+#foto-obb-dialog { display:none; position:fixed; inset:0; z-index:9500; background:var(--overlay-soft); align-items:center; justify-content:center; padding:20px; }
+#foto-obb-dialog.open { display:flex; }
+#foto-obb-dialog .box { background:var(--surface); border-radius:var(--radius-card); padding:20px; max-width:380px; width:100%; max-height:90vh; overflow:auto; }
+#foto-obb-dialog .box h4 { margin:0 0 8px; font-size:16px; }
+#foto-obb-dialog .box p { font-size:14px; color:var(--muted); margin:0 0 12px; }
+#foto-obb-dialog .conta { font-family:var(--font-mono); font-size:18px; font-weight:700; text-align:center; margin:6px 0 12px; }
 #gruppo-fase-dialog { display:none; position:fixed; inset:0; z-index:9500; background:var(--overlay-soft); align-items:center; justify-content:center; padding:20px; }
 #gruppo-fase-dialog.open { display:flex; }
 #gruppo-fase-dialog .box { background:var(--surface); border-radius:var(--radius-card); padding:20px; max-width:380px; width:100%; }
@@ -204,11 +210,35 @@ textarea:focus { border-color: var(--accent); }
 #gruppo-fase-dialog .box p { font-size:14px; color:var(--muted); margin:0 0 16px; }
 #gruppo-fase-dialog .box .btn { margin-bottom:8px; }
 
-/* ── ATTIVITÀ ── */
-.attivita-item { padding: 14px 16px; border-bottom: 1px solid var(--border); }
-.attivita-item:last-child { border-bottom: none; }
-.attivita-item .at-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
-.attivita-item .at-sub { font-size: 12px; color: var(--muted); }
+/* ── OGGI (piano del giorno) ── */
+.oggi-riepilogo { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 14px 16px; margin-bottom: 12px; }
+.oggi-riepilogo .oggi-data { font-size: 13px; color: var(--muted); text-transform: capitalize; }
+.oggi-riepilogo .oggi-num { font-size: 22px; font-weight: 700; margin: 2px 0 6px; }
+.oggi-riepilogo .oggi-num small { font-size: 14px; font-weight: 600; color: var(--muted); }
+.oggi-nota { font-size: 12px; color: var(--muted); background: var(--phase-bg); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; margin-bottom: 10px; }
+.oggi-gruppo { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); cursor: pointer; min-height: 56px; }
+.oggi-gruppo:last-child { border-bottom: none; }
+.oggi-gruppo:active { background: var(--phase-bg); }
+.oggi-gruppo .og-nome { flex: 1; font-size: 15px; font-weight: 600; }
+.oggi-gruppo .og-conta { font-family: var(--font-mono); font-size: 13px; color: var(--muted); white-space: nowrap; }
+.oggi-gruppo.finito .og-nome { color: var(--muted); }
+.oggi-gruppo.finito .og-conta { color: var(--ok-ink); }
+.oggi-voce { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.oggi-voce:last-child { border-bottom: none; }
+.oggi-voce.fatta { background: var(--ok-bg); }
+.oggi-voce.bloccata { opacity: .62; }
+.oggi-voce .ov-testa { display: flex; align-items: center; gap: 10px; }
+.oggi-voce .ov-titolo { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.oggi-voce .ov-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.oggi-voce .ov-azioni { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.oggi-voce .ov-azioni .btn { width: auto; flex: 1; min-width: 96px; padding: 10px 12px; font-size: 14px; }
+.oggi-voce .ov-azioni .btn.piccolo { flex: 0 0 auto; min-width: 48px; }
+.oggi-segno { font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--info-ink); background: var(--info-soft); border-radius: 20px; padding: 2px 7px; white-space: nowrap; }
+.oggi-pezzi { font-family: var(--font-mono); font-size: 14px; font-weight: 700; min-width: 64px; text-align: center; }
+.oggi-sel { width: 22px; height: 22px; flex-shrink: 0; cursor: pointer; }
+.oggi-barra { position: sticky; bottom: 8px; z-index: 5; display: flex; gap: 8px; align-items: center; background: var(--inverse); color: var(--on-inverse); padding: 10px 14px; border-radius: 12px; box-shadow: var(--shadow-bar); margin-top: 12px; }
+.oggi-barra strong { flex: 1; font-size: 13px; }
+.oggi-barra .btn { width: auto; padding: 9px 14px; font-size: 13px; }
 
 /* ── TOAST ── */
 .toast { position: fixed; bottom: 72px; left: 16px; right: 16px; z-index: 300; background: var(--inverse); color: var(--on-inverse); padding: 13px 18px; border-radius: 10px; font-size: 14px; opacity: 0; transform: translateY(6px); transition: all 0.25s; pointer-events: none; text-align: center; }
@@ -349,17 +379,6 @@ textarea:focus { border-color: var(--accent); }
           <div id="home-date" style="font-size:14px;font-weight:600;color:var(--muted);white-space:nowrap"></div>
         </div>
 
-        <!-- In corso -->
-        <div class="section-title">Le mie fasi in corso</div>
-        <div id="btn-batch-completa" style="display:none;flex-direction:column;gap:8px;margin-bottom:8px"></div>
-        <div id="btn-batch-fasi" style="display:none;flex-direction:row;gap:8px;margin-bottom:8px">
-          <button class="btn btn-secondary" style="flex:1;font-size:13px" onclick="pausaTutteFasi()"><i data-ic="pausa"></i> Pausa tutte</button>
-          <button class="btn btn-primary" style="flex:1;font-size:13px" onclick="riprendiTutteFasi()"><i data-ic="play"></i> Riprendi tutte</button>
-        </div>
-        <div class="card" id="mie-fasi-card">
-          <div class="empty-state"><div class="icon"><i data-ic="spunta"></i></div><p>Nessuna fase in corso</p></div>
-        </div>
-
         <!-- Ricerca ordini -->
         <div style="margin-bottom:8px;display:flex;align-items:center;gap:10px">
           <input type="text" id="ordini-search" placeholder="Cerca cliente o codice ordine…" oninput="filtraOrdini()"
@@ -403,13 +422,12 @@ textarea:focus { border-color: var(--accent); }
       </div>
     </div>
 
-    <!-- LE MIE ATTIVITÀ -->
-    <div class="screen" id="screen-attivita">
+    <!-- OGGI — il piano del giorno, uguale per tutta la squadra (nessun tempo, nessun dato per persona) -->
+    <div class="screen" id="screen-oggi">
       <div style="padding:16px">
-        <div class="page-title">Le mie attività</div>
-        <div class="section-title">Fasi completate</div>
-        <div class="card" id="attivita-list">
-          <div class="empty-state"><div class="icon"><i data-ic="grafico"></i></div><p>Caricamento…</p></div>
+        <div id="oggi-testa"></div>
+        <div id="oggi-corpo">
+          <div class="empty-state"><div class="icon"><i data-ic="appunti"></i></div><p>Caricamento…</p></div>
         </div>
       </div>
     </div>
@@ -480,9 +498,9 @@ textarea:focus { border-color: var(--accent); }
       <span class="tab-icon"><i data-ic="casa"></i></span>
       <span class="tab-label">Home</span>
     </div>
-    <div class="nav-tab" id="tab-attivita" onclick="showScreen('attivita')">
-      <span class="tab-icon"><i data-ic="grafico"></i></span>
-      <span class="tab-label">Attività</span>
+    <div class="nav-tab" id="tab-oggi" onclick="showScreen('oggi')">
+      <span class="tab-icon"><i data-ic="appunti"></i></span>
+      <span class="tab-label">Oggi</span>
     </div>
     <div class="nav-tab" id="tab-notifiche" onclick="showScreen('notifiche')" style="position:relative">
       <span class="tab-icon"><i data-ic="campana"></i></span>
@@ -506,6 +524,24 @@ textarea:focus { border-color: var(--accent); }
     <button type="button" id="foto-cam-btn-scatta" onclick="scattaFotoInterna()" aria-label="Scatta foto"></button>
   </div>
   <div id="foto-cam-progress"></div>
+</div>
+
+<!-- FOTO OBBLIGATORIE — passo prima del completamento (C.7) -->
+<div id="foto-obb-dialog" role="dialog" aria-modal="true" aria-labelledby="foto-obb-titolo">
+  <div class="box">
+    <h4 id="foto-obb-titolo"><i data-ic="fotocamera"></i> Foto obbligatorie</h4>
+    <p id="foto-obb-testo"></p>
+    <div class="conta" id="foto-obb-conta" aria-live="polite"></div>
+    <div class="foto-preview" id="foto-obb-anteprima"></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <label class="upload-btn" style="flex:1;width:auto;margin-bottom:0" onclick="document.getElementById('foto-obb-cam').click()"><i data-ic="fotocamera"></i> Scatta foto</label>
+      <label class="upload-btn" style="flex:1;width:auto;margin-bottom:0" onclick="document.getElementById('foto-obb-gal').click()"><i data-ic="immagine"></i> Allega da galleria</label>
+    </div>
+    <input type="file" id="foto-obb-cam" accept="image/*" capture="environment" style="display:none">
+    <input type="file" id="foto-obb-gal" accept="image/*" multiple style="display:none">
+    <button type="button" class="btn btn-ok" id="foto-obb-ok" disabled>✓ Conferma e completa</button>
+    <button type="button" class="btn btn-secondary" style="margin-top:8px" id="foto-obb-annulla">Annulla</button>
+  </div>
 </div>
 
 <!-- SPEDIZIONE UNICA — dialog completamento fase di gruppo -->
@@ -553,7 +589,6 @@ let fotocameraInternaAttiva = false;
 let currentOrdineId = null;
 let currentFaseDetId = null; // ordine_fasi.id
 let _faseDetCorrente = null; // riga ordine_fasi renderizzata da renderFaseDetail() — usata da completaFase()
-let faseMediaMinutiMap = {};
 let orarioConfig = null;   // solo per l'orario di fine turno (timer di aggiornamento); il calendario è in Calendario
 
 // ═══════════════════════════════════════════════
@@ -776,17 +811,19 @@ async function syncQueue() {
   for (const item of queue) {
     try {
       let ok = false;
-      if (item.type === 'prendi_fase') {
-        const { data } = await sb.rpc('prendi_in_carico_fase', { p_ordine_fase_id: item.ordFaseId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
+      if (item.type === 'completa_diretta') {
+        // completamento senza presa in carico (mango-v45); "già completata" conta come riuscita (coda riprodotta due volte)
+        const { data } = await sb.rpc('completa_fase_diretta', { p_operatore_id: currentUser.id, p_session_token: sessionToken,
+          p_ordine_fase_id: item.ordFaseId || null, p_fase_extra_id: item.faseExtraId || null, p_note_operatore: item.note || null, p_gruppo: !!item.gruppo });
         ok = data?.ok;
+      } else if (item.type === 'prendi_fase' || item.type === 'prendi_fase_extra') {
+        // azioni di una versione precedente rimaste in coda: la presa in carico non esiste più, si scartano
+        ok = true;
       } else if (item.type === 'completa_fase') {
-        const { data } = await sb.rpc('completa_fase', { p_ordine_fase_id: item.ordFaseId, p_operatore_id: currentUser.id, p_note_operatore: item.note, p_session_token: sessionToken });
-        ok = data?.ok;
-      } else if (item.type === 'prendi_fase_extra') {
-        const { data } = await sb.rpc('prendi_in_carico_extra', { p_fase_extra_id: item.faseExtraId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
+        const { data } = await sb.rpc('completa_fase_diretta', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_fase_id: item.ordFaseId, p_note_operatore: item.note || null });
         ok = data?.ok;
       } else if (item.type === 'completa_fase_extra') {
-        const { data } = await sb.rpc('completa_fase_extra', { p_fase_extra_id: item.faseExtraId, p_operatore_id: currentUser.id, p_note: item.note, p_session_token: sessionToken });
+        const { data } = await sb.rpc('completa_fase_diretta', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_fase_extra_id: item.faseExtraId, p_note_operatore: item.note || null });
         ok = data?.ok;
       }
       if (ok) await deleteQueued(item.id);
@@ -795,6 +832,7 @@ async function syncQueue() {
   }
   await loadOrdini();
   renderHome();
+  if (document.getElementById('screen-oggi')?.classList.contains('active')) loadOggi();
   updateQueueBadge();
   toast('Sincronizzazione completata', 'ok');
 }
@@ -931,14 +969,14 @@ async function showApp() {
   await loadCalendario();
   await loadOrdini();
   await loadNotificheOp();
-  await Promise.all([loadFaseMediaMinuti(), loadOrarioConfigOp()]);
+  await loadOrarioConfigOp();
   avviaPollingAggiornamenti();
   scheduleEndOfShiftRefreshOp();
   updateQueueBadge();
   syncQueue();
   initOneSignal();
   renderHome();
-  renderAttivita();
+  loadOggi();
 
   const params = new URLSearchParams(window.location.search);
   const deepOrdineId = params.get('ordine');
@@ -1070,8 +1108,9 @@ function avviaPollingAggiornamenti() {
       return;
     }
     await loadOrdini();
-    if (currentOrdineId) await renderOrdineDetail(currentOrdineId);
+    if (currentOrdineId && document.getElementById('screen-ordine')?.classList.contains('active')) await renderOrdineDetail(currentOrdineId);
     renderHome();
+    if (document.getElementById('screen-oggi')?.classList.contains('active')) await loadOggi();
     await loadNotificheOp();
     const screen = document.getElementById('screen-notifiche');
     if (screen?.classList.contains('active')) renderNotificheOp();
@@ -1089,9 +1128,10 @@ function showScreen(name) {
   document.getElementById('screen-' + name)?.classList.add('active');
   document.getElementById('tab-' + name)?.classList.add('active');
 
+  if (name !== 'oggi') oggiFermaAggiornamento();
   if (name === 'home') { loadOrdini().then(() => renderHome()); }
 
-  else if (name === 'attivita') renderAttivita();
+  else if (name === 'oggi') { oggiFaseAperta = null; oggiSelezione.clear(); oggiAvviaAggiornamento(); loadOggi(); }
   else if (name === 'notifiche') {
     // Richiedi permesso notifiche push (richiede gesto utente su iOS)
     richiediPermessoNotifiche();
@@ -1122,77 +1162,7 @@ function showScreen(name) {
 // HOME
 // ═══════════════════════════════════════════════
 async function renderHome() {
-  // Mie fasi in corso — ordini standard (ordine_fasi) + ordini extra (fasi_ordine_extra)
-  let mieFasi = [];
-  let mieFasiExtra = [];
-  if (isOnline) {
-    const [{ data: mieFasiResp }, { data: comeCollegaResp }] = await Promise.all([
-      sb.rpc('mie_fasi_in_corso', { p_operatore_id: currentUser.id, p_session_token: sessionToken }),
-      // Audit Round 3, punto 5: ora richiede p_session_token come tutte le altre RPC operatore.
-      sb.rpc('fasi_in_corso_come_collega', { p_operatore_id: currentUser.id, p_session_token: sessionToken }),
-    ]);
-    const primarie = mieFasiResp?.ok ? mieFasiResp.dati.primarie : [];
-    const extraInCorso = mieFasiResp?.ok ? mieFasiResp.dati.extra : [];
-    const comeCollega = comeCollegaResp?.ok ? comeCollegaResp.dati : [];
-    const ids = new Set((primarie || []).map(f => f.id));
-    const daCollega = (comeCollega || [])
-      .filter(j => !ids.has(j.id))
-      .map(j => ({ ...j, _collegaNome: j.collegaNome || null }));
-    mieFasi = [...(primarie || []), ...daCollega];
-    mieFasiExtra = extraInCorso || [];
-  }
-
-  const mieEl = document.getElementById('mie-fasi-card');
-  const tutteInCorso = [
-    ...mieFasi.map(f => ({
-      id: f.id, ordineId: f.ordine_id, nome: f.nome_custom || f.fasi?.nome || 'Fase',
-      faseId: f.fase_id || null,
-      cliente: f.ordini?.cliente || '', codice: f.ordini?.codice || '', stato: f.stato, isExtra: false,
-      collegaNome: f._collegaNome || null
-    })),
-    ...mieFasiExtra.map(f => ({
-      id: f.id, ordineId: f.ordine_id, nome: f.nome || 'Fase extra',
-      faseId: null,
-      cliente: f.ordini?.cliente || '', codice: f.ordini?.codice || '', stato: f.stato, isExtra: true,
-      collegaNome: null
-    }))
-  ];
-  const batchDiv = document.getElementById('btn-batch-fasi');
-  if (batchDiv) batchDiv.style.display = tutteInCorso.length > 1 ? 'flex' : 'none';
-
-  // Bottoni "Completa tutte le X" per gruppi >= 3 fasi uguali in_corso
-  const soloInCorso = tutteInCorso.filter(f => f.stato === 'in_corso');
-  const gruppi = {};
-  soloInCorso.forEach(f => {
-    const key = f.isExtra ? `extra:${f.nome}` : `std:${f.faseId}`;
-    if (!gruppi[key]) gruppi[key] = { nome: f.nome, faseId: f.faseId, isExtra: f.isExtra, count: 0 };
-    gruppi[key].count++;
-  });
-  const batchCompleta = Object.values(gruppi).filter(g => g.count >= 2);
-  const batchCompletaDiv = document.getElementById('btn-batch-completa');
-  if (batchCompletaDiv) {
-    batchCompletaDiv.style.display = batchCompleta.length ? 'flex' : 'none';
-    batchCompletaDiv.innerHTML = batchCompleta.map(g => `
-      <button class="btn btn-ok" style="flex:1;font-size:13px" onclick="completaTutteFasiUguali('${escapeJsAttr(g.isExtra ? g.nome : g.faseId)}', ${g.isExtra})">
-        ✓ Completa tutte le "${escapeHtml(g.nome)}" (${g.count})
-      </button>`).join('');
-  }
-
-  if (!tutteInCorso.length) {
-    mieEl.innerHTML = '<div class="empty-state"><div class="icon"><i data-ic="spunta"></i></div><p>Nessuna fase in corso</p></div>';
-  } else {
-    mieEl.innerHTML = tutteInCorso.map(f => `
-      <div class="card-row" onclick="${f.isExtra ? `openFaseExtraDetail('${f.id}','${f.ordineId}')` : `openFaseDetail('${f.id}','${f.ordineId}')`}">
-        <div class="row-main">
-          <div class="row-title">${escapeHtml(f.nome)}</div>
-          <div class="row-sub">${escapeHtml(f.cliente)} · ${escapeHtml(f.codice)}${f.collegaNome ? ` · con ${escapeHtml(f.collegaNome)}` : ''}${f.isExtra ? ' · <em>Ordine Extra</em>' : ''}</div>
-        </div>
-        <span class="badge badge-${f.stato}">${f.stato === 'in_attesa' ? 'In attesa' : f.stato === 'bloccata' ? '<i data-ic="avviso"></i> Bloccata' : 'In corso'}</span>
-        <span class="arrow">›</span>
-      </div>`).join('');
-  }
-
-  // Ordini disponibili (aperto + attesa_spedizione visibili in lista)
+  // Ordini con fasi disponibili (aperto + attesa_spedizione + sospeso in lista). Nessuna presa in carico, nessuna stima di tempo.
   const aperti = ordiniCache.filter(o => o.stato === 'aperto' || o.stato === 'attesa_spedizione' || o.stato === 'sospeso');
   let conDisp = new Set();
   let fasiPerOrdine = {};
@@ -1214,83 +1184,10 @@ async function renderHome() {
       }
     }
   }
-  // Calcola stima consegna per ogni ordine — coda per fase_id + critical path
+  // Solo la scadenza: "in ritardo" se la data è passata (nessuna stima di consegna: non ci sono più tempi registrati)
   const stimaPerOrdine = {};
-  const minutiGiorno = getMinutiGiorno();
-
-  // Coda per fase_id: stessa fase → stesso operatore la fa in sequenza; scadenza prima = priorità
-  const faseQueue = {};
-  aperti.forEach(o => {
-    const fasiRimanenti = (fasiPerOrdine[o.id] || []).filter(f => f.stato === 'disponibile' || f.stato === 'in_corso');
-    const q = o.quantita || 1;
-    const scad = o.scadenza || '9999-12-31';
-    fasiRimanenti.forEach(f => {
-      const fase_id = parseInt(f.fase_id);
-      const media = faseMediaMinutiMap[fase_id];
-      if (!media) return;
-      const minuti = (f.stato === 'in_corso' ? media * Calendario.costante('fattore_fase_in_corso') : media) * q;
-      if (!faseQueue[fase_id]) faseQueue[fase_id] = [];
-      faseQueue[fase_id].push({ ordine_id: o.id, minuti, scad });
-    });
-  });
-  Object.values(faseQueue).forEach(q => q.sort((a, b) => a.scad.localeCompare(b.scad)));
-
-  // Mappa fase_id -> dipendenze reali (fase_dipendenze, caricate in loadFasi() dentro `fasi`)
-  const dipendenzeMap = {};
-  fasi.forEach(f => { dipendenzeMap[f.id] = f.dipendenze || []; });
-
-  // ETA = critical path: somma (attesa in coda + tempo proprio) lungo le dipendenze reali tra
-  // le fasi rimanenti dello stesso ordine — non un massimo globale su tutte le fasi (un pezzo
-  // deve passarle in sequenza se dipendono l'una dall'altra). Fasi senza una dipendenza reale
-  // tra loro restano parallele: si prende il massimo solo tra i "rami" che confluiscono.
-  aperti.forEach(o => {
-    const fasiRimanenti = (fasiPerOrdine[o.id] || []).filter(f => f.stato === 'disponibile' || f.stato === 'in_corso');
-    const idsRimanenti = new Set(fasiRimanenti.map(f => parseInt(f.fase_id)));
-
-    const costo = {};
-    fasiRimanenti.forEach(f => {
-      const fase_id = parseInt(f.fase_id);
-      const queue = faseQueue[fase_id];
-      if (!queue) return;
-      const myPos = queue.findIndex(item => item.ordine_id === o.id);
-      if (myPos < 0) return;
-      const attesa = queue.slice(0, myPos).reduce((s, i) => s + i.minuti, 0);
-      costo[fase_id] = attesa + queue[myPos].minuti;
-    });
-
-    // Finish-time per fase = costo proprio + il massimo tra le dipendenze dirette ancora
-    // rimanenti (0 se già completata/non applicabile). Guardia anti-ciclo difensiva.
-    const finish = {};
-    const inCorsoCalcolo = new Set();
-    function calcolaFinish(fid) {
-      if (finish[fid] !== undefined) return finish[fid];
-      if (!(fid in costo)) return 0;
-      if (inCorsoCalcolo.has(fid)) return 0;
-      inCorsoCalcolo.add(fid);
-      const preds = (dipendenzeMap[fid] || []).filter(d => idsRimanenti.has(d));
-      const maxPred = preds.reduce((m, d) => Math.max(m, calcolaFinish(d)), 0);
-      inCorsoCalcolo.delete(fid);
-      finish[fid] = maxPred + costo[fid];
-      return finish[fid];
-    }
-
-    let maxMinuti = 0;
-    fasiRimanenti.forEach(f => {
-      maxMinuti = Math.max(maxMinuti, calcolaFinish(parseInt(f.fase_id)));
-    });
-
-    const oggi = Calendario.oggiIso();
-    const isInRitardo = !!(o.scadenza && oggi > o.scadenza);
-    if (maxMinuti > 0) {
-      const giorni = Math.ceil(maxMinuti / minutiGiorno);
-      const dataStimata = addGiorniLavorativi(new Date(), giorni);
-      const stimaStr = dataStimata.toISOString().split('T')[0];
-      const isRischio = !!(o.scadenza && stimaStr > o.scadenza);
-      stimaPerOrdine[o.id] = { dataStimata, stimaStr, isRischio, isInRitardo };
-    } else if (o.scadenza) {
-      stimaPerOrdine[o.id] = { isInRitardo, isRischio: false };
-    }
-  });
+  const oggiIso = Calendario.oggiIso();
+  aperti.forEach(o => { if (o.scadenza && oggiIso > o.scadenza) stimaPerOrdine[o.id] = { isInRitardo: true }; });
   window._ordiniAperti = aperti;
   window._conDisp = conDisp;
   window._fasiPerOrdine = fasiPerOrdine;
@@ -1412,12 +1309,11 @@ function filtraOrdini() {
   const fasiPerOrdine = window._fasiPerOrdine || {};
   const stimaPerOrdine = window._stimaPerOrdine || {};
 
-  // Ordina: attesa_spedizione prima, poi in ritardo > a rischio stima > scadenza vicina > resto
+  // Ordina: attesa_spedizione prima, poi in ritardo > scadenza vicina > resto
   const urgenzaScore = (o) => {
     if (o.stato === 'attesa_spedizione') return -1;
     const s = stimaPerOrdine[o.id];
     if (s?.isInRitardo) return 0;
-    if (s?.isRischio) return 1;
     const oggi = new Date(); oggi.setHours(0,0,0,0);
     if (o.scadenza) return 2 + Math.max(0, Math.floor((new Date(o.scadenza) - oggi) / 86400000));
     return 999;
@@ -1464,16 +1360,7 @@ function filtraOrdini() {
         ? (fasiPerOrdine[o.id] || []).some(f => f.stato === 'disponibile')
         : conDisp.has(o.id));
     let stimaBadge = '';
-    if (!isAttesa && !isSosp && stima?.stimaStr) {
-      const stimaFmt = stima.dataStimata.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit' });
-      if (stima.isInRitardo) {
-        stimaBadge = `<span style="font-size:11px;font-weight:700;color:var(--alert-strong)"><i data-ic="punto"></i> IN RITARDO · stima: ${stimaFmt}</span>`;
-      } else if (stima.isRischio) {
-        stimaBadge = `<span style="font-size:11px;font-weight:700;color:var(--warn-ink-2)"><i data-ic="punto"></i> A RISCHIO · stima: ${stimaFmt}</span>`;
-      } else {
-        stimaBadge = `<span style="font-size:11px;color:var(--muted)"><i data-ic="punto" style="color:var(--ok)"></i> stima: ${stimaFmt}</span>`;
-      }
-    } else if (!isAttesa && !isSosp && stima?.isInRitardo) {
+    if (!isAttesa && !isSosp && stima?.isInRitardo) {
       stimaBadge = `<span style="font-size:11px;font-weight:700;color:var(--alert-strong)"><i data-ic="punto"></i> IN RITARDO</span>`;
     }
     const fratelliGruppo = codiciFratelliGruppo(o);
@@ -1537,7 +1424,6 @@ async function renderOrdineDetail(ordineId) {
     <div class="meta-item"><label>Priorità</label>${Etichette.badgePriorita(ordine.priorita)}</div>
     <div class="meta-item"><label>Stato</label><span class="badge badge-${ordine.stato}">${Etichette.statoOrdine(ordine.stato)}</span></div>
     <div class="meta-item"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}${ordine.scadenza ? ` · Settimana ${settimanaIsoDaData(ordine.scadenza)}` : ''}</span></div>
-    <div class="meta-item" id="ord-stima-item"><label>Consegna stimata</label><span id="ord-stima-val" style="color:var(--muted)">—</span></div>
     ${fratelliGruppoDet.length ? `<div class="meta-item" style="grid-column:1/-1"><label><i data-ic="pacco"></i> Spedizione unica</label><span style="color:var(--accent);font-weight:600">Insieme a ${escapeHtml(fratelliGruppoDet.join(', '))}</span></div>` : ''}
     ${ordine.note_generali ? `<div class="meta-item" style="grid-column:1/-1"><label>Note</label><span class="nota-ordine-testo">${escapeHtml(ordine.note_generali)}</span></div>` : ''}
   `;
@@ -1571,13 +1457,11 @@ async function renderOrdineDetail(ordineId) {
       fasiExt = await cacheGet('fasi-extra-' + ordineId) || [];
     }
     el.innerHTML = fasiExt.map(f => {
-      const opNome = f['users'] ? `${escapeHtml(f['users'].nome)} ${escapeHtml(f['users'].cognome)}` : '';
-      const isMia = f.operatore_id === currentUser.id;
       return `<div class="fase-row ${f.stato}" onclick="openFaseExtraDetail('${f.id}', '${ordineId}')">
-        <div class="fase-num-circle">${f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '<i data-ic="play"></i>' : f.numero}</div>
+        <div class="fase-num-circle">${f.stato === 'completata' ? '✓' : f.numero}</div>
         <div class="fase-info">
           <div class="fn">${escapeHtml(f.nome)}</div>
-          <div class="fo">${opNome ? opNome + (isMia ? ' (tu)' : '') : 'Disponibile'}</div>
+          <div class="fo">${f.stato === 'completata' ? 'Completata' : 'Da fare'}</div>
         </div>
         <span class="badge badge-${f.stato}" style="font-size:10px">${statoFaseLabel(f.stato)}</span>
         <span class="arrow">›</span>
@@ -1599,30 +1483,6 @@ async function renderOrdineDetail(ordineId) {
       ordFasi = (await cacheGet('fasi-' + ordineId) || []).filter(f => f.stato !== 'non_applicabile');
     }
 
-    // Calcola e mostra stima consegna
-    const stimaEl = document.getElementById('ord-stima-val');
-    if (stimaEl) {
-      let minRim = 0;
-      ordFasi.forEach(f => {
-        if (f.stato === 'completata') return;
-        const media = faseMediaMinutiMap[parseInt(f.fase_id)];
-        if (media) minRim += f.stato === 'in_corso' ? media * Calendario.costante('fattore_fase_in_corso') : media;
-      });
-      if (minRim > 0) {
-        const quantita = ordine.quantita || 1;
-        const giorni = Math.ceil(minRim * quantita / getMinutiGiorno());
-        const dataStimata = addGiorniLavorativi(new Date(), giorni);
-        const stimaStr = dataStimata.toISOString().split('T')[0];
-        const stimaFmt = dataStimata.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit', year:'numeric' });
-        const isRischio = ordine.scadenza && stimaStr > ordine.scadenza;
-        const isInRitardo = ordine.scadenza && Calendario.oggiIso() > ordine.scadenza;
-        stimaEl.textContent = stimaFmt + (isInRitardo ? ' ⚠️ IN RITARDO' : isRischio ? ' ⚠️ a rischio' : ' ✓');
-        stimaEl.style.color = isInRitardo ? 'var(--alert-strong)' : isRischio ? 'var(--warn-ink-2)' : 'var(--ok-strong)';
-        stimaEl.style.fontWeight = (isInRitardo || isRischio) ? '700' : '400';
-      } else {
-        stimaEl.textContent = 'Dati insufficienti';
-      }
-    }
 
     const struttura = ordine?.struttura || '';
 
@@ -1657,8 +1517,6 @@ async function renderOrdineDetail(ordineId) {
     el.innerHTML = ordFasi.map(f => {
       const isCustom = !f.fase_id;
       const nomeFase = escapeHtml(isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id));
-      const opNome = f['users'] ? `${escapeHtml(f['users'].nome)} ${escapeHtml(f['users'].cognome)}` : '';
-      const isMia = f.operatore_id === currentUser.id;
       const est = !isCustom && isEsterna(f.fase_id);
       const cnc = !isCustom && isCNC(f.fase_id);
       // Calcola se fase è bloccata da dipendenze non soddisfatte (tiene conto della soglia quantità)
@@ -1668,7 +1526,7 @@ async function renderOrdineDetail(ordineId) {
           const depOf = ordFasi.find(of => of.fase_id === depId);
           return depOf && _depNonSoddisfatta(depId, depOf);
         });
-      const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '<i data-ic="play"></i>' : f.stato === 'in_attesa' ? '<i data-ic="pausa"></i>' : isBloccata ? '<i data-ic="lucchetto"></i>' : isCustom ? '★' : f.fase_id;
+      const icon = f.stato === 'completata' ? '✓' : (f.stato === 'in_attesa' && est) ? '<i data-ic="pausa"></i>' : isBloccata ? '<i data-ic="lucchetto"></i>' : isCustom ? '★' : f.fase_id;
       const extraBadges = [
         cnc ? '<span style="font-size:9px;font-weight:700;background:var(--violet);color:var(--on-violet);padding:1px 4px;border-radius:3px;margin-left:4px">CNC</span>' : '',
         est ? '<span style="font-size:9px;font-weight:700;background:var(--ext);color:var(--on-ext);padding:1px 4px;border-radius:3px;margin-left:4px">EXT</span>' : ''
@@ -1679,9 +1537,9 @@ async function renderOrdineDetail(ordineId) {
           .filter(depId => { const d = ordFasi.find(of => of.fase_id === depId); return d && _depNonSoddisfatta(depId, d); })
           .map(depId => { const fm = fasi.find(fm => fm.id === depId); return escapeHtml(fm ? fm.nome : depId); });
         subLabel = 'Attende: ' + blockantiNomi.join(', ');
-      } else if (opNome) subLabel = opNome + (isMia ? ' (tu)' : '');
-      else if (est) subLabel = 'Fase esterna';
-      else subLabel = 'Disponibile';
+      } else if (f.stato === 'completata') subLabel = 'Completata';
+      else if (est) subLabel = f.stato === 'in_attesa' ? 'In attesa dal fornitore' : 'Fase esterna';
+      else subLabel = 'Da fare';
       return `<div class="fase-row ${f.stato}" onclick="openFaseDetail('${f.id}', '${ordineId}')">
         <div class="fase-num-circle" style="${isBloccata ? 'background:var(--violet-soft);color:var(--violet);font-size:14px' : ''}">${icon}</div>
         <div class="fase-info">
@@ -1702,14 +1560,12 @@ async function renderOrdineDetail(ordineId) {
       el.innerHTML += `<div style="margin-top:14px;padding-top:10px;border-top:2px dashed var(--border)">
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:6px">Lavorazioni aggiuntive</div>
         ${fasiExtStd.map(f => {
-          const opNome = f['users'] ? `${escapeHtml(f['users'].nome)} ${escapeHtml(f['users'].cognome)}` : '';
-          const isMia = f.operatore_id === currentUser.id;
-          const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '<i data-ic="play"></i>' : f.stato === 'in_attesa' ? '<i data-ic="pausa"></i>' : '★';
+          const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_attesa' ? '<i data-ic="pausa"></i>' : '★';
           return `<div class="fase-row ${f.stato}" onclick="openFaseExtraDetail('${f.id}', '${ordineId}')">
             <div class="fase-num-circle" style="background:var(--accent);color:var(--on-accent)">${icon}</div>
             <div class="fase-info">
               <div class="fn">${escapeHtml(f.nome)}<span style="font-size:9px;font-weight:700;background:var(--warn-ink);color:var(--on-warn);padding:1px 4px;border-radius:3px;margin-left:5px">AGG</span></div>
-              <div class="fo">${opNome ? opNome + (isMia ? ' (tu)' : '') : 'Disponibile'}</div>
+              <div class="fo">${f.stato === 'completata' ? 'Completata' : 'Da fare'}</div>
             </div>
             <span class="badge badge-${f.stato}" style="font-size:10px">${statoFaseLabel(f.stato)}</span>
             <span class="arrow">›</span>
@@ -1735,11 +1591,10 @@ async function openFaseExtraDetail(faseExtraId, ordineId) {
 }
 
 async function renderFaseExtraDetail(faseExtraId, ordineId) {
-  let f, opMulti = [];
+  let f;
   if (isOnline) {
     const { data: detResp } = await sb.rpc('dettaglio_fase_extra_completa', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_fase_extra_id: faseExtraId });
     f = detResp?.ok ? detResp.dati.fase : null;
-    opMulti = detResp?.ok ? detResp.dati.collaboratori : [];
   } else {
     const cached = await cacheGet('fasi-extra-' + ordineId) || [];
     f = cached.find(x => x.id === faseExtraId);
@@ -1747,7 +1602,6 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
   if (!f) return;
 
   const ordine = ordiniCache.find(o => o.id === ordineId);
-  const isMia = opMulti.some(o => o.operatore_id === currentUser.id) || f.operatore_id === currentUser.id;
   const sospeso = ordine?.stato === 'sospeso';
 
   const banner = document.getElementById('fase-ordine-banner');
@@ -1767,23 +1621,6 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
   if (f.note_responsabile) bodyHtml += `<div class="note-box"><strong>Note Responsabile</strong>${escapeHtml(f.note_responsabile)}</div>`;
   if (f.note_operatore) bodyHtml += `<div class="note-box"><strong>Note Operatore</strong>${escapeHtml(f.note_operatore)}</div>`;
 
-  // Lista operatori sulla fase
-  if (opMulti.length > 0) {
-    const righe = opMulti.map(o => {
-      const n = `${o.users?.nome || ''} ${o.users?.cognome || ''}`.trim();
-      const sei_tu = o.operatore_id === currentUser.id;
-      const puoiRimuovere = isMia && !sei_tu && f.stato === 'in_corso';
-      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0">
-        <span>${sei_tu ? `<strong>${escapeHtml(n)} (tu)</strong>` : escapeHtml(n)}</span>
-        ${puoiRimuovere ? `<button class="btn btn-alert" style="padding:3px 10px;font-size:12px" onclick="rimuoviCollegaExtra('${faseExtraId}','${ordineId}','${o.operatore_id}','${escapeJsAttr(n)}')">Rimuovi</button>` : ''}
-      </div>`;
-    }).join('');
-    bodyHtml += `<div class="note-box" style="border-color:var(--accent)"><strong>Operatori su questa fase</strong>${righe}</div>`;
-  }
-
-  if (f.iniziata_il) bodyHtml += `<div class="meta-item" style="margin-bottom:10px"><label>Iniziata</label><span>${formatDateTime(f.iniziata_il)}</span></div>`;
-  if (f.completata_il) bodyHtml += `<div class="meta-item" style="margin-bottom:10px"><label>Completata</label><span>${formatDateTime(f.completata_il)}</span></div>`;
-
   const tipoGestioneExtra = f.tipo_gestione || 'standard';
 
   if (currentUser.ruolo === 'sola_lettura') {
@@ -1794,14 +1631,14 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
     if (f.stato === 'disponibile') {
       bodyHtml += `<div class="azione-box" style="border-color:var(--violet-line-2)">
         <h4><i data-ic="invio"></i> Spedisci al fornitore</h4>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Quando spedisci il pezzo al fornitore esterno, registra l'uscita. Il tempo sarà misurato fino alla ricezione.</p>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Quando spedisci il pezzo al fornitore esterno, registra l'uscita.</p>
         <button class="btn btn-primary" onclick="segnaSpedizioneExtra('${faseExtraId}','${ordineId}')"><i data-ic="invio"></i> Segna come spedito</button>
       </div>`;
     } else if (f.stato === 'in_attesa') {
-      const spedIl = f.spedita_il ? `<div class="meta-item" style="margin-bottom:10px"><label>Spedito il</label><span>${formatDateTime(f.spedita_il)}</span></div>` : '';
+      const spedIl = f.spedita_il ? `<div class="meta-item" style="margin-bottom:10px"><label>Spedito il</label><span>${formatDate(f.spedita_il)}</span></div>` : '';
       bodyHtml += `${spedIl}<div class="azione-box" style="border-color:var(--ok-line)">
         <h4><i data-ic="pacco"></i> Pezzo rientrato?</h4>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Il pezzo è tornato dal fornitore? Conferma la ricezione per chiudere la fase e registrare il tempo di attesa.</p>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Il pezzo è tornato dal fornitore? Conferma la ricezione per chiudere la fase.</p>
         <button class="btn btn-ok" onclick="confermaRicezioneExtra('${faseExtraId}','${ordineId}')"><i data-ic="spunta"></i> Conferma ricezione pezzo</button>
       </div>`;
     } else if (f.stato === 'completata') {
@@ -1811,47 +1648,6 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
         <button class="btn btn-secondary" onclick="riapriFaseExtraOp('${faseExtraId}','${ordineId}')">↩ Riapri fase</button>
       </div>`;
     }
-  } else if (f.stato === 'disponibile') {
-    bodyHtml += `<div class="azione-box"><h4>Prendi in carico questa fase</h4>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Puoi lavorarci insieme a un collega — entrambi dovete prendere in carico.</p>
-      <button class="btn btn-primary" onclick="prendiInCaricoExtra('${faseExtraId}','${ordineId}')"><i data-ic="play"></i> Prendi in carico</button></div>`;
-  } else if (f.stato === 'in_corso' && isMia) {
-    const giaSulla = new Set(opMulti.map(o => o.operatore_id));
-    giaSulla.add(currentUser.id);
-    let opzioniColleghi = '';
-    if (isOnline) {
-      const { data: collResp } = await sb.rpc('colleghi_disponibili', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
-      const tuttiOp = collResp?.ok ? collResp.dati : [];
-      const disponibili = (tuttiOp || []).filter(u => !giaSulla.has(u.id));
-      if (disponibili.length) {
-        const chips = disponibili.map(u =>
-          `<button class="btn btn-secondary" style="padding:8px 14px;font-size:13px" onclick="aggiungiCollegaExtra('${faseExtraId}','${ordineId}','${u.id}','${escapeJsAttr(u.nome + ' ' + u.cognome)}')">${escapeHtml(u.nome)} ${escapeHtml(u.cognome)}</button>`
-        ).join('');
-        opzioniColleghi = `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);display:block;margin-bottom:8px">Aggiungi collega</label>
-          <div style="display:flex;flex-wrap:wrap;gap:8px">${chips}</div>
-        </div>`;
-      }
-    }
-    bodyHtml += `<div class="azione-box"><h4>Completa fase</h4>
-      <div class="form-group" style="margin-bottom:12px"><label>Le tue note (opzionale)</label>
-        <textarea id="note-op-extra" placeholder="Scrivi eventuali note…">${escapeHtml(f.note_operatore || '')}</textarea></div>
-      ${opzioniColleghi}
-      <button class="btn btn-ok" style="margin-top:14px" onclick="completaFaseExtra('${faseExtraId}','${ordineId}')">✓ Segna come completata</button>
-      <button class="btn btn-alert" style="margin-top:10px;font-size:12px;opacity:0.8" onclick="annullaPresaInCaricoExtra('${faseExtraId}','${ordineId}')">✕ Annulla presa in carico</button></div>`;
-  } else if (f.stato === 'in_corso' && !isMia) {
-    const altriNomi = opMulti.filter(o => o.operatore_id !== currentUser.id)
-      .map(o => `${o.users?.nome || ''} ${o.users?.cognome || ''}`.trim()).join(', ')
-      || (f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '');
-    bodyHtml += `
-      <div class="note-box" style="border:1px solid var(--info-line)">
-        <strong>In corso</strong>${altriNomi ? `In carico a: ${escapeHtml(altriNomi)}` : 'Fase in corso.'}
-      </div>
-      <div class="azione-box" style="margin-top:12px">
-        <h4>Unisciti a questa fase</h4>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Puoi affiancare ${escapeHtml(altriNomi || 'il collega')} senza togliergli la fase.</p>
-        <button class="btn btn-primary" onclick="uniscitiAFaseExtra('${faseExtraId}','${ordineId}')">+ Unisciti</button>
-      </div>`;
   } else if (f.stato === 'completata' && !sospeso) {
     bodyHtml += `
       <div class="azione-box" style="border-color:var(--border);margin-top:12px">
@@ -1859,45 +1655,15 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
         <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Hai ancora lavoro da fare su questa fase? Riaprila per continuare.</p>
         <button class="btn btn-secondary" onclick="riapriFaseExtraOp('${faseExtraId}','${ordineId}')">↩ Riapri fase</button>
       </div>`;
+  } else if (['disponibile', 'in_corso', 'in_attesa'].includes(f.stato)) {
+    // nessuna presa in carico: la fase si segna direttamente come completata
+    bodyHtml += `<div class="azione-box"><h4>Completa fase</h4>
+      <div class="form-group" style="margin-bottom:12px"><label>Le tue note (opzionale)</label>
+        <textarea id="note-op-extra" placeholder="Scrivi eventuali note…">${escapeHtml(f.note_operatore || '')}</textarea></div>
+      <button class="btn btn-ok" onclick="completaFaseExtra('${faseExtraId}','${ordineId}')">✓ Completata</button></div>`;
   }
 
   document.getElementById('fase-det-body').innerHTML = bodyHtml;
-}
-
-async function prendiInCaricoExtra(faseExtraId, ordineId) {
-  if (isOnline) {
-    const { data, error } = await sb.rpc('prendi_in_carico_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-    if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
-  } else {
-    await queueAction({ type: 'prendi_fase_extra', faseExtraId, ordineId });
-    await updateQueueBadge();
-  }
-  toast('Fase presa in carico!', 'ok');
-  await renderFaseExtraDetail(faseExtraId, ordineId);
-  renderHome();
-}
-
-async function uniscitiAFaseExtra(faseExtraId, ordineId) {
-  const { data, error } = await sb.rpc('unisciti_fase_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
-  toast('Ti sei unito alla fase!', 'ok');
-  await renderFaseExtraDetail(faseExtraId, ordineId);
-  renderHome();
-}
-
-async function aggiungiCollegaExtra(faseExtraId, ordineId, opId, opNome) {
-  const { data, error } = await sb.rpc('aggiungi_collega_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: opId, p_session_token: sessionToken });
-  if (error || !data?.ok) { toast('Errore', 'err'); return; }
-  toast(`${opNome} aggiunto alla fase`, 'ok');
-  await renderFaseExtraDetail(faseExtraId, ordineId);
-}
-
-async function rimuoviCollegaExtra(faseExtraId, ordineId, opId, opNome) {
-  if (!confirm(`Rimuovere ${opNome} da questa fase?`)) return;
-  const { data, error } = await sb.rpc('rimuovi_collega_extra', { p_fase_extra_id: faseExtraId, p_collega_id: opId, p_richiedente_id: currentUser.id, p_session_token: sessionToken });
-  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
-  toast(`${opNome} rimosso`, 'ok');
-  await renderFaseExtraDetail(faseExtraId, ordineId);
 }
 
 async function riapriFaseOp(ordFaseId, ordineId) {
@@ -1967,22 +1733,13 @@ async function confermaRicezioneExtra(faseExtraId, ordineId) {
   renderHome();
 }
 
-async function annullaPresaInCaricoExtra(faseExtraId, ordineId) {
-  const { data, error } = await sb.rpc('annulla_presa_in_carico_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-  if (error || !data?.ok) { toast('Errore annullamento', 'err'); return; }
-  toast('Presa in carico annullata', 'ok');
-  await renderHome();
-  await renderOrdineDetail(ordineId);
-  showScreen('ordine');
-}
-
 async function completaFaseExtra(faseExtraId, ordineId) {
   const note = document.getElementById('note-op-extra')?.value.trim() || null;
   if (isOnline) {
-    const { data, error } = await sb.rpc('completa_fase_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id, p_note: note, p_session_token: sessionToken });
-    if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
+    const { data, error } = await sb.rpc('completa_fase_diretta', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_fase_extra_id: faseExtraId, p_note_operatore: note });
+    if (error || !data?.ok) { toast(erroreCompletamento(data, error), 'err'); return; }
   } else {
-    await queueAction({ type: 'completa_fase_extra', faseExtraId, note });
+    await queueAction({ type: 'completa_diretta', faseExtraId, note });
     await updateQueueBadge();
   }
   toast('Fase completata!', 'ok');
@@ -2007,11 +1764,10 @@ async function openFaseDetail(ordFaseId, ordineId) {
 
 async function renderFaseDetail(ordFaseId, ordineId) {
   _fotoAccumulate = []; // reset accumulo foto quando si apre una fase diversa
-  let f, opMulti = [];
+  let f;
   if (isOnline) {
     const { data: detResp } = await sb.rpc('dettaglio_fase_completa', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ord_fase_id: ordFaseId });
     f = detResp?.ok ? detResp.dati.fase : null;
-    opMulti = detResp?.ok ? detResp.dati.collaboratori : [];
   } else {
     const cached = await cacheGet('fasi-' + ordineId) || [];
     f = cached.find(x => x.id === ordFaseId);
@@ -2024,9 +1780,6 @@ async function renderFaseDetail(ordFaseId, ordineId) {
   const isCustom = !f.fase_id;
   const nomeFase = isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id);
   const numLabel = isCustom ? '★' : f.fase_id;
-
-  // isMia = sono nella junction table O sono il primary operatore_id
-  const isMia = opMulti.some(o => o.operatore_id === currentUser.id) || f.operatore_id === currentUser.id;
 
   const banner = document.getElementById('fase-ordine-banner');
   if (ordine && banner) {
@@ -2050,35 +1803,16 @@ async function renderFaseDetail(ordFaseId, ordineId) {
     bodyHtml += `<div class="note-box"><strong>Note Operatore</strong>${escapeHtml(f.note_operatore)}</div>`;
   }
 
-  // Lista operatori
-  if (opMulti.length > 0) {
-    const righe = opMulti.map(o => {
-      const n = `${o.users?.nome || ''} ${o.users?.cognome || ''}`.trim();
-      const sei_tu = o.operatore_id === currentUser.id;
-      const puoiRimuovere = isMia && !sei_tu && f.stato === 'in_corso';
-      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0">
-        <span>${sei_tu ? `<strong>${escapeHtml(n)} (tu)</strong>` : escapeHtml(n)}</span>
-        ${puoiRimuovere ? `<button class="btn btn-alert" style="padding:3px 10px;font-size:12px" onclick="rimuoviCollega('${ordFaseId}','${ordineId}','${o.operatore_id}','${escapeJsAttr(n)}')">Rimuovi</button>` : ''}
-      </div>`;
-    }).join('');
-    bodyHtml += `<div class="note-box" style="border-color:var(--accent)"><strong>Operatori su questa fase</strong>${righe}</div>`;
-  } else if (f['users']) {
-    const n = `${f['users'].nome} ${f['users'].cognome}`;
-    bodyHtml += `<div class="note-box"><strong>In carico a</strong>${escapeHtml(n)}</div>`;
-  }
-
-  if (f.iniziata_il) bodyHtml += `<div class="meta-item" style="margin-bottom:10px"><label>Iniziata</label><span>${formatDateTime(f.iniziata_il)}</span></div>`;
-  if (f.completata_il) bodyHtml += `<div class="meta-item" style="margin-bottom:10px"><label>Completata</label><span>${formatDateTime(f.completata_il)}</span></div>`;
-
   // Placeholder foto — popolato dopo inject DOM (fetch reale da DB)
   bodyHtml += `<div id="foto-fase-container"></div>`;
 
   const sospeso = ordine?.stato === 'sospeso';
   const solaLettura = currentUser.ruolo === 'sola_lettura';
+  const tipoGestione = f.fasi?.tipo_gestione || 'standard';
 
   // Check dipendenze bloccanti
   let _depBloccanti = [];
-  if (!isCustom && f.stato === 'disponibile' && isOnline) {
+  if (!isCustom && ['disponibile', 'in_corso', 'in_attesa'].includes(f.stato) && tipoGestione === 'standard' && isOnline) {
     const _faseMaster = fasi.find(fm => fm.id === f.fase_id);
     if (_faseMaster && (_faseMaster.dipendenze || []).length > 0) {
       const _depIds = _faseMaster.dipendenze;
@@ -2090,60 +1824,56 @@ async function renderFaseDetail(ordFaseId, ordineId) {
     }
   }
 
-  // AZIONE BOX
+  // AZIONE BOX — gli operatori non prendono in carico, non mettono in pausa, non riprendono: segnano solo "Completata"
   if (solaLettura) {
     // nessuna azione
-  } else if (f.stato === 'disponibile' && !sospeso && _depBloccanti.length > 0) {
+  } else if (f.stato === 'disponibile' && !sospeso && tipoGestione === 'spedizione_esterna') {
+    bodyHtml += `
+      <div class="azione-box" style="border-color:var(--violet-line-2)">
+        <h4><i data-ic="invio"></i> Spedisci al fornitore</h4>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Quando spedisci il pezzo al fornitore, registra l'uscita.</p>
+        <button class="btn btn-primary" onclick="segnaSpedizioneFase('${ordFaseId}','${ordineId}')"><i data-ic="invio"></i> Segna come spedito</button>
+      </div>`;
+  } else if (f.stato === 'in_attesa' && !sospeso && tipoGestione === 'conferma_ricezione') {
+    bodyHtml += `
+      <div class="azione-box" style="border-color:var(--ok-line)">
+        <h4><i data-ic="pacco"></i> Attesa materiale esterno</h4>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Il materiale è arrivato? Conferma la ricezione per chiudere questa fase.</p>
+        <button class="btn btn-ok" onclick="confermaRicezioneFase('${ordFaseId}','${ordineId}')"><i data-ic="spunta"></i> Conferma ricezione</button>
+      </div>`;
+  } else if (f.stato === 'in_attesa' && !sospeso && tipoGestione === 'spedizione_esterna') {
+    const spedIl = f.spedita_il ? `<div class="meta-item" style="margin-bottom:10px"><label>Spedito il</label><span>${formatDate(f.spedita_il)}</span></div>` : '';
+    bodyHtml += `${spedIl}
+      <div class="azione-box" style="border-color:var(--ok-line)">
+        <h4><i data-ic="pacco"></i> Pezzo rientrato dal fornitore?</h4>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Il pezzo è tornato? Conferma la ricezione per chiudere la fase.</p>
+        <button class="btn btn-ok" onclick="confermaRicezioneFase('${ordFaseId}','${ordineId}')"><i data-ic="spunta"></i> Conferma ricezione pezzo</button>
+      </div>`;
+  } else if (['disponibile', 'in_corso', 'in_attesa'].includes(f.stato) && !sospeso && _depBloccanti.length > 0) {
     bodyHtml += `
       <div class="azione-box" style="border-color:var(--violet-line);background:var(--violet-bg)">
         <h4 style="color:var(--violet)"><i data-ic="lucchetto"></i> Fase bloccata</h4>
         <p style="font-size:13px;color:var(--muted);margin-bottom:0">Prima devi completare: <strong>${_depBloccanti.map(n => escapeHtml(n)).join(', ')}</strong></p>
       </div>`;
-  } else if (f.stato === 'disponibile' && !sospeso) {
-    const tgDisp = f.fasi?.tipo_gestione || 'standard';
-    if (tgDisp === 'spedizione_esterna') {
-      bodyHtml += `
-        <div class="azione-box" style="border-color:var(--violet-line-2)">
-          <h4><i data-ic="invio"></i> Spedisci al fornitore</h4>
-          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Quando spedisci il pezzo al fornitore, registra l'uscita. Il tempo sarà misurato fino alla ricezione.</p>
-          <button class="btn btn-primary" onclick="segnaSpedizioneFase('${ordFaseId}','${ordineId}')"><i data-ic="invio"></i> Segna come spedito</button>
-        </div>`;
-    } else {
-    bodyHtml += `
-      <div class="azione-box">
-        <h4>Prendi in carico questa fase</h4>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Puoi lavorarci insieme a un collega — entrambi dovete prendere in carico.</p>
-        <button class="btn btn-primary" onclick="prendiInCarico('${ordFaseId}', '${ordineId}')"><i data-ic="play"></i> Prendi in carico</button>
-      </div>`;
-    } // fine else spedizione_esterna
-  } else if (f.stato === 'in_corso' && isMia) {
-    // Carica operatori disponibili (escludi chi è già sulla fase)
-    const giaSulla = new Set(opMulti.map(o => o.operatore_id));
-    giaSulla.add(currentUser.id);
-    let opzioniColleghi = '';
-    if (isOnline) {
-      const { data: collResp } = await sb.rpc('colleghi_disponibili', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
-      const tuttiOp = collResp?.ok ? collResp.dati : [];
-      const disponibili = (tuttiOp || []).filter(u => !giaSulla.has(u.id));
-      if (disponibili.length) {
-        const chips = disponibili.map(u =>
-          `<button class="btn btn-secondary" style="padding:8px 14px;font-size:13px" onclick="aggiungiCollega('${ordFaseId}','${ordineId}','${u.id}','${escapeJsAttr(u.nome + ' ' + u.cognome)}')">${escapeHtml(u.nome)} ${escapeHtml(u.cognome)}</button>`
-        ).join('');
-        opzioniColleghi = `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
-          <label style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);display:block;margin-bottom:8px">Aggiungi collega</label>
-          <div style="display:flex;flex-wrap:wrap;gap:8px">${chips}</div>
-        </div>`;
-      }
-    }
+  } else if (['disponibile', 'in_corso', 'in_attesa'].includes(f.stato) && !sospeso) {
+    const aPezzi = !!f.a_pezzi && (f.pezzi_totali || 1) > 1;
+    const fatti = Math.min(f.pezzi_completati || 0, f.pezzi_totali || 1);
+    const bloccoPezzi = aPezzi ? `
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <button class="btn btn-secondary" style="width:56px;flex:0 0 auto" ${fatti <= 0 ? 'disabled' : ''} onclick="pezziFase('${ordFaseId}','${ordineId}','meno')" aria-label="Togli un pezzo">−</button>
+          <div class="oggi-pezzi" style="flex:1;font-size:18px" aria-live="polite">${fatti} di ${f.pezzi_totali}</div>
+          <button class="btn btn-primary" style="flex:1" onclick="pezziFase('${ordFaseId}','${ordineId}','piu')">+1 pezzo</button>
+        </div>` : '';
     bodyHtml += `
       <div class="azione-box">
         <h4>Completa fase</h4>
+        ${bloccoPezzi}
         <div class="form-group" style="margin-bottom:12px">
           <label>Le tue note (opzionale)</label>
           <textarea id="note-op" placeholder="Scrivi eventuali note sul lavoro svolto…">${escapeHtml(f.note_operatore || '')}</textarea>
         </div>
         <div class="form-group">
-          <label>Foto (opzionale)</label>
+          <label>Foto ${f.foto_richieste ? '(obbligatorie: almeno ' + f.foto_minime + (f.foto_presenti ? ', già caricate ' + f.foto_presenti : '') + ')' : '(opzionale)'}</label>
           <div style="display:flex;gap:8px">
             <label class="upload-btn" style="flex:1;width:auto;margin-bottom:0" onclick="apriFotocameraInterna('${ordFaseId}','${ordineId}')"><i data-ic="fotocamera"></i> Scatta foto</label>
             <label class="upload-btn" style="flex:1;width:auto;margin-bottom:0" onclick="_apriRipiegoInputFile()"><i data-ic="immagine"></i> Allega da galleria</label>
@@ -2151,51 +1881,8 @@ async function renderFaseDetail(ordFaseId, ordineId) {
           <input type="file" id="fase-foto-input" accept="image/*" multiple style="display:none" onchange="previewFaseFoto(this)">
           <div class="foto-preview" id="fase-foto-preview"></div>
         </div>
-        ${opzioniColleghi}
-        <button class="btn btn-ok" id="btn-completa-fase" style="margin-top:14px" onclick="completaFase('${ordFaseId}', '${ordineId}')">✓ Segna come completata</button>
-        <button class="btn btn-secondary" style="margin-top:10px" onclick="mettiInAttesa('${ordFaseId}', '${ordineId}')"><i data-ic="pausa"></i> Metti in attesa</button>
-        <button class="btn btn-alert" style="margin-top:10px;font-size:12px;opacity:0.8" onclick="annullaPresaInCarico('${ordFaseId}', '${ordineId}')">✕ Annulla presa in carico</button>
+        <button class="btn btn-ok" id="btn-completa-fase" style="margin-top:14px" onclick="completaFase('${ordFaseId}', '${ordineId}')">✓ ${aPezzi ? 'Completata (tutti i pezzi)' : 'Completata'}</button>
       </div>`;
-  } else if (f.stato === 'in_corso' && !isMia && !sospeso) {
-    const altriNomi = opMulti.filter(o => o.operatore_id !== currentUser.id)
-      .map(o => `${o.users?.nome || ''} ${o.users?.cognome || ''}`.trim()).join(', ')
-      || (f['users'] ? `${f['users'].nome} ${f['users'].cognome}` : '');
-    bodyHtml += `
-      <div class="note-box" style="border:1px solid var(--info-line)">
-        <strong>In corso</strong>${altriNomi ? `In carico a: ${escapeHtml(altriNomi)}` : 'Fase in corso.'}
-      </div>
-      <div class="azione-box" style="margin-top:12px">
-        <h4>Unisciti a questa fase</h4>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Puoi affiancare ${escapeHtml(altriNomi || 'il collega')} senza togliergli la fase.</p>
-        <button class="btn btn-primary" onclick="uniscitiAFase('${ordFaseId}', '${ordineId}')">+ Unisciti</button>
-      </div>`;
-  } else if (f.stato === 'in_attesa' && !sospeso) {
-    const tipoGestione = f.fasi?.tipo_gestione || 'standard';
-    if (tipoGestione === 'conferma_ricezione') {
-      bodyHtml += `
-        <div class="azione-box" style="border-color:var(--ok-line)">
-          <h4><i data-ic="pacco"></i> Attesa materiale esterno</h4>
-          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Il materiale è arrivato? Conferma la ricezione per chiudere questa fase.</p>
-          <button class="btn btn-ok" onclick="confermaRicezioneFase('${ordFaseId}','${ordineId}')"><i data-ic="spunta"></i> Conferma ricezione</button>
-        </div>`;
-    } else if (tipoGestione === 'spedizione_esterna') {
-      const spedIl = f.spedita_il ? `<div class="meta-item" style="margin-bottom:10px"><label>Spedito il</label><span>${formatDateTime(f.spedita_il)}</span></div>` : '';
-      bodyHtml += `${spedIl}
-        <div class="azione-box" style="border-color:var(--ok-line)">
-          <h4><i data-ic="pacco"></i> Pezzo rientrato dal fornitore?</h4>
-          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Il pezzo è tornato? Conferma la ricezione per chiudere la fase e registrare il tempo.</p>
-          <button class="btn btn-ok" onclick="confermaRicezioneFase('${ordFaseId}','${ordineId}')"><i data-ic="spunta"></i> Conferma ricezione pezzo</button>
-        </div>`;
-    } else {
-      bodyHtml += `
-        <div class="azione-box" style="border-color:var(--attesa-line)">
-          <h4><i data-ic="pausa"></i> Fase in attesa</h4>
-          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">
-            ${isMia ? 'Hai messo questa fase in attesa. Puoi riprenderla tu o lasciare che un collega la continui.' : 'Questa fase è in attesa. Puoi riprenderla tu.'}
-          </p>
-          <button class="btn btn-primary" onclick="riprendi('${ordFaseId}', '${ordineId}', false)"><i data-ic="play"></i> Riprendi fase</button>
-        </div>`;
-    }
   } else if (f.stato === 'completata') {
     // Mostra pulsante spedizione se l'ultima fase applicabile è completata
     if (ordine?.stato === 'aperto') {
@@ -2236,45 +1923,102 @@ async function renderFaseDetail(ordFaseId, ordineId) {
   await caricaERenderizzaFoto('foto-fase-container', ordFaseId);
 }
 
-async function prendiInCarico(ordFaseId, ordineId) {
-  if (isOnline) {
-    const { data } = await sb.rpc('prendi_in_carico_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-    if (!data?.ok) { toast(data?.errore || 'Errore', 'err'); return; }
-    // La junction table è gestita internamente dal RPC prendi_in_carico_fase
-  } else {
-    await queueAction({ type: 'prendi_fase', ordFaseId, ts: Date.now() });
-    toast('Azione salvata offline — sarà sincronizzata alla riconnessione', 'ok');
-    await updateQueueBadge();
-  }
-  toast('Fase presa in carico!', 'ok');
-  await renderFaseDetail(ordFaseId, ordineId);
-  await renderOrdineDetail(ordineId);
+// carica una foto di fase (firma di upload, upload su storage, registrazione dell'allegato): true se tutto è andato bene
+async function caricaFotoFase(file, idx, ordFaseId, ordineId) {
+  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+  const { data: firma, error: eFirma } = await sb.functions.invoke('allegato-upload', {
+    headers: await _headerAutorizzazione(),
+    body: { p_user_id: currentUser.id, p_session_token: sessionToken, tipo: 'fase', ordine_id: ordineId, ordine_fase_id: ordFaseId, estensione: ext, indice: idx }
+  });
+  if (eFirma || !firma?.ok) { console.error('Firma upload foto:', eFirma || firma?.errore); return false; }
+  const { error: upErr } = await sb.storage.from('allegati-fasi').uploadToSignedUrl(firma.path, firma.token, file);
+  if (upErr) { console.error('Upload foto:', upErr); return false; }
+  const { data: ins } = await sb.rpc('salva_allegato', { p_ordine_fase_id: ordFaseId, p_url_file: firma.path, p_operatore_id: currentUser.id, p_session_token: sessionToken });
+  return !!ins?.ok;
 }
 
-async function aggiungiCollega(ordFaseId, ordineId, collegaId, collegaNome) {
-  if (!confirm(`Aggiungere ${collegaNome} a questa fase?`)) return;
-  const { data, error } = await sb.rpc('aggiungi_collega_fase', { p_ordine_fase_id: ordFaseId, p_collega_id: collegaId, p_richiedente_id: currentUser.id, p_session_token: sessionToken });
-  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
-  toast(`${collegaNome} aggiunto alla fase`, 'ok');
-  await renderFaseDetail(ordFaseId, ordineId);
+// Passo "foto obbligatorie": raccoglie le foto (Scatta / Galleria), mostra "k di N", conferma attiva solo al minimo, carica e risolve true.
+// Offline: nessun completamento (le foto non si possono caricare) con messaggio chiaro.
+function chiediFotoObbligatorie(ordFaseId, ordineId, minime, presenti) {
+  return new Promise(resolve => {
+    if (!isOnline) { toast(`Servono almeno ${minime} foto: connettiti per completare questa fase`, 'err'); resolve(false); return; }
+    const dlg = document.getElementById('foto-obb-dialog');
+    const cam = document.getElementById('foto-obb-cam'), gal = document.getElementById('foto-obb-gal');
+    const ok = document.getElementById('foto-obb-ok'), ann = document.getElementById('foto-obb-annulla');
+    const files = [];
+    const urls = [];
+    document.getElementById('foto-obb-testo').textContent = `Questa fase richiede almeno ${minime} ${minime === 1 ? 'foto' : 'foto'} per essere completata${presenti ? ' (' + presenti + ' già caricate)' : ''}.`;
+    const disegna = () => {
+      const tot = presenti + files.length;
+      document.getElementById('foto-obb-conta').textContent = `${Math.min(tot, minime)} di ${minime}${tot > minime ? ' (+' + (tot - minime) + ')' : ''}`;
+      ok.disabled = tot < minime;
+      document.getElementById('foto-obb-anteprima').innerHTML = files.map((_, i) => `<div class="thumb-wrap" style="position:relative"><img class="foto-thumb" src="${urls[i]}" alt="Foto ${i + 1}"><button type="button" onclick="this.dispatchEvent(new CustomEvent('rimuovi',{bubbles:true,detail:${i}}))" style="position:absolute;top:-6px;right:-6px;background:var(--scrim-max);color:var(--media-ink);border:none;border-radius:50%;width:22px;height:22px;cursor:pointer" aria-label="Togli foto">✕</button></div>`).join('');
+    };
+    const aggiungi = (lista) => { [...lista].forEach(fl => { files.push(fl); urls.push(URL.createObjectURL(fl)); }); disegna(); };
+    const chiudi = (esito) => {
+      urls.forEach(u => URL.revokeObjectURL(u));
+      dlg.classList.remove('open');
+      cam.onchange = gal.onchange = ok.onclick = ann.onclick = dlg.onrimuovi = null;
+      dlg.removeEventListener('rimuovi', gestRimuovi);
+      resolve(esito);
+    };
+    const gestRimuovi = (e) => { const i = e.detail; URL.revokeObjectURL(urls[i]); files.splice(i, 1); urls.splice(i, 1); disegna(); };
+    dlg.addEventListener('rimuovi', gestRimuovi);
+    cam.value = ''; gal.value = '';
+    cam.onchange = () => { aggiungi(cam.files); cam.value = ''; };
+    gal.onchange = () => { aggiungi(gal.files); gal.value = ''; };
+    ann.onclick = () => chiudi(false);
+    ok.onclick = async () => {
+      ok.disabled = true; ann.disabled = true;
+      let fallite = 0;
+      for (let i = 0; i < files.length; i++) {
+        ok.textContent = `Caricamento foto ${i + 1}/${files.length}…`;
+        if (!(await caricaFotoFase(files[i], i + 1, ordFaseId, ordineId))) fallite++;
+      }
+      ann.disabled = false; ok.textContent = '✓ Conferma e completa';
+      if (fallite) { toast(`${fallite} foto non caricate: riprova`, 'err'); files.length = 0; urls.forEach(u => URL.revokeObjectURL(u)); urls.length = 0; presenti = -1; await aggiornaPresenti(); disegna(); return; }
+      chiudi(true);
+    };
+    // dopo un caricamento parziale si rilegge quante foto ci sono davvero
+    const aggiornaPresenti = async () => {
+      const { data } = await sb.rpc('dettaglio_fase_completa', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ord_fase_id: ordFaseId });
+      presenti = data?.ok ? (data.dati.fase?.foto_presenti || 0) : 0;
+    };
+    disegna();
+    dlg.classList.add('open');
+  });
 }
 
-async function rimuoviCollega(ordFaseId, ordineId, collegaId, collegaNome) {
-  if (!confirm(`Rimuovere ${collegaNome} da questa fase?`)) return;
-  const { data, error } = await sb.rpc('rimuovi_collega_fase', { p_ordine_fase_id: ordFaseId, p_collega_id: collegaId, p_richiedente_id: currentUser.id, p_session_token: sessionToken });
-  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
-  toast(`${collegaNome} rimosso dalla fase`, 'ok');
-  await renderFaseDetail(ordFaseId, ordineId);
-}
+const ERRORI_COMPLETAMENTO = {
+  foto_insufficienti: 'Servono più foto per completare questa fase',
+  sessione_non_valida: 'Sessione scaduta, effettua di nuovo l\'accesso',
+  accesso_sola_lettura: 'Account in sola lettura, operazione non consentita',
+  fase_bloccata_da_dipendenza: 'Prima va completata una fase precedente',
+  ordine_sospeso: 'L\'ordine è sospeso: contatta il responsabile',
+  ordine_non_trovato: 'Ordine non trovato',
+  usa_conferma_ricezione: 'Usa il pulsante specifico per questo tipo di fase',
+  stato_non_valido: 'La fase non può essere completata nello stato attuale',
+  fase_non_a_pezzi: 'Questa fase si segna in blocco, non pezzo per pezzo',
+  nessun_pezzo: 'Nessun pezzo da togliere',
+  annullamento_non_consentito: 'Non si può più annullare: chiedi al responsabile',
+  tempo_scaduto: 'Non si può più annullare: chiedi al responsabile',
+  non_completata: 'La fase non risulta completata',
+  ordine_spedito: 'L\'ordine è già spedito',
+};
+const erroreCompletamento = (data, error) => (data?.errore === 'foto_insufficienti' && data.messaggio) || ERRORI_COMPLETAMENTO[data?.errore] || data?.errore || error?.message || 'Operazione non riuscita';
 
-async function uniscitiAFase(ordFaseId, ordineId) {
+// "+1 pezzo" / "−" dal dettaglio fase (per le fasi in cui UN pezzo richiede abbastanza tempo)
+async function pezziFase(ordFaseId, ordineId, azione) {
   if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
-  const { data, error } = await sb.rpc('aggiungi_collega_fase', { p_ordine_fase_id: ordFaseId, p_collega_id: currentUser.id, p_richiedente_id: currentUser.id, p_session_token: sessionToken });
-  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
-  toast('Ti sei unito alla fase!', 'ok');
+  const fd = _faseDetCorrente;
+  if (azione === 'piu' && fd?.id === ordFaseId && fd.foto_richieste && (fd.pezzi_completati || 0) + 1 >= (fd.pezzi_totali || 1) && (fd.foto_presenti || 0) < fd.foto_minime) {
+    if (!(await chiediFotoObbligatorie(ordFaseId, ordineId, fd.foto_minime, fd.foto_presenti || 0))) return;   // ultimo pezzo: servono le foto
+  }
+  const { data, error } = await sb.rpc('pezzi_fase_oggi', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_fase_id: ordFaseId, p_azione: azione });
+  if (error || !data?.ok) { toast(erroreCompletamento(data, error), 'err'); return; }
+  if (data.completata) toast('Tutti i pezzi fatti: fase completata!', 'ok');
   await renderFaseDetail(ordFaseId, ordineId);
   await renderOrdineDetail(ordineId);
-  renderHome();
 }
 
 // "Spedizione unica": la scelta compare solo per le fasi con la proprietà fasi.gruppo_spedizione (configurabile dal responsabile).
@@ -2305,11 +2049,17 @@ function chiediModalitaCompletamentoGruppo(codiciFratelli) {
 async function completaFase(ordFaseId, ordineId) {
   const note = document.getElementById('note-op')?.value.trim() || null;
 
-  // Spedizione unica: se questa è una fase 16/21 e l'ordine è raggruppato, chiedi all'operatore
+  // Spedizione unica: se la fase ha la proprietà "gruppo_spedizione" e l'ordine è raggruppato, chiedi all'operatore
   // se completare solo questo ordine o tutti quelli della stessa spedizione. Solo online: la
   // scelta richiede di conoscere i fratelli del gruppo, già disponibili in ordiniCache.
+  const fd = _faseDetCorrente?.id === ordFaseId ? _faseDetCorrente : null;
+  if (fd?.foto_richieste) {
+    const mancano = fd.foto_minime - (fd.foto_presenti || 0) - _fotoAccumulate.length;
+    if (!isOnline) { toast(`Servono almeno ${fd.foto_minime} foto: connettiti per completare questa fase`, 'err'); return; }
+    if (mancano > 0) { toast(`Servono almeno ${fd.foto_minime} foto (ne mancano ${mancano}): scatta o allega le foto qui sopra`, 'err'); return; }
+  }
   let modalitaGruppo = false;
-  if (isOnline && _faseDetCorrente?.id === ordFaseId && faseGruppoSpedizione(_faseDetCorrente.fase_id)) {
+  if (isOnline && !fd?.foto_richieste && _faseDetCorrente?.id === ordFaseId && faseGruppoSpedizione(_faseDetCorrente.fase_id)) {
     const ordine = ordiniCache.find(o => o.id === ordineId);
     if (ordine?.gruppo_spedizione_id) {
       const codiciFratelli = ordiniCache
@@ -2363,126 +2113,25 @@ async function completaFase(ordFaseId, ordineId) {
   if (btnCompleta) btnCompleta.textContent = 'Completamento...';
 
   if (isOnline) {
-    const rpcName = modalitaGruppo ? 'completa_fase_gruppo_spedizione' : 'completa_fase';
-    const { data } = await sb.rpc(rpcName, { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_note_operatore: note, p_session_token: sessionToken });
-    if (!data?.ok) {
-      if (btnCompleta) { btnCompleta.disabled = false; btnCompleta.textContent = '✓ Segna come completata'; }
-      const errori = {
-        sessione_non_valida: 'Sessione scaduta, effettua di nuovo l\'accesso',
-        non_autorizzato: 'Non sei autorizzato a completare questa fase',
-        stato_non_in_corso: 'La fase non è più in corso — potrebbe essere già stata completata',
-        usa_conferma_ricezione: 'Usa il pulsante specifico per questo tipo di fase',
-        accesso_sola_lettura: 'Account in sola lettura, operazione non consentita',
-      };
-      toast(errori[data?.errore] || data?.errore || 'Errore completamento fase', 'err');
+    const { data, error } = await sb.rpc('completa_fase_diretta', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_fase_id: ordFaseId, p_note_operatore: note, p_gruppo: modalitaGruppo });
+    if (error || !data?.ok) {
+      if (btnCompleta) { btnCompleta.disabled = false; btnCompleta.textContent = '✓ Completata'; }
+      toast(erroreCompletamento(data, error), 'err');
       return;
     }
     if (modalitaGruppo && data.risultati) {
-      const etichette = { completata: 'completata', saltata_non_in_corso: 'saltata (non in corso)', saltata_non_trovata: 'saltata (fase non trovata)' };
-      const riepilogo = data.risultati.map(r => `${r.codice}: ${etichette[r.esito] || r.esito}`).join(' · ');
-      toast(riepilogo, data.risultati.every(r => r.esito === 'completata') ? 'ok' : 'err');
+      const etichette = { completata: 'completata', gia_completata: 'già completata', saltata_non_trovata: 'saltata (fase non trovata)' };
+      const riepilogo = data.risultati.map(r => `${r.codice}: ${etichette[r.esito] || 'saltata'}`).join(' · ');
+      toast(riepilogo, data.risultati.every(r => r.esito === 'completata' || r.esito === 'gia_completata') ? 'ok' : 'err');
     } else {
       toast('Fase completata!', 'ok');
     }
   } else {
-    await queueAction({ type: 'completa_fase', ordFaseId, note });
+    await queueAction({ type: 'completa_diretta', ordFaseId, note, gruppo: false });
     await updateQueueBadge();
-    toast('Fase completata!', 'ok');
+    toast('Salvato offline — sarà sincronizzato alla riconnessione', 'ok');
   }
   await renderFaseDetail(ordFaseId, ordineId);
-}
-
-async function annullaPresaInCarico(ordFaseId, ordineId) {
-  if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
-  if (!confirm('Annullare la tua presa in carico?')) return;
-
-  const { data, error } = await sb.rpc('annulla_presa_in_carico', {
-    p_ordine_fase_id: ordFaseId,
-    p_operatore_id: currentUser.id,
-    p_session_token: sessionToken
-  });
-  if (error) { toast('Errore: ' + error.message, 'err'); return; }
-
-  toast('Presa in carico annullata — fase tornata disponibile', 'ok');
-  await renderHome();
-  await renderOrdineDetail(ordineId);
-  showScreen('ordine');
-}
-
-async function mettiInAttesa(ordFaseId, ordineId) {
-  if (isOnline) {
-    const { data } = await sb.rpc('metti_in_attesa', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-    if (!data?.ok) { toast(data?.errore || 'Errore', 'err'); return; }
-  } else {
-    toast('Non disponibile offline', 'err'); return;
-  }
-  toast('Fase messa in attesa', 'ok');
-  await renderFaseDetail(ordFaseId, ordineId);
-  await renderOrdineDetail(ordineId);
-}
-
-async function riprendi(ordFaseId, ordineId, forza) {
-  if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
-
-  if (forza) {
-    // Subentro su fase in_corso di un collega: mostra confirm
-    const confermato = confirm('Stai per subentrare su una fase in carico a un tuo collega.\nIl collega riceverà una notifica.\n\nConfermi?');
-    if (!confermato) return;
-  }
-
-  const { data } = await sb.rpc('riprendi_fase', {
-    p_ordine_fase_id: ordFaseId,
-    p_operatore_id: currentUser.id,
-    p_forza: forza,
-    p_session_token: sessionToken
-  });
-  if (!data?.ok) {
-    // fase_in_corso_da_altro_operatore: Audit Round 3, punto 3 — il subentro su una fase
-    // attiva di un collega non è più permesso, solo su una fase in_attesa.
-    const erroriRiprendi = {
-      fase_in_corso_da_altro_operatore: 'Questa fase è in corso con un altro operatore: non puoi subentrare mentre è attiva.',
-      non_riprendibile: 'Questa fase non può essere ripresa nel suo stato attuale.',
-      sessione_non_valida: 'Sessione scaduta, effettua di nuovo l\'accesso',
-      accesso_sola_lettura: 'Account in sola lettura, operazione non consentita',
-    };
-    toast(erroriRiprendi[data?.errore] || data?.errore || 'Errore', 'err');
-    return;
-  }
-  toast('Fase ripresa!', 'ok');
-  await renderFaseDetail(ordFaseId, ordineId);
-  await renderOrdineDetail(ordineId);
-}
-
-async function completaTutteFasiUguali(chiave, isExtra) {
-  const tipo = isExtra ? 'fasi extra' : 'fasi';
-  if (!confirm(`Segnare come completate tutte le ${tipo} "${chiave}" che hai in corso?`)) return;
-  if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
-  let data, error;
-  if (isExtra) {
-    ({ data, error } = await sb.rpc('completa_fasi_extra_batch', { p_nome: chiave, p_operatore_id: currentUser.id, p_session_token: sessionToken }));
-  } else {
-    ({ data, error } = await sb.rpc('completa_fasi_batch', { p_fase_id: parseInt(chiave), p_operatore_id: currentUser.id, p_session_token: sessionToken }));
-  }
-  if (error || !data?.ok) { toast('Errore: ' + (error?.message || ''), 'err'); return; }
-  toast(`${data.completate} fasi completate!`, 'ok');
-  await loadOrdini();
-  await renderHome();
-}
-
-async function pausaTutteFasi() {
-  if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
-  const { data, error } = await sb.rpc('pausa_tutte_fasi', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
-  if (error || !data?.ok) { toast('Errore', 'err'); return; }
-  toast('Tutte le fasi messe in pausa', 'ok');
-  await renderHome();
-}
-
-async function riprendiTutteFasi() {
-  if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
-  const { data, error } = await sb.rpc('riprendi_tutte_fasi', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
-  if (error || !data?.ok) { toast('Errore', 'err'); return; }
-  toast('Tutte le fasi riprese', 'ok');
-  await renderHome();
 }
 
 // ═══════════════════════════════════════════════
@@ -2894,28 +2543,296 @@ async function _caricaScattoInterno(scatto, ordFaseId, ordineId) {
 // ═══════════════════════════════════════════════
 // ATTIVITÀ PERSONALI
 // ═══════════════════════════════════════════════
-async function renderAttivita() {
-  const el = document.getElementById('attivita-list');
-  if (!currentUser || !isOnline) {
-    el.innerHTML = '<div class="empty-state"><div class="icon"><i data-ic="segnale"></i></div><p>Disponibile solo online</p></div>';
-    return;
-  }
-  const { data: storicoResp } = await sb.rpc('storico_fasi_completate', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
-  const data = storicoResp?.ok ? storicoResp.dati : [];
+// ═══════════════════════════════════════════════
+// OGGI — il piano del giorno, uguale per tutta la squadra
+// ═══════════════════════════════════════════════
+// Il piano lo genera il server all'inizio del turno (tetto giornaliero, priorità, dipendenze, macchine) e si allunga in giornata se la squadra
+// va più veloce del previsto. Qui si vede solo cosa fare, raggruppato per fase, con "fatte / totali": nessun minuto, nessuna ora, nessun dato per persona.
+// Aggiornamento: Supabase Realtime NON è usabile dall'app operatore (anon senza letture dirette sulle tabelle: la RLS tace in silenzio, vedi nota
+// "AGGIORNAMENTO PERIODICO"). Si usa un aggiornamento leggero ogni OGGI_INTERVALLO_MS finché la scheda è aperta e visibile (una RPC con
+// sessione), più un aggiornamento subito dopo ogni azione propria e al ritorno in primo piano dell'app. Offline: ultimo piano ricevuto + coda azioni.
+const OGGI_INTERVALLO_MS = 8000;
+let oggiDati = null;            // ultima risposta di oggi_squadra (anche dalla cache offline)
+let oggiDaCache = false;
+let oggiFaseAperta = null;      // chiave del gruppo aperto ('f:12' | 'extra:nome'); null = elenco delle fasi
+let oggiSelezione = new Set();  // voce_id selezionate per il completamento multiplo
+let oggiModoMultiplo = false;
+let oggiTimer = null;
+let oggiCaricando = false;
+let oggiOperazione = false;     // un'azione è in corso: niente ridisegno dall'aggiornamento periodico
 
-  if (!data?.length) {
-    el.innerHTML = '<div class="empty-state"><div class="icon"><i data-ic="grafico"></i></div><p>Nessuna fase completata</p></div>';
+function oggiAvviaAggiornamento() {
+  if (oggiTimer) return;
+  oggiTimer = setInterval(() => {
+    if (!currentUser || !isOnline || document.hidden || oggiOperazione) return;
+    if (!document.getElementById('screen-oggi')?.classList.contains('active')) { oggiFermaAggiornamento(); return; }
+    loadOggi();
+  }, OGGI_INTERVALLO_MS);
+}
+function oggiFermaAggiornamento() { if (oggiTimer) { clearInterval(oggiTimer); oggiTimer = null; } }
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && currentUser && isOnline && document.getElementById('screen-oggi')?.classList.contains('active')) loadOggi();
+});
+
+async function loadOggi() {
+  if (!currentUser || oggiCaricando) return;
+  oggiCaricando = true;
+  try {
+    if (isOnline) {
+      const { data, error } = await sb.rpc('oggi_squadra', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
+      if (!error && data?.ok) { oggiDati = data; oggiDaCache = false; await cacheSet('oggi', data); }
+      else if (!oggiDati) { oggiDati = await cacheGet('oggi') || null; oggiDaCache = !!oggiDati; }
+    } else {
+      oggiDati = await cacheGet('oggi') || oggiDati;
+      oggiDaCache = !!oggiDati;
+    }
+  } finally { oggiCaricando = false; }
+  renderOggi();
+}
+
+const oggiVoci = () => (oggiDati?.gruppi || []).flatMap(g => g.voci);
+const oggiTrovaVoce = (id) => [...oggiVoci(), ...(oggiDati?.esterne || [])].find(v => v.voce_id === id);
+
+function oggiConta(fatte, totali) { return `${fatte} di ${totali}`; }
+
+function renderOggi() {
+  const testa = document.getElementById('oggi-testa');
+  const corpo = document.getElementById('oggi-corpo');
+  if (!testa || !corpo) return;
+  const solaLettura = currentUser?.ruolo === 'sola_lettura';
+  const dataTesto = new Date((oggiDati?.data || Calendario.oggiIso()) + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+  const offline = (!isOnline || oggiDaCache) ? `<div class="oggi-nota"><i data-ic="offline"></i> ${isOnline ? 'Non aggiornato' : 'Offline'} — ultimo piano ricevuto. Le azioni verranno sincronizzate alla riconnessione.</div>` : '';
+
+  if (!oggiDati) {
+    testa.innerHTML = '';
+    corpo.innerHTML = `<div class="page-title">Oggi</div>${offline}<div class="empty-state"><div class="icon"><i data-ic="appunti"></i></div><p>${isOnline ? 'Caricamento…' : 'Piano non disponibile offline'}</p></div>`;
     return;
   }
-  el.innerHTML = data.map(f => {
-    const durata = f.iniziata_il && f.completata_il
-      ? Math.round((new Date(f.completata_il) - new Date(f.iniziata_il)) / 60000) + ' min'
-      : '—';
-    return `<div class="attivita-item">
-      <div class="at-title">${escapeHtml(f.fasi?.nome || 'Fase')} — ${escapeHtml(f.ordini?.codice)}</div>
-      <div class="at-sub">${escapeHtml(f.ordini?.cliente)} · ${formatDate(f.completata_il)} · <i data-ic="timer"></i> ${durata}</div>
+  if (!oggiDati.piano_presente) {
+    testa.innerHTML = '';
+    corpo.innerHTML = `<div class="page-title">Oggi</div>${offline}<div class="oggi-riepilogo"><div class="oggi-data">${escapeHtml(dataTesto)}</div></div>
+      <div class="empty-state"><div class="icon"><i data-ic="calendario"></i></div><p>${oggiDati.lavorativo
+        ? 'Il piano di oggi non è ancora pronto: viene creato all\'inizio del turno.'
+        : 'Oggi non è un giorno lavorativo.'}</p></div>`;
+    return;
+  }
+
+  const av = oggiDati.avanzamento || { fatte: 0, totali: 0 };
+  const pct = av.totali ? Math.round(av.fatte / av.totali * 100) : 0;
+  testa.innerHTML = `${offline}<div class="oggi-riepilogo">
+      <div class="oggi-data">${escapeHtml(dataTesto)}</div>
+      <div class="oggi-num">${av.fatte} di ${av.totali} <small>attività</small></div>
+      <div class="progress-bar-wrap"><div class="progress-bar-fill ${av.totali && av.fatte === av.totali ? 'done' : ''}" style="width:${pct}%"></div></div>
     </div>`;
-  }).join('');
+
+  const gruppo = oggiFaseAperta ? (oggiDati.gruppi || []).find(g => g.chiave === oggiFaseAperta) : null;
+  if (oggiFaseAperta && !gruppo) { oggiFaseAperta = null; oggiSelezione.clear(); oggiModoMultiplo = false; }
+  corpo.innerHTML = gruppo ? renderOggiGruppo(gruppo, solaLettura) : renderOggiElenco();
+}
+
+function renderOggiElenco() {
+  const gruppi = oggiDati.gruppi || [];
+  let html = '';
+  if (!gruppi.length) {
+    html += '<div class="empty-state"><div class="icon"><i data-ic="spunta"></i></div><p>Nessuna attività in elenco per oggi</p></div>';
+  } else {
+    html += '<div class="section-title">Fasi di oggi</div><div class="card">' + gruppi.map(g => {
+      const finito = g.totali > 0 && g.fatte === g.totali;
+      return `<div class="oggi-gruppo ${finito ? 'finito' : ''}" role="button" tabindex="0" onclick="oggiApriGruppo('${escapeJsAttr(g.chiave)}')" onkeydown="if(event.key==='Enter')this.click()">
+        <div class="og-nome">${escapeHtml(g.fase_nome)}</div>
+        <div class="og-conta">${finito ? '✓ ' : ''}${oggiConta(g.fatte, g.totali)}</div>
+        <span class="arrow">›</span>
+      </div>`;
+    }).join('') + '</div>';
+  }
+  const esterne = oggiDati.esterne || [];
+  if (esterne.length) {
+    html += '<div class="section-title">Spedizioni e ricezioni</div><div class="card">' + esterne.map(v => renderOggiVoceEsterna(v)).join('') + '</div>';
+  }
+  return html;
+}
+
+function oggiTitoloVoce(v) {
+  const o = v.ordine || {};
+  return `${escapeHtml(o.cliente || '')} — ${escapeHtml(o.codice || '')}`;
+}
+
+function renderOggiVoceEsterna(v) {
+  const o = v.ordine || {};
+  const solaLettura = currentUser?.ruolo === 'sola_lettura';
+  let azione = '';
+  if (!solaLettura && v.stato_fase === 'disponibile') azione = `<button class="btn btn-primary" onclick="oggiEsterna('${escapeJsAttr(v.voce_id)}','spedizione')"><i data-ic="invio"></i> Segna spedita</button>`;
+  else if (!solaLettura && v.stato_fase === 'in_attesa') azione = `<button class="btn btn-ok" onclick="oggiEsterna('${escapeJsAttr(v.voce_id)}','ricezione')"><i data-ic="spunta"></i> Conferma ricezione</button>`;
+  else if (v.fatta) azione = '<span class="oggi-segno" style="background:var(--ok-soft);color:var(--ok-ink)">✓ Fatta</span>';
+  return `<div class="oggi-voce ${v.fatta ? 'fatta' : ''}">
+    <div class="ov-testa"><div class="ov-titolo">${oggiTitoloVoce(v)}</div>${v.aggiunta ? '<span class="oggi-segno">aggiunta</span>' : ''}</div>
+    <div class="ov-sub">${escapeHtml(v.fase_nome)}${o.quantita > 1 ? ' · ' + o.quantita + ' pz' : ''} · ${v.stato_fase === 'in_attesa' ? 'dal fornitore' : v.fatta ? 'completata' : 'da spedire'}</div>
+    ${azione ? `<div class="ov-azioni">${azione}</div>` : ''}
+  </div>`;
+}
+
+function oggiApriGruppo(chiave) { oggiFaseAperta = chiave; oggiSelezione.clear(); oggiModoMultiplo = false; renderOggi(); window.scrollTo?.(0, 0); document.querySelector('.app-content')?.scrollTo?.(0, 0); }
+function oggiTornaElenco() { oggiFaseAperta = null; oggiSelezione.clear(); oggiModoMultiplo = false; renderOggi(); }
+
+const oggiAzionabile = (v) => !v.fatta && !(v.bloccata_da && v.bloccata_da.length);
+const oggiSelezionabile = (v) => oggiAzionabile(v) && !v.foto;   // le fasi con foto obbligatorie si completano una per una
+
+function renderOggiGruppo(g, solaLettura) {
+  const azionabili = g.voci.filter(oggiSelezionabile);
+  const puoMultiplo = !solaLettura && azionabili.length >= 2;
+  const barraSel = oggiModoMultiplo && oggiSelezione.size
+    ? `<div class="oggi-barra"><strong>${oggiSelezione.size} selezionate</strong>
+         <button class="btn btn-secondary" onclick="oggiAnnullaSelezione()">Annulla</button>
+         <button class="btn btn-ok" onclick="oggiCompletaSelezione()">✓ Completa ${oggiSelezione.size}</button></div>` : '';
+  return `<button class="back-btn" onclick="oggiTornaElenco()">← Tutte le fasi</button>
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
+      <div class="page-title" style="margin-bottom:0">${escapeHtml(g.fase_nome)}</div>
+      <div class="og-conta" style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${oggiConta(g.fatte, g.totali)}</div>
+    </div>
+    ${puoMultiplo ? `<div style="margin-bottom:8px"><span onclick="oggiToggleMultiplo()" style="cursor:pointer;text-decoration:underline;text-underline-offset:2px;color:var(--accent-2);font-size:13px;font-weight:600">${oggiModoMultiplo ? '✕ Esci dalla selezione' : '☑ Seleziona più ordini'}</span></div>` : ''}
+    <div class="card">${g.voci.map(v => renderOggiVoce(v, solaLettura)).join('')}</div>${barraSel}`;
+}
+
+function renderOggiVoce(v, solaLettura) {
+  const o = v.ordine || {};
+  const bloccata = v.bloccata_da && v.bloccata_da.length;
+  const meta = (typeof metaLatiLavorazioniHtml === 'function' && o.id) ? metaLatiLavorazioniHtml(o) : '';
+  const sel = oggiModoMultiplo && oggiSelezionabile(v) && !solaLettura
+    ? `<input type="checkbox" class="oggi-sel" ${oggiSelezione.has(v.voce_id) ? 'checked' : ''} onchange="oggiToggleSel('${escapeJsAttr(v.voce_id)}')" aria-label="Seleziona">` : '';
+  let azioni = '';
+  if (!solaLettura && !oggiModoMultiplo) {
+    if (v.fatta) {
+      if (v.annullabile) azioni = `<button class="btn btn-secondary" onclick="oggiAnnulla('${escapeJsAttr(v.voce_id)}')">↩ Annulla</button>`;
+    } else if (bloccata) {
+      azioni = '';
+    } else if (v.pezzi) {
+      azioni = `<button class="btn btn-secondary piccolo" ${v.pezzi.fatti <= 0 ? 'disabled' : ''} onclick="oggiPezzi('${escapeJsAttr(v.voce_id)}','meno')" aria-label="Togli un pezzo">−</button>
+        <div class="oggi-pezzi" aria-live="polite">${v.pezzi.fatti} di ${v.pezzi.totali}</div>
+        <button class="btn btn-primary" onclick="oggiPezzi('${escapeJsAttr(v.voce_id)}','piu')">+1 pezzo</button>
+        <button class="btn btn-ok" onclick="oggiCompleta('${escapeJsAttr(v.voce_id)}')">Tutti</button>`;
+    } else {
+      azioni = `<button class="btn btn-ok" onclick="oggiCompleta('${escapeJsAttr(v.voce_id)}')">✓ Completata</button>`;
+    }
+  }
+  const apri = v.ordine_fase_id ? `openFaseDetail('${escapeJsAttr(v.ordine_fase_id)}','${escapeJsAttr(v.ordine_id)}')` : `openFaseExtraDetail('${escapeJsAttr(v.fase_extra_id)}','${escapeJsAttr(v.ordine_id)}')`;
+  return `<div class="oggi-voce ${v.fatta ? 'fatta' : ''} ${bloccata ? 'bloccata' : ''}">
+    <div class="ov-testa">
+      ${sel}
+      <div class="ov-titolo" style="cursor:pointer" onclick="${apri}">${oggiTitoloVoce(v)}</div>
+      ${v.aggiunta ? '<span class="oggi-segno">aggiunta</span>' : ''}
+      ${v.fatta ? '<span class="oggi-segno" style="background:var(--ok-soft);color:var(--ok-ink)">✓ Fatta</span>' : ''}
+      ${v.pezzi && !v.fatta && oggiModoMultiplo ? `<span class="og-conta" style="font-family:var(--font-mono);font-size:12px;color:var(--muted)">${v.pezzi.fatti} di ${v.pezzi.totali}</span>` : ''}
+    </div>
+    <div class="ov-sub">${o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo'}${v.foto && !v.fatta ? ' · <i data-ic="fotocamera"></i> foto obbligatorie: ' + v.foto.presenti + ' di ' + v.foto.minime : ''}${bloccata ? ' · <strong>dopo: ' + escapeHtml(v.bloccata_da.join(', ')) + '</strong>' : ''}</div>
+    ${meta ? `<div class="order-meta" style="margin:8px 0 0">${meta}</div>` : ''}
+    ${renderNotaOrdineBox(o)}
+    ${azioni ? `<div class="ov-azioni">${azioni}</div>` : ''}
+  </div>`;
+}
+
+function oggiToggleMultiplo() { oggiModoMultiplo = !oggiModoMultiplo; oggiSelezione.clear(); renderOggi(); }
+function oggiToggleSel(id) { oggiSelezione.has(id) ? oggiSelezione.delete(id) : oggiSelezione.add(id); renderOggi(); }
+function oggiAnnullaSelezione() { oggiSelezione.clear(); renderOggi(); }
+
+// esegue un'azione sul server, poi riallinea la schermata; offline l'azione di completamento va in coda
+async function oggiEsegui(fn) {
+  if (oggiOperazione) return;
+  oggiOperazione = true;
+  try { await fn(); } finally { oggiOperazione = false; }
+  await loadOggi();
+  renderHome();
+  if (currentOrdineId && document.getElementById('screen-ordine')?.classList.contains('active')) renderOrdineDetail(currentOrdineId);
+}
+
+async function oggiCompleta(voceId) {
+  const v = oggiTrovaVoce(voceId); if (!v) return;
+  let gruppo = false;
+  if (v.foto && v.ordine_fase_id && v.foto.presenti < v.foto.minime) {
+    if (!(await chiediFotoObbligatorie(v.ordine_fase_id, v.ordine_id, v.foto.minime, v.foto.presenti))) return;
+  }
+  if (isOnline && !v.foto && v.ordine_fase_id && faseGruppoSpedizione(v.fase_id) && v.ordine?.gruppo_spedizione_id) {
+    const codiciFratelli = ordiniCache.filter(o => o.gruppo_spedizione_id === v.ordine.gruppo_spedizione_id && o.id !== v.ordine_id).map(o => o.codice || '—');
+    if (codiciFratelli.length) {
+      const scelta = await chiediModalitaCompletamentoGruppo(codiciFratelli);
+      if (!scelta) return;
+      gruppo = scelta === 'tutti';
+    }
+  }
+  await oggiEsegui(async () => {
+    if (!isOnline) {
+      if (v.foto) { toast(`Servono almeno ${v.foto.minime} foto: connettiti per completare questa fase`, 'err'); return; }
+      await queueAction({ type: 'completa_diretta', ordFaseId: v.ordine_fase_id || null, faseExtraId: v.fase_extra_id || null, note: null, gruppo: false });
+      await updateQueueBadge();
+      v.fatta = true;                                   // aggiornamento locale: il server confermerà alla sincronizzazione
+      const g = (oggiDati.gruppi || []).find(x => x.voci.includes(v)); if (g) g.fatte = g.voci.filter(x => x.fatta).length;
+      oggiDati.avanzamento.fatte = (oggiDati.gruppi || []).reduce((s, x) => s + x.fatte, 0);
+      await cacheSet('oggi', oggiDati);
+      toast('Salvato offline — sarà sincronizzato alla riconnessione', 'ok');
+      return;
+    }
+    const { data, error } = await sb.rpc('completa_fase_diretta', { p_operatore_id: currentUser.id, p_session_token: sessionToken,
+      p_ordine_fase_id: v.ordine_fase_id || null, p_fase_extra_id: v.fase_extra_id || null, p_gruppo: gruppo });
+    if (error || !data?.ok) { toast(erroreCompletamento(data, error), 'err'); return; }
+    toast(gruppo ? 'Completate per tutta la spedizione' : 'Completata!', 'ok');
+  });
+}
+
+async function oggiPezzi(voceId, azione) {
+  const v = oggiTrovaVoce(voceId); if (!v || !v.ordine_fase_id) return;
+  if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
+  if (azione === 'piu' && v.foto && v.pezzi && v.pezzi.fatti + 1 >= v.pezzi.totali && v.foto.presenti < v.foto.minime) {
+    if (!(await chiediFotoObbligatorie(v.ordine_fase_id, v.ordine_id, v.foto.minime, v.foto.presenti))) return;   // ultimo pezzo: servono le foto
+  }
+  await oggiEsegui(async () => {
+    const { data, error } = await sb.rpc('pezzi_fase_oggi', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_fase_id: v.ordine_fase_id, p_azione: azione });
+    if (error || !data?.ok) { toast(erroreCompletamento(data, error), 'err'); return; }
+    if (data.completata) toast('Tutti i pezzi fatti!', 'ok');
+  });
+}
+
+async function oggiAnnulla(voceId) {
+  const v = oggiTrovaVoce(voceId); if (!v) return;
+  if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
+  await oggiEsegui(async () => {
+    const { data, error } = await sb.rpc('annulla_completamento_fase', { p_operatore_id: currentUser.id, p_session_token: sessionToken,
+      p_ordine_fase_id: v.ordine_fase_id || null, p_fase_extra_id: v.fase_extra_id || null });
+    if (error || !data?.ok) { toast(erroreCompletamento(data, error), 'err'); return; }
+    toast('Completamento annullato', 'ok');
+  });
+}
+
+async function oggiCompletaSelezione() {
+  const scelte = [...oggiSelezione].map(oggiTrovaVoce).filter(Boolean);
+  if (!scelte.length) return;
+  if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
+  await oggiEsegui(async () => {
+    const { data, error } = await sb.rpc('completa_fasi_diretta_multi', { p_operatore_id: currentUser.id, p_session_token: sessionToken,
+      p_ordine_fase_ids: scelte.filter(v => v.ordine_fase_id).map(v => v.ordine_fase_id), p_fase_extra_ids: scelte.filter(v => v.fase_extra_id).map(v => v.fase_extra_id) });
+    if (error || !data?.ok) { toast(erroreCompletamento(data, error), 'err'); return; }
+    const errori = (data.risultati || []).filter(r => !r.ok);
+    toast(errori.length ? `${data.completate} completate, ${errori.length} non completabili` : `${data.completate} completate!`, errori.length ? 'err' : 'ok');
+    oggiSelezione.clear(); oggiModoMultiplo = false;
+  });
+}
+
+// spedizioni e ricezioni (fasi esterne): invariate, raggiungibili anche da qui
+async function oggiEsterna(voceId, tipo) {
+  const v = oggiTrovaVoce(voceId); if (!v) return;
+  if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
+  const extra = !!v.fase_extra_id;
+  if (tipo === 'spedizione') { if (!confirm('Confermi la spedizione al fornitore? Verrà registrata la data di uscita.')) return; if (!confirm('Confermi di aver spedito questo pezzo?')) return; }
+  else { if (!confirm(extra ? 'Il pezzo è tornato dal fornitore? Confermi la ricezione?' : 'Confermi la ricezione del materiale? La fase verrà chiusa.')) return; if (!extra && !confirm('Confermi di aver ricevuto davvero il materiale per questo pezzo?')) return; }
+  await oggiEsegui(async () => {
+    let r;
+    if (tipo === 'spedizione') r = extra
+      ? await sb.rpc('segna_spedizione_extra', { p_fase_extra_id: v.fase_extra_id, p_operatore_id: currentUser.id, p_session_token: sessionToken })
+      : await sb.rpc('segna_spedizione_fase', { p_ordine_fase_id: v.ordine_fase_id, p_operatore_id: currentUser.id, p_session_token: sessionToken });
+    else r = extra
+      ? await sb.rpc('conferma_ricezione_extra', { p_fase_extra_id: v.fase_extra_id, p_operatore_id: currentUser.id, p_session_token: sessionToken })
+      : await sb.rpc('conferma_ricezione_fase', { p_ordine_fase_id: v.ordine_fase_id, p_operatore_id: currentUser.id, p_session_token: sessionToken });
+    if (r.error || !r.data?.ok) { toast('Errore: ' + (r.error?.message || r.data?.errore || ''), 'err'); return; }
+    toast(tipo === 'spedizione' ? 'Spedizione registrata!' : 'Ricezione confermata!', 'ok');
+  });
 }
 
 // ═══════════════════════════════════════════════
@@ -3018,26 +2935,6 @@ async function loadOrarioConfigOp() {
 }
 
 // Calendario: nessuna regola nel client (vedi js/calendario.js)
-const getMinutiGiorno = () => Calendario.minutiGiorno();
-const addGiorniLavorativi = (da, giorni) => Calendario.aggiungiGiorniLavorativi(typeof da === 'string' ? da : Calendario.oggiIso(), giorni);
-
-async function loadFaseMediaMinuti() {
-  if (!isOnline || !currentUser) return;
-  const { data: tmResp } = await sb.rpc('tempo_medio_fasi_dati', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
-  const data = tmResp?.ok ? tmResp.dati : null;
-  if (!data) return;
-  const map = {};
-  data.forEach(f => {
-    const q = f.ordini?.quantita || 1;
-    const minPerPezzo = f.tempo_accumulato_minuti / (f.n_ordini_batch || 1) / q;
-    if (!map[f.fase_id]) map[f.fase_id] = [];
-    map[f.fase_id].push(minPerPezzo);
-  });
-  faseMediaMinutiMap = {};
-  Object.entries(map).forEach(([id, vals]) => {
-    faseMediaMinutiMap[parseInt(id)] = vals.reduce((a, b) => a + b, 0) / vals.length;
-  });
-}
 
 // ═══════════════════════════════════════════════
 // NOTIFICHE OPERATORE

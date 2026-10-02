@@ -67,7 +67,7 @@ async function leggiConfigPubblica(client) {
 // Versione del client — da incrementare SEMPRE insieme a CACHE in sw.js (stesso valore,
 // stesso commit). Letta da responsabile.html per la guardia di versione sulle operazioni
 // distruttive (esportazione/archiviazione) — vedi Checklist-Sicurezza.md nel vault.
-const APP_VERSION = 'mango-v44';
+const APP_VERSION = 'mango-v45';
 
 // ═══════════════════════════════════════════════
 // SETTIMANA ISO 8601 — usata nel dettaglio ordine (operatore.html + responsabile.html)
