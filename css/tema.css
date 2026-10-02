@@ -341,3 +341,13 @@ i[data-ic] > svg { width: 100%; height: 100%; display: block; }
 .foto-ord-barra { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 8px; }
 .foto-ord-barra > div { height: 100%; width: 0; background: var(--ok); transition: width .2s; }
 .foto-ord-stato { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.pinpad-conferma { background: transparent; color: var(--ok); font-size: 30px; font-weight: 700; }
+.accesso-dispositivo { display: none; flex-direction: column; align-items: center; gap: 14px; text-align: center; max-width: 320px; margin: 0 auto; }
+.accesso-dispositivo h2 { margin: 0; font-size: 18px; }
+.accesso-dispositivo p { margin: 0; font-size: 14px; color: var(--muted); }
+.accesso-dispositivo .codice-disp { font-family: var(--font-mono); font-size: 34px; font-weight: 700; letter-spacing: .12em; color: var(--ink); }
+.accesso-overlay { position: fixed; inset: 0; z-index: 9600; background: var(--bg); display: none; align-items: center; justify-content: center; padding: 20px; overflow: auto; }
+.accesso-overlay.open { display: flex; }
+.accesso-overlay .box { width: 100%; max-width: 360px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.accesso-overlay h2 { margin: 0; font-size: 18px; }
+.accesso-overlay p { margin: 0; font-size: 14px; color: var(--muted); }

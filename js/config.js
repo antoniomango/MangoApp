@@ -10,11 +10,11 @@
 const AMBIENTI = {
   produzione: {
     url:  'https://mtpzfxnyfkzikzlkomwz.supabase.co',
-    anon: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10cHpmeG55Zmt6aWt6bGtvbXd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2NzczNzEsImV4cCI6MjA5NzI1MzM3MX0.3JxpgQORCSUUdSgawmcizNgaJhpDnmQ_zT_c41WfJbs'
+    anon: 'sb_publishable_enADFCnzAdVajpilZyd_6Q_JIOZVW2u'
   },
   test: {
     url:  'https://kpdlynvmsoctagwtzrxr.supabase.co',
-    anon: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtwZGx5bnZtc29jdGFnd3R6cnhyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0MjE3MzgsImV4cCI6MjA5Nzk5NzczOH0._2rKWXsJDFOI42IrN4lJiWFpbC5eievSRWsuFC1BURM'
+    anon: 'sb_publishable_SzV089R7GLT6oox2-ZWdXQ_sPzhWcC5'
   }
 };
 
@@ -67,7 +67,7 @@ async function leggiConfigPubblica(client) {
 // Versione del client — da incrementare SEMPRE insieme a CACHE in sw.js (stesso valore,
 // stesso commit). Letta da responsabile.html per la guardia di versione sulle operazioni
 // distruttive (esportazione/archiviazione) — vedi Checklist-Sicurezza.md nel vault.
-const APP_VERSION = 'mango-v47';
+const APP_VERSION = 'mango-v48';
 
 // ═══════════════════════════════════════════════
 // SETTIMANA ISO 8601 — usata nel dettaglio ordine (operatore.html + responsabile.html)

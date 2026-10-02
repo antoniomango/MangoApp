@@ -595,18 +595,27 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
     </div>
     <h2>Accesso Responsabile</h2>
     <p>Area riservata alla gestione della produzione</p>
-    <div class="form-group">
-      <label>Email</label>
-      <input type="email" id="login-email" placeholder="indirizzo-rimosso@example.org" value="indirizzo-rimosso@example.org">
+    <div id="login-credenziali">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="Email" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" id="login-pwd" placeholder="••••••••" autocomplete="current-password">
+      </div>
     </div>
-    <div class="form-group">
-      <label>Password</label>
-      <input type="password" id="login-pwd" placeholder="••••••••">
+    <div id="login-mfa" style="display:none">
+      <div class="form-group">
+        <label for="login-mfa-codice">Codice a due fattori</label>
+        <input type="text" id="login-mfa-codice" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 cifre dall'app di autenticazione">
+      </div>
     </div>
     <div id="login-err" class="err-msg"></div>
-    <button class="btn btn-primary btn-full" style="margin-top:20px" onclick="doLogin()">
+    <button class="btn btn-primary btn-full" id="login-btn" style="margin-top:20px" onclick="doLogin()">
       Accedi
     </button>
+    <button class="btn btn-secondary btn-full" id="login-mfa-annulla" style="margin-top:8px;display:none" onclick="doLogout()">Annulla</button>
   </div>
 </div>
 
@@ -839,6 +848,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           <button type="button" role="tab" id="ops-tab-ufficio" data-tab="ufficio" aria-controls="ops-pan-ufficio" onclick="operatoriScheda('ufficio')">Ufficio</button>
           <button type="button" role="tab" id="ops-tab-richieste" data-tab="richieste" aria-controls="ops-pan-richieste" onclick="operatoriScheda('richieste')">Richieste <span class="tab-conta" id="ops-tab-ric-conta" hidden>0</span></button>
           <button type="button" role="tab" id="ops-tab-assenze" data-tab="assenze" aria-controls="ops-pan-assenze" onclick="operatoriScheda('assenze')">Assenze</button>
+          <button type="button" role="tab" id="ops-tab-dispositivi" data-tab="dispositivi" aria-controls="ops-pan-dispositivi" onclick="operatoriScheda('dispositivi')">Telefoni <span class="tab-conta" id="ops-tab-disp-conta" hidden>0</span></button>
         </div>
 
         <div id="ops-pan-produzione" class="ric-vista" role="tabpanel" aria-labelledby="ops-tab-produzione">
@@ -883,6 +893,11 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
             </div>
             <div class="card" id="ric-storico-corpo" style="overflow-x:auto"></div>
           </div>
+        </div>
+
+        <div id="ops-pan-dispositivi" class="ric-vista" role="tabpanel" aria-labelledby="ops-tab-dispositivi" hidden>
+          <div class="sub" style="color:var(--muted);font-size:13px;margin-bottom:12px">Ogni telefono (o PC) deve essere approvato da te prima di poter entrare. Un telefono nuovo mostra un codice: confrontalo con quello in elenco prima di approvare. "Blocca" toglie subito l'accesso a quel telefono.</div>
+          <div id="disp-elenco"><div style="color:var(--muted);padding:20px">Caricamento…</div></div>
         </div>
 
         <div id="ops-pan-assenze" class="ric-vista" role="tabpanel" aria-labelledby="ops-tab-assenze" hidden>
@@ -1568,6 +1583,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           </div>
         </div>
         <div class="card" id="sistema-config-body" style="padding:20px;max-width:640px">Caricamento…</div>
+        <div class="card" id="sicurezza-account-body" style="padding:20px;max-width:640px;margin-top:16px"></div>
         <div class="card" id="sistema-job-body" style="padding:20px;max-width:640px;margin-top:16px"></div>
       </section>
 
@@ -2049,8 +2065,8 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label id="op-pin-label">PIN (4 cifre) *</label>
-          <input type="password" id="op-pin" placeholder="••••" maxlength="4" pattern="[0-9]{4}">
+          <label id="op-pin-label">PIN (6 cifre) *</label>
+          <input type="password" id="op-pin" placeholder="••••••" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" autocomplete="off">
           <div id="op-pin-hint" style="display:none;font-size:11px;color:var(--muted);margin-top:4px">Lascia vuoto per non cambiare il PIN</div>
         </div>
         <div class="form-group">
@@ -2294,14 +2310,15 @@ async function init() {
   const { data: { session } } = await sb.auth.getSession();
   if (session) {
     currentUser = session.user;
-    await postLogin();
+    if (await mfaDaCompletare()) mostraMfaLogin(); else await postLogin();
   }
 
   sb.auth.onAuthStateChange(async (event, session) => {
     if (event === 'SIGNED_IN' && session) {
       currentUser = session.user;
-      await postLogin();
+      if (await mfaDaCompletare()) mostraMfaLogin(); else await postLogin();
     } else if (event === 'SIGNED_OUT') {
+      ripristinaLoginCredenziali();
       fermaContatoriRichieste();
       // Il dispositivo non riceve più le push del responsabile uscito (alias external_id)
       _pushAliasResp = null;
@@ -2385,7 +2402,7 @@ async function postLogin() {
   setupRealtime();
   scheduleEndOfShiftRefresh();
   initOneSignalResp();
-  if (currentUserRow?.ruolo === 'responsabile') { aggiornaBadgeRichieste(); avviaContatoriRichieste(); }
+  if (currentUserRow?.ruolo === 'responsabile') { aggiornaBadgeRichieste(); aggiornaBadgeDispositivi(); avviaContatoriRichieste(); }
   // Render in base al ruolo
   if (currentUserRow?.ruolo === 'sola_lettura') {
     // Nascondi nav e funzioni non pertinenti all'ufficio
@@ -2417,6 +2434,7 @@ function _sezioneDaLink() {
 // AUTH
 // ═══════════════════════════════════════════════
 async function doLogin() {
+  if (_mfaLoginAttivo) { await confermaMfaLogin(); return; }
   const email = document.getElementById('login-email').value.trim();
   const pwd = document.getElementById('login-pwd').value;
   const errEl = document.getElementById('login-err');
@@ -2430,6 +2448,48 @@ async function doLogin() {
 }
 
 document.getElementById('login-pwd').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('login-mfa-codice').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+// ── verifica a due fattori (codice dell'app di autenticazione) ──
+let _mfaLoginAttivo = false;
+async function mfaDaCompletare() {
+  try {
+    const { data } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+    return !!data && data.nextLevel === 'aal2' && data.currentLevel !== 'aal2';
+  } catch (e) { return false; }
+}
+function mostraMfaLogin() {
+  _mfaLoginAttivo = true;
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('login-credenziali').style.display = 'none';
+  document.getElementById('login-mfa').style.display = 'block';
+  document.getElementById('login-mfa-annulla').style.display = '';
+  document.getElementById('login-btn').textContent = 'Conferma codice';
+  document.getElementById('login-err').style.display = 'none';
+  document.getElementById('login-mfa-codice').value = '';
+  document.getElementById('login-mfa-codice').focus();
+}
+function ripristinaLoginCredenziali() {
+  _mfaLoginAttivo = false;
+  document.getElementById('login-credenziali').style.display = '';
+  document.getElementById('login-mfa').style.display = 'none';
+  document.getElementById('login-mfa-annulla').style.display = 'none';
+  document.getElementById('login-btn').textContent = 'Accedi';
+  document.getElementById('login-pwd').value = '';
+}
+async function confermaMfaLogin() {
+  const errEl = document.getElementById('login-err');
+  errEl.style.display = 'none';
+  const codice = document.getElementById('login-mfa-codice').value.replace(/\s/g, '');
+  const { data: fattori } = await sb.auth.mfa.listFactors();
+  const fattore = (fattori?.totp || []).find(f => f.status === 'verified');
+  const { error } = fattore ? await sb.auth.mfa.challengeAndVerify({ factorId: fattore.id, code: codice }) : { error: new Error('nessun fattore') };
+  if (error) { errEl.textContent = 'Codice non valido. Riprova.'; errEl.style.display = 'block'; return; }
+  _mfaLoginAttivo = false;
+  ripristinaLoginCredenziali();
+  await postLogin();
+}
 
 async function doLogout() {
   await sb.auth.signOut();
@@ -2607,7 +2667,7 @@ async function loadOrdini() {
 
 async function loadOperatori() {
   const { data } = await sb.from('users')
-    .select('id, nome, cognome, ruolo, attivo, ore_default, escluso_pianificazione')
+    .select('id, nome, cognome, ruolo, attivo, ore_default, escluso_pianificazione, pin_da_cambiare, pin_da_reimpostare')
     .in('ruolo', ['operatore', 'sola_lettura'])
     .neq('eliminato', true)
     .order('cognome');
@@ -3105,7 +3165,75 @@ async function loadSistemaConfig() {
   const { data } = await sb.from('config_sistema').select('chiave, valore');
   _sistema = Object.fromEntries((data || []).map(r => [r.chiave, r.valore]));
   renderSistemaConfig();
+  renderSicurezzaAccount();
   loadJobSchedulati();
+}
+
+// ── Sicurezza dell'account: verifica a due fattori con l'app di autenticazione ──
+async function renderSicurezzaAccount() {
+  const el = document.getElementById('sicurezza-account-body');
+  if (!el || !currentUserRow) return;
+  const [{ data: st }, { data: lf }, { data: aal }] = await Promise.all([
+    sb.rpc('mfa_stato', { p_responsabile_id: currentUserRow.id, p_session_token: null }),
+    sb.auth.mfa.listFactors(),
+    sb.auth.mfa.getAuthenticatorAssuranceLevel(),
+  ]);
+  const verificato = (lf?.totp || []).find(f => f.status === 'verified');
+  const conCodice = aal?.currentLevel === 'aal2';
+  const richiesta = !!st?.richiesta;
+  let corpo;
+  if (!verificato) {
+    corpo = `<div style="font-size:13px;margin-bottom:10px">Non attiva. Con la verifica a due fattori, oltre alla password serve un codice a 6 cifre generato da un'app sul tuo telefono (Google Authenticator, Microsoft Authenticator, Authy…).</div>
+      <button class="btn btn-primary" onclick="mfaAvviaIscrizione()">Attiva la verifica a due fattori</button>
+      <div id="mfa-iscrizione" style="margin-top:14px"></div>`;
+  } else if (!conCodice) {
+    corpo = `<div style="font-size:13px;margin-bottom:10px">Attiva sul tuo account. Per modificare queste impostazioni conferma prima un codice.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><input type="text" id="mfa-codice" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="Codice a 6 cifre" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit;width:170px"><button class="btn btn-primary" onclick="mfaConfermaSessione()">Conferma codice</button></div>`;
+  } else if (!richiesta) {
+    corpo = `<div style="font-size:13px;margin-bottom:10px">Attiva sul tuo account, ma <strong>non ancora obbligatoria</strong>: finché non la rendi obbligatoria, chi conosce la password entra anche senza codice.</div>
+      <button class="btn btn-ok" onclick="mfaImposta(true)">Rendi obbligatoria</button>`;
+  } else {
+    corpo = `<div style="font-size:13px;margin-bottom:10px"><strong>Obbligatoria</strong>: senza il codice non si entra e le operazioni da responsabile sono rifiutate.</div>
+      <button class="btn btn-secondary" onclick="mfaImposta(false)">Togli l'obbligo</button>`;
+  }
+  el.innerHTML = '<div style="font-size:13px;font-weight:600;margin-bottom:6px">Verifica a due fattori (account responsabile)</div>' + corpo;
+}
+
+async function mfaAvviaIscrizione() {
+  const box = document.getElementById('mfa-iscrizione');
+  // un tentativo lasciato a metà va tolto prima di iniziarne un altro
+  const { data: lf } = await sb.auth.mfa.listFactors();
+  for (const f of (lf?.all || []).filter(x => x.factor_type === 'totp' && x.status !== 'verified')) await sb.auth.mfa.unenroll({ factorId: f.id });
+  const { data, error } = await sb.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'MangoApp ' + new Date().toISOString().slice(0, 10) });
+  if (error || !data) { box.innerHTML = '<div style="color:var(--alert);font-size:13px">Impossibile avviare l\'attivazione. Riprova.</div>'; return; }
+  window._mfaFattoreInCorso = data.id;
+  box.innerHTML = `<div style="font-size:13px;margin-bottom:8px">1. Apri l'app di autenticazione e scansiona questo codice (oppure inserisci la chiave a mano).</div>
+    <img alt="Codice QR per l'app di autenticazione" src="${escapeHtml(data.totp.qr_code)}" style="width:180px;height:180px;background:#fff;padding:6px;border-radius:8px">
+    <div style="font-size:12px;margin:8px 0;color:var(--muted)">Chiave: <code style="word-break:break-all">${escapeHtml(data.totp.secret)}</code></div>
+    <div style="font-size:13px;margin-bottom:8px">2. Scrivi qui il codice a 6 cifre che mostra l'app.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><input type="text" id="mfa-codice" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="Codice a 6 cifre" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit;width:170px"><button class="btn btn-primary" onclick="mfaVerificaIscrizione()">Verifica e attiva</button></div>`;
+}
+async function mfaVerificaIscrizione() {
+  const codice = (document.getElementById('mfa-codice')?.value || '').replace(/\s/g, '');
+  const { error } = await sb.auth.mfa.challengeAndVerify({ factorId: window._mfaFattoreInCorso, code: codice });
+  if (error) { toast('Codice non valido: riprova', 'err'); return; }
+  toast('Verifica a due fattori attivata. Ora puoi renderla obbligatoria.', 'ok');
+  renderSicurezzaAccount();
+}
+async function mfaConfermaSessione() {
+  const codice = (document.getElementById('mfa-codice')?.value || '').replace(/\s/g, '');
+  const { data: lf } = await sb.auth.mfa.listFactors();
+  const f = (lf?.totp || []).find(x => x.status === 'verified');
+  const { error } = f ? await sb.auth.mfa.challengeAndVerify({ factorId: f.id, code: codice }) : { error: new Error('nessun fattore') };
+  if (error) { toast('Codice non valido: riprova', 'err'); return; }
+  renderSicurezzaAccount();
+}
+async function mfaImposta(attiva) {
+  if (attiva && !confirm('Da ora, per entrare servirà la password e il codice dell\'app. Se perdi il telefono senza aver salvato la chiave non potrai più entrare da solo. Confermi?')) return;
+  const { data, error } = await sb.rpc('imposta_mfa_responsabile', { p_attiva: attiva, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Operazione non riuscita (' + (data?.errore || error?.message || '') + ')', 'err'); return; }
+  toast(attiva ? 'Verifica a due fattori obbligatoria' : 'Obbligo tolto', 'ok');
+  renderSicurezzaAccount();
 }
 
 function renderSistemaConfig() {
@@ -5126,7 +5254,14 @@ async function confermRiassegna() {
 // ═══════════════════════════════════════════════
 // OPERATORI
 // ═══════════════════════════════════════════════
+function _etichettaPin(op) {
+  if (op.pin_da_reimpostare) return `<div class="op-etichette"><button type="button" class="op-etichetta assenza" title="Il PIN era troppo facile: l'accesso è bloccato finché non imposti un nuovo PIN" onclick="openModalModificaOperatore('${escapeJsAttr(op.id)}')">PIN da reimpostare: accesso bloccato</button></div>`;
+  if (op.pin_da_cambiare) return `<div class="op-etichette"><span class="op-etichetta attesa" title="Al prossimo accesso sceglierà un PIN a 6 cifre">PIN da cambiare al prossimo accesso</span></div>`;
+  return '';
+}
+
 function _cardOperatore(op, conDati, etichette) {
+  etichette = (etichette || '') + _etichettaPin(op);
   return `
     <div class="op-card ${op.attivo ? '' : 'inactive'}">
       <div class="op-name">${escapeHtml(op.nome)} ${escapeHtml(op.cognome)}</div>
@@ -5187,7 +5322,7 @@ function openModalNuovoOperatore(ruolo) {
   document.getElementById('op-ruolo').value = ruolo === 'sola_lettura' ? 'sola_lettura' : 'operatore';
   document.getElementById('op-modal-title').textContent = ruolo === 'sola_lettura' ? 'Nuovo profilo ufficio' : 'Nuovo Operatore';
   document.getElementById('op-modal-btn').textContent = 'Crea';
-  document.getElementById('op-pin-label').textContent = 'PIN (4 cifre) *';
+  document.getElementById('op-pin-label').textContent = 'PIN (6 cifre) *';
   document.getElementById('op-pin-hint').style.display = 'none';
   document.getElementById('op-escluso-pianificazione').checked = false;
   document.getElementById('op-ore-default').value = '';
@@ -5208,7 +5343,7 @@ function openModalModificaOperatore(id) {
   document.getElementById('op-ruolo').value = op.ruolo;
   document.getElementById('op-modal-title').textContent = `Modifica — ${op.nome} ${op.cognome}`;
   document.getElementById('op-modal-btn').textContent = 'Salva';
-  document.getElementById('op-pin-label').textContent = 'Nuovo PIN (4 cifre)';
+  document.getElementById('op-pin-label').textContent = 'Nuovo PIN (6 cifre)';
   document.getElementById('op-pin-hint').style.display = '';
   document.getElementById('op-escluso-pianificazione').checked = !!op.escluso_pianificazione;
   document.getElementById('op-ore-default').value = op.ore_default ?? '';
@@ -5323,7 +5458,9 @@ async function salvaOperatore() {
 
 // Le regole di formato del PIN vivono solo sul server (valida_formato_pin): qui si mostra solo l'esito
 function messaggioPin(err) {
-  return err === 'pin_non_valido' ? 'PIN non valido: servono 4 cifre numeriche' : null;
+  if (err === 'pin_non_valido') return 'PIN non valido: servono 6 cifre numeriche';
+  if (err === 'pin_troppo_semplice') return 'PIN troppo facile: niente cifre uguali, sequenze, ripetizioni o date (es. di nascita)';
+  return null;
 }
 
 async function toggleOperatore(id, attivo) {
@@ -5428,7 +5565,7 @@ async function rimuoviPermessoPeriodo(operatoreId, dal, al) {
 // ═══════════════════════════════════════════════
 // SEZIONE OPERATORI — schede Produzione / Ufficio / Richieste / Assenze
 // ═══════════════════════════════════════════════
-const OPS_SCHEDE = ['produzione', 'ufficio', 'richieste', 'assenze'];
+const OPS_SCHEDE = ['produzione', 'ufficio', 'richieste', 'assenze', 'dispositivi'];
 const OPS_SCHEDA_CHIAVE = 'mangoapp-operatori-scheda';
 let _opsScheda = (() => {
   try { const v = localStorage.getItem(OPS_SCHEDA_CHIAVE); return OPS_SCHEDE.includes(v) ? v : 'produzione'; }
@@ -5468,7 +5605,76 @@ function operatoriScheda(v) {
   if (v === 'produzione') { renderOperatori(); aggiornaStatoAssenze(); }
   else if (v === 'ufficio') renderOperatori();
   else if (v === 'richieste') richiesteVista(_ricVista);
+  else if (v === 'dispositivi') { caricaDispositivi(); avviaAggiornamentoDispositivi(); }
   else { renderAssenze(); aggiornaStatoAssenze(); }
+  if (v !== 'dispositivi') fermaAggiornamentoDispositivi();
+}
+
+// ── Telefoni autorizzati ──
+let _dispositivi = [];
+let _dispTimer = null;
+async function caricaDispositivi() {
+  const { data, error } = await sb.rpc('dispositivi_elenco', { p_responsabile_id: currentUserRow.id, p_session_token: null });
+  const el = document.getElementById('disp-elenco');
+  if (error || !data?.ok) { if (el) el.innerHTML = '<div style="color:var(--alert)">Elenco non disponibile</div>'; return; }
+  _dispositivi = data.dispositivi || [];
+  aggiornaContaDispositivi();
+  renderDispositivi();
+}
+function aggiornaContaDispositivi() {
+  const n = _dispositivi.filter(d => d.stato === 'in_attesa').length;
+  const b = document.getElementById('ops-tab-disp-conta');
+  if (b) { b.textContent = String(n); b.hidden = !n; }
+}
+async function aggiornaBadgeDispositivi() {
+  const { data } = await sb.rpc('dispositivi_elenco', { p_responsabile_id: currentUserRow?.id, p_session_token: null });
+  if (data?.ok) { _dispositivi = data.dispositivi || []; aggiornaContaDispositivi(); }
+}
+function avviaAggiornamentoDispositivi() { fermaAggiornamentoDispositivi(); _dispTimer = setInterval(() => { if (!document.hidden) caricaDispositivi(); }, 10000); }
+function fermaAggiornamentoDispositivi() { if (_dispTimer) { clearInterval(_dispTimer); _dispTimer = null; } }
+function renderDispositivi() {
+  const el = document.getElementById('disp-elenco');
+  if (!el) return;
+  if (!_dispositivi.length) { el.innerHTML = '<div class="empty-state"><p>Nessun telefono registrato</p></div>'; return; }
+  const dt = v => v ? formatDateTime(v) : '—';
+  const stato = { in_attesa: ['In attesa di approvazione', 'var(--warn-ink)'], approvato: ['Approvato', 'var(--ok-ink)'], revocato: ['Bloccato', 'var(--alert)'] };
+  el.innerHTML = '<div class="ops-grid">' + _dispositivi.map(d => {
+    const [t, c] = stato[d.stato] || [d.stato, 'var(--muted)'];
+    const id = escapeJsAttr(d.id);
+    return `<div class="op-card ${d.stato === 'revocato' ? 'inactive' : ''}">
+      <div class="op-name">${escapeHtml(d.etichetta || 'Telefono nuovo')}</div>
+      <div class="op-role" style="color:${c};font-weight:600">${escapeHtml(t)}</div>
+      ${d.stato === 'in_attesa' ? `<div style="margin:8px 0;font-size:12px;color:var(--muted)">Codice sul telefono: <strong style="font-family:var(--font-mono);font-size:20px;color:var(--ink);letter-spacing:.1em">${escapeHtml(d.codice || '')}</strong></div>` : ''}
+      <div style="font-size:12px;color:var(--muted);margin-top:6px">Richiesto: ${escapeHtml(dt(d.creato_il))}${d.stato !== 'in_attesa' ? `<br>Ultimo uso: ${escapeHtml(dt(d.ultimo_uso))}${d.ultimo_utente ? ' · ' + escapeHtml(d.ultimo_utente) : ''}` : ''}</div>
+      <div class="op-actions" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+        ${d.stato !== 'approvato' ? `<button class="btn btn-ok" style="padding:5px 10px;font-size:12px" onclick="approvaDispositivo('${id}')">${d.stato === 'revocato' ? 'Riapprova' : 'Approva'}</button>` : `<button class="btn btn-secondary" style="padding:5px 10px;font-size:12px" onclick="approvaDispositivo('${id}')">Rinomina</button><button class="btn" style="padding:5px 10px;font-size:12px;background:var(--warn-strong);color:var(--on-warn)" onclick="revocaDispositivo('${id}')">Blocca</button>`}
+        <button class="btn" style="padding:5px 10px;font-size:12px;background:var(--alert);color:var(--on-alert)" onclick="eliminaDispositivo('${id}')" aria-label="Rimuovi"><i data-ic="cestino"></i></button>
+      </div>
+    </div>`;
+  }).join('') + '</div>';
+}
+async function approvaDispositivo(id) {
+  const d = _dispositivi.find(x => x.id === id);
+  const nome = prompt('Come vuoi chiamare questo telefono? (es. "Telefono di Mario")', d?.etichetta || '');
+  if (nome === null) return;
+  const { data, error } = await sb.rpc('dispositivo_approva', { p_dispositivo_id: id, p_etichetta: nome, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast(data?.errore === 'etichetta_non_valida' ? 'Scrivi un nome (massimo 60 caratteri)' : 'Operazione non riuscita', 'err'); return; }
+  toast('Telefono approvato', 'ok');
+  caricaDispositivi();
+}
+async function revocaDispositivo(id) {
+  if (!confirm('Bloccare questo telefono? Chi lo sta usando viene disconnesso subito e non potrà più entrare finché non lo riapprovi.')) return;
+  const { data, error } = await sb.rpc('dispositivo_revoca', { p_dispositivo_id: id, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Operazione non riuscita', 'err'); return; }
+  toast('Telefono bloccato', 'ok');
+  caricaDispositivi();
+}
+async function eliminaDispositivo(id) {
+  if (!confirm('Rimuovere questo telefono dall\'elenco? Se è in uso viene disconnesso; per rientrare dovrà essere approvato di nuovo.')) return;
+  const { data, error } = await sb.rpc('dispositivo_elimina', { p_dispositivo_id: id, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Operazione non riuscita', 'err'); return; }
+  toast('Telefono rimosso', 'ok');
+  caricaDispositivi();
 }
 
 function apriRichiesteInAttesa() { _ricVista = 'attesa'; showSection('richieste'); }
@@ -10421,6 +10627,7 @@ function _aggiornaContatori() {
   if (ora - _contatoreUltimo < _CONTATORE_MINIMO_MS) return;
   _contatoreUltimo = ora;
   aggiornaBadgeRichieste();
+  aggiornaBadgeDispositivi();
   loadNotifiche().then(() => {
     if (document.getElementById('sec-notifiche')?.classList.contains('active')) renderNotifiche();
   }).catch(() => {});

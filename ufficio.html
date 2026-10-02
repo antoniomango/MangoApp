@@ -21,6 +21,7 @@
 <script src="js/tema.js"></script>
 <script src="js/icone.js" defer></script>
 <script src="js/pin-pad.js"></script>
+<script src="js/accesso.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js" integrity="sha384-JBR+x8blGwjDRO63aHCGiZMD4VNiTR4ZUGA+N6ZKLf3zNt1fK8IBpcgPaMrxqWBp" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="css/tema.css">
 <style>
@@ -178,6 +179,8 @@ header {
       <span>Mango</span>
     </div>
     <div class="accesso-sotto">Vista Ufficio · sola lettura</div>
+    <!-- Dispositivo non ancora approvato dal responsabile: al posto del nome e del PIN (js/accesso.js) -->
+    <div id="login-dispositivo" class="accesso-dispositivo" aria-live="polite"></div>
     <div class="accesso-nome">
       <label for="login-user-select">Chi sei</label>
       <select id="login-user-select" onchange="suCambioNomeLogin()"><option value="">— Seleziona —</option></select>
@@ -262,6 +265,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
       document.getElementById('login-screen').style.display = 'flex';
       if (window.pinPad) pinPad.azzera();
       showErr('Sessione scaduta — effettua di nuovo l\'accesso');
+      if (typeof preparaLoginDispositivo === 'function') preparaLoginDispositivo();
     }
     return result;
   };
@@ -288,6 +292,8 @@ window.pinPad = MangoPinPad.monta({
   nomeSelezionato: () => !!document.getElementById('login-user-select').value,
   mostraErrore: showErr,
   visibile: () => getComputedStyle(document.getElementById('login-screen')).display !== 'none',
+  lunghezza: 6,
+  minimo: 4,   // i PIN a 4 cifre ancora da cambiare si confermano col tasto ✓
   invia: doLogin,
   suSblocco: () => showErr(''),
 });
@@ -306,22 +312,28 @@ async function init() {
       return;
     } catch(e) { localStorage.removeItem('ufficio-user'); localStorage.removeItem('ufficio-session-token'); }
   }
-  const { data } = await sb.rpc('lista_operatori_login', { p_solo_sola_lettura: true });
+  await preparaLoginDispositivo();
+}
+
+// Il dispositivo deve essere stato approvato dal responsabile: finché non lo è, al posto del nome e del PIN compare il suo codice.
+function preparaLoginDispositivo() {
+  return MangoAccesso.preparaLogin({
+    sb,
+    pannello: document.getElementById('login-dispositivo'),
+    nascondi: [document.querySelector('#login-screen .accesso-nome'), document.getElementById('pinpad')],
+    suApprovato: caricaElencoLogin,
+  });
+}
+
+async function caricaElencoLogin() {
+  const { data } = await sb.rpc('lista_operatori_login', { p_solo_sola_lettura: true, ...MangoAccesso.parametri() });
   const sel = document.getElementById('login-user-select');
   sel.innerHTML = '<option value="">— Seleziona —</option>' +
     (data || []).map(u => `<option value="${u.id}">${esc(u.cognome)} ${esc(u.nome)}</option>`).join('');
 }
 
 // Messaggio d'errore di verifica_pin in forma leggibile (stesso criterio di operatore.html).
-function messaggioErrorePin(data) {
-  const codici = { pin_errato: 'PIN errato', utente_non_trovato: 'Utente non trovato', troppi_tentativi: 'Troppi tentativi errati' };
-  let msg = data?.messaggio || codici[data?.errore] || data?.errore || 'PIN errato';
-  if (data?.bloccato_fino) {
-    const ora = new Date(data.bloccato_fino).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-    msg += ` — riprova dopo le ${ora}`;
-  }
-  return msg;
-}
+function messaggioErrorePin(data) { return MangoAccesso.messaggio(data); }
 
 function suCambioNomeLogin() {
   showErr('');
@@ -332,11 +344,17 @@ function suCambioNomeLogin() {
 async function doLogin(pin) {
   const userId = document.getElementById('login-user-select').value;
   if (!userId) { showErr('Seleziona il tuo nome'); return { ok: false }; }
-  if (typeof pin !== 'string' || pin.length !== 4) { showErr('PIN incompleto'); return { ok: false }; }
+  if (typeof pin !== 'string' || pin.length < 4 || pin.length > 6) { showErr('PIN incompleto'); return { ok: false }; }
   showErr('');
 
-  const { data } = await sb.rpc('verifica_pin', { p_user_id: userId, p_pin: pin });
-  if (!data?.ok) { showErr(messaggioErrorePin(data)); return { ok: false, bloccatoFino: data?.bloccato_fino || null }; }
+  // accesso dal server: dispositivo approvato, PIN, eventuale cambio PIN obbligatorio (4 → 6 cifre)
+  const esito = await MangoAccesso.accedi(sb, userId, pin);
+  if (!esito.ok) {
+    if (esito.data?.errore === 'dispositivo_non_approvato') preparaLoginDispositivo();
+    if (esito.data?.errore !== 'annullato') showErr(messaggioErrorePin(esito.data));
+    return { ok: false, bloccatoFino: esito.data?.bloccato_fino || null };
+  }
+  const data = esito.data;
 
   // La vista ufficio non gestisce push: l'alias push segreto restituito da verifica_pin non si conserva
   const { push_alias: _nonSalvato, ...utente } = data.user || {};
@@ -376,10 +394,10 @@ function doLogout() {
 async function caricaMeta() {
   await Etichette.carica(sb, currentUser?.id, sessionToken);   // etichette da configurazione (tipi, strutture, materiali, priorità)
   await Calendario.carica(sb, currentUser?.id, sessionToken);  // "oggi" nel fuso aziendale
-  const [{ data: macro }, { data: fasi }] = await Promise.all([
-    sb.from('macro_fasi').select('*').order('posizione').order('id'),
-    sb.from('fasi').select('id, nome, posizione, macro_fase_id').order('posizione').order('id')
-  ]);
+  // fasi e macro fasi: lette con la sessione (RPC catalogo_operatore)
+  const { data: cat } = await sb.rpc('catalogo_operatore', { p_user_id: currentUser?.id, p_session_token: sessionToken });
+  const macro = (cat?.ok ? cat.macro_fasi : []) || [];
+  const fasi = (cat?.ok ? cat.fasi : []).map(f => ({ id: f.id, nome: f.nome, posizione: f.posizione, macro_fase_id: f.macro_fase_id })).sort((a, b) => (a.posizione - b.posizione) || (a.id - b.id));
 
   fasiNomi = {};
   (fasi || []).forEach(f => { fasiNomi[f.id] = f; });

@@ -20,9 +20,11 @@
 //     visibile: () => bool,            // la tastiera fisica reagisce solo se la schermata è visibile
 //     invia: async (pin) => ({ ok, bloccatoFino, continua }),
 //     suSblocco: () => {},             // opzionale, a fine blocco
-//     titolo: 'Inserisci il PIN'       // opzionale
+//     titolo: 'Inserisci il PIN',      // opzionale
+//     lunghezza: 6,                    // opzionale: cifre del PIN (predefinito 6)
+//     minimo: 4                        // opzionale: sotto la lunghezza piena compare il tasto ✓ per confermare (PIN a 4 cifre ancora da cambiare)
 //   });
-//   pad.azzera(); pad.fermaTastiera(); pad.impostaTitolo(testo);
+//   pad.azzera(); pad.fermaTastiera(); pad.impostaTitolo(testo); pad.impostaMinimo(n);
 //
 // Più PIN in sequenza (cambio PIN: attuale, nuovo, conferma): invia() restituisce
 // { ok: true, continua: true } per passare al PIN successivo senza chiudere il tastierino;
@@ -38,7 +40,9 @@
   }
 
   function monta(opz) {
-    var LUNG = 4;
+    var LUNG = opz.lunghezza || 6;
+    var MIN = Math.min(opz.minimo || LUNG, LUNG);
+    var conferma = null;
     var pin = '';                 // unica copia del PIN in memoria
     var occupato = false;         // richiesta in corso
     var bloccato = false;         // blocco per troppi tentativi
@@ -62,7 +66,16 @@
     tasti.setAttribute('role', 'group');
     tasti.setAttribute('aria-label', 'Tastierino PIN');
     ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', 'canc'].forEach(function (k) {
-      if (k === '') { tasti.appendChild(el('span', 'pinpad-vuoto')); return; }
+      if (k === '') {
+        // posto del tasto ✓: serve solo quando il PIN può avere meno cifre della lunghezza piena
+        conferma = el('button', 'pinpad-tasto pinpad-conferma');
+        conferma.type = 'button';
+        conferma.textContent = '✓';
+        conferma.setAttribute('aria-label', 'Conferma');
+        conferma.addEventListener('click', function () { invia(); });
+        tasti.appendChild(conferma);
+        return;
+      }
       var b = el('button', 'pinpad-tasto');
       b.type = 'button';
       if (k === 'canc') {
@@ -90,11 +103,20 @@
     function mostraPallini(n) {
       Array.prototype.forEach.call(dots.children, function (d, idx) { d.classList.toggle('piena', idx < n); });
       stato.textContent = n === 0 ? '' : (n === 1 ? '1 cifra su ' + LUNG : n + ' cifre su ' + LUNG);
+      aggiornaConferma();
+    }
+
+    function aggiornaConferma() {
+      if (!conferma) return;
+      var serve = MIN < LUNG;
+      conferma.style.visibility = serve ? 'visible' : 'hidden';
+      conferma.disabled = !serve || occupato || bloccato || pin.length < MIN || pin.length >= LUNG;
     }
 
     function abilita(si) {
       pulsanti.forEach(function (b) { b.disabled = !si; });
       root.classList.toggle('pinpad--disabilitato', !si);
+      aggiornaConferma();
     }
 
     function scuoti() {
@@ -134,7 +156,7 @@
 
     function invia() {
       if (occupato || bloccato) return;
-      if (pin.length !== LUNG) { opz.mostraErrore('Inserisci il PIN completo (4 cifre)'); return; }
+      if (pin.length < MIN || pin.length > LUNG) { opz.mostraErrore(MIN === LUNG ? 'Inserisci il PIN completo (' + LUNG + ' cifre)' : 'Inserisci il PIN completo (da ' + MIN + ' a ' + LUNG + ' cifre)'); return; }
       occupato = true;
       abilita(false);
       var tentativo = pin;
@@ -185,10 +207,11 @@
     }
 
     function impostaTitolo(testo) { titolo.textContent = testo; }
+    function impostaMinimo(n) { MIN = Math.min(n || LUNG, LUNG); aggiornaConferma(); }
 
     mostraPallini(0);
     attivaTastiera();
-    return { azzera: azzera, fermaTastiera: fermaTastiera, impostaTitolo: impostaTitolo };
+    return { azzera: azzera, fermaTastiera: fermaTastiera, impostaTitolo: impostaTitolo, impostaMinimo: impostaMinimo };
   }
 
   window.MangoPinPad = { monta: monta };
