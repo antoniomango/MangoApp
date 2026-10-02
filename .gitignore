@@ -45,9 +45,17 @@ guida_operatori.pdf
 logo.png
 package.json
 
-# Eccezione: la suite di test di autorizzazione (test/security/) ha bisogno del proprio
-# package.json/lock per essere installabile ed eseguibile da chiunque — non un file operativo
-# locale come gli altri ignorati sopra. Deve stare per ultimo nel file: un pattern successivo
-# che corrispondesse di nuovo a questi percorsi vincerebbe su questa eccezione.
-!test/security/package.json
-!test/security/package-lock.json
+# Solo uso locale: il repository è pubblico, queste cartelle e questi file non vanno pubblicati
+supabase/
+supabase_schema.sql
+test/
+CLAUDE.md
+brief-mango-cowork.md
+frontend-analysis.md
+PROMPT_MIGRAZIONE_NUOVO_PC.txt
+BACKUP_DATABASE.ps1
+WATCHDOG_SERVER.ps1
+AVVIA SERVER.bat
+migrazione_*.sql
+deploy_data.js
+.claude/
