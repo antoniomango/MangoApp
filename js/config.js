@@ -67,7 +67,7 @@ async function leggiConfigPubblica(client) {
 // Versione del client — da incrementare SEMPRE insieme a CACHE in sw.js (stesso valore,
 // stesso commit). Letta da responsabile.html per la guardia di versione sulle operazioni
 // distruttive (esportazione/archiviazione) — vedi Checklist-Sicurezza.md nel vault.
-const APP_VERSION = 'mango-v46';
+const APP_VERSION = 'mango-v47';
 
 // ═══════════════════════════════════════════════
 // SETTIMANA ISO 8601 — usata nel dettaglio ordine (operatore.html + responsabile.html)
@@ -160,7 +160,8 @@ async function _headerAutorizzazione() {
   }
 }
 
-async function caricaERenderizzaFoto(containerId, ordineFaseId) {
+// Con ordineId (e ordineFaseId null) mostra TUTTE le foto dell'ordine (livello ordine + vecchie di fase), per data di caricamento.
+async function caricaERenderizzaFoto(containerId, ordineFaseId, ordineId = null) {
   const container = document.getElementById(containerId);
   if (!container) return;
   if (!navigator.onLine) {
@@ -174,7 +175,9 @@ async function caricaERenderizzaFoto(containerId, ordineFaseId) {
   try {
     const r = await sb.functions.invoke('allegato-url', {
       headers: await _headerAutorizzazione(),
-      body: { p_user_id: identita.userId, p_session_token: identita.sessionToken, p_ordine_fase_id: ordineFaseId }
+      body: ordineId
+        ? { p_user_id: identita.userId, p_session_token: identita.sessionToken, p_ordine_id: ordineId }
+        : { p_user_id: identita.userId, p_session_token: identita.sessionToken, p_ordine_fase_id: ordineFaseId }
     });
     risposta = r.data;
     if (r.error || !risposta?.ok) throw (r.error || new Error(risposta?.errore || 'errore'));
@@ -186,7 +189,7 @@ async function caricaERenderizzaFoto(containerId, ordineFaseId) {
 
   const items = risposta.allegati || [];
   _fotoViewerState = { items, idx: 0, ordineFaseId, containerId, selezione: new Set(), modoSelezione: false,
-    onRicarica: () => caricaERenderizzaFoto(containerId, ordineFaseId) };
+    onRicarica: () => caricaERenderizzaFoto(containerId, ordineFaseId, ordineId) };
 
   if (!items.length) {
     container.innerHTML = '<div class="note-box" style="color:var(--muted,#7A6E65)">Nessuna foto allegata.</div>';
@@ -276,8 +279,169 @@ async function _fotoEliminaSelezionate() {
   const fatto = await _eliminaAllegatiConConferma(ids);
   if (fatto) {
     // Non fidarsi dello stato locale filtrato: ricarica per davvero dal server.
-    await caricaERenderizzaFoto(_fotoViewerState.containerId, _fotoViewerState.ordineFaseId);
+    if (_fotoViewerState.onRicarica) await _fotoViewerState.onRicarica();
   }
+}
+
+// ── Foto dell'ORDINE (mango-v47): allegare, da operatore e responsabile, finché l'ordine non è spedito ──
+// Una sola sezione per ordine: pulsante "Allega foto a questo ordine" (Scatta foto / Allega da galleria, anteprima, caricamento con avanzamento)
+// e sotto le miniature di tutte le foto dell'ordine. Chi può caricare lo decide il server (autorizza_upload_allegato + salva_allegato);
+// qui si nasconde solo il pulsante. Nessuna coda offline: senza connessione si avvisa e basta.
+const _fotoOrdineStato = {};   // containerId -> { ordineId, files: [], urls: [], invio: false }
+const FOTO_ORDINE_TIPI = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif' };
+const FOTO_ORDINE_ERRORI = {
+  ordine_spedito: 'Ordine già spedito: non si possono più allegare foto',
+  ordine_non_modificabile: 'Questo ordine non è più modificabile',
+  ordine_non_trovato: 'Ordine non trovato',
+  sessione_non_valida: 'Sessione scaduta, effettua di nuovo l\'accesso',
+  non_autorizzato: 'Non puoi allegare foto a questo ordine',
+  accesso_sola_lettura: 'Account in sola lettura: non puoi allegare foto',
+  estensione_non_consentita: 'Formato foto non supportato',
+};
+
+function _fotoOrdineOnline() { return (typeof isOnline !== 'undefined') ? !!isOnline : navigator.onLine; }
+function _estensioneFoto(file) { return FOTO_ORDINE_TIPI[file.type] || ((file.name || '').split('.').pop() || 'jpg').toLowerCase(); }
+async function _corpoErroreEdge(error, data) {
+  if (data && typeof data === 'object' && data.errore) return data;
+  try { return await error?.context?.json(); } catch (e) { return null; }
+}
+function fotoOrdineMessaggio(r) { return r?.messaggio || FOTO_ORDINE_ERRORI[r?.errore] || 'Foto non caricata: riprova'; }
+
+// Carica UNA foto all'ordine (firma di upload, upload su storage, registrazione): { ok, errore, messaggio }
+async function fotoOrdineCarica(file, ordineId, idx) {
+  const identita = _identitaCorrente();
+  try {
+    const { data: firma, error: eFirma } = await sb.functions.invoke('allegato-upload', {
+      headers: await _headerAutorizzazione(),
+      body: { p_user_id: identita.userId, p_session_token: identita.sessionToken, tipo: 'ordine', ordine_id: ordineId, estensione: _estensioneFoto(file), indice: idx }
+    });
+    if (eFirma || !firma?.ok) { const b = await _corpoErroreEdge(eFirma, firma); return { ok: false, errore: b?.errore, messaggio: b?.messaggio }; }
+    const { error: upErr } = await sb.storage.from('allegati-fasi').uploadToSignedUrl(firma.path, firma.token, file);
+    if (upErr) { console.error('Upload foto:', upErr); return { ok: false, errore: 'upload_fallito' }; }
+    const { data: ins, error: eIns } = await sb.rpc('salva_allegato', { p_url_file: firma.path, p_operatore_id: identita.userId, p_session_token: identita.sessionToken, p_ordine_id: ordineId });
+    if (eIns || !ins?.ok) return { ok: false, errore: ins?.errore, messaggio: ins?.messaggio };
+    return { ok: true };
+  } catch (e) {
+    console.error('Caricamento foto ordine:', e);
+    return { ok: false, errore: 'rete' };
+  }
+}
+
+function renderSezioneFotoOrdine(containerId, ordineId, opzioni = {}) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
+  const vecchio = _fotoOrdineStato[containerId];
+  if (vecchio) vecchio.urls.forEach(u => URL.revokeObjectURL(u));
+  _fotoOrdineStato[containerId] = { ordineId, files: [], urls: [], invio: false, onCaricate: opzioni.onCaricate || null };
+  const identita = _identitaCorrente();
+  const puoAllegare = !opzioni.spedito && !identita?.soloLettura;
+  c.innerHTML = (puoAllegare ? `
+    <button type="button" class="btn btn-primary foto-ord-btn" id="${containerId}-apri" onclick="fotoOrdineApri('${containerId}')"><i data-ic="fotocamera"></i> Allega foto a questo ordine</button>
+    <div class="foto-ord-pannello" id="${containerId}-pannello" style="display:none">
+      <div class="foto-ord-azioni">
+        <button type="button" class="btn btn-secondary" onclick="fotoOrdineScatta('${containerId}')"><i data-ic="fotocamera"></i> Scatta foto</button>
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('${containerId}-gal').click()"><i data-ic="immagine"></i> Allega da galleria</button>
+      </div>
+      <input type="file" id="${containerId}-gal" accept="image/*" multiple style="display:none" onchange="fotoOrdineAggiungi('${containerId}', this)">
+      <input type="file" id="${containerId}-cam" accept="image/*" capture="environment" style="display:none" onchange="fotoOrdineAggiungi('${containerId}', this)">
+      <div class="foto-ord-anteprima" id="${containerId}-anteprima"></div>
+      <button type="button" class="btn btn-ok" id="${containerId}-carica" disabled onclick="fotoOrdineInvia('${containerId}')">Carica foto</button>
+      <div class="foto-ord-barra" id="${containerId}-barra" style="display:none"><div id="${containerId}-barra-i"></div></div>
+      <div class="foto-ord-stato" id="${containerId}-stato" aria-live="polite"></div>
+    </div>` : "") + (opzioni.onCaricate ? "" : `<div id="${containerId}-griglia"></div>`);
+  if (!opzioni.onCaricate) caricaERenderizzaFoto(containerId + "-griglia", null, ordineId);
+}
+
+function fotoOrdineApri(containerId) {
+  if (!_fotoOrdineOnline()) { toast('Per allegare foto serve la connessione', 'err'); return; }
+  const p = document.getElementById(containerId + '-pannello');
+  if (p) p.style.display = p.style.display === 'none' ? '' : 'none';
+}
+
+function fotoOrdineScatta(containerId) {
+  if (!_fotoOrdineOnline()) { toast('Per allegare foto serve la connessione', 'err'); return; }
+  const st = _fotoOrdineStato[containerId];
+  // operatore.html ha la fotocamera interna (più scatti, mai la galleria di sistema); altrove si usa il selettore con fotocamera
+  if (typeof apriFotocameraInterna === 'function') apriFotocameraInterna(st.ordineId);
+  else document.getElementById(containerId + '-cam')?.click();
+}
+
+function fotoOrdineAggiungi(containerId, input) {
+  const st = _fotoOrdineStato[containerId];
+  if (!st) return;
+  [...input.files].forEach(f => { st.files.push(f); st.urls.push(URL.createObjectURL(f)); });
+  input.value = '';
+  _fotoOrdineDisegnaAnteprima(containerId);
+}
+
+function fotoOrdineTogli(containerId, i) {
+  const st = _fotoOrdineStato[containerId];
+  if (!st || st.invio) return;
+  URL.revokeObjectURL(st.urls[i]); st.files.splice(i, 1); st.urls.splice(i, 1);
+  _fotoOrdineDisegnaAnteprima(containerId);
+}
+
+function _fotoOrdineDisegnaAnteprima(containerId) {
+  const st = _fotoOrdineStato[containerId];
+  const el = document.getElementById(containerId + '-anteprima');
+  if (!st || !el) return;
+  el.innerHTML = st.files.map((_, i) => `<div class="foto-ord-item"><img class="foto-thumb" src="${st.urls[i]}" alt="Foto ${i + 1}"><button type="button" aria-label="Togli foto" onclick="fotoOrdineTogli('${containerId}', ${i})">✕</button></div>`).join('');
+  const b = document.getElementById(containerId + '-carica');
+  if (b) { b.disabled = st.invio || !st.files.length; b.textContent = st.files.length ? `Carica ${st.files.length} ${st.files.length === 1 ? 'foto' : 'foto'}` : 'Carica foto'; }
+}
+
+async function fotoOrdineInvia(containerId) {
+  const st = _fotoOrdineStato[containerId];
+  if (!st || st.invio || !st.files.length) return;
+  if (!_fotoOrdineOnline()) { toast('Per allegare foto serve la connessione', 'err'); return; }
+  st.invio = true;
+  const btn = document.getElementById(containerId + '-carica');
+  const barra = document.getElementById(containerId + '-barra'), barraI = document.getElementById(containerId + '-barra-i');
+  const stato = document.getElementById(containerId + '-stato');
+  if (btn) btn.disabled = true;
+  if (barra) barra.style.display = '';
+  const totale = st.files.length;
+  const rimaste = [], urlRimaste = [];
+  let riuscite = 0, ultimoErrore = null;
+  for (let i = 0; i < totale; i++) {
+    if (stato) stato.textContent = `Caricamento foto ${i + 1} di ${totale}…`;
+    if (barraI) barraI.style.width = Math.round((i / totale) * 100) + '%';
+    const r = await fotoOrdineCarica(st.files[i], st.ordineId, i + 1);
+    if (r.ok) { riuscite++; URL.revokeObjectURL(st.urls[i]); }
+    else {
+      ultimoErrore = r; rimaste.push(st.files[i]); urlRimaste.push(st.urls[i]);
+      if (r.errore === 'ordine_spedito') {   // spedito nel frattempo: le foto che restano non si possono più allegare
+        for (let j = i + 1; j < totale; j++) { rimaste.push(st.files[j]); urlRimaste.push(st.urls[j]); }
+        break;
+      }
+    }
+  }
+  st.files = rimaste; st.urls = urlRimaste; st.invio = false;
+  if (barraI) barraI.style.width = '100%';
+  if (ultimoErrore?.errore === 'ordine_spedito') {
+    toast(fotoOrdineMessaggio(ultimoErrore), 'err');
+    renderSezioneFotoOrdine(containerId, st.ordineId, { spedito: true, onCaricate: st.onCaricate });
+    return;
+  }
+  if (barra) barra.style.display = 'none';
+  if (barraI) barraI.style.width = '0';
+  _fotoOrdineDisegnaAnteprima(containerId);
+  if (ultimoErrore) {
+    if (stato) stato.textContent = `${riuscite} caricate, ${rimaste.length} no: premi di nuovo "Carica" per riprovare`;
+    toast(`${fotoOrdineMessaggio(ultimoErrore)} (${riuscite}/${totale} caricate)`, 'err');
+  } else {
+    if (stato) stato.textContent = '';
+    toast(`${riuscite} ${riuscite === 1 ? 'foto caricata' : 'foto caricate'}`, 'ok');
+    const p = document.getElementById(containerId + '-pannello'); if (p) p.style.display = 'none';
+  }
+  if (riuscite) { if (st.onCaricate) st.onCaricate(); else caricaERenderizzaFoto(containerId + "-griglia", null, st.ordineId); }
+}
+
+// dopo uno scatto con la fotocamera interna (operatore.html): rilegge le miniature di quell'ordine
+function fotoOrdineRicarica(ordineId) {
+  Object.keys(_fotoOrdineStato).forEach(cid => {
+    if (_fotoOrdineStato[cid].ordineId === ordineId && document.getElementById(cid + '-griglia')) caricaERenderizzaFoto(cid + '-griglia', null, ordineId);
+  });
 }
 
 // ── Visualizzatore a schermo intero: zoom (pinch + doppio tocco), navigazione,

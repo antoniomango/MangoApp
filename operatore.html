@@ -197,12 +197,6 @@ textarea:focus { border-color: var(--accent); }
 #foto-cam-progress { display:none; color:var(--media-ink); text-align:center; padding:6px; background:var(--media-bar); font-size:13px; flex:0 0 auto; }
 
 /* ── DIALOG SPEDIZIONE UNICA (completamento fase di gruppo) ── */
-#foto-obb-dialog { display:none; position:fixed; inset:0; z-index:9500; background:var(--overlay-soft); align-items:center; justify-content:center; padding:20px; }
-#foto-obb-dialog.open { display:flex; }
-#foto-obb-dialog .box { background:var(--surface); border-radius:var(--radius-card); padding:20px; max-width:380px; width:100%; max-height:90vh; overflow:auto; }
-#foto-obb-dialog .box h4 { margin:0 0 8px; font-size:16px; }
-#foto-obb-dialog .box p { font-size:14px; color:var(--muted); margin:0 0 12px; }
-#foto-obb-dialog .conta { font-family:var(--font-mono); font-size:18px; font-weight:700; text-align:center; margin:6px 0 12px; }
 #gruppo-fase-dialog { display:none; position:fixed; inset:0; z-index:9500; background:var(--overlay-soft); align-items:center; justify-content:center; padding:20px; }
 #gruppo-fase-dialog.open { display:flex; }
 #gruppo-fase-dialog .box { background:var(--surface); border-radius:var(--radius-card); padding:20px; max-width:380px; width:100%; }
@@ -410,6 +404,8 @@ textarea:focus { border-color: var(--accent); }
         <div class="page-title" id="ord-det-title"></div>
         <div class="order-meta" id="ord-det-meta"></div>
         <div id="ord-det-btn-spedito"></div>
+        <div class="section-title">Foto dell'ordine</div>
+        <div id="ord-det-foto" style="margin-bottom:16px"></div>
         <div class="section-title">Fasi di produzione</div>
         <div class="card" id="ord-det-fasi"></div>
       </div>
@@ -528,24 +524,6 @@ textarea:focus { border-color: var(--accent); }
     <button type="button" id="foto-cam-btn-scatta" onclick="scattaFotoInterna()" aria-label="Scatta foto"></button>
   </div>
   <div id="foto-cam-progress"></div>
-</div>
-
-<!-- FOTO OBBLIGATORIE — passo prima del completamento (C.7) -->
-<div id="foto-obb-dialog" role="dialog" aria-modal="true" aria-labelledby="foto-obb-titolo">
-  <div class="box">
-    <h4 id="foto-obb-titolo"><i data-ic="fotocamera"></i> Foto obbligatorie</h4>
-    <p id="foto-obb-testo"></p>
-    <div class="conta" id="foto-obb-conta" aria-live="polite"></div>
-    <div class="foto-preview" id="foto-obb-anteprima"></div>
-    <div style="display:flex;gap:8px;margin-bottom:12px">
-      <label class="upload-btn" style="flex:1;width:auto;margin-bottom:0" onclick="document.getElementById('foto-obb-cam').click()"><i data-ic="fotocamera"></i> Scatta foto</label>
-      <label class="upload-btn" style="flex:1;width:auto;margin-bottom:0" onclick="document.getElementById('foto-obb-gal').click()"><i data-ic="immagine"></i> Allega da galleria</label>
-    </div>
-    <input type="file" id="foto-obb-cam" accept="image/*" capture="environment" style="display:none">
-    <input type="file" id="foto-obb-gal" accept="image/*" multiple style="display:none">
-    <button type="button" class="btn btn-ok" id="foto-obb-ok" disabled>✓ Conferma e completa</button>
-    <button type="button" class="btn btn-secondary" style="margin-top:8px" id="foto-obb-annulla">Annulla</button>
-  </div>
 </div>
 
 <!-- SPEDIZIONE UNICA — dialog completamento fase di gruppo -->
@@ -1410,6 +1388,7 @@ async function openOrdineDetail(ordineId) {
   currentOrdineId = ordineId;
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-ordine').classList.add('active');
+  const fotoOrd = document.getElementById('ord-det-foto'); if (fotoOrd) fotoOrd.dataset.chiave = '';   // riapertura: rilegge le foto dell'ordine
   await renderOrdineDetail(ordineId);
 }
 
@@ -1431,6 +1410,14 @@ async function renderOrdineDetail(ordineId) {
     ${fratelliGruppoDet.length ? `<div class="meta-item" style="grid-column:1/-1"><label><i data-ic="pacco"></i> Spedizione unica</label><span style="color:var(--accent);font-weight:600">Insieme a ${escapeHtml(fratelliGruppoDet.join(', '))}</span></div>` : ''}
     ${ordine.note_generali ? `<div class="meta-item" style="grid-column:1/-1"><label>Note</label><span class="nota-ordine-testo">${escapeHtml(ordine.note_generali)}</span></div>` : ''}
   `;
+
+  // Foto dell'ordine: pulsante "Allega foto" (solo se l'ordine non è spedito) + miniature di tutte le foto dell'ordine.
+  // Non si ridisegna se è già mostrata per lo stesso ordine e stato, così le foto in anteprima non si perdono ai refresh.
+  const fotoEl = document.getElementById('ord-det-foto');
+  if (fotoEl) {
+    const chiave = ordineId + '|' + (ordine.stato === 'spedito' ? 's' : 'a');
+    if (fotoEl.dataset.chiave !== chiave) { fotoEl.dataset.chiave = chiave; renderSezioneFotoOrdine('ord-det-foto', ordineId, { spedito: ordine.stato === 'spedito' }); }
+  }
 
   // Pulsante Spedisci — visibile solo se ordine in attesa corriere
   const btnSpeditoEl = document.getElementById('ord-det-btn-spedito');
@@ -1767,7 +1754,6 @@ async function openFaseDetail(ordFaseId, ordineId) {
 }
 
 async function renderFaseDetail(ordFaseId, ordineId) {
-  _fotoAccumulate = []; // reset accumulo foto quando si apre una fase diversa
   let f;
   if (isOnline) {
     const { data: detResp } = await sb.rpc('dettaglio_fase_completa', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ord_fase_id: ordFaseId });
@@ -1807,8 +1793,6 @@ async function renderFaseDetail(ordFaseId, ordineId) {
     bodyHtml += `<div class="note-box"><strong>Note Operatore</strong>${escapeHtml(f.note_operatore)}</div>`;
   }
 
-  // Placeholder foto — popolato dopo inject DOM (fetch reale da DB)
-  bodyHtml += `<div id="foto-fase-container"></div>`;
 
   const sospeso = ordine?.stato === 'sospeso';
   const solaLettura = currentUser.ruolo === 'sola_lettura';
@@ -1876,15 +1860,6 @@ async function renderFaseDetail(ordFaseId, ordineId) {
           <label>Le tue note (opzionale)</label>
           <textarea id="note-op" placeholder="Scrivi eventuali note sul lavoro svolto…">${escapeHtml(f.note_operatore || '')}</textarea>
         </div>
-        <div class="form-group">
-          <label>Foto ${f.foto_richieste ? '(obbligatorie: almeno ' + f.foto_minime + (f.foto_presenti ? ', già caricate ' + f.foto_presenti : '') + ')' : '(opzionale)'}</label>
-          <div style="display:flex;gap:8px">
-            <label class="upload-btn" style="flex:1;width:auto;margin-bottom:0" onclick="apriFotocameraInterna('${ordFaseId}','${ordineId}')"><i data-ic="fotocamera"></i> Scatta foto</label>
-            <label class="upload-btn" style="flex:1;width:auto;margin-bottom:0" onclick="_apriRipiegoInputFile()"><i data-ic="immagine"></i> Allega da galleria</label>
-          </div>
-          <input type="file" id="fase-foto-input" accept="image/*" multiple style="display:none" onchange="previewFaseFoto(this)">
-          <div class="foto-preview" id="fase-foto-preview"></div>
-        </div>
         <button class="btn btn-ok" id="btn-completa-fase" style="margin-top:14px" onclick="completaFase('${ordFaseId}', '${ordineId}')">✓ ${aPezzi ? 'Completata (tutti i pezzi)' : 'Completata'}</button>
       </div>`;
   } else if (f.stato === 'completata') {
@@ -1918,83 +1893,9 @@ async function renderFaseDetail(ordFaseId, ordineId) {
 
   document.getElementById('fase-det-body').innerHTML = bodyHtml;
 
-  // Foto allegate: fetch reale ad ogni apertura (qualunque stato, qualunque operatore), tre
-  // stati distinti (offline/errore/nessuna foto) gestiti dentro caricaERenderizzaFoto —
-  // componente condiviso con responsabile.html, vedi js/config.js. Da qui in poi la lettura
-  // passa dall'edge function allegato-url (session-based), non più da storage diretto: come
-  // anon, l'operatore non ha mai avuto una policy SELECT su storage.objects — vedi nota vault
-  // 2026-09-01-foto-lettura-operatori-visualizzatore.
-  await caricaERenderizzaFoto('foto-fase-container', ordFaseId);
-}
-
-// carica una foto di fase (firma di upload, upload su storage, registrazione dell'allegato): true se tutto è andato bene
-async function caricaFotoFase(file, idx, ordFaseId, ordineId) {
-  const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-  const { data: firma, error: eFirma } = await sb.functions.invoke('allegato-upload', {
-    headers: await _headerAutorizzazione(),
-    body: { p_user_id: currentUser.id, p_session_token: sessionToken, tipo: 'fase', ordine_id: ordineId, ordine_fase_id: ordFaseId, estensione: ext, indice: idx }
-  });
-  if (eFirma || !firma?.ok) { console.error('Firma upload foto:', eFirma || firma?.errore); return false; }
-  const { error: upErr } = await sb.storage.from('allegati-fasi').uploadToSignedUrl(firma.path, firma.token, file);
-  if (upErr) { console.error('Upload foto:', upErr); return false; }
-  const { data: ins } = await sb.rpc('salva_allegato', { p_ordine_fase_id: ordFaseId, p_url_file: firma.path, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-  return !!ins?.ok;
-}
-
-// Passo "foto obbligatorie": raccoglie le foto (Scatta / Galleria), mostra "k di N", conferma attiva solo al minimo, carica e risolve true.
-// Offline: nessun completamento (le foto non si possono caricare) con messaggio chiaro.
-function chiediFotoObbligatorie(ordFaseId, ordineId, minime, presenti) {
-  return new Promise(resolve => {
-    if (!isOnline) { toast(`Servono almeno ${minime} foto: connettiti per completare questa fase`, 'err'); resolve(false); return; }
-    const dlg = document.getElementById('foto-obb-dialog');
-    const cam = document.getElementById('foto-obb-cam'), gal = document.getElementById('foto-obb-gal');
-    const ok = document.getElementById('foto-obb-ok'), ann = document.getElementById('foto-obb-annulla');
-    const files = [];
-    const urls = [];
-    document.getElementById('foto-obb-testo').textContent = `Questa fase richiede almeno ${minime} ${minime === 1 ? 'foto' : 'foto'} per essere completata${presenti ? ' (' + presenti + ' già caricate)' : ''}.`;
-    const disegna = () => {
-      const tot = presenti + files.length;
-      document.getElementById('foto-obb-conta').textContent = `${Math.min(tot, minime)} di ${minime}${tot > minime ? ' (+' + (tot - minime) + ')' : ''}`;
-      ok.disabled = tot < minime;
-      document.getElementById('foto-obb-anteprima').innerHTML = files.map((_, i) => `<div class="thumb-wrap" style="position:relative"><img class="foto-thumb" src="${urls[i]}" alt="Foto ${i + 1}"><button type="button" onclick="this.dispatchEvent(new CustomEvent('rimuovi',{bubbles:true,detail:${i}}))" style="position:absolute;top:-6px;right:-6px;background:var(--scrim-max);color:var(--media-ink);border:none;border-radius:50%;width:22px;height:22px;cursor:pointer" aria-label="Togli foto">✕</button></div>`).join('');
-    };
-    const aggiungi = (lista) => { [...lista].forEach(fl => { files.push(fl); urls.push(URL.createObjectURL(fl)); }); disegna(); };
-    const chiudi = (esito) => {
-      urls.forEach(u => URL.revokeObjectURL(u));
-      dlg.classList.remove('open');
-      cam.onchange = gal.onchange = ok.onclick = ann.onclick = dlg.onrimuovi = null;
-      dlg.removeEventListener('rimuovi', gestRimuovi);
-      resolve(esito);
-    };
-    const gestRimuovi = (e) => { const i = e.detail; URL.revokeObjectURL(urls[i]); files.splice(i, 1); urls.splice(i, 1); disegna(); };
-    dlg.addEventListener('rimuovi', gestRimuovi);
-    cam.value = ''; gal.value = '';
-    cam.onchange = () => { aggiungi(cam.files); cam.value = ''; };
-    gal.onchange = () => { aggiungi(gal.files); gal.value = ''; };
-    ann.onclick = () => chiudi(false);
-    ok.onclick = async () => {
-      ok.disabled = true; ann.disabled = true;
-      let fallite = 0;
-      for (let i = 0; i < files.length; i++) {
-        ok.textContent = `Caricamento foto ${i + 1}/${files.length}…`;
-        if (!(await caricaFotoFase(files[i], i + 1, ordFaseId, ordineId))) fallite++;
-      }
-      ann.disabled = false; ok.textContent = '✓ Conferma e completa';
-      if (fallite) { toast(`${fallite} foto non caricate: riprova`, 'err'); files.length = 0; urls.forEach(u => URL.revokeObjectURL(u)); urls.length = 0; presenti = -1; await aggiornaPresenti(); disegna(); return; }
-      chiudi(true);
-    };
-    // dopo un caricamento parziale si rilegge quante foto ci sono davvero
-    const aggiornaPresenti = async () => {
-      const { data } = await sb.rpc('dettaglio_fase_completa', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ord_fase_id: ordFaseId });
-      presenti = data?.ok ? (data.dati.fase?.foto_presenti || 0) : 0;
-    };
-    disegna();
-    dlg.classList.add('open');
-  });
 }
 
 const ERRORI_COMPLETAMENTO = {
-  foto_insufficienti: 'Servono più foto per completare questa fase',
   sessione_non_valida: 'Sessione scaduta, effettua di nuovo l\'accesso',
   accesso_sola_lettura: 'Account in sola lettura, operazione non consentita',
   fase_bloccata_da_dipendenza: 'Prima va completata una fase precedente',
@@ -2009,15 +1910,11 @@ const ERRORI_COMPLETAMENTO = {
   non_completata: 'La fase non risulta completata',
   ordine_spedito: 'L\'ordine è già spedito',
 };
-const erroreCompletamento = (data, error) => (data?.errore === 'foto_insufficienti' && data.messaggio) || ERRORI_COMPLETAMENTO[data?.errore] || data?.errore || error?.message || 'Operazione non riuscita';
+const erroreCompletamento = (data, error) => ERRORI_COMPLETAMENTO[data?.errore] || data?.errore || error?.message || 'Operazione non riuscita';
 
 // "+1 pezzo" / "−" dal dettaglio fase (per le fasi in cui UN pezzo richiede abbastanza tempo)
 async function pezziFase(ordFaseId, ordineId, azione) {
   if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
-  const fd = _faseDetCorrente;
-  if (azione === 'piu' && fd?.id === ordFaseId && fd.foto_richieste && (fd.pezzi_completati || 0) + 1 >= (fd.pezzi_totali || 1) && (fd.foto_presenti || 0) < fd.foto_minime) {
-    if (!(await chiediFotoObbligatorie(ordFaseId, ordineId, fd.foto_minime, fd.foto_presenti || 0))) return;   // ultimo pezzo: servono le foto
-  }
   const { data, error } = await sb.rpc('pezzi_fase_oggi', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_fase_id: ordFaseId, p_azione: azione });
   if (error || !data?.ok) { toast(erroreCompletamento(data, error), 'err'); return; }
   if (data.completata) toast('Tutti i pezzi fatti: fase completata!', 'ok');
@@ -2056,14 +1953,8 @@ async function completaFase(ordFaseId, ordineId) {
   // Spedizione unica: se la fase ha la proprietà "gruppo_spedizione" e l'ordine è raggruppato, chiedi all'operatore
   // se completare solo questo ordine o tutti quelli della stessa spedizione. Solo online: la
   // scelta richiede di conoscere i fratelli del gruppo, già disponibili in ordiniCache.
-  const fd = _faseDetCorrente?.id === ordFaseId ? _faseDetCorrente : null;
-  if (fd?.foto_richieste) {
-    const mancano = fd.foto_minime - (fd.foto_presenti || 0) - _fotoAccumulate.length;
-    if (!isOnline) { toast(`Servono almeno ${fd.foto_minime} foto: connettiti per completare questa fase`, 'err'); return; }
-    if (mancano > 0) { toast(`Servono almeno ${fd.foto_minime} foto (ne mancano ${mancano}): scatta o allega le foto qui sopra`, 'err'); return; }
-  }
   let modalitaGruppo = false;
-  if (isOnline && !fd?.foto_richieste && _faseDetCorrente?.id === ordFaseId && faseGruppoSpedizione(_faseDetCorrente.fase_id)) {
+  if (isOnline && _faseDetCorrente?.id === ordFaseId && faseGruppoSpedizione(_faseDetCorrente.fase_id)) {
     const ordine = ordiniCache.find(o => o.id === ordineId);
     if (ordine?.gruppo_spedizione_id) {
       const codiciFratelli = ordiniCache
@@ -2080,39 +1971,6 @@ async function completaFase(ordFaseId, ordineId) {
   // Blocca il bottone subito per evitare doppi click
   const btnCompleta = document.getElementById('btn-completa-fase');
   if (btnCompleta) { btnCompleta.disabled = true; btnCompleta.textContent = 'Attendere...'; }
-
-  // Upload foto accumulate (supporta scatti separati su mobile)
-  if (_fotoAccumulate.length && isOnline) {
-    const files = [..._fotoAccumulate];
-    let caricate = 0;
-    let idx = 0;
-    for (const file of files) {
-      idx++;
-      if (btnCompleta) btnCompleta.textContent = `Caricamento foto ${idx}/${files.length}...`;
-      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-      const { data: firma, error: eFirma } = await sb.functions.invoke('allegato-upload', {
-        headers: await _headerAutorizzazione(),
-        body: {
-          p_user_id: currentUser.id,
-          p_session_token: sessionToken,
-          tipo: 'fase',
-          ordine_id: ordineId,
-          ordine_fase_id: ordFaseId,
-          estensione: ext,
-          indice: idx
-        }
-      });
-      if (eFirma || !firma?.ok) { console.error('Firma upload foto:', eFirma || firma?.errore); toast(`Foto ${idx}: errore upload`, 'err'); continue; }
-      const { error: upErr } = await sb.storage.from('allegati-fasi').uploadToSignedUrl(firma.path, firma.token, file);
-      if (upErr) { console.error('Upload foto:', upErr); toast(`Foto ${idx}: errore upload`, 'err'); }
-      else {
-        const { data: insData } = await sb.rpc('salva_allegato', { p_ordine_fase_id: ordFaseId, p_url_file: firma.path, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-        if (!insData?.ok) console.error('Insert allegato: non autorizzato o errore');
-        else caricate++;
-      }
-    }
-    if (caricate < files.length) toast(`Attenzione: caricate ${caricate}/${files.length} foto`, 'err');
-  }
 
   if (btnCompleta) btnCompleta.textContent = 'Completamento...';
 
@@ -2286,53 +2144,6 @@ async function segnaSpedito(ordineId) {
 }
 
 // ═══════════════════════════════════════════════
-// FOTO ALLEGATE — visualizzazione, zoom, selezione ed eliminazione: componente condiviso
-// con responsabile.html, vive in js/config.js (caricaERenderizzaFoto, apriVisualizzatoreFoto
-// e le funzioni di supporto). Qui resta solo l'accumulo delle foto NON ANCORA caricate,
-// specifico del flusso di completamento fase di questa pagina.
-// ═══════════════════════════════════════════════
-
-// Foto accumulate per la fase correntemente aperta (reset su apertura nuova fase)
-let _fotoAccumulate = [];
-
-function previewFaseFoto(input) {
-  // Accumula i nuovi file a quelli già selezionati in precedenza
-  for (const file of input.files) {
-    _fotoAccumulate.push(file);
-  }
-  // Resetta l'input così il prossimo scatto non confonde il browser
-  input.value = '';
-  _renderFotoAccumulate();
-}
-
-function _renderFotoAccumulate() {
-  const el = document.getElementById('fase-foto-preview');
-  if (!el) return;
-  el.innerHTML = '';
-  _fotoAccumulate.forEach((file, idx) => {
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'position:relative;display:inline-block';
-    const img = document.createElement('img');
-    img.className = 'foto-thumb';
-    img.src = URL.createObjectURL(file);
-    const btn = document.createElement('button');
-    btn.textContent = '✕';
-    btn.setAttribute('aria-label', 'Rimuovi foto');
-    btn.title = 'Rimuovi foto';
-    btn.style.cssText = 'position:absolute;top:2px;right:2px;background:var(--scrim-strong);color:var(--media-ink);border:none;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;line-height:1;padding:0';
-    btn.onclick = () => { _fotoAccumulate.splice(idx, 1); _renderFotoAccumulate(); };
-    wrap.appendChild(img); wrap.appendChild(btn);
-    el.appendChild(wrap);
-  });
-  if (_fotoAccumulate.length > 0) {
-    const cnt = document.createElement('div');
-    cnt.style.cssText = 'font-size:12px;color:var(--muted);margin-top:4px';
-    cnt.textContent = `${_fotoAccumulate.length} foto selezionat${_fotoAccumulate.length === 1 ? 'a' : 'e'}`;
-    el.appendChild(cnt);
-  }
-}
-
-// ═══════════════════════════════════════════════
 // FOTOCAMERA INTERNA (getUserMedia) — Voce 5, 2026-09-01
 // ═══════════════════════════════════════════════
 // Requisito: mai l'intent della fotocamera di sistema (riempirebbe la galleria personale
@@ -2362,7 +2173,7 @@ async function caricaFlagFotocameraInterna() {
 
 let _camStream = null;
 let _camScatti = [];       // [{ blob, url, ok: null|true|false }]
-let _camContesto = null;   // { ordFaseId, ordineId }
+let _camContesto = null;   // { ordineId }
 // Compromesso qualità/peso (2026-09-01, Parte B): serve poter zoomare per ispezionare un
 // danno o un difetto — questo richiede PIXEL (risoluzione), non solo qualità di compressione
 // JPEG. 1800px/0,8 (valori precedenti) producevano scatti da 27-74 KB: troppo aggressivo per
@@ -2383,7 +2194,7 @@ function _camStopTracks() {
 document.addEventListener('visibilitychange', () => { if (document.hidden) _camStopTracks(); });
 window.addEventListener('pagehide', _camStopTracks);
 
-// Componente usato solo per le foto di fase — la segnalazione NC (e con essa il secondo uso
+// Componente usato per le foto dell'ordine — la segnalazione NC (e con essa il secondo uso
 // di questo componente) è stata rimossa il 2026-09-01, vedi nota vault
 // 2026-09-01-rimozione-non-conformita.
 // Due pulsanti distinti (2026-09-11): "Scatta foto" chiama sempre apriFotocameraInterna()
@@ -2391,10 +2202,10 @@ window.addEventListener('pagehide', _camStopTracks);
 // già gestito dentro apriFotocameraInterna in caso di getUserMedia negato/non supportato);
 // "Allega da galleria" chiama sempre _apriRipiegoInputFile(), indipendentemente dal flag.
 function _apriRipiegoInputFile() {
-  document.getElementById('fase-foto-input')?.click();
+  document.getElementById('ord-det-foto-gal')?.click();
 }
 
-async function apriFotocameraInterna(ordFaseId, ordineId) {
+async function apriFotocameraInterna(ordineId) {
   // getUserMedia deve partire nello STESSO gesto dell'utente (tocco su "Allega foto"): nessun
   // await prima di questa riga. Su iOS Safari una richiesta scollegata dal gesto viene negata.
   let stream;
@@ -2411,7 +2222,7 @@ async function apriFotocameraInterna(ordFaseId, ordineId) {
   }
   _camStream = stream;
   _camScatti = [];
-  _camContesto = { ordFaseId, ordineId };
+  _camContesto = { ordineId };
   const video = document.getElementById('foto-cam-video');
   video.srcObject = stream;
   document.getElementById('foto-cam-modal').classList.add('open');
@@ -2465,25 +2276,19 @@ function _renderStripFotocamera() {
 function chiudiFotocameraInterna() {
   _camStopTracks();
   document.getElementById('foto-cam-modal').classList.remove('open');
-  const ordFaseId = _camContesto?.ordFaseId;
+  const ordineId = _camContesto?.ordineId;
   _camScatti.forEach(s => URL.revokeObjectURL(s.url));
   _camScatti = [];
   _camContesto = null;
-  // Le foto caricate con la fotocamera interna sono già allegate alla fase in questo punto
-  // (caricaScattiInterni le carica subito, non le accoda) — riallinea la sezione "Foto
-  // allegate" già visibile così l'operatore vede la conferma senza dover riaprire la fase.
-  if (ordFaseId) renderFotoFaseSeAperta(ordFaseId);
-}
-
-async function renderFotoFaseSeAperta(ordFaseId) {
-  if (!document.getElementById('foto-fase-container') || !isOnline) return;
-  await caricaERenderizzaFoto('foto-fase-container', ordFaseId);
+  // Gli scatti caricati sono già allegati all'ordine (caricaScattiInterni li carica subito, non li accoda):
+  // si rileggono le miniature dell'ordine così l'operatore vede la conferma senza riaprire nulla.
+  if (ordineId) fotoOrdineRicarica(ordineId);
 }
 
 async function caricaScattiInterni() {
   if (!_camContesto) return;
   if (!isOnline) { toast('Non disponibile offline — resta qui, riprova quando torna la connessione. Nessuno scatto è stato perso.', 'err'); return; }
-  const { ordFaseId, ordineId } = _camContesto;
+  const { ordineId } = _camContesto;
 
   const daProcessare = _camScatti.filter(s => s.ok !== true);
   if (!daProcessare.length) return;
@@ -2495,7 +2300,7 @@ async function caricaScattiInterni() {
   for (const s of daProcessare) {
     fatte++;
     progress.textContent = `Caricamento ${fatte}/${daProcessare.length}...`;
-    const ok = await _caricaScattoInterno(s, ordFaseId, ordineId);
+    const ok = await _caricaScattoInterno(s, ordineId);
     s.ok = ok;
     if (ok) riuscite++;
   }
@@ -2510,34 +2315,15 @@ async function caricaScattiInterni() {
   }
 }
 
-// Carica un singolo scatto tramite la stessa edge function allegato-upload già usata dal
-// percorso input-file — nessuna nuova autorizzazione, nessuna modifica alla funzione.
-// Allegata subito con salva_allegato: non serve attendere il completamento della fase,
-// esattamente come già fa oggi il caricamento da input file dentro completaFase().
-async function _caricaScattoInterno(scatto, ordFaseId, ordineId) {
-  try {
-    const { data: firma, error: eFirma } = await sb.functions.invoke('allegato-upload', {
-      headers: await _headerAutorizzazione(),
-      body: {
-        p_user_id: currentUser.id,
-        p_session_token: sessionToken,
-        tipo: 'fase',
-        ordine_id: ordineId,
-        ordine_fase_id: ordFaseId,
-        estensione: 'jpg',
-        indice: 1
-      }
-    });
-    if (eFirma || !firma?.ok) { console.error('Firma upload scatto interno:', eFirma || firma?.errore); return false; }
-    const { error: upErr } = await sb.storage.from('allegati-fasi').uploadToSignedUrl(firma.path, firma.token, scatto.blob);
-    if (upErr) { console.error('Upload scatto interno:', upErr); return false; }
-    const { data: insData } = await sb.rpc('salva_allegato', { p_ordine_fase_id: ordFaseId, p_url_file: firma.path, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-    if (!insData?.ok) { console.error('salva_allegato scatto interno: non autorizzato o errore'); return false; }
-    return true;
-  } catch (e) {
-    console.error('Caricamento scatto interno:', e);
-    return false;
+// Carica un singolo scatto sull'ORDINE con lo stesso percorso della galleria (fotoOrdineCarica in js/config.js):
+// allegato-upload (autorizzazione lato server) + salva_allegato. Allegato subito, nessuna coda offline.
+async function _caricaScattoInterno(scatto, ordineId) {
+  const r = await fotoOrdineCarica(scatto.blob, ordineId, 1);
+  if (!r.ok) {
+    console.error('Caricamento scatto interno:', r.errore);
+    if (r.errore === 'ordine_spedito') toast(fotoOrdineMessaggio(r), 'err');
   }
+  return r.ok;
 }
 
 // Il vecchio lightbox (lbOpen/lbClose/lbMove) è stato sostituito dal visualizzatore
@@ -2698,7 +2484,7 @@ function oggiApriGruppo(chiave) { oggiFaseAperta = chiave; oggiSelezione.clear()
 function oggiTornaElenco() { oggiFaseAperta = null; oggiSelezione.clear(); oggiModoMultiplo = false; renderOggi(); }
 
 const oggiAzionabile = (v) => !v.fatta && !(v.bloccata_da && v.bloccata_da.length);
-const oggiSelezionabile = (v) => oggiAzionabile(v) && !v.foto;   // le fasi con foto obbligatorie si completano una per una
+const oggiSelezionabile = (v) => oggiAzionabile(v);
 
 function renderOggiGruppo(g, solaLettura) {
   const azionabili = g.voci.filter(oggiSelezionabile);
@@ -2744,9 +2530,10 @@ function renderOggiVoce(v, solaLettura) {
       <div class="ov-titolo" style="cursor:pointer" onclick="${apri}">${oggiTitoloVoce(v)}</div>
       ${v.aggiunta ? '<span class="oggi-segno">aggiunta</span>' : ''}
       ${v.fatta ? '<span class="oggi-segno" style="background:var(--ok-soft);color:var(--ok-ink)">✓ Fatta</span>' : ''}
+      ${ordiniCache.some(x => x.id === v.ordine_id) ? `<button type="button" class="btn btn-secondary piccolo" style="width:auto;flex:0 0 auto" onclick="openOrdineDetail('${escapeJsAttr(v.ordine_id)}')" aria-label="Foto e dettaglio ordine"><i data-ic="fotocamera"></i> Foto</button>` : ''}
       ${v.pezzi && !v.fatta && oggiModoMultiplo ? `<span class="og-conta" style="font-family:var(--font-mono);font-size:12px;color:var(--muted)">${v.pezzi.fatti} di ${v.pezzi.totali}</span>` : ''}
     </div>
-    <div class="ov-sub">${o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo'}${v.foto && !v.fatta ? ' · <i data-ic="fotocamera"></i> foto obbligatorie: ' + v.foto.presenti + ' di ' + v.foto.minime : ''}${bloccata ? ' · <strong>dopo: ' + escapeHtml(v.bloccata_da.join(', ')) + '</strong>' : ''}</div>
+    <div class="ov-sub">${o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo'}${bloccata ? ' · <strong>dopo: ' + escapeHtml(v.bloccata_da.join(', ')) + '</strong>' : ''}</div>
     ${meta ? `<div class="order-meta" style="margin:8px 0 0">${meta}</div>` : ''}
     ${renderNotaOrdineBox(o)}
     ${azioni ? `<div class="ov-azioni">${azioni}</div>` : ''}
@@ -2770,10 +2557,7 @@ async function oggiEsegui(fn) {
 async function oggiCompleta(voceId) {
   const v = oggiTrovaVoce(voceId); if (!v) return;
   let gruppo = false;
-  if (v.foto && v.ordine_fase_id && v.foto.presenti < v.foto.minime) {
-    if (!(await chiediFotoObbligatorie(v.ordine_fase_id, v.ordine_id, v.foto.minime, v.foto.presenti))) return;
-  }
-  if (isOnline && !v.foto && v.ordine_fase_id && faseGruppoSpedizione(v.fase_id) && v.ordine?.gruppo_spedizione_id) {
+  if (isOnline && v.ordine_fase_id && faseGruppoSpedizione(v.fase_id) && v.ordine?.gruppo_spedizione_id) {
     const codiciFratelli = ordiniCache.filter(o => o.gruppo_spedizione_id === v.ordine.gruppo_spedizione_id && o.id !== v.ordine_id).map(o => o.codice || '—');
     if (codiciFratelli.length) {
       const scelta = await chiediModalitaCompletamentoGruppo(codiciFratelli);
@@ -2783,7 +2567,6 @@ async function oggiCompleta(voceId) {
   }
   await oggiEsegui(async () => {
     if (!isOnline) {
-      if (v.foto) { toast(`Servono almeno ${v.foto.minime} foto: connettiti per completare questa fase`, 'err'); return; }
       await queueAction({ type: 'completa_diretta', ordFaseId: v.ordine_fase_id || null, faseExtraId: v.fase_extra_id || null, note: null, gruppo: false });
       await updateQueueBadge();
       v.fatta = true;                                   // aggiornamento locale: il server confermerà alla sincronizzazione
@@ -2803,9 +2586,6 @@ async function oggiCompleta(voceId) {
 async function oggiPezzi(voceId, azione) {
   const v = oggiTrovaVoce(voceId); if (!v || !v.ordine_fase_id) return;
   if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
-  if (azione === 'piu' && v.foto && v.pezzi && v.pezzi.fatti + 1 >= v.pezzi.totali && v.foto.presenti < v.foto.minime) {
-    if (!(await chiediFotoObbligatorie(v.ordine_fase_id, v.ordine_id, v.foto.minime, v.foto.presenti))) return;   // ultimo pezzo: servono le foto
-  }
   await oggiEsegui(async () => {
     const { data, error } = await sb.rpc('pezzi_fase_oggi', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_fase_id: v.ordine_fase_id, p_azione: azione });
     if (error || !data?.ok) { toast(erroreCompletamento(data, error), 'err'); return; }

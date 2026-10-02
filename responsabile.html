@@ -807,7 +807,10 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         </div>
         <div class="card" id="det-foto-card">
           <div class="card-hdr"><h3>Foto allegate</h3></div>
-          <div style="padding:16px" id="det-foto-galleria"></div>
+          <div style="padding:16px">
+            <div id="det-foto-allega"></div>
+            <div id="det-foto-galleria"></div>
+          </div>
         </div>
         <div class="card">
           <div class="card-hdr"><h3>Fasi di Produzione</h3></div>
@@ -4495,6 +4498,11 @@ async function renderDettaglioOrdine(id) {
   // proprietario). Nota: oggi copre solo gli ordini standard — le foto di fase per gli ordini
   // extra (fasi_ordine_extra) non risultano mai in questa aggregazione, limite preesistente
   // non introdotto qui (segnalato, non risolto: vedi nota vault).
+  // Allegare foto all'ordine (stesso componente dell'app operatore, js/config.js): finché l'ordine non è spedito.
+  renderSezioneFotoOrdine('det-foto-allega', id, {
+    spedito: ordine.stato === 'spedito' || !!ordine.spedito_il,
+    onCaricate: () => caricaGalleriaOrdineDettaglio(id, mappaNomiFasi)
+  });
   await caricaGalleriaOrdineDettaglio(id, mappaNomiFasi);
 
   // Log
@@ -4561,7 +4569,7 @@ async function caricaGalleriaOrdineDettaglio(ordineId, mappaNomiFasi) {
     id: a.id,
     caricato_da: a.caricato_da,
     ordine_fase_id: a.ordine_fase_id,
-    nomeFase: mappaNomiFasi.get(a.ordine_fase_id) || 'Fase',
+    nomeFase: a.ordine_fase_id ? (mappaNomiFasi.get(a.ordine_fase_id) || 'Fase') : 'Ordine',
     nomeFile: a.url_file,
     signedUrl: a.signedUrl
   })).filter(x => x.signedUrl);
@@ -7087,7 +7095,7 @@ function generaPDFOrdine(ordine, fasiOrd, fasiExtra, logOrd, allegati) {
       doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
       doc.text(a.url_file.split('/').pop(), L, y);
       doc.setTextColor(120, 120, 120);
-      doc.text(faseNome || '—', L + 100, y);
+      doc.text(faseNome || (a.ordine_fase_id ? '—' : 'Ordine'), L + 100, y);
       y += lineH * 0.85;
     }
   }
@@ -7808,10 +7816,6 @@ function renderFasiConfig() {
             <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer" title="Alla chiusura l'operatore può completare tutti gli ordini della stessa spedizione unica">
               <input type="checkbox" ${fasiVal(f, 'gruppo_spedizione') ? 'checked' : ''} onchange="fasiEdit(${f.id},'gruppo_spedizione',this.checked,false)" style="width:14px;height:14px;cursor:pointer"> Gruppo spedizione
             </label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer" title="L'operatore deve allegare almeno il numero indicato di foto per completare la fase (anche all'ultimo pezzo). Il controllo è anche lato server; il completamento multiplo è disattivato per queste fasi.">
-              <input type="checkbox" ${fasiVal(f, 'richiede_foto') ? 'checked' : ''} onchange="fasiEdit(${f.id},'richiede_foto',this.checked)" style="width:14px;height:14px;cursor:pointer"> Foto obbligatorie
-              ${fasiVal(f, 'richiede_foto') ? `<input type="number" min="1" max="20" step="1" value="${escapeHtml(String(fasiVal(f, 'foto_minime') ?? 1))}" onchange="fasiEdit(${f.id},'foto_minime',Math.max(1,Math.min(20,parseInt(this.value)||1)),false)" aria-label="Foto minime" style="width:52px;font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--surface)"> foto minime` : ''}
-            </label>
             <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer" title="Non si attiva da sola: si abilita manualmente dall'ordine">
               <input type="checkbox" ${fasiVal(f, 'opzionale') ? 'checked' : ''} onchange="fasiEdit(${f.id},'opzionale',this.checked,false)" style="width:14px;height:14px;cursor:pointer"> Opzionale
             </label>
@@ -7964,7 +7968,7 @@ function aggiungiNuovaFase() {
   const lista = fasiAttive();
   nuovaFase = {
     nome: '', descrizione: '', dopo: lista.length ? String(lista[lista.length - 1].id) : 'top',
-    macro_fase_id: '', tipo_gestione: 'standard', e_attesa_esterna: false, avvio_automatico: false, opzionale: false, e_cnc: false, gruppo_spedizione: false, richiede_foto: false, foto_minime: 1,
+    macro_fase_id: '', tipo_gestione: 'standard', e_attesa_esterna: false, avvio_automatico: false, opzionale: false, e_cnc: false, gruppo_spedizione: false,
     tipi: [], materiali: [], strutture: [], modo_tipi: 'solo', modo_materiali: 'solo', modo_strutture: 'solo', dipendenze: [], dipendenti: [],
   };
   fasiCriteriDef().forEach(d => { nuovaFase[d.campo] ||= []; nuovaFase[d.modo] ||= 'solo'; });
@@ -8036,8 +8040,6 @@ function renderNuovaFase() {
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" ${nf.opzionale ? 'checked' : ''} onchange="nfSet('opzionale', this.checked, false)"> Opzionale (si attiva solo manualmente dall'ordine)</label>
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" ${nf.e_cnc ? 'checked' : ''} onchange="nfSet('e_cnc', this.checked, false)"> CNC (badge CNC sulla fase)</label>
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" ${nf.gruppo_spedizione ? 'checked' : ''} onchange="nfSet('gruppo_spedizione', this.checked, false)"> Gruppo spedizione (completamento per spedizione unica)</label>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex-wrap:wrap"><input type="checkbox" ${nf.richiede_foto ? 'checked' : ''} onchange="nfSet('richiede_foto', this.checked)"> Foto obbligatorie al completamento
-        ${nf.richiede_foto ? `<input type="number" min="1" max="20" step="1" value="${escapeHtml(String(nf.foto_minime))}" onchange="nfSet('foto_minime', Math.max(1,Math.min(20,parseInt(this.value)||1)), false)" aria-label="Foto minime" style="width:60px;padding:4px 6px;border:1px solid var(--border);border-radius:6px"> foto minime` : ''}</label>
     </div>
     <div style="font-size:13px;font-weight:700;margin:6px 0 8px">Criteri di applicabilità</div>
     ${criteri}
@@ -8064,7 +8066,7 @@ async function confermaNuovaFase() {
     nome: nf.nome.trim(), descrizione: nf.descrizione.trim(), dopo_fase_id: nf.dopo === 'top' ? null : parseInt(nf.dopo),
     macro_fase_id: nf.macro_fase_id === '' ? null : parseInt(nf.macro_fase_id),
     tipo_gestione: nf.tipo_gestione, e_attesa_esterna: nf.e_attesa_esterna, avvio_automatico: nf.avvio_automatico, opzionale: nf.opzionale,
-    e_cnc: nf.e_cnc, gruppo_spedizione: nf.gruppo_spedizione, richiede_foto: nf.richiede_foto, foto_minime: nf.foto_minime,
+    e_cnc: nf.e_cnc, gruppo_spedizione: nf.gruppo_spedizione,
     tipi: nf.tipi, materiali: nf.materiali, strutture: nf.strutture,
     modo_tipi: nf.modo_tipi, modo_materiali: nf.modo_materiali, modo_strutture: nf.modo_strutture,
     dipendenze: nf.dipendenze, dipendenti: nf.dipendenti,
