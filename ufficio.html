@@ -161,12 +161,10 @@ header {
 .fase-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--border); }
 .fase-row:last-child { border-bottom: none; }
 .fase-nome { font-size: 13px; font-weight: 500; }
-.fase-nome.na { color: var(--muted); font-weight: 400; }
 .badge-fase-completata  { background: var(--ok-soft); color: var(--ok-ink); }
 .badge-fase-in_corso    { background: var(--info-soft); color: var(--info-ink); }
 .badge-fase-disponibile { background: var(--phase-bg); color: var(--muted); }
 .badge-fase-in_attesa   { background: var(--warn-soft); color: var(--warn-ink); }
-.badge-fase-non_applicabile { background: transparent; color: var(--muted); font-style: italic; font-size: 10px; padding: 2px 0; }
 </style>
 </head>
 <body>
@@ -422,7 +420,8 @@ async function aggiornaUfficio() {
   const { data: avResp } = await sb.rpc('avanzamento_fasi_batch', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_ids: idsAttivi });
   const dati = avResp?.ok ? avResp.dati : { ordine_fasi: [], fasi_extra: [] };
 
-  allOrdFasi   = dati.ordine_fasi   || [];
+  // le fasi non attive sull'ordine (non_applicabile) non si mostrano, come per l'operatore
+  allOrdFasi   = (dati.ordine_fasi   || []).filter(x => x.stato !== 'non_applicabile');
   allFasiExtra = dati.fasi_extra || [];
 
   renderLista();
@@ -482,8 +481,7 @@ function cardHtml(o, fasiMap, fasiExtraMap, oggi) {
       ? `<div style="font-size:12px;color:var(--muted);margin-bottom:6px">${comp}/${fe.length} fasi completate</div>`
       : '<div style="font-size:12px;color:var(--muted)">Nessuna fase inserita</div>';
   } else {
-    const fasi = fasiMap[o.id] || [];
-    const appl = fasi.filter(f => f.stato !== 'non_applicabile');
+    const appl = fasiMap[o.id] || [];
     const comp = appl.filter(f => f.stato === 'completata').length;
     const tot  = appl.length || 1;
     pct  = Math.round(comp / tot * 100);
@@ -624,7 +622,7 @@ async function apriDettaglio(ordineId) {
   // "lavorazioni aggiuntive" non fanno parte di questa vista.
   const fasiExtra = (detResp?.ok && o.tipo === 'extra') ? detResp.dati.fasi_extra : [];
 
-  renderDettaglio(o, ordFasi || [], fasiExtra || []);
+  renderDettaglio(o, (ordFasi || []).filter(x => x.stato !== 'non_applicabile'), fasiExtra || []);
 }
 
 async function apriDettaglioStorico(ordineId) {
@@ -640,7 +638,7 @@ async function apriDettaglioStorico(ordineId) {
   const fasiExtra = (detResp?.ok && o.tipo === 'extra') ? detResp.dati.fasi_extra : [];
 
   const stats = statsArr?.[0] || null;
-  renderDettaglio(o, ordFasi || [], fasiExtra || [], stats);
+  renderDettaglio(o, (ordFasi || []).filter(x => x.stato !== 'non_applicabile'), fasiExtra || [], stats);
 }
 
 function _minutiToOreMin(m) {
@@ -707,7 +705,7 @@ function renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine, stats) {
           .filter(f => f.fase_id && m.fasi.has(f.fase_id))
           .sort((a, b) => (fasiNomi[a.fase_id]?.posizione ?? 999) - (fasiNomi[b.fase_id]?.posizione ?? 999));
         if (!mFasi.length) return '';
-        const appl = mFasi.filter(f => f.stato !== 'non_applicabile');
+        const appl = mFasi;
         const comp = appl.filter(f => f.stato === 'completata').length;
         const mPct = appl.length ? Math.round(comp / appl.length * 100) : 0;
         return `<div class="detail-card">
@@ -726,7 +724,7 @@ function renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine, stats) {
         ${sorted.map(f => faseRowHtml(f)).join('')}
       </div>`;
     }
-    const appl   = ordFasiPerOrdine.filter(f => f.stato !== 'non_applicabile');
+    const appl   = ordFasiPerOrdine;
     const comp   = appl.filter(f => f.stato === 'completata').length;
     const totPct = appl.length ? Math.round(comp / appl.length * 100) : 0;
     fasiHtml += `<div style="padding:0 4px 8px">
@@ -756,11 +754,10 @@ function renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine, stats) {
 function faseRowHtml(f) {
   const info = fasiNomi[f.fase_id];
   const nome = info?.nome || `Fase ${f.fase_id}`;
-  const isNA = f.stato === 'non_applicabile';
   const badgeClass = `badge badge-fase-${f.stato}`;
   const statoLabel = Etichette.statoFase(f.stato);
   return `<div class="fase-row">
-    <span class="fase-nome${isNA?' na':''}">${esc(nome)}</span>
+    <span class="fase-nome">${esc(nome)}</span>
     <span class="${badgeClass}">${statoLabel}</span>
   </div>`;
 }

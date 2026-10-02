@@ -301,14 +301,15 @@ tr.ric-evidenza td { background: var(--info-soft); }
 .fase-card.in_corso { background: var(--info-bg); border-color: var(--info-line); }
 .fase-card.in_attesa { background: var(--attesa-bg); border-color: var(--attesa-line); }
 .fase-card.completata { background: var(--ok-bg); border-color: var(--ok-line); }
-.fase-card.non_applicabile { background: var(--neutral-bg); border-color: var(--neutral-line); cursor: default; opacity: 0.6; }
-.fase-card.non_applicabile:hover { border-color: var(--neutral-line); }
 .fase-num { font-family: var(--font-mono); font-size: 10px; color: var(--muted); margin-bottom: 4px; }
 .fase-nome { font-size: 12px; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .fase-op { font-size: 11px; color: var(--muted); }
 .badge-cnc { font-size: 9px; font-weight: 700; background: var(--violet); color: var(--on-violet); padding: 2px 5px; border-radius: 3px; letter-spacing: 0.04em; flex-shrink: 0; }
+.sa-scorciatoie { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.sa-sc { font-size: 12px; padding: 5px 10px; }
+.scelta-fase { font-size: 11px; color: var(--muted); font-style: italic; }
+.btn-link-mini { background: none; border: none; padding: 0 0 0 6px; font-size: 11px; color: var(--accent); text-decoration: underline; cursor: pointer; }
 .badge-esterna { font-size: 9px; font-weight: 700; background: var(--ext); color: var(--on-ext); padding: 2px 5px; border-radius: 3px; letter-spacing: 0.04em; flex-shrink: 0; }
-.badge-na { font-size: 9px; font-weight: 700; background: var(--neutral-solid); color: var(--on-neutral); padding: 2px 5px; border-radius: 3px; letter-spacing: 0.04em; flex-shrink: 0; }
 
 /* ── LOG ── */
 .log-list { list-style: none; }
@@ -886,6 +887,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
               <button type="button" role="tab" id="ass-tab-operatore" data-tab="operatore" aria-controls="ass-corpo" onclick="assenzeRaggruppa('operatore')">Per operatore</button>
             </div>
             <div class="filters" style="margin-bottom:0"><select id="ass-f-operatore" aria-label="Filtra per operatore" onchange="assenzeFiltroOperatore(this.value)"></select></div>
+            <button type="button" class="btn btn-secondary" onclick="apriSegnalaAssenza(_assFiltroOp)"><i data-ic="avviso"></i> Segnala assenza</button>
           </div>
           <div class="sub" id="ass-sotto" style="color:var(--muted);font-size:13px;margin-bottom:12px"></div>
           <div class="card" style="padding:4px 0" id="ass-corpo"></div>
@@ -1934,6 +1936,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
     <div class="modal-body">
       <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Per assenze non richieste. Viene registrata subito come approvata e aggiorna la disponibilità. Non si indica il motivo.</div>
       <div class="form-group"><label for="sa-operatore">Operatore</label><select id="sa-operatore" onchange="_saSet('operatore', this.value)"></select></div>
+      <div class="sa-scorciatoie" id="sa-scorciatoie" role="group" aria-label="Scorciatoie per le date"></div>
       <div class="form-row">
         <div class="form-group"><label for="sa-dal">Dal</label><input type="date" id="sa-dal" onchange="_saSet('dal', this.value)"></div>
         <div class="form-group"><label for="sa-al">Al</label><input type="date" id="sa-al" onchange="_saSet('al', this.value)"></div>
@@ -1941,6 +1944,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:12px;cursor:pointer">
         <input type="checkbox" id="sa-ore" onchange="_saSet('ore', this.checked)"> Solo alcune ore (un solo giorno)
       </label>
+      <div style="font-size:11px;color:var(--muted);margin:-6px 0 12px">Spenta: assente tutta la giornata. Accesa: permesso a ore in un solo giorno, le ore vengono tolte dalla giornata</div>
       <div class="form-row" id="sa-ore-riga" hidden>
         <div class="form-group"><label for="sa-oi">Dalle</label><input type="time" id="sa-oi" step="900" onchange="_saSet('oi', this.value)"></div>
         <div class="form-group"><label for="sa-of">Alle</label><input type="time" id="sa-of" step="900" onchange="_saSet('of', this.value)"></div>
@@ -2086,7 +2090,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
     <div class="modal-body" id="anteprima-fasi-body"></div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-anteprima-fasi')">Annulla</button>
-      <button class="btn btn-primary" onclick="confermaSalvaFasiConfig()">Conferma e salva</button>
+      <button class="btn btn-primary" onclick="confermaAnteprimaFasi()">Conferma e salva</button>
     </div>
   </div>
 </div>
@@ -4123,7 +4127,8 @@ async function renderDettaglioOrdine(id) {
     const { data: ordFasiRaw } = await sb.from('ordine_fasi')
       .select('*, users!operatore_id(nome, cognome)')
       .eq('ordine_id', id);
-    const ordFasi = (ordFasiRaw || []).sort((a, b) => {
+    // le fasi non attive sull'ordine (non_applicabile) non si mostrano: si gestiscono solo dalla modifica ordine
+    const ordFasi = (ordFasiRaw || []).filter(f => f.stato !== 'non_applicabile').sort((a, b) => {
       const posA = a.fase_id ? (fasi.find(f => f.id === a.fase_id)?.posizione ?? 9999) : 99999;
       const posB = b.fase_id ? (fasi.find(f => f.id === b.fase_id)?.posizione ?? 9999) : 99999;
       return posA - posB;
@@ -4134,16 +4139,14 @@ async function renderDettaglioOrdine(id) {
       mappaNomiFasi.set(f.id, nomeFaseRaw);
       const nomeFase = escapeHtml(nomeFaseRaw);
       const opNome = f['users'] ? `${escapeHtml(f['users'].nome)} ${escapeHtml(f['users'].cognome)}` : '';
-      const isNA = f.stato === 'non_applicabile';
       const cnc = !isCustom && isCNC(f.fase_id);
       const est = !isCustom && isEsterna(f.fase_id);
-      const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '<i data-ic="play"></i>' : f.stato === 'in_attesa' ? '<i data-ic="pausa"></i>' : isNA ? '—' : '○';
+      const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '<i data-ic="play"></i>' : f.stato === 'in_attesa' ? '<i data-ic="pausa"></i>' : '○';
       const numLabel = isCustom ? '★' : f.fase_id;
-      const clickAttr = isNA ? '' : `onclick="openFaseDetail('${f.id}', '${id}', ${readonly})"`;
-      return `<div class="fase-card ${f.stato}" ${clickAttr} style="${isNA ? 'cursor:default;opacity:0.5' : ''}">
+      return `<div class="fase-card ${f.stato}" onclick="openFaseDetail('${f.id}', '${id}', ${readonly})">
         <div class="fase-num">${numLabel}. ${icon}</div>
-        <div class="fase-nome">${nomeFase}${cnc ? '<span class="badge-cnc">CNC</span>' : ''}${est ? '<span class="badge-esterna">EXT</span>' : ''}${isNA ? '<span class="badge-na">N/A</span>' : ''}${isCustom ? '<span class="badge-cnc" style="background:var(--violet)">EXTRA</span>' : ''}</div>
-        <div class="fase-op">${isNA ? 'Non applicabile' : opNome || (f.stato === 'disponibile' ? 'Disponibile' : '')}</div>
+        <div class="fase-nome">${nomeFase}${cnc ? '<span class="badge-cnc">CNC</span>' : ''}${est ? '<span class="badge-esterna">EXT</span>' : ''}${isCustom ? '<span class="badge-cnc" style="background:var(--violet)">EXTRA</span>' : ''}</div>
+        <div class="fase-op">${opNome || (f.stato === 'disponibile' ? 'Disponibile' : '')}</div>
         ${f.completata_il ? `<div class="fase-op" style="margin-top:4px;font-size:10px">${formatDateTime(f.completata_il)}</div>` : ''}
       </div>`;
     }).join('');
@@ -4172,7 +4175,7 @@ async function renderDettaglioOrdine(id) {
       return `<li class="log-item">
         <div class="log-icon">${logIcon(l.azione)}</div>
         <div class="log-content">
-          <div class="action">${logLabel(l.azione)}${fase ? ` — ${fase}` : ''}</div>
+          <div class="action">${logLabel(l.azione)}${fase ? ` — ${fase}` : ''}${l.dettaglio?.fase_scelta ? ` · ${escapeHtml(_testoSceltaFaseLog(l.dettaglio))}` : ''}</div>
           <div class="meta">${u} · ${formatDateTime(l.timestamp)}</div>
         </div>
       </li>`;
@@ -4888,46 +4891,20 @@ function openModalModificaOperatore(id) {
   compDiv.innerHTML = compHtml;
   document.querySelector('#modal-operatore .modal-body').appendChild(compDiv);
 
-  // Sezione Ferie e permessi
+  // Assenze in programma dell'operatore: sola lettura (stessa fonte e stesse etichette della scheda Assenze).
+  // Un solo modo per segnare un'assenza: "Segnala assenza".
   const existingFerie = document.getElementById('op-ferie-section');
   if (existingFerie) existingFerie.remove();
   const ferieDiv = document.createElement('div');
   ferieDiv.id = 'op-ferie-section';
   ferieDiv.innerHTML = `
     <div style="margin-top:16px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Ferie e Permessi</div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:8px">Assenze in programma</div>
       <div id="op-ferie-list" style="font-size:12px;color:var(--muted);font-style:italic">Caricamento...</div>
-      <div style="margin-top:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px">
-        <div style="font-size:12px;font-weight:600;margin-bottom:8px">Aggiungi periodo</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-          <div class="form-group" style="margin:0">
-            <label style="font-size:11px">Dal</label>
-            <input type="date" id="op-perm-dal" style="font-size:12px">
-          </div>
-          <div class="form-group" style="margin:0">
-            <label style="font-size:11px">Al</label>
-            <input type="date" id="op-perm-al" style="font-size:12px">
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px">
-          <div class="form-group" style="margin:0">
-            <label style="font-size:11px">Motivo (opzionale)</label>
-            <input type="text" id="op-perm-motivo" placeholder="es. Ferie estive" style="font-size:12px" oninput="aggiornaCampoOreDaMotivo()">
-          </div>
-          <div class="form-group" style="margin:0">
-            <label style="font-size:11px">Ore disponibili quel giorno</label>
-            <input type="number" id="op-perm-ore" min="0" max="24" step="0.5" value="0" style="font-size:12px">
-          </div>
-        </div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px">0 = assente tutto il giorno — il campo si aggiorna automaticamente in base al motivo</div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <button id="op-perm-btn-salva" class="btn btn-secondary" style="font-size:12px;padding:5px 12px" onclick="aggiungiPermessoPeriodo('${id}')">+ Aggiungi</button>
-          <button id="op-perm-btn-annulla" class="btn btn-secondary" style="font-size:12px;padding:5px 12px;display:none" onclick="annullaModificaPermesso()">Annulla</button>
-        </div>
-      </div>
+      <div style="margin-top:10px"><button type="button" class="btn btn-secondary" style="font-size:12px;padding:5px 12px" onclick="segnalaAssenzaDaOperatore('${id}')"><i data-ic="avviso"></i> Segnala assenza</button></div>
     </div>`;
   document.querySelector('#modal-operatore .modal-body').appendChild(ferieDiv);
-  caricaFerieOperatore(id);
+  caricaAssenzeOperatore(id);
 
   document.getElementById('modal-operatore').classList.add('open');
 }
@@ -5032,9 +5009,6 @@ async function eliminaOperatore(id, nome) {
 // FERIE E PERMESSI OPERATORE
 // ═══════════════════════════════════════════════
 
-// Stato edit mode: { operatoreId, dalOriginale, alOriginale }
-let _editPermesso = null;
-
 function raggruppaInIntervalli(eccezioni) {
   const gruppi = [];
   let cur = null;
@@ -5049,134 +5023,42 @@ function raggruppaInIntervalli(eccezioni) {
   return gruppi;
 }
 
-function oreLabel(ore, oreDefault) {
-  const n = Number(ore);
-  return n === 0 ? 'Assente' : n < oreDefault ? `${n}h (½ giornata)` : `${n}h`;
-}
-
-function aggiornaCampoOreDaMotivo() {
-  const motivo = (document.getElementById('op-perm-motivo')?.value || '').toLowerCase();
-  const oreField = document.getElementById('op-perm-ore');
-  if (!oreField) return;
-  if (/ferie|malattia|permesso|assente|assenza/.test(motivo)) {
-    oreField.value = 0;
-  } else if (/mezza|mez\.|half|½/.test(motivo)) {
-    oreField.value = 4;
-  }
-}
-
-function annullaModificaPermesso() {
-  _editPermesso = null;
-  // La sezione Ferie e permessi esiste solo in modifica: in creazione non c'è niente da azzerare
-  if (!document.getElementById('op-perm-dal')) return;
-  document.getElementById('op-perm-dal').value = '';
-  document.getElementById('op-perm-al').value = '';
-  document.getElementById('op-perm-ore').value = 0;
-  document.getElementById('op-perm-motivo').value = '';
-  const btnSalva = document.getElementById('op-perm-btn-salva');
-  const btnAnnulla = document.getElementById('op-perm-btn-annulla');
-  if (btnSalva) { btnSalva.textContent = '+ Aggiungi'; }
-  if (btnAnnulla) btnAnnulla.style.display = 'none';
-}
-
-function avviaModificaPermesso(operatoreId, inizio, fine, ore, motivo) {
-  _editPermesso = { operatoreId, dalOriginale: inizio, alOriginale: fine };
-  document.getElementById('op-perm-dal').value = inizio;
-  document.getElementById('op-perm-al').value = fine;
-  document.getElementById('op-perm-ore').value = ore;
-  document.getElementById('op-perm-motivo').value = motivo || '';
-  const btnSalva = document.getElementById('op-perm-btn-salva');
-  const btnAnnulla = document.getElementById('op-perm-btn-annulla');
-  if (btnSalva) btnSalva.textContent = '✓ Salva modifica';
-  if (btnAnnulla) btnAnnulla.style.display = '';
-  document.getElementById('op-perm-dal').focus();
-}
-
-async function caricaFerieOperatore(operatoreId) {
-  const oggi = Calendario.oggiIso();
-  const { data } = await sb.from('disponibilita_giornaliera')
-    .select('id, data, ore, motivo')
-    .eq('operatore_id', operatoreId)
-    .gte('data', oggi)
-    .order('data');
-
+// Elenco in sola lettura delle assenze in programma di un operatore (prossime 4 settimane, come la scheda Assenze).
+// Le voci "Inserito a mano" (vecchio sistema) restano eliminabili con ✕ per poterle ripulire; non se ne creano di nuove da qui.
+async function caricaAssenzeOperatore(operatoreId) {
   const el = document.getElementById('op-ferie-list');
   if (!el) return;
-
   const op = operatoriCache.find(o => o.id === operatoreId);
-  const oreDefault = op?.ore_default ?? oreGiornoDefault();
-  const eccezioni = (data || []).filter(r => !!r.motivo);
-
-  if (!eccezioni.length) {
-    el.innerHTML = '<span style="font-size:12px;color:var(--muted);font-style:italic">Nessun permesso o ferie futuro configurato</span>';
+  if (op && op.ruolo !== 'operatore') {
+    el.innerHTML = '<span style="font-size:12px;color:var(--muted);font-style:italic">Le assenze si segnalano per gli operatori di produzione.</span>';
     return;
   }
-
-  const gruppi = raggruppaInIntervalli(eccezioni);
-  el.innerHTML = gruppi.map(g => {
-    const label = oreLabel(g.ore, oreDefault);
-    const range = g.inizio === g.fine ? formatDate(g.inizio) : `${formatDate(g.inizio)} – ${formatDate(g.fine)}`;
-    const motivoStr = g.motivo ? ` · ${escapeHtml(g.motivo)}` : '';
-    return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">
-      <span style="flex:1">${range}${motivoStr}</span>
-      <span style="color:var(--muted);font-size:11px">${label}</span>
-      <button style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--ink);font-size:11px;padding:1px 7px" onclick="avviaModificaPermesso('${operatoreId}','${g.inizio}','${g.fine}',${g.ore},${JSON.stringify(g.motivo)})" title="Modifica">Modifica</button>
-      <button style="background:none;border:none;cursor:pointer;color:var(--alert);font-size:13px;padding:0 2px" onclick="rimuoviPermessoPeriodo('${operatoreId}','${g.inizio}','${g.fine}')" title="Rimuovi" aria-label="Rimuovi">✕</button>
+  await _caricaAssenze();
+  const el2 = document.getElementById('op-ferie-list');
+  if (!el2) return;
+  if (!_assDati || _assDati.errore) { el2.textContent = 'Impossibile caricare le assenze'; return; }
+  const voci = _assDati.voci.filter(v => v.opId === operatoreId);
+  if (!voci.length) {
+    el2.innerHTML = '<span style="font-size:12px;color:var(--muted);font-style:italic">Nessuna assenza in programma nelle prossime 4 settimane</span>';
+    return;
+  }
+  el2.innerHTML = voci.map(v => {
+    const range = v.dal === v.al ? _dIt(v.dal) : `dal ${_dIt(v.dal)} al ${_dIt(v.al)}`;
+    const dett = v.fonte === 'richiesta'
+      ? [v.tipo, v.oraI ? `dalle ${v.oraI} alle ${v.oraF}` : 'tutto il giorno'].filter(Boolean).join(' · ')
+      : [v.motivo, v.ore === 0 ? 'assente' : `${_oreTxt(v.ore)} h in servizio`].filter(Boolean).join(' · ');
+    const rimuovi = v.fonte === 'mano'
+      ? `<button type="button" style="background:none;border:none;cursor:pointer;color:var(--alert);font-size:13px;padding:0 2px" onclick="rimuoviPermessoPeriodo('${escapeJsAttr(operatoreId)}','${v.dal}','${v.al}')" title="Rimuovi" aria-label="Rimuovi">✕</button>`
+      : '';
+    return `<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--ink);font-style:normal">
+      <span style="flex:1">${escapeHtml(range)}${dett ? ' · ' + escapeHtml(dett) : ''}</span>
+      <span class="ass-fonte${v.fonte === 'mano' ? ' mano' : ''}">${_etichettaFonteAssenza(v)}</span>${rimuovi}
     </div>`;
   }).join('');
 }
 
-async function aggiungiPermessoPeriodo(operatoreId) {
-  const dal = document.getElementById('op-perm-dal').value;
-  const al = document.getElementById('op-perm-al').value || dal;
-  const ore = parseFloat(document.getElementById('op-perm-ore').value);
-  const motivo = document.getElementById('op-perm-motivo').value.trim() || null;
-
-  if (!dal) { toast('Seleziona la data di inizio', 'err'); return; }
-  if (isNaN(ore) || ore < 0 || ore > 24) { toast('Ore non valide (0–24)', 'err'); return; }
-
-  const isModifica = !!_editPermesso;
-
-  // In caso di modifica: prima azzera l'intervallo originale se diverso dal nuovo
-  if (isModifica) {
-    const { dalOriginale, alOriginale } = _editPermesso;
-    const op = operatoriCache.find(o => o.id === operatoreId);
-    const oreDefault = op?.ore_default ?? oreGiornoDefault();
-    if (dalOriginale !== dal || alOriginale !== al) {
-      const { data: resetRes, error: resetErr } = await sb.rpc('imposta_permesso_periodo', {
-        p_operatore_id:    operatoreId,
-        p_data_inizio:     dalOriginale,
-        p_data_fine:       alOriginale,
-        p_ore:             oreDefault,
-        p_motivo:          null,
-        p_responsabile_id: currentUserRow.id,
-      });
-      if (resetErr || !resetRes?.ok) { toast(resetRes?.errore || resetErr?.message || 'Errore reset periodo originale', 'err'); return; }
-    }
-  }
-
-  const { data, error } = await sb.rpc('imposta_permesso_periodo', {
-    p_operatore_id:    operatoreId,
-    p_data_inizio:     dal,
-    p_data_fine:       al,
-    p_ore:             ore,
-    p_motivo:          motivo,
-    p_responsabile_id: currentUserRow.id,
-  });
-
-  if (error || !data?.ok) {
-    const msg = data?.errore === 'periodo_troppo_lungo'
-      ? `Periodo troppo lungo (max 90 giorni, richiesti ${data.richiesti})`
-      : data?.errore || error?.message || 'Errore';
-    toast(msg, 'err'); return;
-  }
-
-  toast(isModifica ? 'Periodo aggiornato' : `${data.giorni_aggiornati} giorn${data.giorni_aggiornati === 1 ? 'o' : 'i'} aggiunti`, 'ok');
-  annullaModificaPermesso();
-  caricaFerieOperatore(operatoreId);
-  caricaDisponibilitaPanel();
-  aggiornaStatoAssenze();
-}
+// Dalla scheda operatore: apre "Segnala assenza" già compilato con quell'operatore (la scheda resta aperta, l'elenco si aggiorna alla conferma)
+function segnalaAssenzaDaOperatore(operatoreId) { apriSegnalaAssenza(operatoreId); }
 
 async function rimuoviPermessoPeriodo(operatoreId, dal, al) {
   const op = operatoriCache.find(o => o.id === operatoreId);
@@ -5191,7 +5073,7 @@ async function rimuoviPermessoPeriodo(operatoreId, dal, al) {
   });
   if (error || !data?.ok) { toast(data?.errore || error?.message || 'Errore', 'err'); return; }
   toast('Periodo rimosso', 'ok');
-  caricaFerieOperatore(operatoreId);
+  caricaAssenzeOperatore(operatoreId);
   caricaDisponibilitaPanel();
   aggiornaStatoAssenze();
 }
@@ -5385,8 +5267,10 @@ function _assStatoOperatore(opId) {
 function assenzeRaggruppa(v) { _assRaggruppa = v === 'operatore' ? 'operatore' : 'giorno'; renderAssenze(); }
 function assenzeFiltroOperatore(id) { _assFiltroOp = id || ''; renderAssenze(); }
 
+const _etichettaFonteAssenza = v => v.fonte === 'mano' ? 'Inserito a mano' : v.origine === 'responsabile' ? 'Segnalata' : 'Richiesta';
+
 function _voceAssenzaHtml(v, perGiorno, giorno) {
-  const etichetta = v.fonte === 'mano' ? 'Inserito a mano' : v.origine === 'responsabile' ? 'Segnalata' : 'Richiesta';
+  const etichetta = _etichettaFonteAssenza(v);
   let dett;
   if (v.fonte === 'richiesta') {
     const quando = v.oraI ? `dalle ${v.oraI} alle ${v.oraF}${perGiorno ? '' : ' del ' + _dIt(v.dal)}`
@@ -6632,6 +6516,13 @@ function _nomeOp(id) {
   return op ? `${op.nome} ${op.cognome}` : null;
 }
 // Converte una riga di archivio_log in { titolo, dettagli[] } in italiano leggibile.
+// Testo del registro per le scelte manuali sulle fasi di un ordine (imposta_fase_ordine / ripristina_fase_ordine_automatica)
+function _testoSceltaFaseLog(d) {
+  const base = d.fase_scelta === 'torna_automatico' ? 'Fase tornata automatica'
+    : (d.fase_scelta === 'attivata' ? 'Fase attivata dal responsabile' : 'Fase disattivata dal responsabile');
+  return base + (d.segue_regole ? ' (come le regole automatiche)' : ' (scelta manuale: resta finché non la cambi)');
+}
+
 function _leggiLogRiga(azione, dettaglio, fasiOrd) {
   const d = dettaglio || {};
   const ofase = d.ordine_fase_id ? fasiOrd.find(f => f.id === d.ordine_fase_id) : null;
@@ -6666,6 +6557,7 @@ function _leggiLogRiga(azione, dettaglio, fasiOrd) {
   }
   if (d.stato_precedente) dettagli.push(`Stato precedente: ${_statoFaseMinuscolo(d.stato_precedente)}`);
   if (d.modifica) dettagli.push('Ordine modificato dopo la creazione');
+  if (d.fase_scelta) dettagli.push(_testoSceltaFaseLog(d));
   // Campi non riconosciuti: omessi deliberatamente (non mostrare JSON grezzo)
 
   return { titolo, dettagli };
@@ -6764,20 +6656,20 @@ function generaPDFOrdine(ordine, fasiOrd, fasiExtra, logOrd, allegati) {
   kv('Tempo di lavorazione', fmtOre(minutiLavorazione));
   kv('Tempo di attesa esterna', fmtOre(minutiAttesa));
   kv('Tempo complessivo (lavorazione + attesa)', fmtOre(totMin));
-  kv('Fasi eseguite', `${fasiCompletate} su ${fasiEseguibili.length} applicabili (${fasiOrdinate.length} totali)`);
+  kv('Fasi eseguite', `${fasiCompletate} su ${fasiEseguibili.length}`);
   if (ordine.creato_il && ordine.spedito_il) {
     const giorni = Math.round((new Date(ordine.spedito_il) - new Date(ordine.creato_il)) / 86400000);
     kv('Giorni creazione - spedizione', giorni);
   }
 
   // Fasi standard — omesse per ordini di tipo extra (non hanno un catalogo fasi standard)
-  if (ordine.tipo !== 'extra' && fasiOrdinate.length) {
+  if (ordine.tipo !== 'extra' && fasiEseguibili.length) {
     section('Fasi di Produzione');
     const cols = [L, L + 62, L + 108, L + 130, L + 150, L + 172];
     doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
     ['Fase', 'Operatore', 'Tempo (min)', 'Inizio', 'Fine', ''].forEach((h, i) => doc.text(h, cols[i], y));
     y += lineH * 0.85; hr(220, 220, 220);
-    for (const f of fasiOrdinate) {
+    for (const f of fasiEseguibili) {
       checkPage();
       const faseName = f.nome_custom || fasi.find(x => x.id === f.fase_id)?.nome || `#${f.fase_id}`;
       const op = operatoriCache.find(x => x.id === f.operatore_id);
@@ -6795,11 +6687,8 @@ function generaPDFOrdine(ordine, fasiOrd, fasiExtra, logOrd, allegati) {
       doc.text(tempo, cols[2], y);
       doc.text(fmtDate(f.iniziata_il), cols[3], y);
       doc.text(fmtDate(f.completata_il), cols[4], y);
-      // Distingue non applicabile (esclusa dai criteri fase) da non eseguita (doveva farsi, non fatta)
-      if (f.stato === 'non_applicabile') {
-        doc.setTextColor(160, 160, 160); doc.setFont('helvetica', 'italic');
-        doc.text('N/A', cols[5], y);
-      } else if (f.stato !== 'completata') {
+      // le fasi non attive sull'ordine (non_applicabile) non sono in elenco: qui resta solo "non eseguita"
+      if (f.stato !== 'completata') {
         doc.setTextColor(200, 120, 40); doc.setFont('helvetica', 'italic');
         doc.text('non eseguita', cols[5], y);
       }
@@ -7512,6 +7401,10 @@ function renderFasiConfig() {
     const tgVincolato = tg === 'conferma_ricezione' || tg === 'spedizione_esterna';
     const deps = fasiVal(f, 'dipendenze') || [];
     const altre = lista.filter(alt => alt.id !== f.id);
+    // chi aspetta questa fase (dipendenze inverse): derivato dalle dipendenze di tutte le fasi, bozze incluse
+    const dipendenti = altre.filter(g => (fasiVal(g, 'dipendenze') || []).includes(f.id)).map(g => g.id);
+    const ultimaDelFlusso = lista[lista.length - 1]?.id === f.id;
+    const senzaSuccessive = !dipendenti.length && !ultimaDelFlusso && !fasiVal(f, 'e_attesa_esterna') && !fasiVal(f, 'opzionale');
 
     return `
     <div class="fase-config-item" id="fase-cfg-row-${f.id}" ${modificata ? 'style="border-left:3px solid var(--indigo)"' : ''}>
@@ -7617,6 +7510,22 @@ function renderFasiConfig() {
             </div>`
           }
         </div>
+        <!-- DIPENDENZE INVERSE -->
+        <div style="margin-top:10px;padding:8px 10px;background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:6px">
+          <div style="font-size:11px;font-weight:600;color:var(--warn-ink-2);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em">Fasi che devono aspettare questa fase <em style="font-weight:400;text-transform:none;letter-spacing:0">(la scelgono come "da completare prima")</em></div>
+          ${senzaSuccessive ? `<div style="font-size:12px;color:var(--warn-ink-2);margin-bottom:6px">⚠ Nessuna fase aspetta questa fase: se la crei o la modifichi a ordini già avviati non può essere saltata in automatico.</div>` : ''}
+          ${altre.length === 0
+            ? `<span style="font-size:12px;color:var(--muted);font-style:italic">Nessun'altra fase configurata</span>`
+            : `<div style="display:flex;flex-direction:column;gap:4px">
+              ${altre.map(alt =>
+                `<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+                  <input type="checkbox" ${dipendenti.includes(alt.id) ? 'checked' : ''} onchange="fasiToggle(${alt.id},'dipendenze',${f.id},this.checked)" style="width:13px;height:13px;cursor:pointer">
+                  <span style="color:var(--muted);font-family:var(--font-mono);font-size:11px;min-width:22px">${alt.posizione}.</span>
+                  ${escapeHtml(alt.nome)}
+                </label>`).join('')}
+            </div>`
+          }
+        </div>
       </div>
       <button class="fase-del-btn" title="Elimina fase" onclick="eliminaFase(${f.id})" aria-label="Elimina fase">✕</button>
     </div>`;
@@ -7705,7 +7614,7 @@ function aggiungiNuovaFase() {
   nuovaFase = {
     nome: '', descrizione: '', dopo: lista.length ? String(lista[lista.length - 1].id) : 'top',
     macro_fase_id: '', tipo_gestione: 'standard', e_attesa_esterna: false, avvio_automatico: false, opzionale: false, e_cnc: false, gruppo_spedizione: false,
-    tipi: [], materiali: [], strutture: [], modo_tipi: 'solo', modo_materiali: 'solo', modo_strutture: 'solo', dipendenze: [],
+    tipi: [], materiali: [], strutture: [], modo_tipi: 'solo', modo_materiali: 'solo', modo_strutture: 'solo', dipendenze: [], dipendenti: [],
   };
   fasiCriteriDef().forEach(d => { nuovaFase[d.campo] ||= []; nuovaFase[d.modo] ||= 'solo'; });
   renderNuovaFase();
@@ -7783,6 +7692,12 @@ function renderNuovaFase() {
     <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto">
       ${lista.map(f => `<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
         <input type="checkbox" ${nf.dipendenze.includes(f.id) ? 'checked' : ''} onchange="nfToggle('dipendenze', ${f.id}, this.checked)"> ${escapeHtml(f.nome)}</label>`).join('')}
+    </div>
+    <div style="font-size:13px;font-weight:700;margin:12px 0 2px">Fasi che devono aspettare questa fase</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Servono anche a non far comparire la fase negli ordini già oltre quel punto: se una di queste è già completata su un ordine, la nuova fase viene saltata.</div>
+    <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto">
+      ${lista.map(f => `<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+        <input type="checkbox" ${nf.dipendenti.includes(f.id) ? 'checked' : ''} onchange="nfToggle('dipendenti', ${f.id}, this.checked)"> ${escapeHtml(f.nome)}</label>`).join('')}
     </div>`;
 }
 
@@ -7799,10 +7714,19 @@ async function confermaNuovaFase() {
     e_cnc: nf.e_cnc, gruppo_spedizione: nf.gruppo_spedizione,
     tipi: nf.tipi, materiali: nf.materiali, strutture: nf.strutture,
     modo_tipi: nf.modo_tipi, modo_materiali: nf.modo_materiali, modo_strutture: nf.modo_strutture,
-    dipendenze: nf.dipendenze,
+    dipendenze: nf.dipendenze, dipendenti: nf.dipendenti,
     ..._raccogliAttributiBozza(Object.fromEntries(Object.entries(nf).filter(([k]) => k.startsWith('attr_') || k.startsWith('modo_attr_')))),
   };
+  // anteprima: stesso calcolo del server, nessuna scrittura. Se la fase cambia degli ordini aperti, si chiede conferma.
+  const { data: ant, error: errAnt } = await sb.rpc('crea_fase', { p_dati: { ...dati, _anteprima: true }, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (errAnt || !ant?.ok) { toast('Errore: ' + (ant?.errore || errAnt?.message || ''), 'err'); return; }
+  if (ant.n_cambi) { mostraAnteprimaFasi('Questa nuova fase', ant, () => creaFaseConferma(dati)); return; }
+  await creaFaseConferma(dati);
+}
+
+async function creaFaseConferma(dati) {
   const { data, error } = await sb.rpc('crea_fase', { p_dati: dati, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  closeModal('modal-anteprima-fasi');
   if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
   closeModal('modal-nuova-fase');
   nuovaFase = null;
@@ -7858,13 +7782,37 @@ async function salvaFasiConfig() {
     p_modifiche: modifiche, p_solo_anteprima: true, p_responsabile_id: currentUserRow.id, p_session_token: null });
   if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
   if (!data.n_cambi) { await confermaSalvaFasiConfig(); return; }
-  const righe = (data.cambi || []).map(c => `<tr><td>${escapeHtml(c.codice || '')}</td><td>${escapeHtml(c.fase_nome || '')}</td>
-    <td>${escapeHtml(etichettaStatoFase(c.da))} → <b>${escapeHtml(etichettaStatoFase(c.a))}</b></td></tr>`).join('');
+  mostraAnteprimaFasi('Questa modifica', data, confermaSalvaFasiConfig);
+}
+
+// Anteprima dei cambi sugli ordini aperti: distingue fasi attivate, saltate (fasi successive già completate) e disattivate, con i codici ordine.
+// "conferma" è la funzione che scrive davvero (salvataggio configurazione o creazione fase).
+let _anteprimaFasiConferma = null;
+function mostraAnteprimaFasi(soggetto, data, conferma) {
+  const cambi = data.cambi || [];
+  const gruppi = [
+    { titolo: 'Attivata', nota: '', sel: c => c.a !== 'non_applicabile' },
+    { titolo: 'Saltata', nota: ' (fasi successive già completate)', sel: c => c.motivo === 'fasi_successive_completate' },
+    { titolo: 'Disattivata', nota: '', sel: c => c.a === 'non_applicabile' && !c.motivo },
+  ].map(g => {
+    const codici = [...new Set(cambi.filter(g.sel).map(c => c.codice || ''))];
+    return codici.length ? `<li><b>${g.titolo}</b>${g.nota} su <b>${codici.length}</b> ${codici.length === 1 ? 'ordine' : 'ordini'}: ${codici.map(escapeHtml).join(', ')}</li>` : '';
+  }).join('');
+  const righe = cambi.map(c => `<tr><td>${escapeHtml(c.codice || '')}</td><td>${escapeHtml(c.fase_nome || '')}</td>
+    <td>${escapeHtml(etichettaStatoFase(c.da))} → <b>${escapeHtml(etichettaStatoFase(c.a))}</b>${c.motivo ? ' <em>(saltata)</em>' : ''}</td></tr>`).join('');
   document.getElementById('anteprima-fasi-body').innerHTML = `
-    <p style="font-size:14px;margin-bottom:10px">Questa modifica cambia <b>${data.n_cambi}</b> ${data.n_cambi === 1 ? 'fase' : 'fasi'} su <b>${data.n_ordini}</b> ${data.n_ordini === 1 ? 'ordine aperto' : 'ordini aperti'}.
+    <p style="font-size:14px;margin-bottom:6px">${escapeHtml(soggetto)} cambia <b>${data.n_cambi}</b> ${data.n_cambi === 1 ? 'fase' : 'fasi'} su <b>${data.n_ordini}</b> ${data.n_ordini === 1 ? 'ordine aperto' : 'ordini aperti'}.
     Le fasi già iniziate o completate e gli ordini spediti non vengono toccati.</p>
+    <ul style="font-size:13px;margin:0 0 10px 18px;line-height:1.5">${gruppi}</ul>
     <div style="max-height:320px;overflow:auto"><table class="tbl" style="width:100%;font-size:12px"><thead><tr><th>Ordine</th><th>Fase</th><th>Stato</th></tr></thead><tbody>${righe}</tbody></table></div>`;
+  _anteprimaFasiConferma = conferma;
   document.getElementById('modal-anteprima-fasi').classList.add('open');
+}
+
+async function confermaAnteprimaFasi() {
+  const fn = _anteprimaFasiConferma;
+  _anteprimaFasiConferma = null;
+  if (fn) await fn(); else closeModal('modal-anteprima-fasi');
 }
 
 async function confermaSalvaFasiConfig() {
@@ -8295,7 +8243,7 @@ function _htmlTabFuori(righe) {
 
 function closeModal(id) {
   document.getElementById(id)?.classList.remove('open');
-  if (id === 'modal-operatore') { annullaModificaPermesso(); aggiornaStatoAssenze(); }
+  if (id === 'modal-operatore') { aggiornaStatoAssenze(); }
 }
 
 function escapeHtml(str) {
@@ -9583,7 +9531,7 @@ async function caricaFasiCatalogoModal(ordineId) {
   // Carica fasi catalogo e stato corrente per questo ordine
   const [{ data: fasiCat }, { data: ordFasi }] = await Promise.all([
     sb.from('fasi').select('id, nome, posizione, tipo_gestione, opzionale').order('posizione'),
-    sb.from('ordine_fasi').select('id, fase_id, stato, spedita_il').eq('ordine_id', ordineId)
+    sb.from('ordine_fasi').select('id, fase_id, stato, spedita_il, scelta_manuale, scelta_motivo').eq('ordine_id', ordineId)
   ]);
   if (!fasiCat) { el.innerHTML = '<em>Errore caricamento fasi</em>'; return; }
   const statoMap = {};
@@ -9600,15 +9548,23 @@ async function caricaFasiCatalogoModal(ordineId) {
     const optBadge = f.opzionale ? `<span style="font-size:9px;background:var(--urgente-bg);color:var(--warn-ink);padding:1px 5px;border-radius:3px;margin-left:4px">OPZ</span>` : '';
     const statoColor = {disponibile:'var(--ok-soft)',in_corso:'var(--info-soft)',completata:'var(--indigo-soft)',in_attesa:'var(--urgente-bg)',non_applicabile:'var(--fill)'}[stato]||'var(--fill)';
     const motivo = bloccata ? (stato==='in_corso'?'in corso':stato==='completata'?'completata':'spedizione avviata') : '';
+    // scelta manuale persistente (resta finché non la cambia il responsabile) o fase saltata perché le successive sono già completate
+    const sceltaTxt = !riga?.scelta_manuale ? ''
+      : riga.scelta_motivo === 'fasi_successive_completate' ? 'saltata: fasi successive già completate'
+      : (riga.scelta_manuale === 'attiva' ? 'scelta manuale: attiva' : 'scelta manuale: esclusa');
+    const sceltaHtml = sceltaTxt && !bloccata
+      ? `<span class="scelta-fase" title="Le regole automatiche non cambiano questa fase finché non torna automatica">${sceltaTxt}</span>
+         <button type="button" class="btn-link-mini" onclick="tornaAutomaticoFase('${ordineId}',${f.id})">Torna automatico</button>`
+      : '';
     return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)">
       <span style="background:${statoColor};padding:1px 7px;border-radius:8px;font-size:10px;white-space:nowrap;min-width:80px;text-align:center">${stato}</span>
-      <span style="flex:1;font-size:13px">${escapeHtml(f.nome)}${tgBadge}${optBadge}</span>
+      <span style="flex:1;font-size:13px">${escapeHtml(f.nome)}${tgBadge}${optBadge}${sceltaHtml ? `<span style="display:block;margin-top:2px">${sceltaHtml}</span>` : ''}</span>
       ${bloccata
         ? `<span style="font-size:11px;color:var(--muted);white-space:nowrap">${motivo}</span>`
         : `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;white-space:nowrap;font-size:12px">
              <input type="checkbox" ${attiva?'checked':''} style="width:15px;height:15px;cursor:pointer"
                onchange="impostaFaseCatalogo('${ordineId}',${f.id},this.checked,this)">
-             ${attiva?'Attiva':'Attiva'}
+             Attiva
            </label>`
       }
     </div>`;
@@ -9628,6 +9584,15 @@ async function impostaFaseCatalogo(ordineId, faseId, attiva, chk) {
     return;
   }
   toast(attiva ? 'Fase attivata' : 'Fase disattivata', 'ok');
+  await caricaFasiCatalogoModal(ordineId);
+}
+
+async function tornaAutomaticoFase(ordineId, faseId) {
+  const { data, error } = await sb.rpc('ripristina_fase_ordine_automatica', {
+    p_ordine_id: ordineId, p_fase_id: faseId, p_responsabile_id: currentUserRow.id, p_session_token: null
+  });
+  if (error || !data?.ok) { toast('Errore: ' + (data?.messaggio || data?.errore || error?.message || ''), 'err'); return; }
+  toast('Fase tornata automatica', 'ok');
   await caricaFasiCatalogoModal(ordineId);
 }
 
@@ -10257,12 +10222,41 @@ async function annullaApprovazione(id) {
 
 // ── Segnala assenza (assenza non richiesta: nessun motivo) ──
 let _saForm = { operatore: '', dal: '', al: '', ore: false, oi: '', of: '' };
-function apriSegnalaAssenza() {
+// Scorciatoie per Dal/Al: compilano solo le due date, che restano modificabili. Calcolate con il calendario aziendale (giorni lavorativi e chiusure).
+function _saScorciatoie() {
+  const oggi = _isoOggi(), giorni = Calendario.giorni();
+  const prossimo = giorni.find(g => g > oggi);
+  const d = new Date(oggi + 'T12:00:00');
+  d.setDate(d.getDate() + (6 - ((d.getDay() + 6) % 7)));            // domenica della settimana corrente
+  const domenica = d.toISOString().slice(0, 10);
+  const restoSettimana = giorni.filter(g => g >= oggi && g <= domenica);
+  const dal = restoSettimana[0] || oggi, al = restoSettimana[restoSettimana.length - 1] || oggi;
+  const etich = iso => { const t = new Date(iso + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'short', day: '2-digit', month: '2-digit' }).replace(/\./g, '');
+    return t.charAt(0).toUpperCase() + t.slice(1); };
+  const voci = [{ testo: 'Oggi', dal: oggi, al: oggi }];
+  if (prossimo) voci.push({ testo: `Prossimo giorno lavorativo (${etich(prossimo)})`, dal: prossimo, al: prossimo });
+  voci.push({ testo: 'Fino a fine settimana', dal, al });
+  return voci;
+}
+function _saApplicaScorciatoia(i) {
+  const v = _saScorciatoie()[i];
+  if (!v) return;
+  _saSet('dal', v.dal);
+  _saSet('al', v.al);
+  document.getElementById('sa-dal').value = _saForm.dal;
+  document.getElementById('sa-al').value = _saForm.al;
+}
+
+// operatoreId opzionale: precompila l'operatore (dalla scheda operatore o dal filtro della scheda Assenze)
+function apriSegnalaAssenza(operatoreId) {
   _saForm = { operatore: '', dal: _isoOggi(), al: _isoOggi(), ore: false, oi: '', of: '' };
+  document.getElementById('sa-scorciatoie').innerHTML = _saScorciatoie().map((v, i) =>
+    `<button type="button" class="btn btn-secondary sa-sc" onclick="_saApplicaScorciatoia(${i})">${escapeHtml(v.testo)}</button>`).join('');
   const sel = document.getElementById('sa-operatore');
   sel.innerHTML = '<option value="">— Scegli —</option>' + operatoriCache
     .filter(o => o.ruolo === 'operatore' && o.attivo && !o.eliminato).sort((a, b) => (a.cognome || '').localeCompare(b.cognome || ''))
     .map(o => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.cognome)} ${escapeHtml(o.nome)}</option>`).join('');
+  if (typeof operatoreId === 'string' && operatoreId && [...sel.options].some(o => o.value === operatoreId)) { sel.value = operatoreId; _saForm.operatore = operatoreId; }
   document.getElementById('sa-dal').value = _saForm.dal;
   document.getElementById('sa-al').value = _saForm.al;
   document.getElementById('sa-ore').checked = false;
@@ -10299,7 +10293,7 @@ async function confermaSegnalaAssenza() {
   closeModal('modal-segnala-assenza');
   toast(`Assenza registrata: disponibilità aggiornata (${data.giorni_aggiornati} giorn${data.giorni_aggiornati === 1 ? 'o' : 'i'})`, 'ok');
   if (_opsScheda === 'richieste') richiesteVista(_ricVista);
-  aggiornaStatoAssenze();
+  aggiornaStatoAssenze().then(() => { if (document.getElementById('modal-operatore')?.classList.contains('open')) caricaAssenzeOperatore(f.operatore); });
 }
 
 // ── Dati di un operatore (profilo) ──

@@ -227,12 +227,6 @@ textarea:focus { border-color: var(--accent); }
 .av-title { font-size: 14px; font-weight: 600; }
 .av-meta { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
 .av-fasi-mini { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 8px; }
-.av-fase-dot { width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0; }
-.av-fase-dot.completata { background: var(--ok); }
-.av-fase-dot.in_corso { background: var(--info-strong); }
-.av-fase-dot.in_attesa { background: var(--warn-strong); }
-.av-fase-dot.disponibile { background: var(--border); }
-.av-fase-dot.non_applicabile { background: transparent; border: 1px solid var(--border); opacity: 0.3; }
 @keyframes blink-warn   { 0%,100% { border-left-color: var(--warn-strong); } 50% { border-left-color: transparent; } }
 @keyframes blink-danger { 0%,100% { border-left-color: var(--alert-strong); } 50% { border-left-color: transparent; } }
 .scad-ok      { border-left: 4px solid var(--ok-strong) !important; }
@@ -1594,14 +1588,15 @@ async function renderOrdineDetail(ordineId) {
     let ordFasi = [];
     if (isOnline) {
       const data = dettaglioResp.ordine_fasi || [];
-      ordFasi = (data || []).sort((a, b) => {
+      // le fasi non attive sull'ordine (non_applicabile) non si mostrano all'operatore
+      ordFasi = (data || []).filter(f => f.stato !== 'non_applicabile').sort((a, b) => {
         const posA = a.fase_id ? (fasi.find(f => f.id === a.fase_id)?.posizione ?? 9999) : 99999;
         const posB = b.fase_id ? (fasi.find(f => f.id === b.fase_id)?.posizione ?? 9999) : 99999;
         return posA - posB;
       });
       await cacheSet('fasi-' + ordineId, ordFasi);
     } else {
-      ordFasi = await cacheGet('fasi-' + ordineId) || [];
+      ordFasi = (await cacheGet('fasi-' + ordineId) || []).filter(f => f.stato !== 'non_applicabile');
     }
 
     // Calcola e mostra stima consegna
@@ -1609,7 +1604,7 @@ async function renderOrdineDetail(ordineId) {
     if (stimaEl) {
       let minRim = 0;
       ordFasi.forEach(f => {
-        if (f.stato === 'completata' || f.stato === 'non_applicabile') return;
+        if (f.stato === 'completata') return;
         const media = faseMediaMinutiMap[parseInt(f.fase_id)];
         if (media) minRim += f.stato === 'in_corso' ? media * Calendario.costante('fattore_fase_in_corso') : media;
       });
@@ -1664,25 +1659,22 @@ async function renderOrdineDetail(ordineId) {
       const nomeFase = escapeHtml(isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id));
       const opNome = f['users'] ? `${escapeHtml(f['users'].nome)} ${escapeHtml(f['users'].cognome)}` : '';
       const isMia = f.operatore_id === currentUser.id;
-      const isNA = f.stato === 'non_applicabile';
       const est = !isCustom && isEsterna(f.fase_id);
       const cnc = !isCustom && isCNC(f.fase_id);
       // Calcola se fase è bloccata da dipendenze non soddisfatte (tiene conto della soglia quantità)
       const faseMaster = !isCustom && fasi.find(fm => fm.id === f.fase_id);
-      const isBloccata = !isNA && f.stato === 'disponibile' && faseMaster &&
+      const isBloccata = f.stato === 'disponibile' && faseMaster &&
         (faseMaster.dipendenze || []).some(depId => {
           const depOf = ordFasi.find(of => of.fase_id === depId);
           return depOf && _depNonSoddisfatta(depId, depOf);
         });
-      const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '<i data-ic="play"></i>' : f.stato === 'in_attesa' ? '<i data-ic="pausa"></i>' : isNA ? '—' : isBloccata ? '<i data-ic="lucchetto"></i>' : isCustom ? '★' : f.fase_id;
-      const clickAttr = isNA ? '' : `onclick="openFaseDetail('${f.id}', '${ordineId}')"`;
+      const icon = f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '<i data-ic="play"></i>' : f.stato === 'in_attesa' ? '<i data-ic="pausa"></i>' : isBloccata ? '<i data-ic="lucchetto"></i>' : isCustom ? '★' : f.fase_id;
       const extraBadges = [
         cnc ? '<span style="font-size:9px;font-weight:700;background:var(--violet);color:var(--on-violet);padding:1px 4px;border-radius:3px;margin-left:4px">CNC</span>' : '',
         est ? '<span style="font-size:9px;font-weight:700;background:var(--ext);color:var(--on-ext);padding:1px 4px;border-radius:3px;margin-left:4px">EXT</span>' : ''
       ].join('');
       let subLabel;
-      if (isNA) subLabel = 'Non applicabile';
-      else if (isBloccata) {
+      if (isBloccata) {
         const blockantiNomi = (faseMaster.dipendenze || [])
           .filter(depId => { const d = ordFasi.find(of => of.fase_id === depId); return d && _depNonSoddisfatta(depId, d); })
           .map(depId => { const fm = fasi.find(fm => fm.id === depId); return escapeHtml(fm ? fm.nome : depId); });
@@ -1690,14 +1682,14 @@ async function renderOrdineDetail(ordineId) {
       } else if (opNome) subLabel = opNome + (isMia ? ' (tu)' : '');
       else if (est) subLabel = 'Fase esterna';
       else subLabel = 'Disponibile';
-      return `<div class="fase-row ${f.stato}" ${clickAttr} style="${isNA ? 'opacity:0.5;cursor:default' : ''}">
+      return `<div class="fase-row ${f.stato}" onclick="openFaseDetail('${f.id}', '${ordineId}')">
         <div class="fase-num-circle" style="${isBloccata ? 'background:var(--violet-soft);color:var(--violet);font-size:14px' : ''}">${icon}</div>
         <div class="fase-info">
           <div class="fn">${nomeFase}${extraBadges}</div>
           <div class="fo" style="${isBloccata ? 'color:var(--violet);font-size:11px' : ''}">${subLabel}</div>
         </div>
         <span class="badge badge-${f.stato}" style="font-size:10px">${statoFaseLabel(f.stato)}</span>
-        ${isNA ? '' : '<span class="arrow">›</span>'}
+        <span class="arrow">›</span>
       </div>`;
     }).join('');
 
