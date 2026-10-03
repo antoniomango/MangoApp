@@ -67,7 +67,43 @@ async function leggiConfigPubblica(client) {
 // Versione del client — da incrementare SEMPRE insieme a CACHE in sw.js (stesso valore,
 // stesso commit). Letta da responsabile.html per la guardia di versione sulle operazioni
 // distruttive (esportazione/archiviazione) — vedi Checklist-Sicurezza.md nel vault.
-const APP_VERSION = 'mango-v49';
+const APP_VERSION = 'mango-v50';
+
+// Guardia di versione per operatore.html e ufficio.html: se la versione minima richiesta dal server (config_pubblica) è
+// maggiore di questa, un client rimasto in cache non resta in uso. Prima prova da solo ad aggiornarsi (cancella cache e
+// service worker e ricarica, una volta sola per versione richiesta); se resta obsoleto mostra "Aggiorna l'app" a tutto schermo.
+// Se la verifica non riesce (offline, formato non riconosciuto) non blocca nulla.
+function _numVersione(v) { const m = /^mango-v(\d+)$/.exec(v || ''); return m ? parseInt(m[1], 10) : null; }
+async function controllaVersioneMinima(client) {
+  try {
+    const minima = (await leggiConfigPubblica(client))?.versione_minima_client;
+    const n = _numVersione(minima), mia = _numVersione(APP_VERSION);
+    if (n === null || mia === null || mia >= n) return true;
+    const aggiorna = async () => {
+      try { (await navigator.serviceWorker?.getRegistrations?.() || []).forEach(r => r.unregister()); } catch (e) {}
+      try { for (const k of await caches.keys()) await caches.delete(k); } catch (e) {}
+      location.reload();
+    };
+    let tentato = null;
+    try { tentato = sessionStorage.getItem('mango-agg-tentato'); } catch (e) {}
+    if (tentato !== minima) {
+      try { sessionStorage.setItem('mango-agg-tentato', minima); } catch (e) {}
+      aggiorna();
+      return false;
+    }
+    const velo = document.createElement('div');
+    velo.id = 'mango-aggiorna-app';
+    velo.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:var(--bg,#fff);color:var(--text,#111);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;font-family:system-ui,sans-serif';
+    velo.innerHTML = '<div style="font-size:22px;font-weight:700">Aggiorna l&rsquo;app</div><div style="max-width:320px;line-height:1.4">Questa versione non è più supportata. Tocca il pulsante per caricare quella nuova.</div>';
+    const b = document.createElement('button');
+    b.textContent = 'Aggiorna ora';
+    b.style.cssText = 'padding:14px 28px;font-size:17px;font-weight:600;border:0;border-radius:12px;background:#f59e0b;color:#111;cursor:pointer';
+    b.onclick = aggiorna;
+    velo.appendChild(b);
+    document.body.appendChild(velo);
+    return false;
+  } catch (e) { return true; }
+}
 
 // ═══════════════════════════════════════════════
 // SETTIMANA ISO 8601 — usata nel dettaglio ordine (operatore.html + responsabile.html)

@@ -555,6 +555,7 @@ textarea:focus { border-color: var(--accent); }
 // SUPABASE_URL / SUPABASE_ANON arrivano da js/config.js (ambiente produzione/test)
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+controllaVersioneMinima(sb);
 
 // ═══════════════════════════════════════════════
 // STATE

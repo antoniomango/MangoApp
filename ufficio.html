@@ -249,6 +249,7 @@ header {
 // SUPABASE_URL / SUPABASE_ANON arrivano da js/config.js (ambiente produzione/test)
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+controllaVersioneMinima(sb);
 
 // Intercetta sessione_non_valida su tutte le chiamate RPC: reindirizza al login.
 // Stesso pattern di operatore.html — necessario ora che le letture passano da RPC
