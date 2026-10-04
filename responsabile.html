@@ -22,7 +22,6 @@
 <script src="js/tema.js"></script>
 <script src="js/icone.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js" integrity="sha384-JBR+x8blGwjDRO63aHCGiZMD4VNiTR4ZUGA+N6ZKLf3zNt1fK8IBpcgPaMrxqWBp" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="css/tema.css">
 <style>
@@ -7285,7 +7284,7 @@ function _leggiLogRiga(azione, dettaglio, fasiOrd) {
 }
 
 // ─── Genera PDF scheda ordine con jsPDF ───────────────────────────────────────
-function generaPDFOrdine(ordine, fasiOrd, fasiExtra, logOrd, allegati) {
+function generaPDFOrdine(ordine, fasiOrd, fasiExtra, logOrd, allegati, opzioni = {}) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W = 190, L = 10;
@@ -7348,6 +7347,7 @@ function generaPDFOrdine(ordine, fasiOrd, fasiExtra, logOrd, allegati) {
   kv('Creato il', fmtDate(ordine.creato_il));
   kv('Scadenza', fmtDate(ordine.scadenza));
   kv('Spedito il', fmtDate(ordine.spedito_il));
+  kv('Completato il', fmtDate(ordine.completato_il));
   if (ordine.note_generali) {
     checkPage();
     doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
@@ -7357,97 +7357,125 @@ function generaPDFOrdine(ordine, fasiOrd, fasiExtra, logOrd, allegati) {
     noteLines.forEach((line, i) => { if (i > 0) checkPage(); doc.text(line, L + 44, y); y += lineH; });
   }
 
-  // ─── Totali di sintesi ───
-  section('Totali di Sintesi');
-  // Tempo di lavorazione vs tempo di attesa esterna (es. essiccazione, verniciatura in
-  // conto terzi): il campo che distingue i due è e_attesa_esterna. Su ordine_fasi non
-  // esiste una colonna propria — si risale al catalogo `fasi` via fase_id. Su
-  // fasi_ordine_extra il campo è invece diretto sulla riga.
-  const eAttesaEsterna = (f) => fasi.find(x => x.id === f.fase_id)?.e_attesa_esterna === true;
-  const minutiLavorazioneFasi = fasiOrdinate.reduce((s, f) => s + (eAttesaEsterna(f) ? 0 : (Number(f.tempo_accumulato_minuti) || 0)), 0);
-  const minutiAttesaFasi = fasiOrdinate.reduce((s, f) => s + (eAttesaEsterna(f) ? (Number(f.tempo_accumulato_minuti) || 0) : 0), 0);
-  const minutiLavorazioneExtra = (fasiExtra || []).reduce((s, f) => s + (f.e_attesa_esterna ? 0 : (Number(f.ore_stimate_manuali) || 0) * 60), 0);
-  const minutiAttesaExtra = (fasiExtra || []).reduce((s, f) => s + (f.e_attesa_esterna ? (Number(f.ore_stimate_manuali) || 0) * 60 : 0), 0);
-  const minutiLavorazione = minutiLavorazioneFasi + minutiLavorazioneExtra;
-  const minutiAttesa = minutiAttesaFasi + minutiAttesaExtra;
-  const totMin = Math.round(minutiLavorazione + minutiAttesa);
-  const fmtOre = (min) => `${Math.floor(min / 60)}h ${String(Math.round(min) % 60).padStart(2, '0')}m`;
+  // ─── Dal giorno configurato (config_sistema.tempi_non_registrati_dal) la fase completata non registra più operatore, inizio e tempo ───
+  // `dal` arriva dalla configurazione ('AAAA-MM-GG', o null se non impostata): niente data scritta nel codice.
+  const dal = opzioni.tempiNonRegistratiDal || null;
+  const giornoLocale = (d) => new Date(d).toLocaleDateString('sv-SE');          // AAAA-MM-GG nel fuso del browser
+  const conDatiRegistrati = (f) => f.stato === 'completata' && !!f.completata_il && (!dal || giornoLocale(f.completata_il) < dal);
+  const macchineElenco = opzioni.macchine || [];
+
   const fasiEseguibili = fasiOrdinate.filter(f => f.stato !== 'non_applicabile');
-  const fasiCompletate = fasiOrdinate.filter(f => f.stato === 'completata').length;
-  kv('Tempo di lavorazione', fmtOre(minutiLavorazione));
-  kv('Tempo di attesa esterna', fmtOre(minutiAttesa));
-  kv('Tempo complessivo (lavorazione + attesa)', fmtOre(totMin));
-  kv('Fasi eseguite', `${fasiCompletate} su ${fasiEseguibili.length}`);
-  if (ordine.creato_il && ordine.spedito_il) {
-    const giorni = Math.round((new Date(ordine.spedito_il) - new Date(ordine.creato_il)) / 86400000);
-    kv('Giorni creazione - spedizione', giorni);
+  const extraEseguibili = (fasiExtra || []).filter(f => f.stato !== 'non_applicabile');
+  const tutteLeFasi = [...fasiEseguibili, ...extraEseguibili];
+  const fasiCompletate = tutteLeFasi.filter(f => f.stato === 'completata').length;
+  const tuttePrimaDellaData = tutteLeFasi.length > 0 && tutteLeFasi.every(conDatiRegistrati);   // totali ore solo se TUTTE le fasi hanno dati registrati
+  const mostraDatiRegistrati = tutteLeFasi.some(conDatiRegistrati);                             // colonne operatore/tempo/inizio solo se almeno una fase li ha
+  const fasiSaltate = fasiOrdinate.filter(f => f.scelta_motivo === 'fasi_successive_completate');
+
+  // ─── Sintesi ───
+  section('Sintesi');
+  kv('Creato il', fmtDT(ordine.creato_il));
+  kv('Completato il', fmtDT(ordine.completato_il));
+  kv('Spedito il', fmtDT(ordine.spedito_il));
+  const giorni = (ordine.creato_il && ordine.spedito_il) ? Math.round((new Date(ordine.spedito_il) - new Date(ordine.creato_il)) / 86400000) : null;
+  kv('Giorni dalla creazione alla spedizione', giorni === null ? '—' : giorni);
+  const entroScadenza = (ordine.scadenza && ordine.spedito_il) ? (giornoLocale(ordine.spedito_il) <= String(ordine.scadenza).slice(0, 10) ? 'Sì' : 'No') : '—';
+  kv('Spedito entro la scadenza', entroScadenza);
+  kv('Fasi eseguite', `${fasiCompletate} su ${tutteLeFasi.length}`);
+  if (fasiSaltate.length) {
+    checkPage();
+    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
+    doc.text('Fasi saltate:', L, y);
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+    const nomiSaltate = fasiSaltate.map(f => f.nome_custom || fasi.find(x => x.id === f.fase_id)?.nome || `#${f.fase_id}`).join(', ');
+    doc.splitTextToSize(nomiSaltate, W - 46).forEach((line, i) => { if (i > 0) checkPage(); doc.text(line, L + 44, y); y += lineH; });
   }
+  if (tuttePrimaDellaData) {
+    // Tempo di lavorazione vs tempo di attesa esterna: il campo che distingue i due è e_attesa_esterna (su ordine_fasi si risale al catalogo `fasi`;
+    // su fasi_ordine_extra è diretto sulla riga). Mostrati solo se tutte le fasi hanno i tempi registrati: mai "0h 00m" né totali parziali.
+    const eAttesaEsterna = (f) => fasi.find(x => x.id === f.fase_id)?.e_attesa_esterna === true;
+    const minutiExtra = (f) => Number(f.tempo_accumulato_minuti ?? (Number(f.ore_stimate_manuali) || 0) * 60) || 0;
+    const minutiLavorazione = fasiEseguibili.reduce((s, f) => s + (eAttesaEsterna(f) ? 0 : (Number(f.tempo_accumulato_minuti) || 0)), 0)
+      + extraEseguibili.reduce((s, f) => s + (f.e_attesa_esterna ? 0 : minutiExtra(f)), 0);
+    const minutiAttesa = fasiEseguibili.reduce((s, f) => s + (eAttesaEsterna(f) ? (Number(f.tempo_accumulato_minuti) || 0) : 0), 0)
+      + extraEseguibili.reduce((s, f) => s + (f.e_attesa_esterna ? minutiExtra(f) : 0), 0);
+    const fmtOre = (min) => `${Math.floor(min / 60)}h ${String(Math.round(min) % 60).padStart(2, '0')}m`;
+    kv('Tempo di lavorazione', fmtOre(minutiLavorazione));
+    kv('Tempo di attesa esterna', fmtOre(minutiAttesa));
+    kv('Tempo complessivo (lavorazione + attesa)', fmtOre(Math.round(minutiLavorazione + minutiAttesa)));
+  }
+
+  // Tabella generica: colonne con peso di larghezza, righe di celle {t: testo, s: 'attenzione' per il corsivo arancione}; il testo va a capo nella cella
+  const tabella = (colonne, righe) => {
+    const gap = 2, pesoTot = colonne.reduce((s, c) => s + c.peso, 0), util = W - gap * (colonne.length - 1);
+    let x = L;
+    const pos = colonne.map(c => { const w = util * c.peso / pesoTot; const p = { x, w }; x += w + gap; return p; });
+    const intestazione = () => {
+      doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
+      colonne.forEach((c, i) => doc.text(c.t, pos[i].x, y));
+      y += lineH * 0.85; hr(220, 220, 220);
+    };
+    intestazione();
+    for (const riga of righe) {
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'normal');
+      const celle = riga.map((c, i) => doc.splitTextToSize(String(c.t ?? ''), pos[i].w));
+      const alt = Math.max(...celle.map(l => l.length), 1) * 3.6;
+      if (y + alt > 272) { doc.addPage(); y = 15; intestazione(); }
+      celle.forEach((linee, i) => {
+        const attenzione = riga[i].s === 'attenzione';
+        doc.setFont('helvetica', attenzione ? 'italic' : 'normal');
+        if (attenzione) doc.setTextColor(200, 120, 40); else doc.setTextColor(30, 30, 30);
+        linee.forEach((linea, k) => doc.text(linea, pos[i].x, y + k * 3.6));
+      });
+      y += Math.max(alt, lineH);
+    }
+  };
+  const nomeOperatore = (f) => { const op = operatoriCache.find(x => x.id === f.operatore_id); return op ? `${op.nome} ${op.cognome}` : (f.operatore_id ? '?' : '—'); };
 
   // Fasi standard — omesse per ordini di tipo extra (non hanno un catalogo fasi standard)
   if (ordine.tipo !== 'extra' && fasiEseguibili.length) {
+    if (y > 235) { doc.addPage(); y = 15; }   // titolo, intestazione e almeno una riga stanno insieme
     section('Fasi di Produzione');
-    const cols = [L, L + 62, L + 108, L + 130, L + 150, L + 172];
-    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
-    ['Fase', 'Operatore', 'Tempo (min)', 'Inizio', 'Fine', ''].forEach((h, i) => doc.text(h, cols[i], y));
-    y += lineH * 0.85; hr(220, 220, 220);
-    for (const f of fasiEseguibili) {
-      checkPage();
+    const piuPezzi = Number(ordine.quantita) > 1;
+    const colonne = [{ t: 'Fase', peso: 3 }, { t: 'Completata il', peso: 2 }];
+    if (piuPezzi) colonne.push({ t: 'Pezzi', peso: 1 });
+    if (mostraDatiRegistrati) colonne.push({ t: 'Operatore', peso: 2 }, { t: 'Tempo (min)', peso: 1.6 }, { t: 'Inizio', peso: 1.4 });
+    colonne.push({ t: 'Note', peso: 3 });
+    tabella(colonne, fasiEseguibili.map(f => {
       const faseName = f.nome_custom || fasi.find(x => x.id === f.fase_id)?.nome || `#${f.fase_id}`;
-      const op = operatoriCache.find(x => x.id === f.operatore_id);
-      const opNome = op ? `${op.nome} ${op.cognome}` : (f.operatore_id ? '?' : '—');
-      const tempo = f.tempo_accumulato_minuti != null ? Number(f.tempo_accumulato_minuti).toFixed(1) : '—';
-
-      // Manda a capo il nome fase invece di troncarlo — è il campo più cercato in archivio
-      const faseLines = doc.splitTextToSize(faseName, 58);
-      const opLines = doc.splitTextToSize(opNome, 42);
-      const nRighe = Math.max(faseLines.length, opLines.length, 1);
-
-      doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-      faseLines.forEach((line, i) => doc.text(line, cols[0], y + i * 3.6));
-      opLines.forEach((line, i) => doc.text(line, cols[1], y + i * 3.6));
-      doc.text(tempo, cols[2], y);
-      doc.text(fmtDate(f.iniziata_il), cols[3], y);
-      doc.text(fmtDate(f.completata_il), cols[4], y);
-      // le fasi non attive sull'ordine (non_applicabile) non sono in elenco: qui resta solo "non eseguita"
-      if (f.stato !== 'completata') {
-        doc.setTextColor(200, 120, 40); doc.setFont('helvetica', 'italic');
-        doc.text('non eseguita', cols[5], y);
-      }
-      y += Math.max(nRighe * 3.6, lineH);
-      if (f.note_operatore) {
-        doc.setFontSize(8); doc.setFont('helvetica', 'italic'); doc.setTextColor(100, 100, 100);
-        doc.splitTextToSize(`Note: ${f.note_operatore}`, W - 12).forEach(line => { checkPage(); doc.text(line, L + 4, y); y += 3.8; });
-      }
+      const registrati = conDatiRegistrati(f);
+      const riga = [{ t: faseName }, f.stato === 'completata' ? { t: fmtDT(f.completata_il) } : { t: 'non eseguita', s: 'attenzione' }];
+      // una fase completata ha fatto tutti i pezzi (chiudendola il contatore si azzera); per le altre si mostra l'avanzamento, se c'è
+      if (piuPezzi) riga.push({ t: f.stato === 'completata' ? `${ordine.quantita} su ${ordine.quantita}` : (Number(f.pezzi_completati) > 0 ? `${f.pezzi_completati} su ${ordine.quantita}` : '—') });
+      if (mostraDatiRegistrati) riga.push({ t: registrati ? nomeOperatore(f) : '' }, { t: registrati ? (f.tempo_accumulato_minuti != null ? Number(f.tempo_accumulato_minuti).toFixed(1) : '—') : '' }, { t: registrati ? fmtDate(f.iniziata_il) : '' });
+      riga.push({ t: f.note_operatore || '' });
+      return riga;
+    }));
+    if (dal && mostraDatiRegistrati) {
+      checkPage();
+      doc.setFontSize(8); doc.setFont('helvetica', 'italic'); doc.setTextColor(120, 120, 120);
+      doc.text(`Dal ${new Date(dal + 'T12:00:00').toLocaleDateString('it-IT')} operatore e tempi non vengono più registrati alla fase.`, L, y + 2); y += 5;
     }
   }
 
-  // Fasi extra — sezione sempre presente: chi legge deve sapere che è stata controllata,
-  // non restare nel dubbio se manchi o non sia stata cercata.
+  // Fasi extra — sezione sempre presente: chi legge deve sapere che è stata controllata, non restare nel dubbio se manchi o non sia stata cercata.
+  if (y > 235) { doc.addPage(); y = 15; }
   section('Fasi Extra');
   if (!fasiExtra || !fasiExtra.length) {
     doc.setFontSize(9); doc.setFont('helvetica', 'italic'); doc.setTextColor(140, 140, 140);
     doc.text('Nessuna', L, y); y += lineH;
   } else {
-    const cols2 = [L, L + 60, L + 95, L + 130, L + 158];
-    doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
-    ['Nome', 'Operatore', 'Stato', 'Ore stimate', 'Completata il'].forEach((h, i) => doc.text(h, cols2[i], y));
-    y += lineH * 0.85; hr(220, 220, 220);
-    for (const f of fasiExtra) {
-      checkPage();
-      const op = operatoriCache.find(x => x.id === f.operatore_id);
-      const nomeLines = doc.splitTextToSize(f.nome || '—', 56);
-      doc.setFontSize(8.5); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-      nomeLines.forEach((line, i) => doc.text(line, cols2[0], y + i * 3.6));
-      doc.text(op ? `${op.nome} ${op.cognome}` : '—', cols2[1], y);
-      doc.text(f.stato ? _statoFaseMinuscolo(f.stato) : '—', cols2[2], y);
-      doc.text(f.ore_stimate_manuali != null ? String(f.ore_stimate_manuali) : '—', cols2[3], y);
-      doc.text(fmtDate(f.completata_il), cols2[4], y);
-      y += Math.max(nomeLines.length * 3.6, lineH);
-      if (f.note_operatore) {
-        doc.setFontSize(8); doc.setFont('helvetica', 'italic'); doc.setTextColor(100, 100, 100);
-        doc.splitTextToSize(`Note: ${f.note_operatore}`, W - 12).forEach(line => { checkPage(); doc.text(line, L + 4, y); y += 3.8; });
-      }
-    }
+    const colonne = [{ t: 'Nome', peso: 3 }, { t: 'Macchina', peso: 2 }, { t: 'Stato', peso: 1.6 }, { t: 'Completata il', peso: 2 }];
+    if (mostraDatiRegistrati) colonne.push({ t: 'Operatore', peso: 2 });
+    colonne.push({ t: 'Note', peso: 3 });
+    tabella(colonne, fasiExtra.map(f => {
+      const registrati = conDatiRegistrati(f);
+      const riga = [{ t: f.nome || '—' }, { t: macchineElenco.find(m => m.id === f.macchina_id)?.nome || '—' }, { t: f.stato ? _statoFaseMinuscolo(f.stato) : '—' },
+                    { t: f.completata_il ? fmtDT(f.completata_il) : '—' }];
+      if (mostraDatiRegistrati) riga.push({ t: registrati ? nomeOperatore(f) : '' });
+      riga.push({ t: f.note_operatore || '' });
+      return riga;
+    }));
   }
 
   // Elenco foto — nome file + fase di appartenenza (le foto stanno nella cartella accanto al PDF)
@@ -7529,35 +7557,51 @@ async function _scriviEVerifica(subDir, nomeFile, blob) {
   return true;
 }
 
+// ─── Archiviazione: solo da PC con Chrome o Edge ──────────────────────────────
+// Dopo l'archiviazione le foto restano soltanto sul PC: la cancellazione dal cloud avviene solo dopo aver riletto ogni file dal disco, e questo
+// si può fare solo con la selezione cartella (showDirectoryPicker). Su Safari, iPhone, Firefox non si archivia: niente zip, niente cancellazione senza verifica.
+const MSG_SOLO_PC = "L'archiviazione si fa solo da PC con Chrome o Edge: le foto vengono cancellate dal cloud solo dopo aver verificato che siano salvate sul disco.";
+function _archiviazioneDisponibile() {
+  if (typeof window.showDirectoryPicker === 'function') return true;
+  alert(MSG_SOLO_PC);
+  return false;
+}
+
+const MSG_ERRORI_ARCHIVIAZIONE = {
+  ordine_non_trovato: 'ordine non trovato', ordine_eliminato: "l'ordine è stato eliminato", ordine_non_spedito: "l'ordine non risulta spedito",
+  ordine_gia_archiviato: "l'ordine è già archiviato", allegati_non_verificati: "l'ordine ha foto che non sono state verificate su disco",
+  allegati_verificati_mancanti: 'richiesta incompleta: aggiorna la pagina', mfa_richiesta: 'serve la verifica a due fattori', sessione_non_valida: 'sessione non valida: accedi di nuovo',
+  non_autorizzato: 'operazione non consentita'
+};
+function messaggioArchiviazione(codice) { return MSG_ERRORI_ARCHIVIAZIONE[codice] || codice || 'errore sconosciuto'; }
+
 // ─── Esporta uno o più ordini: cartella per ordine, PDF + foto, poi archivia DB.
 // Usata sia dal pulsante "Esporta Archivio" (tutti gli ordini da esportare) sia dal
 // pulsante del singolo ordine — stessa funzione, stesso comportamento, per costruzione
 // (non due implementazioni parallele che possono divergere).
 //
 // Ogni ordine è un'unità atomica: si scrive tutto, si rilegge dal disco per verificare,
-// e SOLO se la verifica passa si procede a archiviare e cancellare. Se anche un solo
-// file fallisce, l'ordine viene saltato per intero — nessuna archiviazione, nessuna
-// cancellazione, foto intatte in cloud — e si prosegue con gli altri.
+// e SOLO se la verifica passa si archivia. Se anche un solo file fallisce, l'ordine viene
+// saltato per intero — nessuna archiviazione, nessuna cancellazione, foto intatte in cloud —
+// e si prosegue con gli altri.
 //
-// Ordine delle operazioni (deviazione motivata dalla bozza originale, vedi changelog):
-// allegato-elimina PRIMA di archivia_ordine, non dopo. archivia_ordine cancella già da
-// sé le righe `allegati` dell'ordine (comportamento suo proprio, non modificabile) — se
-// allegato-elimina girasse dopo, elimina_allegati non troverebbe più le righe da cui
-// risalire a url_file e i file resterebbero per sempre nello storage senza generare
-// errore. Chiamandolo prima, elimina_allegati cancella riga+file mentre la riga esiste
-// ancora; il DELETE interno di archivia_ordine diventa poi un no-op innocuo (0 righe).
+// L'archiviazione è una sola chiamata (edge function archivia-ordine → RPC archivia_ordine):
+// il database controlla stato dell'ordine e foto PRIMA di toccare qualunque cosa, cancella le
+// righe e imposta archiviato_il solo se ogni foto dell'ordine è tra quelle verificate su disco;
+// la funzione cancella poi dal bucket solo i percorsi restituiti dalla RPC.
 async function _esportaOrdiniConVerifica(ordini) {
   if (!ordini.length) { toast('Nessun ordine da esportare', 'ok'); return; }
+  if (!_archiviazioneDisponibile()) return;
 
   let dirHandle = null;
-  const hasFSA = typeof window.showDirectoryPicker === 'function';
-  if (hasFSA) {
-    try { dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' }); }
-    catch (e) { if (e.name === 'AbortError') return; }
-  } else {
-    toast('Safari non supporta la selezione cartella — verrà scaricato uno zip per ogni ordine.', 'ok');
-    await new Promise(r => setTimeout(r, 1500));
-  }
+  try { dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' }); }
+  catch (e) { return; }   // selezione annullata (o negata): nessuna archiviazione
+
+  // da questa data la fase completata non registra più operatore, inizio e tempo: la scheda PDF li omette (data da config_sistema)
+  const { data: cfgTempi } = await sb.from('config_sistema').select('valore').eq('chiave', 'tempi_non_registrati_dal').maybeSingle();
+  const tempiNonRegistratiDal = cfgTempi?.valore || null;
+  if (!macchineList.length) await loadMacchine();
+  if (!operatoriCache.length && typeof loadOperatori === 'function') { try { await loadOperatori(); } catch (e) { /* i nomi restano "?" */ } }
 
   const totale = ordini.length;
   const falliti = [];
@@ -7573,13 +7617,13 @@ async function _esportaOrdiniConVerifica(ordini) {
         { data: fasiExtra },
       ] = await Promise.all([
         sb.from('ordine_fasi')
-          .select('id, fase_id, nome_custom, stato, operatore_id, tempo_accumulato_minuti, n_ordini_batch, iniziata_il, completata_il, note_operatore')
+          .select('id, fase_id, nome_custom, stato, operatore_id, tempo_accumulato_minuti, n_ordini_batch, iniziata_il, completata_il, note_operatore, pezzi_completati, scelta_manuale, scelta_motivo')
           .eq('ordine_id', o.id).order('id'),
         sb.from('archivio_log')
           .select('azione, utente_id, timestamp, dettaglio, users!utente_id(nome,cognome)')
           .eq('ordine_id', o.id).order('timestamp'),
         sb.from('fasi_ordine_extra')
-          .select('id, nome, stato, operatore_id, ore_stimate_manuali, completata_il, note_operatore, iniziata_il, e_attesa_esterna')
+          .select('id, nome, stato, operatore_id, ore_stimate_manuali, completata_il, note_operatore, iniziata_il, e_attesa_esterna, macchina_id, tempo_accumulato_minuti')
           .eq('ordine_id', o.id).order('creato_il'),
       ]);
 
@@ -7589,66 +7633,37 @@ async function _esportaOrdiniConVerifica(ordini) {
         headers: await _headerAutorizzazione(),
         body: { p_responsabile_id: currentUserRow.id, p_ordine_id: o.id }
       });
-      const allegati = esitoFoto?.ok ? esitoFoto.allegati : [];
+      if (!esitoFoto?.ok) throw new Error(`elenco foto non disponibile (${esitoFoto?.errore || 'errore'})`);
+      const allegati = esitoFoto.allegati || [];
 
       const speditoDate = o.spedito_il ? o.spedito_il.split('T')[0] : 'no-data';
       const folderName = `${o.cliente || 'cliente'}_${o.codice || o.id}_${speditoDate}`
         .replace(/[^a-zA-Z0-9_\-]/g, '_').replace(/_+/g, '_').slice(0, 80);
 
-      const fotoTotali = (allegati || []).length;
-      const attesi = fotoTotali + 1; // foto + 1 PDF
+      const attesi = allegati.length + 1; // foto + 1 PDF
       let scrittiVerificati = 0;
       const idsVerificati = [];
       let scritturaFallita = null;
 
-      if (dirHandle) {
-        // Sottocartella dedicata — SEMPRE, mai file di ordini diversi mescolati
-        const subDir = await dirHandle.getDirectoryHandle(folderName, { create: true });
+      // Sottocartella dedicata — SEMPRE, mai file di ordini diversi mescolati
+      const subDir = await dirHandle.getDirectoryHandle(folderName, { create: true });
 
-        for (const a of (allegati || [])) {
-          if (!a.signedUrl) { scritturaFallita = `signed URL fallito: ${a.url_file}`; break; }
-          const resp = await fetch(a.signedUrl);
-          if (!resp.ok) { scritturaFallita = `download foto fallito (${resp.status}): ${a.url_file}`; break; }
-          const blob = await resp.blob();
-          const ok = await _scriviEVerifica(subDir, a.url_file.split('/').pop(), blob);
-          if (!ok) { scritturaFallita = `verifica su disco fallita per foto: ${a.url_file}`; break; }
-          scrittiVerificati++; idsVerificati.push(a.id);
-        }
+      for (const a of allegati) {
+        if (!a.signedUrl) { scritturaFallita = `signed URL fallito: ${a.url_file}`; break; }
+        const resp = await fetch(a.signedUrl);
+        if (!resp.ok) { scritturaFallita = `download foto fallito (${resp.status}): ${a.url_file}`; break; }
+        const blob = await resp.blob();
+        const ok = await _scriviEVerifica(subDir, a.url_file.split('/').pop(), blob);
+        if (!ok) { scritturaFallita = `verifica su disco fallita per foto: ${a.url_file}`; break; }
+        scrittiVerificati++; idsVerificati.push(a.id);
+      }
 
-        if (!scritturaFallita) {
-          await arricchisciOrdini([o]);
-          const pdfBlob = generaPDFOrdine(o, fasiOrd, fasiExtra, logOrd, allegati);
-          const okPdf = await _scriviEVerifica(subDir, 'scheda-ordine.pdf', pdfBlob);
-          if (!okPdf) scritturaFallita = 'verifica su disco fallita per scheda-ordine.pdf';
-          else scrittiVerificati++;
-        }
-      } else {
-        // Fallback Safari: nessuna API per rileggere un file scaricato dal browser —
-        // verifica limitata alla dimensione del blob generato lato client (il meglio
-        // disponibile senza File System Access API; dichiarato esplicitamente, non
-        // spacciato per una vera rilettura da disco).
-        const zip = new JSZip();
-        for (const a of (allegati || [])) {
-          if (!a.signedUrl) { scritturaFallita = `signed URL fallito: ${a.url_file}`; break; }
-          const resp = await fetch(a.signedUrl);
-          if (!resp.ok) { scritturaFallita = `download foto fallito (${resp.status}): ${a.url_file}`; break; }
-          const blob = await resp.blob();
-          if (!blob.size) { scritturaFallita = `foto vuota: ${a.url_file}`; break; }
-          zip.file(a.url_file.split('/').pop(), blob);
-          scrittiVerificati++; idsVerificati.push(a.id);
-        }
-        if (!scritturaFallita) {
-          await arricchisciOrdini([o]);
-          const pdfBlob = generaPDFOrdine(o, fasiOrd, fasiExtra, logOrd, allegati);
-          if (!pdfBlob.size) { scritturaFallita = 'PDF generato vuoto'; }
-          else {
-            zip.file('scheda-ordine.pdf', pdfBlob);
-            scrittiVerificati++;
-            const zipBlob = await zip.generateAsync({ type: 'blob' });
-            if (!zipBlob.size) { scritturaFallita = 'zip generato vuoto'; }
-            else { _downloadBlob(zipBlob, `${folderName}.zip`); await new Promise(r => setTimeout(r, 800)); }
-          }
-        }
+      if (!scritturaFallita) {
+        await arricchisciOrdini([o]);
+        const pdfBlob = generaPDFOrdine(o, fasiOrd, fasiExtra, logOrd, allegati, { tempiNonRegistratiDal, macchine: macchineList });
+        const okPdf = await _scriviEVerifica(subDir, 'scheda-ordine.pdf', pdfBlob);
+        if (!okPdf) scritturaFallita = 'verifica su disco fallita per scheda-ordine.pdf';
+        else scrittiVerificati++;
       }
 
       if (scritturaFallita || scrittiVerificati !== attesi) {
@@ -7656,37 +7671,20 @@ async function _esportaOrdiniConVerifica(ordini) {
         continue;
       }
 
-      // Solo ora, con scrittura verificata su disco: allegato-elimina PRIMA (righe+file,
-      // finché le righe esistono ancora), poi archivia_ordine (imposta archiviato_il; il
-      // suo DELETE interno su allegati trova ormai 0 righe, no-op innocuo).
-      if (idsVerificati.length) {
-        const { data: elimData, error: elimErr } = await sb.functions.invoke('allegato-elimina', {
-          headers: await _headerAutorizzazione(),
-          body: { p_allegato_ids: idsVerificati, p_operatore_id: currentUserRow.id, p_session_token: null }
-        });
-        if (elimErr || !elimData?.ok) {
-          falliti.push(`${o.codice || o.cliente} (allegato-elimina fallita: ${elimErr?.message || elimData?.errore} — ordine NON archiviato)`);
-          continue;
-        }
-      }
-      // Rete di sicurezza, non il percorso principale: allegato-elimina sopra ha già
-      // ripulito riga+file, quindi qui url_eliminati è quasi sempre vuoto lato RPC. Ma se in
-      // futuro archivia_ordine venisse chiamato senza quel passaggio (o idsVerificati fosse
-      // vuoto per un motivo diverso), non deve restare nessun path orfano in storage.
-      // Dal 2026-09-09 (V-29) non più uno storage.remove() diretto dal client (appoggiato
-      // alle policy a livello di bucket intero) — l'edge function archivia-ordine chiama
-      // archivia_ordine come l'utente e cancella con la service role solo i path che la RPC
-      // ha appena autorizzato e restituito, stesso schema di allegato-elimina.
+      // Solo ora, con ogni file riletto dal disco: una sola chiamata archivia l'ordine e cancella le foto dal cloud.
+      // Se il database rifiuta (ordine non spedito, già archiviato, eliminato, foto non verificate…) non viene toccato nulla.
       const { data: archEsito, error: archErr } = await sb.functions.invoke('archivia-ordine', {
         headers: await _headerAutorizzazione(),
-        body: { p_ordine_id: o.id, p_responsabile_id: currentUserRow.id }
+        body: { p_ordine_id: o.id, p_responsabile_id: currentUserRow.id, p_allegati_verificati: idsVerificati }
       });
       if (archErr || !archEsito?.ok) {
-        falliti.push(`${o.codice || o.cliente} (archivia_ordine fallita dopo cancellazione allegati: ${archErr?.message || archEsito?.errore})`);
+        let codice = archEsito?.errore;
+        if (!codice && archErr?.context && typeof archErr.context.json === 'function') { try { codice = (await archErr.context.json())?.errore; } catch (e) { /* risposta non leggibile */ } }
+        falliti.push(`${o.codice || o.cliente} (archiviazione rifiutata: ${messaggioArchiviazione(codice || archErr?.message)} — ordine NON archiviato, foto intatte in cloud)`);
         continue;
       }
       if (archEsito.storage_errori?.length) {
-        console.warn(`Archiviazione ${o.codice}: righe allegati cancellate ma storage.remove() fallita — file potenzialmente orfani:`, archEsito.storage_errori);
+        console.warn(`Archiviazione ${o.codice}: righe allegati cancellate ma cancellazione dal bucket fallita — file potenzialmente orfani:`, archEsito.storage_errori);
       }
 
       archiviati.push(o);
@@ -7697,23 +7695,19 @@ async function _esportaOrdiniConVerifica(ordini) {
     }
   }
 
-  // CSV riepilogo alla radice della cartella scelta (solo per esportazioni multiple)
-  if (archiviati.length > 1 && dirHandle) {
-    const headers = ['Codice', 'Cliente', 'Struttura', 'Tipo Prodotto', 'Materiale', 'Priorità', 'Stato', 'Creato il', 'Scadenza', 'Spedito il', 'Ore lavoro', 'Attesa esterna', 'N. operatori'];
+  // CSV riepilogo alla radice della cartella scelta (solo per esportazioni multiple).
+  // Niente ore/operatori: da quando non si registrano più sarebbero 0 o parziali; i tempi stanno, dove esistono, nella scheda di ogni ordine.
+  if (archiviati.length > 1) {
+    const headers = ['Codice', 'Cliente', 'Struttura', 'Tipo Prodotto', 'Materiale', 'Priorità', 'Stato', 'Creato il', 'Scadenza', 'Completato il', 'Spedito il'];
     await arricchisciOrdini(archiviati);
-    const rows = archiviati.map(o => {
-      const st = lavoroStatsCache[o.id];
-      return [
-        o.codice, o.cliente, strutturaLabel(o.struttura), tipoProdLabel(o.tipo_prodotto), Etichette.attributiLato().map(a => Etichette.riepilogoLato(o, a.chiave)).join(' | '),
-        o.priorita, o.stato,
-        formatDate(o.creato_il),
-        o.scadenza ? o.scadenza.split('T')[0] : '',
-        o.spedito_il ? formatDate(o.spedito_il) : '',
-        st ? minutiToOreMinuti(st.minuti_lavoro) : '',
-        st ? minutiToOreMinuti(st.minuti_attesa_esterna) : '',
-        st ? String(st.n_operatori) : '',
-      ];
-    });
+    const rows = archiviati.map(o => [
+      o.codice, o.cliente, strutturaLabel(o.struttura), tipoProdLabel(o.tipo_prodotto), Etichette.attributiLato().map(a => Etichette.riepilogoLato(o, a.chiave)).join(' | '),
+      o.priorita, o.stato,
+      formatDate(o.creato_il),
+      o.scadenza ? o.scadenza.split('T')[0] : '',
+      o.completato_il ? formatDate(o.completato_il) : '',
+      o.spedito_il ? formatDate(o.spedito_il) : '',
+    ]);
     const csv = [headers, ...rows].map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
     const csvBlob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const csvName = `riepilogo-archivio-${new Date().toISOString().split('T')[0]}.csv`;
@@ -7734,6 +7728,7 @@ async function _esportaOrdiniConVerifica(ordini) {
 // ─── Esporta Archivio: tutti gli ordini spediti non ancora archiviati ─────────
 async function esportaArchivio() {
   if (_bloccaSeClientObsoleto()) return;
+  if (!_archiviazioneDisponibile()) return;
   const daEsportare = ordiniSpeditiCache.filter(o => !o.archiviato_il);
   if (!daEsportare.length) { toast('Nessun ordine da esportare', 'ok'); return; }
   await _esportaOrdiniConVerifica(daEsportare);
@@ -7742,9 +7737,10 @@ async function esportaArchivio() {
 // ─── Esporta un singolo ordine — stessa funzione, stesso comportamento ────────
 async function scaricaEliminaFoto(ordineId, codice, cliente) {
   if (_bloccaSeClientObsoleto()) return;
+  if (!_archiviazioneDisponibile()) return;
   const ordine = ordiniSpeditiCache.find(o => o.id === ordineId);
   if (!ordine) { toast('Ordine non trovato', 'err'); return; }
-  if (!confirm(`Esportare l'ordine ${codice} — ${cliente} (scheda PDF + foto) e archiviarlo?\n\nL'ordine sparirà da "Da esportare" e le foto verranno rimosse dal cloud (righe DB incluse).`)) return;
+  if (!confirm(`Esportare l'ordine ${codice} — ${cliente} (scheda PDF + foto) e archiviarlo?\n\nL'ordine sparirà da "Da esportare" e le foto verranno rimosse dal cloud dopo averle verificate sul disco.`)) return;
   await _esportaOrdiniConVerifica([ordine]);
 }
 

@@ -27,7 +27,7 @@ const Etichette = (() => {
   const STATI_RICHIESTA = { in_attesa: 'In attesa', approvata: 'Approvata', rifiutata: 'Non approvata', annullata: 'Annullata' };
   const AZIONI_LOG = {
     ordine_creato: 'Ordine creato', ordine_modificato: 'Ordine modificato', ordine_sospeso: 'Ordine sospeso',
-    ordine_riattivato: 'Ordine riattivato', ordine_spedito: 'Ordine spedito',
+    ordine_riattivato: 'Ordine riattivato', ordine_spedito: 'Ordine spedito', ordine_archiviato: 'Ordine archiviato',
     fase_iniziata: 'Fase iniziata', fase_completata: 'Fase completata', fase_riassegnata: 'Fase riassegnata',
     fase_messa_in_attesa: 'Fase messa in attesa', fase_ripresa: 'Fase ripresa', fase_confermata_ricezione: 'Ricezione confermata',
     fase_annullata: 'Fase annullata', fase_riaperta: 'Fase riaperta', fase_eliminata: 'Fase eliminata',
