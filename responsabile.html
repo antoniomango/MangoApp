@@ -1642,6 +1642,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
         </div>
         <div id="tempi-rif-note"></div>
         <div class="card" style="padding:12px 16px"><div id="tempi-rif-body">Caricamento…</div></div>
+        <div id="tempi-rif-extra"></div>
         <div id="tempi-rif-storico"></div>
       </section>
 
@@ -1928,6 +1929,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
               <option value="">— inserimento libero —</option>
             </select>
           </div>
+          <div class="form-group" id="nef-macchina-box" style="display:none;margin-bottom:8px"></div>
           <div class="form-group" style="margin-bottom:8px">
             <label style="font-size:12px">Nome fase</label>
             <input type="text" id="nef-nome" placeholder="es. Spazzolatura esterna" list="nomi-fasi-extra-storia" autocomplete="off">
@@ -3639,6 +3641,7 @@ async function salvaMacchineCFE() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function prefillDaCatalogo(catalogoId) {
+  mostraMacchinaExtra(document.getElementById('nef-macchina-box'), catalogoId || null, 'nef-macchina');
   const row = document.getElementById('nef-salva-catalogo-row');
   if (!catalogoId) {
     // Fase libera: mostra opzione salva nel catalogo
@@ -4954,6 +4957,36 @@ function addStdFaseExtra() {
 
 let extraFaseCounter = 0;
 
+// ── Macchina delle fasi extra ──
+// Catalogo con una sola macchina: la imposta il database. Con più macchine il responsabile sceglie; la proposta (macchina meno carica)
+// la calcola il database. Nessuna macchina nel catalogo: nessuna scelta.
+const MSG_FASI_EXTRA = {
+  ordine_spedito: "L'ordine è già spedito: non si possono aggiungere fasi.", ordine_eliminato: "L'ordine è stato eliminato.", ordine_non_trovato: 'Ordine non trovato.',
+  catalogo_non_attivo: 'La voce di catalogo scelta è disattivata.', catalogo_non_trovato: 'Voce di catalogo non trovata.',
+  numero_gia_usato: "Esiste già una fase con questo numero nell'ordine.", numero_non_valido: 'Numero di fase non valido.', nome_obbligatorio: 'Inserisci il nome di tutte le fasi.',
+  macchina_non_valida: 'Macchina non valida o non attiva.', macchina_non_del_catalogo: 'La macchina scelta non appartiene a questa fase del catalogo.',
+  tipo_gestione_non_valido: 'Tipo di gestione non valido.', fasi_non_valide: 'Dati delle fasi non validi.',
+  sessione_non_valida: 'Sessione non valida: accedi di nuovo.', non_autorizzato: 'Operazione non consentita.'
+};
+function messaggioFasiExtra(errore) { return MSG_FASI_EXTRA[errore] || errore || ''; }
+
+async function mostraMacchinaExtra(box, catalogoId, classeSelect) {
+  if (!box) return;
+  box.style.display = 'none';
+  box.innerHTML = '';
+  box.dataset.cat = catalogoId || '';
+  const c = catalogoId ? catalogoFasiExtra.find(x => x.id === catalogoId) : null;
+  if (!c || (c.macchine_ids || []).length < 2) return;
+  const { data } = await sb.rpc('proposta_macchina_fase_extra', { p_responsabile_id: currentUserRow.id, p_session_token: null, p_catalogo_id: catalogoId });
+  if (box.dataset.cat !== (catalogoId || '')) return;   // nel frattempo è stata scelta un'altra voce
+  if (!data?.ok || !(data.macchine || []).length) return;
+  box.innerHTML = `<label style="font-size:12px;display:block;margin-bottom:3px">Macchina</label>
+    <select class="${classeSelect}" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-family:var(--font-sans);font-size:13px;background:var(--bg);color:var(--ink);outline:none">
+      ${data.macchine.map(m => `<option value="${m.id}" ${m.id === data.proposta ? 'selected' : ''}>${escapeHtml(m.nome)} — oggi ${fmtMinuti(m.minuti_oggi)} min, ${m.fasi_extra_aperte} fasi extra aperte${m.id === data.proposta ? ' (proposta: la meno carica)' : ''}</option>`).join('')}
+    </select>`;
+  box.style.display = '';
+}
+
 function onCatalogoFaseChange(sel) {
   const row = sel.closest('.extra-fase-row');
   const catalogoId = sel.value || null;
@@ -4971,6 +5004,7 @@ function onCatalogoFaseChange(sel) {
   } else {
     salvaRow.style.display = '';
   }
+  mostraMacchinaExtra(row.querySelector('.extra-fase-macchina-box'), catalogoId, 'extra-fase-macchina');
 }
 
 async function addFaseExtra() {
@@ -5002,6 +5036,7 @@ async function addFaseExtra() {
       <input type="text" class="extra-fase-note" placeholder="Note (opz.)"
         style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-family:var(--font-sans);font-size:13px;background:var(--bg);color:var(--ink);outline:none">
     </div>
+    <div class="extra-fase-macchina-box" style="display:none;padding-left:26px"></div>
     <div class="extra-fase-salva-row" style="padding-left:26px">
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--indigo-ink)">
         <input type="checkbox" class="extra-fase-salva-cat" style="accent-color:var(--indigo)">
@@ -5123,6 +5158,7 @@ async function creaOrdine() {
         e_attesa_esterna: eEsterna,
         tipo_gestione: catEntry ? catEntry.tipo_gestione : (eEsterna ? 'spedizione_esterna' : 'standard'),
         catalogo_fase_extra_id: catId || null,
+        macchina_id: row.querySelector('.extra-fase-macchina')?.value || null,
         _salva_catalogo: !catId && (row.querySelector('.extra-fase-salva-cat')?.checked ?? false)
       };
     });
@@ -5183,7 +5219,7 @@ async function creaOrdine() {
       p_fasi: fasiExtra,
       p_responsabile_id: currentUserRow.id
     });
-    if (!eData?.ok) { toast('Errore fasi extra', 'err'); return; }
+    if (!eData?.ok) { toast('Errore fasi extra: ' + messaggioFasiExtra(eData?.errore), 'err'); return; }
   }
 
   // Le fasi applicabili le decide solo il database (trigger sull'inserimento dell'ordine); registro e ordine nella stessa RPC
@@ -6587,6 +6623,7 @@ async function loadTempiRiferimento() {
   tempiFasi = (data.fasi || []).map(f => ({ ...f, _min: f.tempo?.minuti_tipici ?? '', _max: f.tempo?.minuti_max ?? '', _conf: !!f.tempo?.da_confermare, _note: f.tempo?.note || '' }));
   tempiFasiCatalogo = data.fasi_da_catalogo || [];
   tempiRifStorico = data.storico || [];
+  await loadTempiRifExtra();
   renderTempiRiferimento();
 }
 
@@ -6615,8 +6652,64 @@ function renderTempiRifExtra() {
         <td data-label="Note" style="${td}">${escapeHtml(r.note || '')}</td></tr>`).join('')}</tbody></table></div></details>`;
 }
 
+// ── Fasi extra: tempo di riferimento per pezzo (catalogo), nella stessa pagina e con lo stesso stile delle fasi normali ──
+let tempiExtra = [];            // voci del catalogo fasi extra a gestione standard (+ bozza: _min)
+let tempiExtraDefault = null;   // durata predefinita delle fasi extra (kpi_config), usata quando manca ogni altro tempo
+
+async function loadTempiRifExtra() {
+  await loadCatalogoFasiExtra();
+  tempiExtra = catalogoFasiExtra.filter(c => c.tipo_gestione === 'standard')
+    .map(c => ({ id: c.id, nome: c.nome, attiva: c.attiva, tempo: c.tempo_per_pezzo_minuti, _min: c.tempo_per_pezzo_minuti ?? '' }));
+  try {
+    const { data } = await sb.from('kpi_config').select('valore').eq('chiave', 'durata_default_fase_extra_minuti').maybeSingle();
+    tempiExtraDefault = data?.valore ?? null;
+  } catch (e) { tempiExtraDefault = null; }
+}
+
+function tempiExtraSet(i, valore) { const r = tempiExtra[i]; if (r) r._min = valore; }
+
+function renderTempiRifFasiExtra() {
+  const box = document.getElementById('tempi-rif-extra');
+  if (!box) return;
+  if (!tempiExtra.length) { box.innerHTML = ''; return; }
+  const cella = 'padding:6px 8px;border:1px solid var(--border-strong);border-radius:var(--radius-ctl);font-size:13px;background:var(--bg);color:var(--ink)';
+  const predef = tempiExtraDefault !== null ? `${fmtMinuti(tempiExtraDefault)} min` : 'quella impostata nelle Soglie KPI';
+  box.innerHTML = `<div class="card" style="padding:12px 16px;margin-top:12px">
+    <div style="font-size:13px;font-weight:600;margin-bottom:4px">Fasi extra</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Minuti per 1 pezzo, moltiplicati per la quantità dell'ordine. Le ore stimate sulla fase di un ordine hanno la precedenza; senza nessun tempo il piano "Oggi" usa la durata predefinita delle fasi extra (${escapeHtml(predef)}).</div>
+    <div style="overflow-x:auto"><table class="tempi-tab" style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em">
+        <th style="padding:8px">Fase extra</th><th style="padding:8px">Tempo per pezzo (min)</th><th></th></tr></thead>
+      <tbody>${tempiExtra.map((r, i) => `
+        <tr style="border-top:1px solid var(--border)">
+          <td data-label="Fase extra" class="cella-fase" style="padding:6px 8px;font-weight:600">${escapeHtml(r.nome)}${r.attiva ? '' : ' <span style="font-size:11px;background:var(--neutral-soft);color:var(--neutral);border-radius:5px;padding:1px 7px;font-weight:600">Inattiva</span>'}${r.tempo === null || r.tempo === undefined ? ' <span style="font-size:11px;background:var(--warn-soft);color:var(--warn-ink);border-radius:5px;padding:1px 7px;font-weight:600;white-space:nowrap">Da impostare</span>' : ''}</td>
+          <td data-label="Tempo per pezzo (min)" style="padding:6px 8px"><input type="number" min="0.1" max="1440" step="0.5" value="${escapeHtml(r._min)}" aria-label="Tempo per pezzo in minuti" style="${cella};width:104px" oninput="tempiExtraSet(${i},this.value)"></td>
+          <td style="padding:6px 8px;white-space:nowrap">
+            <button class="btn btn-secondary" style="padding:6px 10px;font-size:12px" onclick="salvaTempoExtra(${i})"><i data-ic="salva"></i> Salva</button>
+            ${r.tempo !== null && r.tempo !== undefined ? `<button class="btn btn-danger" style="padding:6px 10px;font-size:12px" onclick="salvaTempoExtra(${i}, true)" aria-label="Togli il tempo"><i data-ic="cestino"></i></button>` : ''}
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div></div>`;
+}
+
+async function salvaTempoExtra(i, togli) {
+  const r = tempiExtra[i]; if (!r) return;
+  let minuti = null;
+  if (!togli) {
+    minuti = _numeroValido(r._min);
+    if (minuti === null || minuti <= 0) { toast('Il tempo per pezzo deve essere un numero maggiore di 0', 'err'); return; }
+  } else if (!confirm(`Togliere il tempo di "${r.nome}"? Il piano userà la durata predefinita delle fasi extra.`)) { return; }
+  const { data, error } = await sb.rpc('imposta_tempo_catalogo_fase_extra', { p_responsabile_id: currentUserRow.id, p_session_token: null, p_id: r.id, p_minuti: minuti });
+  if (error || !data?.ok) { toast(data?.messaggio || 'Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
+  await loadTempiRifExtra();
+  renderTempiRifFasiExtra();
+  toast(togli ? 'Tempo tolto' : 'Tempo di riferimento salvato', 'ok');
+}
+
 function renderTempiRiferimento() {
   renderTempiRifExtra();
+  renderTempiRifFasiExtra();
   const el = document.getElementById('tempi-rif-body');
   if (!el) return;
   const daImpostare = tempiFasi.filter(f => !f.tempo).length;
@@ -10242,6 +10335,7 @@ async function apriAggiungiExtraFase() {
       attive.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
     sel.value = '';
   }
+  mostraMacchinaExtra(document.getElementById('nef-macchina-box'), null, 'nef-macchina');
   document.getElementById('mod-aggiungi-fase-form').style.display = '';
   document.getElementById('nef-nome').focus();
 }
@@ -10280,10 +10374,10 @@ async function aggiungiExtraFase() {
 
   const { data, error } = await sb.rpc('crea_fasi_extra', {
     p_ordine_id: ordineId,
-    p_fasi: [{ numero: prossimoNumero, nome, note_responsabile: note, tipo_gestione: tipoGestione, catalogo_fase_extra_id: catalogoId || '' }],
+    p_fasi: [{ numero: prossimoNumero, nome, note_responsabile: note, tipo_gestione: tipoGestione, catalogo_fase_extra_id: catalogoId || '', macchina_id: document.querySelector('#nef-macchina-box select')?.value || null }],
     p_responsabile_id: currentUserRow.id
   });
-  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
+  if (error || !data?.ok) { toast('Errore: ' + (error?.message || messaggioFasiExtra(data?.errore)), 'err'); return; }
   toast(`Fase "${nome}" aggiunta`, 'ok');
   document.getElementById('mod-aggiungi-fase-form').style.display = 'none';
   await caricaFasiExtraModal(ordineId);
