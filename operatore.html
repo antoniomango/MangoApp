@@ -239,6 +239,11 @@ textarea:focus { border-color: var(--accent); }
 .oggi-barra { position: sticky; bottom: 8px; z-index: 5; display: flex; gap: 8px; align-items: center; background: var(--inverse); color: var(--on-inverse); padding: 10px 14px; border-radius: 12px; box-shadow: var(--shadow-bar); margin-top: 12px; }
 .oggi-barra strong { flex: 1; font-size: 13px; }
 .oggi-barra .btn { width: auto; padding: 9px 14px; font-size: 13px; }
+.ricevi-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-bottom: 12px; padding: 12px 14px; font-size: 15px; font-weight: 600; }
+.ricevi-conta { font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--warn-ink); background: var(--warn-soft); border-radius: 20px; padding: 3px 9px; white-space: nowrap; }
+.ricevi-cerca { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; font-size: 15px; background: var(--surface); color: var(--ink); outline: none; margin-bottom: 12px; }
+.ricevi-sotto { font-size: 12px; color: var(--ink-2); margin-top: 3px; }
+.ricevi-sotto strong { color: var(--warn-ink); }
 
 /* ── TOAST ── */
 .toast { position: fixed; bottom: 72px; left: 16px; right: 16px; z-index: 300; background: var(--inverse); color: var(--on-inverse); padding: 13px 18px; border-radius: 10px; font-size: 14px; opacity: 0; transform: translateY(6px); transition: all 0.25s; pointer-events: none; text-align: center; }
@@ -1163,7 +1168,7 @@ function showScreen(name) {
   if (name !== 'oggi') oggiFermaAggiornamento();
   if (name === 'home') { loadOrdini().then(() => renderHome()); }
 
-  else if (name === 'oggi') { oggiFaseAperta = null; oggiSelezione.clear(); oggiAvviaAggiornamento(); loadOggi(); }
+  else if (name === 'oggi') { oggiFaseAperta = null; riceviAperto = false; oggiSelezione.clear(); oggiAvviaAggiornamento(); loadOggi(); }
   else if (name === 'notifiche') {
     // Richiedi permesso notifiche push (richiede gesto utente su iOS)
     richiediPermessoNotifiche();
@@ -2444,7 +2449,7 @@ async function _oggiUnGiro() {
     if (isOnline) {
       const { data, error } = await sb.rpc('oggi_squadra', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
       if (oggiRicarica) return;                       // dati di prima di un'azione appena fatta: si scartano, segue un nuovo giro
-      if (!error && data?.ok) { oggiDati = data; oggiDaCache = false; _oggiRender(); cacheSet('oggi', data); return; }
+      if (!error && data?.ok) { oggiDati = data; oggiDaCache = false; _oggiRender(); cacheSet('oggi', data); loadRicezioni().catch(() => {}); return; }
       if (!oggiDati) { oggiDati = await cacheGet('oggi') || null; oggiDaCache = !!oggiDati; }
     } else {
       oggiDati = await cacheGet('oggi') || oggiDati;
@@ -2452,6 +2457,47 @@ async function _oggiUnGiro() {
     }
   } catch (e) { console.warn('loadOggi', e); }
   _oggiRender();
+  loadRicezioni().catch(() => {});
+}
+
+// ── Ricevi materiale: ricezioni aperte (arrivi di materiale e rientri da lavorazione esterna), fuori dal piano di Oggi ──
+// Si ridisegna prima, la cache (best effort) si scrive dopo. Nessun tempo, nessun giorno di attesa: li vede solo il responsabile.
+let ricezioniDati = null;        // ultima risposta di ricezioni_in_attesa (anche dalla cache offline)
+let ricezioniDaCache = false;
+let riceviAperto = false;        // il pannello è aperto dentro la schermata Oggi
+let riceviCerca = '';            // testo di ricerca (tenuto in memoria a ogni digitazione)
+let ricezioniInCorso = new Set(); // chiavi delle ricezioni con una conferma in corso
+let ricezioniRicarica = false;
+let _ricezioniProm = null;
+const riceviChiave = (r) => r.ordine_fase_id || r.fase_extra_id;
+function loadRicezioni() {
+  if (!currentUser) return Promise.resolve();
+  if (_ricezioniProm) { ricezioniRicarica = true; return _ricezioniProm; }
+  _ricezioniProm = (async () => {
+    try { do { ricezioniRicarica = false; await _ricezioniUnGiro(); } while (ricezioniRicarica); }
+    finally { _ricezioniProm = null; }
+  })();
+  return _ricezioniProm;
+}
+async function _ricezioniUnGiro() {
+  try {
+    if (isOnline) {
+      const { data, error } = await sb.rpc('ricezioni_in_attesa', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
+      if (ricezioniRicarica) return;                  // dati di prima di una conferma appena fatta: si scartano, segue un nuovo giro
+      if (!error && data?.ok) { ricezioniDati = data; ricezioniDaCache = false; _oggiRender(); cacheSet('ricezioni', data); return; }
+      if (!ricezioniDati) { ricezioniDati = await cacheGet('ricezioni') || null; ricezioniDaCache = !!ricezioniDati; }
+    } else {
+      ricezioniDati = await cacheGet('ricezioni') || ricezioniDati;
+      ricezioniDaCache = !!ricezioniDati;
+    }
+  } catch (e) { console.warn('loadRicezioni', e); }
+  _oggiRender();
+}
+function riceviApri() { riceviAperto = true; riceviCerca = ''; oggiFaseAperta = null; oggiSelezione.clear(); oggiModoMultiplo = false; renderOggi(); window.scrollTo?.(0, 0); document.querySelector('.app-content')?.scrollTo?.(0, 0); loadRicezioni().catch(() => {}); }
+function riceviChiudi() { riceviAperto = false; renderOggi(); }
+function riceviBottone() {
+  const n = ricezioniDati?.n_urgenti || 0;
+  return `<button type="button" class="btn btn-secondary ricevi-btn" onclick="riceviApri()"><i data-ic="pacco"></i> Ricevi materiale${n ? `<span class="ricevi-conta">${n} ${n === 1 ? 'serve' : 'servono'}</span>` : ''}</button>`;
 }
 function _oggiRender() { try { renderOggi(); } catch (e) { console.warn('renderOggi', e); } }
 
@@ -2468,13 +2514,15 @@ function renderOggi() {
   const dataTesto = new Date((oggiDati?.data || Calendario.oggiIso()) + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
   const offline = (!isOnline || oggiDaCache) ? `<div class="oggi-nota"><i data-ic="offline"></i> ${isOnline ? 'Non aggiornato' : 'Offline'} — ultimo piano ricevuto. Le azioni verranno sincronizzate alla riconnessione.</div>` : '';
 
+  if (riceviAperto) { testa.innerHTML = ''; corpo.innerHTML = renderRicevi(solaLettura); return; }
+
   if (!oggiDati) {
-    testa.innerHTML = '';
+    testa.innerHTML = riceviBottone();
     corpo.innerHTML = `<div class="page-title">Oggi</div>${offline}<div class="empty-state"><div class="icon"><i data-ic="appunti"></i></div><p>${isOnline ? 'Caricamento…' : 'Piano non disponibile offline'}</p></div>`;
     return;
   }
   if (!oggiDati.piano_presente) {
-    testa.innerHTML = '';
+    testa.innerHTML = riceviBottone();
     corpo.innerHTML = `<div class="page-title">Oggi</div>${offline}<div class="oggi-riepilogo"><div class="oggi-data">${escapeHtml(dataTesto)}</div></div>
       <div class="empty-state"><div class="icon"><i data-ic="calendario"></i></div><p>${oggiDati.lavorativo
         ? 'Il piano di oggi non è ancora pronto: viene creato all\'inizio del turno.'
@@ -2488,7 +2536,7 @@ function renderOggi() {
       <div class="oggi-data">${escapeHtml(dataTesto)}</div>
       <div class="oggi-num">${av.fatte} di ${av.totali} <small>attività</small></div>
       <div class="progress-bar-wrap"><div class="progress-bar-fill ${av.totali && av.fatte === av.totali ? 'done' : ''}" style="width:${pct}%"></div></div>
-    </div>`;
+    </div>${riceviBottone()}`;
 
   const gruppo = oggiFaseAperta ? oggiPartiziona().principali.find(g => g.chiave === oggiFaseAperta) : null;
   if (oggiFaseAperta && !gruppo) { oggiFaseAperta = null; oggiSelezione.clear(); oggiModoMultiplo = false; }
@@ -2529,10 +2577,6 @@ function renderOggiElenco() {
       return `<div class="oggi-voce bloccata" aria-disabled="true"><div class="ov-titolo">${escapeHtml(o.cliente || '')} — ${escapeHtml(o.codice || '')}</div><div class="ov-sub">dopo ${escapeHtml(v.bloccata_da.join(', '))}</div></div>`;
     }).join('') + '</div>').join('');
   }
-  const esterne = oggiDati.esterne || [];
-  if (esterne.length) {
-    html += '<div class="section-title">Spedizioni e ricezioni</div><div class="card">' + esterne.map(v => renderOggiVoceEsterna(v)).join('') + '</div>';
-  }
   return html;
 }
 
@@ -2541,25 +2585,11 @@ function oggiTitoloVoce(v) {
   return `${escapeHtml(o.cliente || '')} — ${escapeHtml(o.codice || '')}`;
 }
 
-function renderOggiVoceEsterna(v) {
-  const o = v.ordine || {};
-  const solaLettura = currentUser?.ruolo === 'sola_lettura';
-  let azione = '';
-  if (!solaLettura && v.stato_fase === 'disponibile') azione = `<button class="btn btn-primary" onclick="oggiEsterna('${escapeJsAttr(v.voce_id)}','spedizione')"><i data-ic="invio"></i> Segna spedita</button>`;
-  else if (!solaLettura && v.stato_fase === 'in_attesa') azione = `<button class="btn btn-ok" onclick="oggiEsterna('${escapeJsAttr(v.voce_id)}','ricezione')"><i data-ic="spunta"></i> Conferma ricezione</button>`;
-  else if (v.fatta) azione = '<span class="oggi-segno" style="background:var(--ok-soft);color:var(--ok-ink)">✓ Fatta</span>';
-  return `<div class="oggi-voce ${v.fatta ? 'fatta' : ''}">
-    <div class="ov-testa"><div class="ov-titolo">${oggiTitoloVoce(v)}</div>${v.aggiunta ? '<span class="oggi-segno">aggiunta</span>' : ''}</div>
-    <div class="ov-sub">${escapeHtml(v.fase_nome)}${o.quantita > 1 ? ' · ' + o.quantita + ' pz' : ''} · ${v.stato_fase === 'in_attesa' ? 'dal fornitore' : v.fatta ? 'completata' : 'da spedire'}</div>
-    ${azione ? `<div class="ov-azioni">${azione}</div>` : ''}
-  </div>`;
-}
-
 function oggiApriGruppo(chiave) { oggiFaseAperta = chiave; oggiSelezione.clear(); oggiModoMultiplo = false; renderOggi(); window.scrollTo?.(0, 0); document.querySelector('.app-content')?.scrollTo?.(0, 0); }
 function oggiTornaElenco() { oggiFaseAperta = null; oggiSelezione.clear(); oggiModoMultiplo = false; renderOggi(); }
 
 const oggiAzionabile = (v) => !v.fatta && !(v.bloccata_da && v.bloccata_da.length);
-const oggiSelezionabile = (v) => oggiAzionabile(v);
+const oggiSelezionabile = (v) => oggiAzionabile(v) && !v.esterna;     // le spedizioni si segnano una per una
 
 function renderOggiGruppo(g, solaLettura) {
   const azionabili = g.voci.filter(oggiSelezionabile);
@@ -2590,6 +2620,8 @@ function renderOggiVoce(v, solaLettura) {
       if (v.annullabile) azioni = `<button class="btn btn-secondary"${occ} onclick="oggiAnnulla('${escapeJsAttr(v.voce_id)}')">↩ Annulla</button>`;
     } else if (bloccata) {
       azioni = '';
+    } else if (v.esterna) {
+      azioni = `<button class="btn btn-primary"${occ} onclick="oggiEsterna('${escapeJsAttr(v.voce_id)}','spedizione')"><i data-ic="invio"></i> ${occ ? '…' : 'Segna spedita'}</button>`;
     } else if (v.pezzi) {
       azioni = `<button class="btn btn-secondary piccolo" ${v.pezzi.fatti <= 0 || occ ? 'disabled' : ''} onclick="oggiPezzi('${escapeJsAttr(v.voce_id)}','meno')" aria-label="Togli un pezzo">−</button>
         <div class="oggi-pezzi" aria-live="polite">${v.pezzi.fatti} di ${v.pezzi.totali}</div>
@@ -2624,7 +2656,7 @@ function oggiAnnullaSelezione() { oggiSelezione.clear(); renderOggi(); }
 function oggiRicalcolaConteggi() {
   if (!oggiDati) return;
   (oggiDati.gruppi || []).forEach(g => { g.fatte = g.voci.filter(x => x.fatta).length; });
-  if (oggiDati.avanzamento) oggiDati.avanzamento.fatte = (oggiDati.gruppi || []).reduce((s, x) => s + x.fatte, 0);
+  if (oggiDati.avanzamento) oggiDati.avanzamento.fatte = (oggiDati.gruppi || []).reduce((s, x) => s + x.voci.filter(y => y.fatta && !y.esterna).length, 0);
 }
 function oggiSegnaFatta(v) {
   if (!v) return;
@@ -2743,25 +2775,87 @@ async function oggiCompletaSelezione() {
   }, scelte.map(v => v.voce_id));
 }
 
-// spedizioni e ricezioni (fasi esterne): invariate, raggiungibili anche da qui
+// spedizione di una fase esterna (voce del piano, solo quando le fasi precedenti sono completate); i passaggi di conferma sono invariati
 async function oggiEsterna(voceId, tipo) {
   const v = oggiTrovaVoce(voceId); if (!v) return;
+  if (tipo !== 'spedizione') return;
   if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
   const extra = !!v.fase_extra_id;
-  if (tipo === 'spedizione') { if (!confirm('Confermi la spedizione al fornitore? Verrà registrata la data di uscita.')) return; if (!confirm('Confermi di aver spedito questo pezzo?')) return; }
-  else { if (!confirm(extra ? 'Il pezzo è tornato dal fornitore? Confermi la ricezione?' : 'Confermi la ricezione del materiale? La fase verrà chiusa.')) return; if (!extra && !confirm('Confermi di aver ricevuto davvero il materiale per questo pezzo?')) return; }
+  if (!confirm('Confermi la spedizione al fornitore? Verrà registrata la data di uscita.')) return;
+  if (!confirm('Confermi di aver spedito questo pezzo?')) return;
   await oggiEsegui(async () => {
-    let r;
-    if (tipo === 'spedizione') r = extra
+    const r = extra
       ? await sb.rpc('segna_spedizione_extra', { p_fase_extra_id: v.fase_extra_id, p_operatore_id: currentUser.id, p_session_token: sessionToken })
       : await sb.rpc('segna_spedizione_fase', { p_ordine_fase_id: v.ordine_fase_id, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-    else r = extra
-      ? await sb.rpc('conferma_ricezione_extra', { p_fase_extra_id: v.fase_extra_id, p_operatore_id: currentUser.id, p_session_token: sessionToken })
-      : await sb.rpc('conferma_ricezione_fase', { p_ordine_fase_id: v.ordine_fase_id, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-    if (r.error || !r.data?.ok) { toast('Errore: ' + (r.error?.message || r.data?.errore || ''), 'err'); return; }
-    toast(tipo === 'spedizione' ? 'Spedizione registrata!' : 'Ricezione confermata!', 'ok');
-    return tipo === 'spedizione' ? null : () => { v.fatta = true; v.annullabile = false; };
+    if (r.error || !r.data?.ok) { toast('Errore: ' + (r.error?.message || r.data?.messaggio || r.data?.errore || ''), 'err'); return; }
+    toast('Spedizione registrata!', 'ok');
+    return null;
   }, [voceId]);
+}
+
+// ── pannello "Ricevi materiale" ──
+function renderRicevi(solaLettura) {
+  const offline = (!isOnline || ricezioniDaCache) ? `<div class="oggi-nota"><i data-ic="offline"></i> ${isOnline ? 'Non aggiornato' : 'Offline'} — Serve la connessione per confermare${ricezioniDati ? '. Ultimo elenco ricevuto.' : '.'}</div>` : '';
+  return `<button class="back-btn" onclick="riceviChiudi()">← Oggi</button>
+    <div class="page-title">Ricevi materiale</div>
+    ${offline}
+    <input type="search" id="ricevi-cerca" class="ricevi-cerca" placeholder="Cerca cliente o codice ordine…" value="${escapeHtml(riceviCerca)}" oninput="riceviFiltra(this.value)" autocomplete="off">
+    <div id="ricevi-lista">${renderRiceviLista(solaLettura)}</div>`;
+}
+// ridisegna solo l'elenco, così il campo di ricerca non perde il focus
+function riceviFiltra(testo) {
+  riceviCerca = testo || '';
+  const el = document.getElementById('ricevi-lista');
+  if (el) el.innerHTML = renderRiceviLista(currentUser?.ruolo === 'sola_lettura');
+}
+function renderRiceviLista(solaLettura) {
+  if (!ricezioniDati) return `<div class="empty-state"><div class="icon"><i data-ic="pacco"></i></div><p>${isOnline ? 'Caricamento…' : 'Elenco non disponibile offline'}</p></div>`;
+  const q = riceviCerca.toLowerCase().trim();
+  const tutte = ricezioniDati.ricezioni || [];
+  const lista = tutte.filter(r => !q || `${r.cliente || ''} ${r.codice || ''}`.toLowerCase().includes(q));
+  if (!tutte.length) return '<div class="empty-state"><div class="icon"><i data-ic="spunta"></i></div><p>Nessuna ricezione in attesa</p></div>';
+  if (!lista.length) return '<div class="empty-state"><p>Nessun risultato</p></div>';
+  const voce = (r) => {
+    const k = riceviChiave(r), occ = ricezioniInCorso.has(k) ? ' disabled' : '';
+    const sblocca = r.urgente && (r.sblocca || []).length ? `<div class="ricevi-sotto"><strong>sblocca:</strong> ${escapeHtml(r.sblocca.join(', '))}</div>` : '';
+    const azione = solaLettura ? '' : `<div class="ov-azioni"><button class="btn btn-ok"${occ}${isOnline ? '' : ' disabled'} onclick="riceviConferma('${escapeJsAttr(k)}')">${occ ? '…' : '<i data-ic="spunta"></i> ' + (r.tipo === 'rientro' ? 'Rientrato' : 'Arrivato')}</button></div>`;
+    return `<div class="oggi-voce"><div class="ov-testa"><div class="ov-titolo">${escapeHtml(r.cliente || '')} — ${escapeHtml(r.codice || '')}</div></div>
+      <div class="ov-sub">${escapeHtml(r.fase_nome || '')}${r.tipo === 'rientro' ? ' · dal fornitore' : ''}</div>${sblocca}${azione}</div>`;
+  };
+  const urg = lista.filter(r => r.urgente), altre = lista.filter(r => !r.urgente);
+  let html = '';
+  if (urg.length) html += '<div class="section-title">Servono adesso</div><div class="card">' + urg.map(voce).join('') + '</div>';
+  if (altre.length) html += '<div class="section-title">Altro in arrivo</div><div class="card">' + altre.map(voce).join('') + '</div>';
+  return html;
+}
+async function riceviConferma(chiave) {
+  const r = (ricezioniDati?.ricezioni || []).find(x => riceviChiave(x) === chiave); if (!r) return;
+  if (!isOnline) { toast('Serve la connessione per confermare', 'err'); return; }
+  if (oggiOperazione || ricezioniInCorso.has(chiave)) return;
+  const extra = !!r.fase_extra_id;
+  if (!confirm(extra || r.tipo === 'rientro' ? 'Il pezzo è tornato dal fornitore? Confermi la ricezione?' : 'Confermi la ricezione del materiale? La fase verrà chiusa.')) return;
+  if (!extra && !confirm('Confermi di aver ricevuto davvero il materiale per questo pezzo?')) return;
+  ricezioniInCorso.add(chiave);
+  riceviFiltra(riceviCerca);
+  try {
+    await oggiEsegui(async () => {
+      const x = extra
+        ? await sb.rpc('conferma_ricezione_extra', { p_fase_extra_id: r.fase_extra_id, p_operatore_id: currentUser.id, p_session_token: sessionToken })
+        : await sb.rpc('conferma_ricezione_fase', { p_ordine_fase_id: r.ordine_fase_id, p_operatore_id: currentUser.id, p_session_token: sessionToken });
+      const giaFatta = x.data?.errore === 'stato_non_in_attesa';
+      if (x.error || (!x.data?.ok && !giaFatta)) { toast('Errore: ' + (x.error?.message || x.data?.messaggio || x.data?.errore || ''), 'err'); return; }
+      toast(giaFatta ? (x.data?.messaggio || 'Ricezione già confermata') : 'Ricezione confermata', giaFatta ? 'err' : 'ok');
+      // la voce sparisce subito dal pannello; poi ci si riallinea al server (Oggi si ricarica: le fasi sbloccate possono essere entrate nel piano)
+      return () => {
+        if (!ricezioniDati) return;
+        ricezioniDati.ricezioni = ricezioniDati.ricezioni.filter(y => riceviChiave(y) !== chiave);
+        ricezioniDati.n_urgenti = ricezioniDati.ricezioni.filter(y => y.urgente).length;
+        cacheSet('ricezioni', ricezioniDati);
+      };
+    }, []);
+  } finally { ricezioniInCorso.delete(chiave); }
+  try { await loadRicezioni(); } catch (e) { console.warn('loadRicezioni', e); }
+  _oggiRender();
 }
 
 // ═══════════════════════════════════════════════

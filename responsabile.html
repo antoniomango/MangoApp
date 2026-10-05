@@ -3087,6 +3087,7 @@ function showSection(name) {
 // va più veloce, con il tetto regolato ogni settimana. Qui: la vista "Oggi" con minuti e capacità, i comandi (rigenera / aggiungi / togli) e la
 // pagina dei parametri con spiegazioni e simulazione. Tutto via RPC con registro; nessun valore di configurazione scritto nel codice.
 let oggiR = null;            // risposta di piano_oggi_responsabile
+let ricezioniR = null;       // risposta di ricezioni_in_attesa (con i giorni di attesa, visibili solo al responsabile)
 let _oggiRTimer = null;
 let _prodDebounce = null;
 
@@ -3101,6 +3102,42 @@ async function loadOggiResp() {
   if (error || !data?.ok) { document.getElementById('oggi-r-corpo').innerHTML = `<div class="empty-state"><p>Piano non disponibile: ${escapeHtml(data?.errore || error?.message || '')}</p></div>`; return; }
   oggiR = data;
   renderOggiResp();
+  loadRicezioniResp();
+}
+async function loadRicezioniResp() {
+  const { data, error } = await sb.rpc('ricezioni_in_attesa', { p_operatore_id: currentUserRow.id, p_session_token: null });
+  ricezioniR = (!error && data?.ok) ? data : null;
+  renderOggiResp();
+}
+// riquadro "In attesa dai fornitori": arrivi di materiale e rientri da lavorazione esterna, con i giorni di attesa e cosa bloccano
+function riquadroFornitori() {
+  if (!ricezioniR) return '';
+  const lista = ricezioniR.ricezioni || [];
+  const giorni = (n) => n === 1 ? '1 giorno' : n + ' giorni';
+  const riga = (r) => {
+    const k = r.ordine_fase_id || r.fase_extra_id;
+    return `<tr style="${r.urgente ? 'background:var(--warn-bg)' : ''}">
+      <td><div style="font-weight:600">${escapeHtml(r.cliente || '')} — ${escapeHtml(r.codice || '')}</div>
+        ${r.urgente && (r.sblocca || []).length ? `<div style="font-size:12px;font-weight:700;color:var(--warn-ink)">blocca: ${escapeHtml(r.sblocca.join(', '))}</div>` : ''}</td>
+      <td>${escapeHtml(r.fase_nome || '')}<div style="font-size:11px;color:var(--muted)">${r.tipo === 'rientro' ? 'rientro da lavorazione esterna' : 'arrivo di materiale'}</div></td>
+      <td style="white-space:nowrap">${giorni(r.giorni_attesa || 0)}</td>
+      <td style="text-align:right"><button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="confermaRicezioneResp('${escapeJsAttr(k)}')">${r.tipo === 'rientro' ? 'Conferma rientro' : 'Conferma arrivo'}</button></td>
+    </tr>`;
+  };
+  const urgenti = lista.filter(r => r.urgente).length;
+  return `<div class="card"><div class="card-hdr"><h3>In attesa dai fornitori</h3><span style="font-size:12px;color:var(--muted)">${lista.length ? lista.length + (lista.length === 1 ? ' ricezione' : ' ricezioni') + (urgenti ? ' · ' + urgenti + (urgenti === 1 ? ' blocca lavoro' : ' bloccano lavoro') : '') : ''}</span></div>
+    ${lista.length ? `<div style="overflow-x:auto"><table><thead><tr><th>Ordine</th><th>Fase</th><th>Attesa</th><th></th></tr></thead><tbody>${lista.map(riga).join('')}</tbody></table></div>` : '<div style="color:var(--muted);font-size:13px;padding:8px 0">Nessuna ricezione in attesa.</div>'}</div>`;
+}
+async function confermaRicezioneResp(chiave) {
+  const r = (ricezioniR?.ricezioni || []).find(x => (x.ordine_fase_id || x.fase_extra_id) === chiave); if (!r) return;
+  if (!confirm((r.tipo === 'rientro' ? 'Confermi il rientro di ' : 'Confermi l\'arrivo di ') + (r.fase_nome || '') + ' — ' + (r.cliente || '') + ' ' + (r.codice || '') + '?')) return;
+  const x = r.fase_extra_id
+    ? await sb.rpc('conferma_ricezione_extra', { p_fase_extra_id: r.fase_extra_id, p_operatore_id: currentUserRow.id, p_session_token: null })
+    : await sb.rpc('conferma_ricezione_fase', { p_ordine_fase_id: r.ordine_fase_id, p_operatore_id: currentUserRow.id, p_session_token: null });
+  const giaFatta = x.data?.errore === 'stato_non_in_attesa';
+  if (x.error || (!x.data?.ok && !giaFatta)) { toast('Non confermata: ' + (x.error?.message || x.data?.messaggio || x.data?.errore || ''), 'err'); return; }
+  toast(giaFatta ? (x.data?.messaggio || 'Già confermata') : 'Ricezione confermata', giaFatta ? 'err' : 'ok');
+  await loadOggiResp();
 }
 
 // ridisegno ritardato: Realtime e aggiornamento periodico possono arrivare a raffica
@@ -3126,7 +3163,7 @@ function renderOggiResp() {
   if (!d.piano_presente) {
     const a0 = document.getElementById('oggi-r-aggiornato'); if (a0) a0.textContent = '';
     riep.innerHTML = '';
-    corpo.innerHTML = `<div class="empty-state"><div class="icon"><i data-ic="calendario"></i></div>
+    corpo.innerHTML = riquadroFornitori() + `<div class="empty-state"><div class="icon"><i data-ic="calendario"></i></div>
       <p>${d.lavorativo ? 'Il piano di oggi non è ancora stato generato: nasce all\'inizio del turno. Puoi crearlo subito con "Rigenera piano di oggi".' : 'Oggi non è un giorno lavorativo: nessun piano.'}</p></div>`;
     return;
   }
@@ -3172,16 +3209,16 @@ function renderOggiResp() {
     if (ok.length) principali.push({ ...g, voci: ok, fatte: ok.filter(v => v.fatta).length, totali: ok.length });
     if (bl.length) inArrivo.push({ ...g, voci: bl, fatte: 0, totali: bl.length });
   });
-  let html = principali.map(g => `<div class="card"><div class="card-hdr"><h3>${escapeHtml(g.fase_nome)}</h3><span style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${g.fatte} di ${g.totali}</span></div>${tabella(g.voci)}</div>`).join('');
-  if (!principali.length) html = '<div class="empty-state"><p>Nessuna attività eseguibile adesso.</p></div>';
+  let html = riquadroFornitori() + principali.map(g => `<div class="card"><div class="card-hdr"><h3>${escapeHtml(g.fase_nome)}</h3><span style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${g.fatte} di ${g.totali}</span></div>${tabella(g.voci)}</div>`).join('');
+  if (!principali.length) html += '<div class="empty-state"><p>Nessuna attività eseguibile adesso.</p></div>';
   if (inArrivo.length) {
     const minArrivo = inArrivo.reduce((t, g) => t + g.voci.reduce((u, v) => u + (Number(v.minuti_stimati) || 0), 0), 0);
     html += `<div role="separator" style="display:flex;align-items:center;gap:10px;margin:22px 0 12px;color:var(--ink-2);font-family:var(--font-mono);font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase"><span style="flex:1;height:2px;background:var(--border-strong)"></span><span>In arrivo · ${_fmtMin(minArrivo)}</span><span style="flex:1;height:2px;background:var(--border-strong)"></span></div>`;
     html += inArrivo.map(g => `<div class="card" style="background:var(--phase-bg)"><div class="card-hdr"><h3>${escapeHtml(g.fase_nome)}</h3><span style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${g.totali} in attesa</span></div>${tabella(g.voci)}</div>`).join('');
   }
-  if (!(d.gruppi || []).length) html = '<div class="empty-state"><p>Nessuna attività nel piano di oggi.</p></div>';
+  if (!(d.gruppi || []).length) html += '<div class="empty-state"><p>Nessuna attività nel piano di oggi.</p></div>';
   if ((d.esterne || []).length) {
-    html += `<div class="card"><div class="card-hdr"><h3>Spedizioni e ricezioni</h3><span style="font-size:12px;color:var(--muted)">non consumano capacità</span></div>${tabella(d.esterne.map(v => ({ ...v, minuti_stimati: 0 })))}</div>`;
+    html += `<div class="card"><div class="card-hdr"><h3>Ricezioni aggiunte a mano</h3><span style="font-size:12px;color:var(--muted)">non consumano capacità</span></div>${tabella(d.esterne.map(v => ({ ...v, minuti_stimati: 0 })))}</div>`;
   }
   // uscite dal piano, con il motivo leggibile
   if ((d.uscite || []).length) {
