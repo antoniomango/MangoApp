@@ -24,6 +24,16 @@ const Etichette = (() => {
   const STATI_ORDINE = { aperto: 'Aperto', sospeso: 'Sospeso', spedito: 'Spedito', attesa_spedizione: 'In attesa corriere' };
   const STATI_FASE = { disponibile: 'Disponibile', in_corso: 'In corso', in_attesa: 'In attesa', completata: 'Completata',
                        non_applicabile: 'Non applicabile', bloccata: 'Bloccata', assente: 'Assente' };
+  // Piano del giorno: motivi per cui una voce esce dal piano e origine delle voci (enumerazioni chiuse del database)
+  const MOTIVI_USCITA_PIANO = { responsabile: 'Tolta da te', non_piu_applicabile: 'Non più applicabile', ordine_non_attivo: 'Ordine non più attivo',
+                                macchina_non_disponibile: 'Macchina non disponibile', dipendenza_riaperta: 'In attesa di una fase riaperta' };
+  const ORIGINI_VOCE_PIANO = { riempimento: 'riempimento', ricalcolo: 'aggiunta in giornata', responsabile: 'aggiunta a mano' };
+  // Tipo di fase (valori del database: standard / conferma_ricezione / spedizione_esterna): [valore, etichetta, spiegazione]
+  const TIPI_GESTIONE_FASE = [
+    ['standard', 'Interna', 'Lavorata in officina. Usa tempo e macchine.'],
+    ['conferma_ricezione', 'Arrivo da fuori', 'Si chiude confermando che il materiale è arrivato.'],
+    ['spedizione_esterna', 'Lavorazione esterna', 'Si spedisce e si conferma il rientro. Non usa tempo interno.'],
+  ];
   const STATI_RICHIESTA = { in_attesa: 'In attesa', approvata: 'Approvata', rifiutata: 'Non approvata', annullata: 'Annullata' };
   const AZIONI_LOG = {
     ordine_creato: 'Ordine creato', ordine_modificato: 'Ordine modificato', ordine_sospeso: 'Ordine sospeso',
@@ -127,6 +137,9 @@ const Etichette = (() => {
     statoFase: s => STATI_FASE[s] || vuoto(s),
     statoRichiesta: s => STATI_RICHIESTA[s] || vuoto(s),
     azioneLog: a => AZIONI_LOG[a] || a,
+    tipiGestioneFase: () => TIPI_GESTIONE_FASE,
+    motivoUscitaPiano: m => MOTIVI_USCITA_PIANO[m] || vuoto(m),
+    origineVocePiano: o => ORIGINI_VOCE_PIANO[o] || '',
     STATI_RICHIESTA,
   };
 })();

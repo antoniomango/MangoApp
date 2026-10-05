@@ -356,18 +356,6 @@ tr.ric-evidenza td { background: var(--info-soft); }
 .macro-fasi-check label:hover { background:var(--phase-bg); }
 
 /* ── CONFIGURAZIONE FASI ── */
-.fase-config-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
-.fase-config-item:last-child { border-bottom: none; }
-.fase-config-num { font-family: var(--font-mono); font-size: 12px; color: var(--muted); width: 28px; flex-shrink: 0; }
-.fase-config-inputs { flex: 1; display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
-.fase-config-inputs input { padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-family: var(--font-sans); font-size: 13px; background: var(--bg); color: var(--ink); outline: none; }
-.fase-config-inputs input:focus { border-color: var(--accent); }
-.fase-del-btn { flex-shrink:0; background:none; border:none; color:var(--muted); font-size:16px; cursor:pointer; padding:4px 6px; border-radius:6px; line-height:1; }
-.fase-del-btn:hover { background:var(--alert-bg); color:var(--alert-strong); }
-.fase-move-btns { display:flex; flex-direction:column; gap:2px; flex-shrink:0; }
-.fase-move-btn { background:none; border:1px solid var(--border); color:var(--muted); font-size:11px; cursor:pointer; padding:2px 6px; border-radius:4px; line-height:1.2; }
-.fase-move-btn:hover:not(:disabled) { background:var(--surface); color:var(--ink); }
-.fase-move-btn:disabled { opacity:0.2; cursor:default; }
 /* fasi extra su ordine standard */
 .extra-std-row { display:flex; gap:8px; align-items:center; }
 .extra-std-row input { flex:1; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; background:var(--bg); color:var(--ink); outline:none; }
@@ -537,12 +525,6 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
   .cfg-aggiungi input[type="text"] { min-width: 0; flex-basis: 100%; }
   .kpi-bar-row .kpi-bar-label { width: 96px; }
   .macro-cfg-hdr { flex-wrap: wrap; }
-  .fase-config-item { flex-wrap: wrap; align-items: flex-start; }
-  .fase-move-btns { flex-direction: row; gap: 6px; }
-  .fase-move-btn { min-width: 44px; min-height: 44px; font-size: 14px; }
-  .fase-config-num { align-self: center; }
-  .fase-config-inputs { flex: 1 1 100%; min-width: 0; grid-template-columns: minmax(0, 1fr); }
-  .fase-config-inputs > div[style*="grid-template-columns"] { grid-template-columns: minmax(0, 1fr) !important; }
   .macro-cfg-hdr input[type="text"] { min-width: 0; flex: 1 1 140px !important; }
 
   /* ── ordini: ogni riga diventa una card ── */
@@ -578,6 +560,155 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), select, textarea { font-size: 16px !important; font-family: var(--font-sans); }
   .notif-item { min-height: 44px; }
   .notif-text { min-width: 0; overflow-wrap: anywhere; }
+}
+
+/* ── Sezione Fasi (mango-v53): elenco compatto + dettaglio di una fase, vista Flusso. Solo token di css/tema.css ── */
+#sec-fasi-config [hidden] { display: none !important; }
+.fs-hdr-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.fs-seg { display: inline-flex; background: var(--fill); border-radius: var(--radius-ctl, 10px); padding: 3px; gap: 2px; }
+.fs-seg button { border: none; background: none; padding: 6px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 500; color: var(--muted); cursor: pointer; }
+.fs-seg button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.fs-btn-ghost { background: none; border: none; color: var(--muted); padding: 6px 10px; border-radius: 10px; cursor: pointer; font-size: 13px; }
+.fs-btn-danger-ghost { background: none; color: var(--alert); border: 1px solid var(--alert-soft); padding: 8px 16px; border-radius: 10px; cursor: pointer; font-size: 13px; }
+.fs-grid { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 20px; align-items: start; }
+.fs-lista { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; position: sticky; top: 0; max-height: calc(100vh - 140px); display: flex; flex-direction: column; overflow: hidden; }
+.fs-lista-top { padding: 12px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+.fs-cerca { width: 100%; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--bg); outline: none; }
+.fs-cerca:focus { border-color: var(--accent); }
+.fs-filtri { display: flex; gap: 6px; flex-wrap: wrap; }
+.fs-filtro { border: 1px solid var(--border); background: var(--surface); border-radius: 20px; padding: 4px 10px; font-size: 12px; color: var(--muted); cursor: pointer; }
+.fs-filtro.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.fs-filtro .n { font-family: var(--font-mono); font-size: 11px; opacity: .8; margin-left: 3px; }
+.fs-righe { overflow-y: auto; }
+.fs-riga { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 14px 10px 11px; border-left: 3px solid transparent; border-bottom: 1px solid var(--border); cursor: pointer; width: 100%; text-align: left; background: none; border-top: none; border-right: none; }
+.fs-riga:hover { background: var(--surface-2); }
+.fs-riga.on { background: var(--phase-bg); border-left-color: var(--accent); }
+.fs-riga .num { font-family: var(--font-mono); font-size: 11px; color: var(--muted); padding-top: 2px; text-align: right; font-variant-numeric: tabular-nums; }
+.fs-riga .nome { font-size: 13.5px; font-weight: 500; line-height: 1.3; display: flex; align-items: center; gap: 6px; }
+.fs-riga .meta { font-size: 11.5px; color: var(--muted); margin-top: 3px; display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.fs-mdot { width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block; }
+.fs-mdot.vuoto { border: 1.5px dashed var(--border-strong); }
+.fs-mod-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--indigo); flex: none; }
+.fs-avv { font-size: 13px; line-height: 1; padding-top: 2px; }
+.fs-avv.warn { color: var(--warn); } .fs-avv.alert { color: var(--alert); } .fs-avv.info { color: var(--muted); }
+.fs-tag { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 20px; font-size: 10.5px; font-weight: 600; letter-spacing: .02em; }
+.fs-tag-cnc { background: var(--fill); color: var(--ink-2); }
+.fs-tag-ext { background: var(--ext-bg); color: var(--ext); }
+.fs-tag-opz { background: var(--violet-soft); color: var(--violet-ink); }
+.fs-tag-fine { background: var(--ok-soft); color: var(--ok-ink); }
+.fs-dettaglio { min-width: 0; }
+.fs-det-hdr { position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 4px 0 12px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+.fs-det-hdr-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: space-between; }
+.fs-det-title { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.fs-det-title .n { font-family: var(--font-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.fs-det-title h2 { font-size: 20px; font-weight: 600; margin: 0; text-wrap: balance; }
+.fs-det-sub { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.fs-stato-mod { font-size: 12px; font-weight: 600; color: var(--indigo); }
+.fs-guard { margin-top: 10px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; background: var(--warn-bg); color: var(--warn-ink); border: 1px solid var(--warn-line); font-size: 13px; }
+.fs-guard span { flex: 1; min-width: 200px; }
+.fs-back { display: none; }
+.fs-blocco { margin-top: 22px; }
+.fs-blocco-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 4px 8px; }
+.fs-blocco-h h3 { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.fs-blocco-h .hint { font-size: 12px; color: var(--muted); }
+.fs-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; }
+.fs-row { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.fs-row:last-child { border-bottom: none; }
+.fs-row.inline { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.fs-lbl { font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 6px; display: block; }
+.fs-desc { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+.fs-inp { width: 100%; padding: 9px 12px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--bg); outline: none; }
+.fs-inp:focus { border-color: var(--accent); }
+.fs-inp.num { width: 84px; text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+select.fs-inp { width: auto; min-width: 200px; max-width: 100%; }
+.fs-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 14px; }
+.fs-riassunto { padding: 12px 16px; background: var(--surface-2); border-bottom: 1px solid var(--border); font-size: 13px; line-height: 1.5; border-radius: 14px 14px 0 0; }
+.fs-crit { display: grid; grid-template-columns: 130px auto minmax(0, 1fr); gap: 12px; align-items: center; }
+.fs-crit-t { font-size: 13px; font-weight: 500; }
+.fs-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fs-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 20px; border: 1px solid var(--border-strong); background: var(--surface); font-size: 12.5px; cursor: pointer; }
+.fs-chip.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.fs-chip-x { border: none; background: none; cursor: pointer; color: inherit; opacity: .6; padding: 0 0 0 2px; font-size: 13px; line-height: 1; }
+.fs-chip-x:hover { opacity: 1; }
+.fs-chip.link { background: var(--surface-2); }
+.fs-chip.link:hover { border-color: var(--accent); }
+.fs-chip .stato { font-size: 10.5px; font-weight: 600; color: var(--alert-ink); }
+.fs-chip .ok { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+.fs-chip .ko { width: 7px; height: 7px; border-radius: 50%; background: var(--alert); }
+.fs-seq { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: stretch; }
+.fs-seq-col { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.fs-seq-col .fs-lbl { margin: 0; }
+.fs-seq-mid { display: flex; align-items: center; gap: 10px; padding: 14px 4px; }
+.fs-freccia { color: var(--border-strong); font-size: 18px; }
+.fs-qui { padding: 10px 14px; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-size: 13px; font-weight: 600; max-width: 200px; text-align: center; line-height: 1.3; }
+.fs-seq-note { padding: 10px 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); line-height: 1.45; }
+.fs-add { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.fs-err { color: var(--alert); font-size: 12px; }
+.fs-sw { position: relative; width: 44px; height: 26px; flex: none; }
+.fs-sw input { opacity: 0; width: 100%; height: 100%; margin: 0; position: absolute; inset: 0; cursor: pointer; z-index: 1; }
+.fs-sw span { position: absolute; inset: 0; background: var(--border-strong); border-radius: 13px; transition: background .15s; }
+.fs-sw span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .15s; }
+.fs-sw input:checked + span { background: var(--ok); }
+.fs-sw input:checked + span::after { transform: translateX(18px); }
+.fs-sw input:disabled + span { opacity: .5; }
+.fs-sw input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fs-avvisi { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+.fs-avviso { display: flex; gap: 10px; padding: 9px 12px; border-radius: 10px; font-size: 12.5px; line-height: 1.4; }
+.fs-avviso.alert { background: var(--alert-bg); color: var(--alert-ink); }
+.fs-avviso.warn { background: var(--warn-bg); color: var(--warn-ink); }
+.fs-avviso.info { background: var(--fill); color: var(--ink-2); }
+.fs-ops { display: flex; flex-direction: column; gap: 6px; }
+.fs-op { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.fs-op .i { font-family: var(--font-mono); font-size: 11px; color: var(--muted); width: 18px; text-align: right; }
+.fs-op .nm { flex: 1; }
+.fs-mini { border: none; background: none; cursor: pointer; color: var(--muted); padding: 2px 5px; font-size: 12px; border-radius: 6px; }
+.fs-mini:hover:not(:disabled) { background: var(--fill); color: var(--ink); }
+.fs-mini:disabled { opacity: .3; cursor: default; }
+details.fs-card > summary { list-style: none; cursor: pointer; padding: 14px 16px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+details.fs-card > summary::-webkit-details-marker { display: none; }
+details.fs-card[open] > summary { border-bottom: 1px solid var(--border); }
+.fs-tempi-tab { width: 100%; border-collapse: collapse; font-size: 13px; }
+.fs-tempi-tab td { padding: 6px 0; border-bottom: 1px solid var(--border); }
+.fs-tempi-tab tr:last-child td { border-bottom: none; }
+.fs-tempi-tab td.v { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.fs-flusso-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+.fs-flusso-top { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 12.5px; color: var(--muted); display: flex; gap: 16px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+.fs-legenda { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.fs-legenda span { display: inline-flex; gap: 6px; align-items: center; }
+.fs-flusso { overflow: auto; max-height: calc(100vh - 260px); }
+.fs-flusso-in { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 176px; gap: 44px; padding: 16px 20px 24px; width: max-content; }
+.fs-fcol { display: flex; flex-direction: column; gap: 10px; }
+.fs-fcol-h { font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); height: 16px; }
+.fs-fnodo { position: relative; z-index: 1; text-align: left; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--surface); cursor: pointer; font-size: 12.5px; line-height: 1.3; display: flex; flex-direction: column; gap: 4px; color: var(--ink); }
+.fs-fnodo:hover { border-color: var(--accent); }
+.fs-fnodo .t { display: flex; gap: 6px; align-items: flex-start; font-weight: 500; }
+.fs-fnodo .t .fs-mdot { margin-top: 4px; }
+.fs-fnodo .m { font-size: 11px; color: var(--muted); }
+.fs-fnodo .m.ko { color: var(--alert-ink); font-weight: 600; }
+.fs-fnodo.ext { border-style: dashed; }
+.fs-fnodo.dim { color: var(--muted); border-color: var(--border); }
+.fs-fnodo.dim .fs-mdot, .fs-fnodo.dim .m { opacity: .5; }
+.fs-fnodo.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+svg.fs-archi { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+svg.fs-archi path { fill: none; stroke: var(--border-strong); stroke-width: 1.5; }
+svg.fs-archi path.hot { stroke: var(--accent); stroke-width: 2; }
+svg.fs-archi path.dim { opacity: .25; }
+@media (max-width: 960px) {
+  .fs-grid { grid-template-columns: minmax(0, 1fr); }
+  .fs-lista { position: static; max-height: 46vh; }
+}
+@media (max-width: 760px) {
+  .fs-two { grid-template-columns: minmax(0, 1fr); }
+  .fs-crit { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .fs-seq { grid-template-columns: minmax(0, 1fr); }
+  .fs-seq-mid { justify-content: center; }
+  .fs-seq-mid .fs-freccia { transform: rotate(90deg); }
+  .fs-grid .fs-lista { max-height: none; }
+  .fs-grid.fs-mostra-dettaglio .fs-lista { display: none; }
+  .fs-grid:not(.fs-mostra-dettaglio) .fs-dettaglio { display: none; }
+  .fs-back { display: inline-flex; }
+  .fs-det-title { flex-wrap: wrap; }
+  select.fs-inp { min-width: 0; width: 100%; }
 }
 </style>
 <script>window.OneSignalDeferred = window.OneSignalDeferred || [];   // prima della libreria: le chiamate si accodano finché non è pronta</script>
@@ -1029,6 +1160,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
           <div>
             <h1>Oggi</h1>
             <div class="sub" id="oggi-r-sub">Il piano del giorno, aggiornato in tempo reale</div>
+            <div class="sub" id="oggi-r-aggiornato" style="font-size:12px"></div>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-secondary" onclick="apriAggiungiAlPiano()">+ Aggiungi al piano</button>
@@ -1391,19 +1523,29 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
       <section class="section" id="sec-fasi-config">
         <div class="page-hdr">
           <div>
-            <h1>Configurazione Fasi</h1>
-            <div class="sub">Rinomina le fasi standard — le modifiche si riflettono ovunque</div>
+            <h1>Fasi</h1>
+            <div class="sub">Scegli una fase dall'elenco per modificarla. Il Flusso mostra in che ordine si sbloccano.</div>
           </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <span id="fasi-bozze-count" style="font-size:12px;color:var(--indigo);font-weight:600"></span>
-            <button class="btn btn-secondary" onclick="aggiungiNuovaFase()">+ Nuova Fase</button>
-            <button class="btn btn-primary" id="fasi-salva-btn" onclick="salvaFasiConfig()" disabled>Salva modifiche</button>
+          <div class="fs-hdr-actions">
+            <div class="fs-seg" role="tablist" aria-label="Vista">
+              <button id="fs-v-elenco" class="on" onclick="fsVista('elenco')">Elenco</button>
+              <button id="fs-v-flusso" onclick="fsVista('flusso')">Flusso</button>
+            </div>
+            <button class="btn btn-secondary" onclick="aggiungiNuovaFase()">+ Nuova fase</button>
           </div>
         </div>
-        <div class="card" style="padding:4px 20px 16px">
-          <div id="fasi-config-list">Caricamento…</div>
-          <div id="fasi-disattivate"></div>
+        <div id="fs-vista-elenco" class="fs-grid">
+          <aside class="fs-lista" aria-label="Elenco fasi">
+            <div class="fs-lista-top">
+              <input id="fs-cerca" class="fs-cerca" type="search" placeholder="Cerca fase o macchina" oninput="FS.cerca=this.value; fsRenderLista()">
+              <div class="fs-filtri" id="fs-filtri"></div>
+            </div>
+            <div class="fs-righe" id="fs-righe">Caricamento…</div>
+          </aside>
+          <section class="fs-dettaglio" id="fs-dettaglio" aria-live="polite"></section>
         </div>
+        <div id="fs-vista-flusso" hidden></div>
+        <div id="fasi-disattivate"></div>
       </section>
 
       <!-- TIPI PRODOTTO -->
@@ -2328,7 +2470,6 @@ let _etaMinutiCache = {}; // ordine_id -> minuti ETA equivalenti (critico intern
 let currentFaseId = null; // per riassegna
 let prioritaConfig = []; // [{id, etichetta, peso, posizione, attivo}] da priorita_ordine_config
 let attributiConfig = []; // [{chiave, etichetta, opzioni:[{valore,etichetta,posizione,attivo}]}] da attributi_prodotto_config + attributo_opzioni
-let fasiBozze = {}; // modifiche non ancora salvate della Configurazione fasi: { faseId: {campo: valore} }
 let riassegnaOrdFaseId = null;
 
 // ═══════════════════════════════════════════════
@@ -2854,6 +2995,7 @@ function tipiScheda(v) {
 }
 
 function showSection(name) {
+  if (!fsPuoUscire(name)) return;   // modifiche non salvate in Fasi: barra di scelta nell'intestazione del dettaglio
   // Alias storici: Richieste e Assenze squadra sono ora schede della sezione Operatori
   if (name === 'richieste' || name === 'assenze') { _opsScheda = name; _opsSalvaScheda(name); name = 'operatori'; }
   chiudiAltro();
@@ -2873,7 +3015,7 @@ function showSection(name) {
   else if (name === 'operatori') { operatoriScheda(_opsScheda); }
   else if (name === 'archivio') { renderArchivioTable(); loadDimensioneDatabase(); }
   else if (name === 'notifiche') renderNotifiche();
-  else if (name === 'fasi-config') renderFasiConfig();
+  else if (name === 'fasi-config') fsApriSezione();
   else if (name === 'orario-config') renderOrarioConfig();
   else if (name === 'macro-config') renderMacroConfig();
   else if (name === 'ufficio') loadUfficio();
@@ -2947,12 +3089,21 @@ function renderOggiResp() {
   const dataTesto = new Date(d.data + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   sub.textContent = dataTesto.charAt(0).toUpperCase() + dataTesto.slice(1);
   if (!d.piano_presente) {
+    const a0 = document.getElementById('oggi-r-aggiornato'); if (a0) a0.textContent = '';
     riep.innerHTML = '';
     corpo.innerHTML = `<div class="empty-state"><div class="icon"><i data-ic="calendario"></i></div>
       <p>${d.lavorativo ? 'Il piano di oggi non è ancora stato generato: nasce all\'inizio del turno. Puoi crearlo subito con "Rigenera piano di oggi".' : 'Oggi non è un giorno lavorativo: nessun piano.'}</p></div>`;
     return;
   }
   const p = d.piano || {};
+  // stato dell'ultimo aggiornamento automatico del piano
+  const agg = document.getElementById('oggi-r-aggiornato');
+  if (agg) {
+    const n = (x, s, pl) => (x || 0) + ' ' + (x === 1 ? s : pl);
+    if (String(p.ultimo_ricalcolo_motivo || '').startsWith('errore')) { agg.style.color = 'var(--warn-ink)'; agg.textContent = 'Ultimo aggiornamento non riuscito: premi Rigenera'; }
+    else if (p.ultimo_ricalcolo_il) { agg.style.color = ''; agg.textContent = 'Aggiornato alle ' + new Date(p.ultimo_ricalcolo_il).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) + ' · ' + n(p.ultimo_ricalcolo_aggiunte, 'aggiunta', 'aggiunte') + ', ' + n(p.ultimo_ricalcolo_uscite, 'uscita', 'uscite'); }
+    else { agg.style.color = ''; agg.textContent = ''; }
+  }
   const av = d.avanzamento || { fatte: 0, totali: 0 };
   const pctMin = p.minuti_pianificati ? Math.round(p.minuti_fatti / p.minuti_pianificati * 100) : 0;
   const cella = (titolo, valore, nota) => `<div class="card" style="padding:14px 16px;margin-bottom:0"><div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">${titolo}</div><div style="font-size:20px;font-weight:700;margin-top:4px">${valore}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${nota || ''}</div></div>`;
@@ -2964,8 +3115,8 @@ function renderOggiResp() {
       ${cella('Riempimenti', String(p.n_riempimenti || 0), p.n_riempimenti ? 'attività aggiunte in giornata' : 'nessuna aggiunta finora')}
       ${cella('Generato', p.generato_da === 'responsabile' ? 'a mano' : 'automatico', new Date(p.generato_il).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }))}
     </div>`;
-  const tag = (v) => v.origine === 'riempimento' ? '<span class="badge" style="background:var(--info-soft);color:var(--info-ink)">riempimento</span>'
-    : v.origine === 'responsabile' ? '<span class="badge" style="background:var(--warn-soft);color:var(--warn-ink)">aggiunta a mano</span>' : '';
+  const tag = (v) => v.origine === 'responsabile' ? `<span class="badge" style="background:var(--warn-soft);color:var(--warn-ink)">${Etichette.origineVocePiano(v.origine)}</span>`
+    : Etichette.origineVocePiano(v.origine) ? `<span class="badge" style="background:var(--info-soft);color:var(--info-ink)">${Etichette.origineVocePiano(v.origine)}</span>` : '';
   const riga = (v) => {
     const o = v.ordine || {};
     const bl = v.bloccata_da && v.bloccata_da.length ? `<div style="font-size:11px;color:var(--violet)">dopo: ${escapeHtml(v.bloccata_da.join(', '))}</div>` : '';
@@ -2997,11 +3148,15 @@ function renderOggiResp() {
   if ((d.esterne || []).length) {
     html += `<div class="card"><div class="card-hdr"><h3>Spedizioni e ricezioni</h3><span style="font-size:12px;color:var(--muted)">non consumano capacità</span></div>${tabella(d.esterne.map(v => ({ ...v, minuti_stimati: 0 })))}</div>`;
   }
+  // uscite dal piano, con il motivo leggibile
+  if ((d.uscite || []).length) {
+    html += `<details class="card"><summary style="cursor:pointer;font-weight:600">Uscite dal piano (${d.uscite.length})</summary><div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>Ordine</th><th>Fase</th><th>Motivo</th></tr></thead><tbody>${d.uscite.map(u => `<tr><td>${escapeHtml(u.cliente || '')} — ${escapeHtml(u.ordine_codice || '')}</td><td>${escapeHtml(u.fase_nome || '')}</td><td>${escapeHtml(Etichette.motivoUscitaPiano(u.motivo))}</td></tr>`).join('')}</tbody></table></div></details>`;
+  }
   corpo.innerHTML = html;
 }
 
 async function rigeneraPianoOggi() {
-  if (!confirm('Rigenerare il piano di oggi?\n\nLe attività già completate restano; tutte le altre voci vengono ricalcolate con le presenze, il tetto e le priorità di adesso (anche quelle tolte a mano tornano candidate).')) return;
+  if (!confirm('Rigenerare il piano di oggi?\n\nIl piano si aggiorna già da solo a ogni modifica. Rigenera rifà da capo la parte automatica non ancora iniziata con le priorità di adesso; restano le attività completate o già iniziate e le tue scelte (aggiunte e tolte a mano).')) return;
   const { data, error } = await sb.rpc('piano_rigenera_oggi', { p_responsabile_id: currentUserRow.id, p_session_token: null });
   if (error || !data?.ok) { toast('Piano non rigenerato: ' + (data?.errore || error?.message || ''), 'err'); return; }
   oggiR = data; renderOggiResp();
@@ -7983,10 +8138,14 @@ async function riaprieFaseExtraResp(faseExtraId, ordineId) {
 }
 
 // ═══════════════════════════════════════════════
-// CONFIGURAZIONE FASI
+// CONFIGURAZIONE FASI — elenco + dettaglio di una fase, vista Flusso (mango-v53)
 // ═══════════════════════════════════════════════
-// Stato delle modifiche non salvate: sempre in memoria (fasiBozze), mai letto dal DOM al momento del click.
+// Una fase alla volta: la bozza vive in memoria (FS.draft), aggiornata a ogni modifica, mai letta dal DOM al clic.
+// Un solo Salva per fase, atomico (RPC salva_fase: campi, criteri, dipendenze, macchine, tempo, competenze).
+// Nessun valore di configurazione nel codice: fasi, macro fasi, macchine, tempi, criteri e operatori vengono dal database.
 const FASI_CAMPO_ORIG = { tipi: 'criteri_tipi', materiali: 'criteri_materiali', strutture: 'criteri_strutture' };
+const FS = { vista: 'elenco', sel: null, draft: null, mod: {}, cerca: '', filtro: 'tutte', guard: null, depErr: '', flussoSel: null,
+             tempi: [], soglia: null, mobileDettaglio: false, critAperto: {}, compAperto: false, salvando: false };
 
 // Criteri di applicabilità: tipo prodotto + attributi a opzioni (materiale, struttura, ...), tutti da configurazione.
 function fasiCriteriDef() {
@@ -8014,313 +8173,575 @@ function fasiOrig(f, campo) {
   return f[FASI_CAMPO_ORIG[campo] || campo];
 }
 
-function fasiVal(f, campo) {
-  const b = fasiBozze[f.id];
-  return (b && campo in b) ? b[campo] : fasiOrig(f, campo);
-}
+// ── modello della fase (stato salvato) e bozza ───────────────────────────────────────────────────────────
+const fsClone = o => JSON.parse(JSON.stringify(o));
+const fsEster = m => (m.tipo_gestione || 'standard') !== 'standard' || !!m.e_attesa_esterna;
+const fsRigheTempo = faseId => FS.tempi.filter(t => t.fase_id === faseId);
+const fsRigaBase = faseId => fsRigheTempo(faseId).find(t => t.tipo_prodotto == null && t.lavorazione_cnc_id == null) || null;
 
-function fasiEdit(id, campo, valore, rerender = true) {
-  const f = fasi.find(x => x.id === id);
-  if (!f) return;
-  const orig = fasiOrig(f, campo);
-  const uguale = Array.isArray(valore)
-    ? JSON.stringify([...valore].sort()) === JSON.stringify([...(orig || [])].sort())
-    : (valore === orig || (valore === '' && (orig == null || orig === '')));
-  const b = fasiBozze[id] = fasiBozze[id] || {};
-  if (uguale) delete b[campo]; else b[campo] = valore;
-  if (!Object.keys(b).length) delete fasiBozze[id];
-  aggiornaContatoreBozzeFasi();
-  if (rerender) renderFasiConfig();
+function fsModello(f) {
+  const base = fsRigaBase(f.id);
+  const m = {
+    id: f.id, nome: f.nome || '', descrizione: f.descrizione || '', macro_fase_id: f.macro_fase_id ?? null,
+    tipo_gestione: f.tipo_gestione || 'standard', e_attesa_esterna: !!f.e_attesa_esterna, avvio_automatico: !!f.avvio_automatico,
+    e_cnc: !!f.e_cnc, opzionale: !!f.opzionale, gruppo_spedizione: !!f.gruppo_spedizione, ambito_tempo: f.ambito_tempo || 'anta',
+    tempo_da_lavorazioni_cnc: !!f.tempo_da_lavorazioni_cnc,
+    dipendenze: [...(f.dipendenze || [])].sort((a, b) => a - b),
+    macchine: macchineList.filter(x => (x.fase_ids || []).includes(f.id)).map(x => x.id).sort(),
+    competenze: [...(f.competenze || [])],
+    tempo: base ? { tipico: String(base.minuti_tipici), massimo: String(base.minuti_max) } : { tipico: '', massimo: '' },
+  };
+  fasiCriteriDef().forEach(def => {
+    m[def.campo] = [...(fasiOrig(f, def.campo) || [])].sort();
+    m[def.modo] = fasiOrig(f, def.modo) || 'solo';
+  });
+  return m;
 }
-
-function fasiToggle(id, campo, valore, on) {
-  const f = fasi.find(x => x.id === id);
-  if (!f) return;
-  const cur = [...(fasiVal(f, campo) || [])];
-  const i = cur.indexOf(valore);
-  if (on && i < 0) cur.push(valore);
-  if (!on && i >= 0) cur.splice(i, 1);
-  fasiEdit(id, campo, cur);
+function fsRicostruisciModelli() {
+  FS.mod = {};
+  fasiAttive().forEach(f => { FS.mod[f.id] = fsModello(f); });
+  if (FS.draft && !FS.mod[FS.draft.id]) FS.draft = null;
 }
-
-function fasiCambiaGestione(id, tg) {
-  fasiEdit(id, 'tipo_gestione', tg, false);
-  if (tg === 'conferma_ricezione' || tg === 'spedizione_esterna') fasiEdit(id, 'e_attesa_esterna', true, false);
-  renderFasiConfig();
+const fsMod = id => (FS.draft && FS.draft.id === id) ? FS.draft : FS.mod[id];
+const fsLista = () => fasiAttive();
+const fsIdx = id => fsLista().findIndex(f => f.id === id);
+const fsSporca = () => !!FS.draft && !!FS.mod[FS.draft.id] && JSON.stringify(FS.draft) !== JSON.stringify(FS.mod[FS.draft.id]);
+const fsMacro = id => macroFasiCache.find(x => x.id === id) || null;
+const fsMacchina = id => macchineList.find(x => x.id === id) || null;
+function fsMacchinaOk(m) {   // attiva e non in manutenzione oggi
+  const oggi = Calendario.oggiIso();
+  return !!m && m.stato === 'attiva' && !(m.manutenzioni || []).some(x => x.data_inizio <= oggi && oggi <= x.data_fine);
 }
-
-function aggiornaContatoreBozzeFasi() {
-  const n = Object.keys(fasiBozze).length;
-  const el = document.getElementById('fasi-bozze-count');
-  if (el) el.textContent = n ? `${n} ${n === 1 ? 'fase modificata' : 'fasi modificate'}` : '';
-  const btn = document.getElementById('fasi-salva-btn');
-  if (btn) btn.disabled = n === 0;
+function fsSuccessori(id) { return fsLista().filter(g => (fsMod(g.id)?.dipendenze || []).includes(id)).map(g => g.id); }
+function fsDipendeDa(a, b, visti = new Set()) {   // a aspetta (anche indirettamente) b?
+  if (visti.has(a)) return false; visti.add(a);
+  const m = fsMod(a); if (!m) return false;
+  return m.dipendenze.some(d => d === b || fsDipendeDa(d, b, visti));
 }
-
-// true se la fase ha criteri su almeno un attributo con ambito "lato" (stato corrente, bozze incluse)
-function faseHaCriteriLato(f) {
+function fsHaCriteriLato(m) {
   return fasiCriteriDef().some(def => {
     const chiave = def.campo === 'materiali' ? 'materiale' : def.campo === 'strutture' ? 'struttura' : def.campo.startsWith('attr_') ? def.campo.slice(5) : null;
-    return chiave && attributiConfig.find(a => a.chiave === chiave)?.ambito === 'lato' && (fasiVal(f, def.campo) || []).length > 0;
+    return chiave && attributiConfig.find(a => a.chiave === chiave)?.ambito === 'lato' && (m[def.campo] || []).length > 0;
   });
 }
+function fsFineFlusso(m) { return !fsSuccessori(m.id).length && !fsEster(m) && !m.opzionale && m.dipendenze.length > 0; }
 
-function etichettaCriterio(def, valore) {
-  return def.opzioni.find(o => o.valore === valore)?.etichetta || valore;
-}
-
-// Riepilogo in linguaggio semplice dei criteri di una fase (usato nel badge)
-function riepilogoCriteriFase(f) {
-  const parti = [];
-  fasiCriteriDef().forEach(def => {
-    const sel = fasiVal(f, def.campo) || [];
-    if (!sel.length) return;
-    const modo = fasiVal(f, def.modo) === 'tutti_tranne' ? 'Tutti tranne ' : '';
-    parti.push(modo + sel.map(v => etichettaCriterio(def, v)).join(', '));
-  });
-  return parti;
-}
-
-function renderFasiConfig() {
-  const el = document.getElementById('fasi-config-list');
-  if (!el) return;
-  const lista = fasiAttive();
-  const n = lista.length;
-  const defs = fasiCriteriDef();
-  el.innerHTML = lista.map((f, i) => {
-    const modificata = !!fasiBozze[f.id];
-    const parti = riepilogoCriteriFase(f);
-    const badgeHtml = parti.length
-      ? `<span style="font-size:11px;font-weight:600;background:var(--indigo-bg);color:var(--indigo-ink);padding:2px 7px;border-radius:4px;white-space:nowrap">${parti.map(p => escapeHtml(p)).join(' + ')}</span>`
-      : `<span style="font-size:11px;color:var(--muted)">Tutti</span>`;
-
-    const criteriHtml = defs.map(def => {
-      const sel = fasiVal(f, def.campo) || [];
-      const modo = fasiVal(f, def.modo) || 'solo';
-      const opzioni = def.opzioni.filter(o => o.attivo !== false || sel.includes(o.valore));
-      const checkboxes = opzioni.map(o =>
-        `<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap">
-          <input type="checkbox" ${sel.includes(o.valore) ? 'checked' : ''} onchange="fasiToggle(${f.id},'${def.campo}','${escapeJsAttr(o.valore)}',this.checked)">
-          ${escapeHtml(o.etichetta)}${o.attivo === false ? ' <em style="color:var(--muted)">(disattivata)</em>' : ''}
-        </label>`).join('');
-      return `<div>
-        <div style="font-size:11px;font-weight:500;color:var(--muted);margin-bottom:4px">${escapeHtml(def.titolo)} <em style="font-weight:400">(nessuno = tutti)</em></div>
-        <select onchange="fasiEdit(${f.id},'${def.modo}',this.value)" style="font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--surface);margin-bottom:4px">
-          <option value="solo" ${modo === 'solo' ? 'selected' : ''}>Solo questi</option>
-          <option value="tutti_tranne" ${modo === 'tutti_tranne' ? 'selected' : ''}>Tutti tranne questi</option>
-        </select>
-        <div style="display:flex;flex-wrap:wrap;gap:6px">${checkboxes || '<span style="font-size:11px;color:var(--muted)">—</span>'}</div>
-        ${!sel.length ? `<div style="font-size:11px;color:var(--ok-strong);margin-top:3px">✓ ${escapeHtml(def.tutti)}</div>` : ''}
-      </div>`;
-    }).join('');
-
-    const tg = fasiVal(f, 'tipo_gestione') || 'standard';
-    const tgVincolato = tg === 'conferma_ricezione' || tg === 'spedizione_esterna';
-    const deps = fasiVal(f, 'dipendenze') || [];
-    const altre = lista.filter(alt => alt.id !== f.id);
-    // chi aspetta questa fase (dipendenze inverse): derivato dalle dipendenze di tutte le fasi, bozze incluse
-    const dipendenti = altre.filter(g => (fasiVal(g, 'dipendenze') || []).includes(f.id)).map(g => g.id);
-    const ultimaDelFlusso = lista[lista.length - 1]?.id === f.id;
-    const senzaSuccessive = !dipendenti.length && !ultimaDelFlusso && !fasiVal(f, 'e_attesa_esterna') && !fasiVal(f, 'opzionale');
-
-    return `
-    <div class="fase-config-item" id="fase-cfg-row-${f.id}" ${modificata ? 'style="border-left:3px solid var(--indigo)"' : ''}>
-      <div class="fase-move-btns">
-        <button class="fase-move-btn" onclick="spostaFase(${f.id},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
-        <button class="fase-move-btn" onclick="spostaFase(${f.id},1)" ${i === n-1 ? 'disabled' : ''}>▼</button>
-      </div>
-      <span class="fase-config-num" title="ID interno: ${f.id}">${i + 1}</span>
-      <div class="fase-config-inputs">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
-          <input type="text" id="fase-nome-${f.id}" value="${escapeHtml(fasiVal(f, 'nome') || '')}" oninput="fasiEdit(${f.id},'nome',this.value,false)" placeholder="Nome fase" style="flex:1;min-width:140px">
-          ${badgeHtml}
-          ${modificata ? '<span style="font-size:10px;color:var(--indigo);font-weight:600">modificata</span>' : ''}
-        </div>
-        <input type="text" id="fase-desc-${f.id}" value="${escapeHtml(fasiVal(f, 'descrizione') || '')}" oninput="fasiEdit(${f.id},'descrizione',this.value,false)" placeholder="Descrizione (opzionale)">
-        <div style="display:grid;grid-template-columns:repeat(${defs.length},1fr);gap:8px;margin-top:6px;padding:8px;background:var(--surface-2);border-radius:6px;border:1px solid var(--border)">
-          ${criteriHtml}
-        </div>
-        <div style="display:flex;align-items:center;gap:16px;margin-top:6px;flex-wrap:wrap">
-          <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:11px;color:var(--muted)">Gestione:</span>
-            <select id="fase-tg-${f.id}" onchange="fasiCambiaGestione(${f.id}, this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface)">
-              <option value="standard" ${tg === 'standard' ? 'selected' : ''}>Standard</option>
-              <option value="conferma_ricezione" ${tg === 'conferma_ricezione' ? 'selected' : ''}>Conferma ricezione</option>
-              <option value="spedizione_esterna" ${tg === 'spedizione_esterna' ? 'selected' : ''}>Spedizione esterna</option>
-            </select>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;${tgVincolato ? 'opacity:0.65' : 'cursor:pointer'}">
-              <input type="checkbox" id="fase-esterna-${f.id}" ${fasiVal(f, 'e_attesa_esterna') ? 'checked' : ''} ${tgVincolato ? 'disabled' : ''} onchange="fasiEdit(${f.id},'e_attesa_esterna',this.checked,false)" style="width:14px;height:14px;${tgVincolato ? '' : 'cursor:pointer'}">
-              Attesa esterna (escludi da stime ore interne)
-            </label>
-            <span style="font-size:10px;color:var(--indigo);font-style:italic;${tgVincolato ? '' : 'display:none'}">Impostata automaticamente da Tipo gestione</span>
-            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer" title="Se attivo, alla creazione di un ordine questa fase parte automaticamente in attesa, senza presa in carico manuale">
-              <input type="checkbox" id="fase-avvio-auto-${f.id}" ${fasiVal(f, 'avvio_automatico') ? 'checked' : ''} onchange="fasiEdit(${f.id},'avvio_automatico',this.checked,false)" style="width:14px;height:14px;cursor:pointer">
-              Avvio automatico alla creazione ordine
-            </label>
-          </div>
-          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer" title="Mostra il badge CNC sulla fase">
-              <input type="checkbox" ${fasiVal(f, 'e_cnc') ? 'checked' : ''} onchange="fasiEdit(${f.id},'e_cnc',this.checked,false)" style="width:14px;height:14px;cursor:pointer"> CNC
-            </label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer" title="Il tempo di riferimento di questa fase è la somma delle lavorazioni CNC scelte sull'ordine (catalogo lavorazioni)">
-              <input type="checkbox" ${fasiVal(f, 'tempo_da_lavorazioni_cnc') ? 'checked' : ''} onchange="fasiEdit(${f.id},'tempo_da_lavorazioni_cnc',this.checked,false); if (this.checked) fasiEdit(${f.id},'ambito_tempo','anta')" style="width:14px;height:14px;cursor:pointer"> Il tempo è la somma delle lavorazioni CNC dell'ordine
-            </label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap" title="Anta intera: il tempo vale una volta per pezzo. 1 lato: il tempo vale per ogni lato che soddisfa i criteri della fase sugli attributi per lato">
-              Il tempo vale per:
-              <select onchange="fasiEdit(${f.id},'ambito_tempo',this.value)" ${fasiVal(f, 'tempo_da_lavorazioni_cnc') ? 'disabled' : ''} style="font-size:11px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--surface)">
-                <option value="anta" ${fasiVal(f, 'ambito_tempo') !== 'lato' ? 'selected' : ''}>Anta intera</option>
-                <option value="lato" ${fasiVal(f, 'ambito_tempo') === 'lato' ? 'selected' : ''}>1 lato</option>
-              </select>
-            </label>
-            ${fasiVal(f, 'ambito_tempo') === 'lato' && !faseHaCriteriLato(f) ? '<span style="font-size:11px;color:var(--warn-ink-2)">⚠ Nessun criterio sugli attributi per lato: il tempo varrà per tutti i lati (moltiplicato per il numero di lati).</span>' : ''}
-            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer" title="Alla chiusura l'operatore può completare tutti gli ordini della stessa spedizione unica">
-              <input type="checkbox" ${fasiVal(f, 'gruppo_spedizione') ? 'checked' : ''} onchange="fasiEdit(${f.id},'gruppo_spedizione',this.checked,false)" style="width:14px;height:14px;cursor:pointer"> Gruppo spedizione
-            </label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);white-space:nowrap;cursor:pointer" title="Non si attiva da sola: si abilita manualmente dall'ordine">
-              <input type="checkbox" ${fasiVal(f, 'opzionale') ? 'checked' : ''} onchange="fasiEdit(${f.id},'opzionale',this.checked,false)" style="width:14px;height:14px;cursor:pointer"> Opzionale
-            </label>
-          </div>
-        </div>
-        <!-- OPERATORI COMPETENTI -->
-        <div style="margin-top:10px;padding:8px 10px;background:var(--ext-bg);border:1px solid var(--ext-line);border-radius:6px">
-          <div style="font-size:11px;font-weight:600;color:var(--ext);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em">Operatori competenti <em style="font-weight:400;text-transform:none;letter-spacing:0">(ordine = priorità assegnazione)</em></div>
-          <div id="comp-list-${f.id}" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px">
-            ${(f.competenze || []).length === 0
-              ? `<span style="font-size:12px;color:var(--muted);font-style:italic">Nessuno — tutti gli operatori verranno proposti in ordine arbitrario</span>`
-              : (f.competenze || []).map((opId, idx) => {
-                  const op = operatoriCache.find(o => o.id === opId);
-                  if (!op) return '';
-                  const nComp = (f.competenze || []).length;
-                  return `<div style="display:flex;align-items:center;gap:6px;font-size:12px">
-                    <span style="min-width:18px;text-align:center;font-family:var(--font-mono);color:var(--muted);font-size:11px">${idx + 1}.</span>
-                    <span style="flex:1">${escapeHtml(op.nome)} ${escapeHtml(op.cognome)}</span>
-                    <button onclick="spostaCompetenza(${f.id},'${opId}',-1)" style="border:none;background:none;cursor:pointer;padding:0 3px;font-size:11px;color:var(--muted)" ${idx === 0 ? 'disabled style="opacity:0.3;cursor:default"' : ''}>▲</button>
-                    <button onclick="spostaCompetenza(${f.id},'${opId}',1)" style="border:none;background:none;cursor:pointer;padding:0 3px;font-size:11px;color:var(--muted)" ${idx === nComp - 1 ? 'disabled style="opacity:0.3;cursor:default"' : ''}>▼</button>
-                    <button onclick="rimuoviCompetenza(${f.id},'${opId}')" style="border:none;background:none;cursor:pointer;padding:0 3px;font-size:12px;color:var(--alert)" title="Rimuovi" aria-label="Rimuovi">✕</button>
-                  </div>`;
-                }).join('')
-            }
-          </div>
-          <div style="display:flex;gap:6px;align-items:center">
-            <select id="comp-add-sel-${f.id}" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);flex:1">
-              <option value="">— aggiungi operatore —</option>
-              ${operatoriCache.filter(op => op.attivo && !(f.competenze || []).includes(op.id)).map(op =>
-                `<option value="${op.id}">${escapeHtml(op.nome)} ${escapeHtml(op.cognome)}</option>`).join('')}
-            </select>
-            <button onclick="aggiungiCompetenza(${f.id})" style="border:1px solid var(--ext);background:var(--ext);color:var(--on-ext);border-radius:4px;padding:3px 10px;font-size:12px;cursor:pointer">+</button>
-          </div>
-        </div>
-        <!-- DIPENDENZE -->
-        <div style="margin-top:10px;padding:8px 10px;background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:6px">
-          <div style="font-size:11px;font-weight:600;color:var(--warn-ink-2);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em">Fasi da completare prima <em style="font-weight:400;text-transform:none;letter-spacing:0">(dipendenze)</em></div>
-          ${altre.length === 0
-            ? `<span style="font-size:12px;color:var(--muted);font-style:italic">Nessun'altra fase configurata</span>`
-            : `<div style="display:flex;flex-direction:column;gap:4px">
-              ${altre.map(alt =>
-                `<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-                  <input type="checkbox" ${deps.includes(alt.id) ? 'checked' : ''} onchange="fasiToggle(${f.id},'dipendenze',${alt.id},this.checked)" style="width:13px;height:13px;cursor:pointer">
-                  <span style="color:var(--muted);font-family:var(--font-mono);font-size:11px;min-width:22px">${alt.posizione}.</span>
-                  ${escapeHtml(alt.nome)}
-                </label>`).join('')}
-            </div>`
-          }
-        </div>
-        <!-- DIPENDENZE INVERSE -->
-        <div style="margin-top:10px;padding:8px 10px;background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:6px">
-          <div style="font-size:11px;font-weight:600;color:var(--warn-ink-2);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em">Fasi che devono aspettare questa fase <em style="font-weight:400;text-transform:none;letter-spacing:0">(la scelgono come "da completare prima")</em></div>
-          ${senzaSuccessive ? `<div style="font-size:12px;color:var(--warn-ink-2);margin-bottom:6px">⚠ Nessuna fase aspetta questa fase: se la crei o la modifichi a ordini già avviati non può essere saltata in automatico.</div>` : ''}
-          ${altre.length === 0
-            ? `<span style="font-size:12px;color:var(--muted);font-style:italic">Nessun'altra fase configurata</span>`
-            : `<div style="display:flex;flex-direction:column;gap:4px">
-              ${altre.map(alt =>
-                `<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-                  <input type="checkbox" ${dipendenti.includes(alt.id) ? 'checked' : ''} onchange="fasiToggle(${alt.id},'dipendenze',${f.id},this.checked)" style="width:13px;height:13px;cursor:pointer">
-                  <span style="color:var(--muted);font-family:var(--font-mono);font-size:11px;min-width:22px">${alt.posizione}.</span>
-                  ${escapeHtml(alt.nome)}
-                </label>`).join('')}
-            </div>`
-          }
-        </div>
-      </div>
-      <button class="fase-del-btn" title="Elimina fase" onclick="eliminaFase(${f.id})" aria-label="Elimina fase">✕</button>
-    </div>`;
-  }).join('');
-
-  // Fasi disattivate (storico conservato): si possono riattivare
-  const disattivate = fasi.filter(f => f.attiva === false);
-  const box = document.getElementById('fasi-disattivate');
-  if (box) {
-    box.innerHTML = disattivate.length ? `
-      <details style="margin-top:16px"><summary style="cursor:pointer;font-size:13px;font-weight:600">Fasi disattivate (${disattivate.length})</summary>
-        <div style="margin-top:8px;font-size:12px;color:var(--muted)">Escluse da nuovi ordini, dall'app operatore e dai ricalcoli; lo storico degli ordini già eseguiti è conservato.</div>
-        ${disattivate.map(f => `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
-          <span style="flex:1;font-size:13px">${escapeHtml(f.nome)}</span>
-          <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="riattivaFase(${f.id})">Riattiva</button>
-        </div>`).join('')}
-      </details>` : '';
+function fsAvvisi(m) {
+  const out = [];
+  if (!fsEster(m)) {
+    const mac = m.macchine.map(fsMacchina).filter(Boolean);
+    if (mac.length && mac.every(x => !fsMacchinaOk(x))) out.push(['alert', `${mac.map(x => x.nome).join(', ')} fuori uso: la fase non entra nel piano finché la macchina non torna attiva.`]);
+    if (!mac.length) out.push(['info', 'Nessuna macchina: il piano non ne limita il carico.']);
+    const haTempo = m.tempo_da_lavorazioni_cnc || (m.tempo.tipico !== '' && m.tempo.massimo !== '') || fsRigheTempo(m.id).length > 0;
+    if (!haTempo) out.push(['warn', 'Manca il tempo di riferimento: il piano usa il valore predefinito.']);
   }
-  aggiornaContatoreBozzeFasi();
+  if (m.macro_fase_id == null) out.push(['info', 'Non appartiene a nessuna macro fase.']);
+  return out;
+}
+const fsLivello = m => { const a = fsAvvisi(m).map(x => x[0]); return a.includes('alert') ? 'alert' : a.includes('warn') ? 'warn' : a.length ? 'info' : null; };
+const fsEtichettaGestione = tg => (Etichette.tipiGestioneFase().find(x => x[0] === tg) || [tg, tg])[1];
+function fsTagEsterna(m) { return fsEster(m) ? `<span class="fs-tag fs-tag-ext">${m.tipo_gestione === 'conferma_ricezione' ? 'Arrivo da fuori' : 'Esterna'}</span>` : ''; }
+
+// ── caricamento ────────────────────────────────────────────────────────────────────────────────────────────
+async function fsCaricaDati() {
+  const [, , , tRes, kRes] = await Promise.all([
+    loadFasi(), loadMacroFasi(), loadMacchine(),
+    sb.from('tempi_riferimento').select('id, fase_id, tipo_prodotto, lavorazione_cnc_id, minuti_tipici, minuti_max, da_confermare, note'),
+    sb.from('kpi_config').select('valore, default_valore').eq('chiave', 'soglia_quantita_svincolo_dipendenze').maybeSingle(),
+  ]);
+  FS.tempi = tRes.data || [];
+  FS.soglia = kRes.data ? Number(kRes.data.valore ?? kRes.data.default_valore) : null;
+  const bozzaSporca = fsSporca();
+  const bozza = bozzaSporca ? FS.draft : null;
+  fsRicostruisciModelli();
+  if (bozza && FS.mod[bozza.id]) FS.draft = bozza;
+  else if (FS.draft && !fsSporca()) FS.draft = FS.mod[FS.draft.id] ? fsClone(FS.mod[FS.draft.id]) : null;
+}
+async function fsApriSezione() {
+  await fsCaricaDati();
+  fsRender();
+}
+function renderFasiConfig() {   // usata da altre pagine dopo modifiche a tipi prodotto, macro fasi...
+  if (!document.getElementById('sec-fasi-config')?.classList.contains('active')) return;
+  fsCaricaDati().then(fsRender);
 }
 
-async function spostaFase(id, dir) {
-  const lista = fasiAttive();
-  const idx = lista.findIndex(f => f.id === id);
-  const swapIdx = idx + dir;
-  if (idx < 0 || swapIdx < 0 || swapIdx >= lista.length) return;
-  const ordine = lista.map(f => f.id);
-  [ordine[idx], ordine[swapIdx]] = [ordine[swapIdx], ordine[idx]];
+function fsRender() {
+  const lista = fsLista();
+  if (!lista.length) { document.getElementById('fs-righe').innerHTML = ''; document.getElementById('fs-dettaglio').innerHTML = '<div class="empty-state"><p>Nessuna fase configurata.</p></div>'; fsRenderDisattivate(); return; }
+  if (!FS.sel || !FS.mod[FS.sel]) FS.sel = lista[0].id;
+  if (!FS.draft || FS.draft.id !== FS.sel) FS.draft = fsClone(FS.mod[FS.sel]);
+  document.getElementById('fs-v-elenco').classList.toggle('on', FS.vista === 'elenco');
+  document.getElementById('fs-v-flusso').classList.toggle('on', FS.vista === 'flusso');
+  document.getElementById('fs-vista-elenco').hidden = FS.vista !== 'elenco';
+  document.getElementById('fs-vista-flusso').hidden = FS.vista !== 'flusso';
+  document.getElementById('fs-vista-elenco').classList.toggle('fs-mostra-dettaglio', FS.mobileDettaglio);
+  if (FS.vista === 'flusso') fsRenderFlusso(); else { fsRenderLista(); fsRenderDettaglio(); }
+  fsRenderDisattivate();
+}
+
+// ── elenco ───────────────────────────────────────────────────────────────────────────────────────────────
+const FS_FILTRI = [
+  ['tutte', 'Tutte', () => true],
+  ['avvisi', 'Da controllare', m => ['alert', 'warn'].includes(fsLivello(m))],
+  ['esterne', 'Esterne', m => fsEster(m)],
+  ['cnc', 'CNC', m => m.e_cnc],
+];
+function fsRenderLista() {
+  const lista = fsLista();
+  document.getElementById('fs-filtri').innerHTML = FS_FILTRI.map(([k, t, fn]) =>
+    `<button class="fs-filtro ${FS.filtro === k ? 'on' : ''}" onclick="FS.filtro='${k}';fsRenderLista()">${t}<span class="n">${lista.filter(f => fn(fsMod(f.id))).length}</span></button>`).join('');
+  const q = FS.cerca.trim().toLowerCase();
+  const fn = FS_FILTRI.find(x => x[0] === FS.filtro)[2];
+  const righe = lista.map((f, i) => [fsMod(f.id), i]).filter(([m]) => fn(m) &&
+    (!q || m.nome.toLowerCase().includes(q) || m.macchine.some(id => (fsMacchina(id)?.nome || '').toLowerCase().includes(q))));
+  document.getElementById('fs-righe').innerHTML = righe.length ? righe.map(([m, i]) => {
+    const lv = fsLivello(m), mac = fsMacro(m.macro_fase_id);
+    const meta = [];
+    if (fsEster(m)) meta.push(fsTagEsterna(m));
+    if (m.e_cnc) meta.push('<span class="fs-tag fs-tag-cnc">CNC</span>');
+    if (m.opzionale) meta.push('<span class="fs-tag fs-tag-opz">Opzionale</span>');
+    if (m.macchine.length) meta.push(escapeHtml(m.macchine.map(id => fsMacchina(id)?.nome || '').filter(Boolean).join(', ')));
+    meta.push(m.dipendenze.length ? `dopo ${m.dipendenze.length} ${m.dipendenze.length === 1 ? 'fase' : 'fasi'}` : 'parte subito');
+    const ico = lv === 'alert' ? '●' : lv === 'warn' ? '▲' : '';
+    const sporca = fsSporca() && FS.draft.id === m.id;
+    return `<button class="fs-riga ${m.id === FS.sel ? 'on' : ''}" onclick="fsSeleziona(${m.id})">
+      <span class="num">${i + 1}</span>
+      <span style="min-width:0">
+        <span class="nome"><span class="fs-mdot ${mac ? '' : 'vuoto'}" style="${mac ? `background:${escapeHtml(mac.colore || '')}` : ''}" title="${escapeHtml(mac ? mac.nome : 'Nessuna macro fase')}"></span>${escapeHtml(m.nome)}${sporca ? '<span class="fs-mod-dot" title="Modifiche non salvate"></span>' : ''}</span>
+        <span class="meta">${meta.join('<span aria-hidden="true">·</span>')}</span>
+      </span>
+      ${ico ? `<span class="fs-avv ${lv}" title="${escapeHtml(fsAvvisi(m).map(a => a[1]).join(' '))}">${ico}</span>` : '<span></span>'}
+    </button>`;
+  }).join('') : '<div style="padding:20px;color:var(--muted);font-size:13px">Nessuna fase trovata.</div>';
+}
+
+function fsSeleziona(id) {
+  if (id === FS.sel) { if (window.innerWidth <= 760) { FS.mobileDettaglio = true; fsRender(); } return; }
+  if (fsSporca()) { FS.guard = { tipo: 'fase', id }; fsRenderDettaglio(); fsVaiInAlto(); return; }
+  fsApri(id);
+}
+function fsApri(id) {
+  if (!FS.mod[id]) return;
+  FS.sel = id; FS.draft = fsClone(FS.mod[id]); FS.guard = null; FS.depErr = ''; FS.critAperto = {};
+  if (window.innerWidth <= 760) FS.mobileDettaglio = true;
+  if (FS.vista !== 'elenco') FS.vista = 'elenco';
+  fsRender();
+  document.querySelector('.fs-riga.on')?.scrollIntoView({ block: 'nearest' });
+  if (window.innerWidth <= 960 && window.innerWidth > 760) document.getElementById('fs-dettaglio')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function fsVaiInAlto() { document.getElementById('fs-dettaglio')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+function fsTornaElenco() { FS.mobileDettaglio = false; fsRender(); }
+
+function fsVista(v) {
+  if (v === 'flusso' && fsSporca()) { toast('Salva o annulla le modifiche prima di passare al Flusso.', 'err'); return; }
+  FS.vista = v; FS.flussoSel = null; fsRender();
+}
+
+// ── modifiche alla bozza ─────────────────────────────────────────────────────────────────────────────────
+function fsAggiornaStato() {
+  const d = fsSporca();
+  const el = document.getElementById('fs-stato-mod'); if (el) el.hidden = !d;
+  document.querySelectorAll('[data-fs-salva]').forEach(b => { b.disabled = !d || FS.salvando; });
+  fsRenderLista();
+}
+function fsSet(campo, valore, rerender = true) {
+  FS.draft[campo] = valore;
+  if (campo === 'tipo_gestione') {
+    FS.draft.e_attesa_esterna = valore !== 'standard';   // impostata dal tipo di fase
+  }
+  if (campo === 'tempo_da_lavorazioni_cnc' && valore) FS.draft.ambito_tempo = 'anta';
+  fsAggiornaStato(); if (rerender) fsRenderDettaglio();
+}
+function fsSetTesto(campo, valore) {
+  FS.draft[campo] = valore; fsAggiornaStato();
+  if (campo === 'nome') { const h = document.querySelector('.fs-det-title h2'); if (h) h.textContent = valore || 'Senza nome'; }
+}
+function fsSetTempo(campo, valore) { FS.draft.tempo[campo] = valore; fsAggiornaStato(); }
+function fsSetModo(def, modo) {
+  const campo = def.campo;
+  if (modo === 'tutti') { FS.draft[campo] = []; FS.draft[def.modo] = 'solo'; delete FS.critAperto[campo]; }
+  else { FS.draft[def.modo] = modo === 'tranne' ? 'tutti_tranne' : 'solo'; if (!FS.draft[campo].length) FS.critAperto[campo] = modo; else delete FS.critAperto[campo]; }
+  fsAggiornaStato(); fsRenderDettaglio();
+}
+function fsToggleCriterio(campo, valore) {
+  const a = FS.draft[campo]; const i = a.indexOf(valore);
+  if (i < 0) a.push(valore); else a.splice(i, 1);
+  a.sort(); delete FS.critAperto[campo];
+  fsAggiornaStato(); fsRenderDettaglio();
+}
+function fsAggiungiDip(v) {
+  const id = Number(v); if (!id) return;
+  if (id === FS.draft.id || fsDipendeDa(id, FS.draft.id)) {
+    FS.depErr = `Non si può: «${fsMod(id)?.nome || ''}» aspetta già questa fase, si creerebbe un giro chiuso.`;
+  } else { FS.draft.dipendenze.push(id); FS.draft.dipendenze.sort((a, b) => a - b); FS.depErr = ''; }
+  fsAggiornaStato(); fsRenderDettaglio();
+}
+function fsTogliDip(id) { FS.draft.dipendenze = FS.draft.dipendenze.filter(x => x !== id); FS.depErr = ''; fsAggiornaStato(); fsRenderDettaglio(); }
+function fsAggiungiMacchina(id) { if (!id || FS.draft.macchine.includes(id)) return; FS.draft.macchine.push(id); FS.draft.macchine.sort(); fsAggiornaStato(); fsRenderDettaglio(); }
+function fsTogliMacchina(id) { FS.draft.macchine = FS.draft.macchine.filter(x => x !== id); fsAggiornaStato(); fsRenderDettaglio(); }
+function fsCompSposta(i, dir) { const a = FS.draft.competenze; [a[i], a[i + dir]] = [a[i + dir], a[i]]; fsAggiornaStato(); fsRenderDettaglio(); }
+function fsCompTogli(i) { FS.draft.competenze.splice(i, 1); fsAggiornaStato(); fsRenderDettaglio(); }
+function fsCompAggiungi(id) { if (!id || FS.draft.competenze.includes(id)) return; FS.draft.competenze.push(id); fsAggiornaStato(); fsRenderDettaglio(); }
+function fsAnnulla() { FS.draft = fsClone(FS.mod[FS.sel]); FS.depErr = ''; FS.critAperto = {}; fsRender(); }
+
+// riordino: salvataggio immediato come prima (riordina_fasi); la bozza della fase aperta resta
+async function fsSposta(dir) {
+  const lista = fsLista(); const i = fsIdx(FS.sel), j = i + dir;
+  if (i < 0 || j < 0 || j >= lista.length) return;
+  const ordine = lista.map(f => f.id); [ordine[i], ordine[j]] = [ordine[j], ordine[i]];
   const { data, error } = await sb.rpc('riordina_fasi', { p_ids_in_ordine: ordine, p_responsabile_id: currentUserRow.id, p_session_token: null });
   if (error || !data?.ok) { toast('Errore riordino fasi: ' + (data?.errore || error?.message || ''), 'err'); return; }
-  const bozze = fasiBozze;   // le modifiche non salvate restano
-  await loadFasi();
-  fasiBozze = bozze;
-  renderFasiConfig();
+  await fsCaricaDati(); fsRender();
+  toast(`Ora è la fase ${j + 1} di ${lista.length}.`, 'ok');
 }
 
-// ─── competenze operatore per fase ───────────────────────────────────────────
-async function aggiornCompetenzeFase(faseId, newOrder) {
-  const { data, error } = await sb.rpc('imposta_competenze_fase', {
-    p_fase_id: faseId,
-    p_operatori_ordinati: newOrder,
-    p_responsabile_id: currentUserRow.id,
+// ── salvataggio ──────────────────────────────────────────────────────────────────────────────────────────
+function fsTempoModificabile(id) {
+  const righe = fsRigheTempo(id);
+  return !fsMod(id).tempo_da_lavorazioni_cnc && !fsEster(fsMod(id)) && righe.every(t => t.tipo_prodotto == null && t.lavorazione_cnc_id == null) && righe.length <= 1;
+}
+function fsPayload() {
+  const d = FS.draft, o = FS.mod[d.id], p = {};
+  ['nome', 'descrizione', 'macro_fase_id', 'tipo_gestione', 'e_attesa_esterna', 'avvio_automatico', 'e_cnc', 'opzionale', 'gruppo_spedizione', 'ambito_tempo', 'tempo_da_lavorazioni_cnc'].forEach(k => {
+    if (JSON.stringify(d[k]) !== JSON.stringify(o[k])) p[k] = k === 'nome' ? d.nome.trim() : d[k];
   });
-  if (error || !data?.ok) { toast(data?.errore || error?.message || 'Errore salvataggio competenze', 'err'); return false; }
-  const f = fasi.find(x => x.id === faseId);
-  if (f) f.competenze = newOrder;
-  return true;
+  const crit = {};
+  fasiCriteriDef().forEach(def => [def.campo, def.modo].forEach(k => { if (JSON.stringify(d[k]) !== JSON.stringify(o[k])) crit[k] = d[k]; }));
+  Object.assign(p, _raccogliAttributiBozza(crit));
+  if (JSON.stringify(d.dipendenze) !== JSON.stringify(o.dipendenze)) p.dipendenze = d.dipendenze;
+  if (JSON.stringify(d.macchine) !== JSON.stringify(o.macchine)) p.macchine = d.macchine;
+  if (JSON.stringify(d.competenze) !== JSON.stringify(o.competenze)) p.competenze = d.competenze;
+  if (JSON.stringify(d.tempo) !== JSON.stringify(o.tempo) && fsTempoModificabile(d.id)) {
+    const riga = fsRigaBase(d.id);
+    p.tempo = { minuti_tipici: Number(d.tempo.tipico), minuti_max: Number(d.tempo.massimo), da_confermare: !!riga?.da_confermare, note: riga?.note || '' };
+  }
+  return p;
+}
+function fsValida() {
+  const d = FS.draft;
+  if (!d.nome.trim()) return 'Inserisci il nome della fase.';
+  if (fsTempoModificabile(d.id)) {
+    const t = d.tempo, a = Number(t.tipico), b = Number(t.massimo), haOrig = FS.mod[d.id].tempo.tipico !== '';
+    if (t.tipico === '' && t.massimo === '') { if (haOrig) return 'Il tempo di riferimento non si può togliere: modifica i minuti.'; }
+    else if (!(a > 0) || !(b > 0)) return 'Il tempo di riferimento deve avere i minuti (tipico e massimo) maggiori di zero.';
+    else if (b < a) return 'Il massimo non può essere minore del tipico.';
+  }
+  if (d.ambito_tempo === 'lato' && d.tempo_da_lavorazioni_cnc) return 'Il tempo vale «ogni lato» solo per le fasi che non sommano le lavorazioni CNC.';
+  return null;
+}
+const FS_ERRORI = { dipendenza_circolare: 'La sequenza crea un giro chiuso tra le fasi.', nome_obbligatorio: 'Il nome è obbligatorio.', minuti_non_validi: 'Minuti del tempo non validi.',
+  fase_tempo_da_lavorazioni_cnc: 'Il tempo di questa fase è la somma delle lavorazioni CNC: si imposta nel Catalogo lavorazioni CNC.', macchina_non_trovata: 'Una macchina scelta non esiste più.',
+  operatore_non_trovato: 'Un operatore scelto non esiste più.', ambito_tempo_incompatibile: 'Il tempo «ogni lato» non vale per le fasi che sommano le lavorazioni CNC.' };
+
+async function fsSalva(poi) {
+  if (FS.salvando || !fsSporca()) return;
+  const err = fsValida(); if (err) { toast(err, 'err'); return; }
+  const payload = fsPayload();
+  if (!Object.keys(payload).length) { toast('Nessuna modifica da salvare', 'ok'); return; }
+  FS.salvando = true; fsAggiornaStato();
+  const faseId = FS.draft.id;
+  const { data, error } = await sb.rpc('salva_fase', { p_fase_id: faseId, p_dati: payload, p_solo_anteprima: true, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  FS.salvando = false; fsAggiornaStato();
+  if (error || !data?.ok) { toast('Errore: ' + (FS_ERRORI[data?.errore] || data?.errore || error?.message || ''), 'err'); return; }
+  if (data.n_cambi) { mostraAnteprimaFasi('Questa modifica', data, () => fsConferma(faseId, payload, poi)); return; }
+  await fsConferma(faseId, payload, poi);
+}
+async function fsConferma(faseId, payload, poi) {
+  FS.salvando = true; fsAggiornaStato();
+  const { data, error } = await sb.rpc('salva_fase', { p_fase_id: faseId, p_dati: payload, p_solo_anteprima: false, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  FS.salvando = false;
+  closeModal('modal-anteprima-fasi');
+  if (error || !data?.ok) { fsAggiornaStato(); toast('Salvataggio NON riuscito: ' + (FS_ERRORI[data?.errore] || data?.errore || error?.message || 'errore sconosciuto'), 'err'); return; }
+  FS.draft = null;
+  await fsCaricaDati();
+  FS.draft = FS.mod[faseId] ? fsClone(FS.mod[faseId]) : null;
+  toast(data.n_cambi ? `Fase salvata: ${data.n_cambi} fasi aggiornate su ${data.n_ordini} ordini. Il piano di oggi si aggiorna da solo.` : 'Fase salvata. Il piano di oggi si aggiorna da solo.', 'ok');
+  if (poi) poi(); else fsRender();
+}
+function fsGuardSalva() {
+  const g = FS.guard; if (!g) return;
+  fsSalva(() => fsVaiA(g));
+}
+function fsGuardScarta() { const g = FS.guard; if (!g) return; FS.draft = fsClone(FS.mod[FS.sel]); fsVaiA(g); }
+function fsGuardResta() { FS.guard = null; fsRenderDettaglio(); }
+function fsVaiA(g) {
+  FS.guard = null;
+  if (g.tipo === 'fase') fsApri(g.id);
+  else if (g.tipo === 'sezione') { FS.draft = FS.mod[FS.sel] ? fsClone(FS.mod[FS.sel]) : null; showSection(g.nome); }
+}
+// uscita dalla sezione con modifiche aperte: la barra compare nell'intestazione del dettaglio
+function fsPuoUscire(nome) {
+  if (nome === 'fasi-config' || !fsSporca() || !document.getElementById('sec-fasi-config')?.classList.contains('active')) return true;
+  FS.guard = { tipo: 'sezione', nome }; FS.vista = 'elenco'; fsRender(); fsVaiInAlto();
+  return false;
 }
 
-async function spostaCompetenza(faseId, opId, dir) {
-  const f = fasi.find(x => x.id === faseId);
-  if (!f) return;
-  const arr = [...(f.competenze || [])];
-  const idx = arr.indexOf(opId);
-  const swapIdx = idx + dir;
-  if (idx < 0 || swapIdx < 0 || swapIdx >= arr.length) return;
-  [arr[idx], arr[swapIdx]] = [arr[swapIdx], arr[idx]];
-  const ok = await aggiornCompetenzeFase(faseId, arr);
-  if (ok) renderFasiConfig();
+// ── dettaglio ────────────────────────────────────────────────────────────────────────────────────────────
+function fsSwitch(id, checked, onchange, disabled) {
+  return `<label class="fs-sw"><input type="checkbox" id="${id}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''} onchange="${onchange}"><span></span></label>`;
+}
+function fsRiassuntoCriteri(m) {
+  const parti = fasiCriteriDef().map(def => {
+    const sel = m[def.campo] || [];
+    if (!sel.length) return escapeHtml(def.tutti);
+    const nomi = sel.map(v => `<b>${escapeHtml(def.opzioni.find(o => o.valore === v)?.etichetta || v)}</b>`).join(', ');
+    return m[def.modo] === 'tutti_tranne' ? `tutti tranne ${nomi}` : nomi;
+  });
+  return `Si applica agli ordini con ${parti.join(' · ')}.`;
 }
 
-async function aggiungiCompetenza(faseId) {
-  const sel = document.getElementById(`comp-add-sel-${faseId}`);
-  const opId = sel?.value;
-  if (!opId) return;
-  const f = fasi.find(x => x.id === faseId);
-  if (!f) return;
-  const arr = [...(f.competenze || []), opId];
-  const ok = await aggiornCompetenzeFase(faseId, arr);
-  if (ok) renderFasiConfig();
+function fsRenderDettaglio() {
+  const m = FS.draft; if (!m) return;
+  const lista = fsLista(); const i = fsIdx(m.id); const mac = fsMacro(m.macro_fase_id);
+  const succ = fsSuccessori(m.id), d = fsSporca(), est = fsEster(m);
+  const g = FS.guard;
+  const nomeDest = g ? (g.tipo === 'fase' ? `«${escapeHtml(FS.mod[g.id]?.nome || '')}»` : 'un\'altra sezione') : '';
+  const guard = g ? `<div class="fs-guard" role="alert"><span>Hai modifiche non salvate su «${escapeHtml(m.nome)}». Cosa vuoi fare prima di aprire ${nomeDest}?</span>
+      <button class="btn btn-primary" onclick="fsGuardSalva()">Salva e apri</button>
+      <button class="btn btn-secondary" onclick="fsGuardScarta()">Scarta</button>
+      <button class="fs-btn-ghost" onclick="fsGuardResta()">Resta qui</button></div>` : '';
+
+  const altre = lista.filter(x => x.id !== m.id && !m.dipendenze.includes(x.id));
+  const opzDip = altre.map(x => { const ciclo = fsDipendeDa(x.id, m.id);
+    return `<option value="${x.id}" ${ciclo ? 'disabled' : ''}>${fsIdx(x.id) + 1}. ${escapeHtml(x.nome)}${ciclo ? ' (la aspetta già)' : ''}</option>`; }).join('');
+
+  // tempo
+  let tempo;
+  const righe = fsRigheTempo(m.id);
+  if (est) {
+    tempo = `<div class="fs-row"><div class="fs-desc" style="margin:0">Fase esterna: non occupa tempo in officina e non conta nella capacità del giorno.</div></div>`;
+  } else if (m.tempo_da_lavorazioni_cnc) {
+    const base = righe.filter(t => t.lavorazione_cnc_id == null && t.tipo_prodotto != null);
+    tempo = `<div class="fs-row inline"><div><div class="fs-crit-t">Il tempo è la somma delle lavorazioni CNC dell'ordine</div>
+        <div class="fs-desc">Le lavorazioni e i loro tempi sono nel <a href="#" onclick="showSection('lavorazioni-cnc-config');return false" style="color:inherit;font-weight:600">Catalogo lavorazioni CNC</a>. Se l'ordine non ne ha, vale il tempo base per tipo di prodotto${base.length ? ':' : '.'}</div></div>
+        ${fsSwitch('fs-t-cnc', true, "fsSet('tempo_da_lavorazioni_cnc',this.checked)")}</div>
+      ${base.length ? `<div class="fs-row"><table class="fs-tempi-tab">${base.map(t => `<tr><td>${escapeHtml(tipiProdotto.find(x => x.id === t.tipo_prodotto)?.label || t.tipo_prodotto)}</td><td class="v">${fmtMinuti(t.minuti_tipici)}–${fmtMinuti(t.minuti_max)} min</td></tr>`).join('')}</table></div>` : ''}`;
+  } else {
+    const modificabile = fsTempoModificabile(m.id);
+    tempo = (modificabile ? `<div class="fs-row fs-two">
+         <div><span class="fs-lbl">Minuti per pezzo</span>
+           <div class="fs-add"><input class="fs-inp num" id="fs-t-min" type="number" min="0" step="any" value="${escapeHtml(m.tempo.tipico)}" oninput="fsSetTempo('tipico',this.value)" aria-label="Minuti tipici"> <span class="fs-desc" style="margin:0">tipico</span>
+           <input class="fs-inp num" id="fs-t-max" type="number" min="0" step="any" value="${escapeHtml(m.tempo.massimo)}" oninput="fsSetTempo('massimo',this.value)" aria-label="Minuti massimi"> <span class="fs-desc" style="margin:0">massimo</span></div>
+           <div class="fs-desc">Stesso valore della pagina Tempi di riferimento: cambiarlo qui lo cambia anche lì.</div></div>
+         <div><span class="fs-lbl">Il tempo vale per</span>
+           <div class="fs-seg"><button class="${m.ambito_tempo !== 'lato' ? 'on' : ''}" onclick="fsSet('ambito_tempo','anta')">Anta intera</button><button class="${m.ambito_tempo === 'lato' ? 'on' : ''}" onclick="fsSet('ambito_tempo','lato')">Ogni lato</button></div>
+           <div class="fs-desc">${m.ambito_tempo === 'lato' ? 'Il tempo si moltiplica per i lati dell\'anta che rispettano i criteri della fase.' : 'Il tempo vale una volta per ogni pezzo.'}</div>
+           ${m.ambito_tempo === 'lato' && !fsHaCriteriLato(m) ? '<div class="fs-desc" style="color:var(--warn-ink)">⚠ Nessun criterio sugli attributi per lato: il tempo varrà per tutti i lati (moltiplicato per il numero di lati).</div>' : ''}</div>
+       </div>`
+      : `<div class="fs-row"><span class="fs-lbl">Tempi di riferimento</span>
+           <table class="fs-tempi-tab">${righe.map(t => `<tr><td>${escapeHtml(t.tipo_prodotto ? (tipiProdotto.find(x => x.id === t.tipo_prodotto)?.label || t.tipo_prodotto) : 'Tutti i prodotti')}</td><td class="v">${fmtMinuti(t.minuti_tipici)}–${fmtMinuti(t.minuti_max)} min</td></tr>`).join('')}</table>
+           <div class="fs-desc">Questa fase ha più righe di tempo: sono in sola lettura qui. Si gestiscono nella pagina <a href="#" onclick="showSection('tempi-rif-config');return false" style="color:inherit;font-weight:600">Tempi di riferimento</a>.</div></div>`)
+      + `<div class="fs-row inline"><div><div class="fs-crit-t">Il tempo è la somma delle lavorazioni CNC</div><div class="fs-desc">Da attivare solo per le fasi CNC che dipendono dalle lavorazioni scelte sull'ordine.</div></div>${fsSwitch('fs-t-cnc', false, "fsSet('tempo_da_lavorazioni_cnc',this.checked)")}</div>`;
+  }
+
+  const av = fsAvvisi(m);
+  const soglia = FS.soglia != null && !Number.isNaN(FS.soglia)
+    ? ` Per gli ordini con più di ${FS.soglia} pezzi può partire prima, appena le fasi precedenti hanno iniziato a chiudere pezzi.` : '';
+  const ops = operatoriCache.filter(o => o.ruolo === 'operatore' && o.attivo);
+  const nomeOp = id => { const o = operatoriCache.find(x => x.id === id); return o ? `${o.nome} ${o.cognome}` : ''; };
+  const defs = fasiCriteriDef();
+  const mobHdr = `<button class="fs-btn-ghost fs-back" onclick="fsTornaElenco()">← Fasi</button>`;
+
+  document.getElementById('fs-dettaglio').innerHTML = `
+    <div class="fs-det-hdr">
+      <div class="fs-det-hdr-row">
+        <div class="fs-det-title">${mobHdr}<span class="n">${i + 1} / ${lista.length}</span><h2>${escapeHtml(m.nome || 'Senza nome')}</h2></div>
+        <div class="fs-hdr-actions">
+          <span class="fs-stato-mod" id="fs-stato-mod" ${d ? '' : 'hidden'}>Modifiche non salvate</span>
+          <button class="btn btn-secondary" data-fs-salva onclick="fsAnnulla()" ${d ? '' : 'disabled'}>Annulla</button>
+          <button class="btn btn-primary" data-fs-salva onclick="fsSalva()" ${d && !FS.salvando ? '' : 'disabled'}>Salva</button>
+        </div>
+      </div>
+      <div class="fs-det-sub">
+        <span class="fs-mdot ${mac ? '' : 'vuoto'}" style="${mac ? `background:${escapeHtml(mac.colore || '')}` : ''}"></span>${escapeHtml(mac ? mac.nome : 'Nessuna macro fase')}
+        ${fsTagEsterna(m)}${m.e_cnc ? '<span class="fs-tag fs-tag-cnc">CNC</span>' : ''}${m.opzionale ? '<span class="fs-tag fs-tag-opz">Opzionale</span>' : ''}
+        ${fsFineFlusso(m) ? '<span class="fs-tag fs-tag-fine">Fine del flusso</span>' : ''}
+      </div>
+      ${guard}
+    </div>
+
+    ${av.length ? `<div class="fs-avvisi">${av.map(a => `<div class="fs-avviso ${a[0]}">${a[0] === 'alert' ? '●' : a[0] === 'warn' ? '▲' : 'i'}<span>${escapeHtml(a[1])}</span></div>`).join('')}</div>` : ''}
+
+    <div class="fs-blocco">
+      <div class="fs-blocco-h"><h3>Sequenza</h3><span class="hint">Quando entra nel piano</span></div>
+      <div class="fs-card">
+        <div class="fs-seq">
+          <div class="fs-seq-col">
+            <span class="fs-lbl">Parte dopo</span>
+            <div class="fs-chips">${m.dipendenze.length ? m.dipendenze.map(id => `<span class="fs-chip link"><span onclick="fsSeleziona(${id})" style="cursor:pointer">${fsIdx(id) + 1}. ${escapeHtml(fsMod(id)?.nome || '')}</span><button class="fs-chip-x" title="Togli" aria-label="Togli ${escapeHtml(fsMod(id)?.nome || '')}" onclick="fsTogliDip(${id})">×</button></span>`).join('') : '<span class="fs-desc" style="margin:0">Nessuna: può partire appena c\'è l\'ordine.</span>'}</div>
+            <div class="fs-add"><select class="fs-inp" id="fs-add-dip" onchange="fsAggiungiDip(this.value)" style="min-width:0;width:100%"><option value="">+ Aggiungi fase…</option>${opzDip}</select></div>
+            ${FS.depErr ? `<div class="fs-err">${escapeHtml(FS.depErr)}</div>` : ''}
+          </div>
+          <div class="fs-seq-mid"><span class="fs-freccia">→</span><div class="fs-qui">${escapeHtml(m.nome)}</div><span class="fs-freccia">→</span></div>
+          <div class="fs-seq-col">
+            <span class="fs-lbl">Poi si sbloccano</span>
+            <div class="fs-chips">${succ.length ? succ.map(id => `<button class="fs-chip link" onclick="fsSeleziona(${id})">${fsIdx(id) + 1}. ${escapeHtml(fsMod(id)?.nome || '')}</button>`).join('') : `<span class="fs-desc" style="margin:0">${fsFineFlusso(m) ? 'Nessuna: è l\'ultima fase dell\'ordine.' : 'Nessuna fase aspetta questa.'}</span>`}</div>
+            <div class="fs-desc" style="margin:0">Per cambiarle apri quella fase e modifica «Parte dopo».</div>
+          </div>
+        </div>
+        <div class="fs-seq-note">La fase entra nel piano di oggi solo quando tutte quelle a sinistra sono completate.${escapeHtml(soglia)}</div>
+      </div>
+    </div>
+
+    <div class="fs-blocco">
+      <div class="fs-blocco-h"><h3>Quando si applica</h3><span class="hint">Se non vale, la fase non viene creata sull'ordine</span></div>
+      <div class="fs-card">
+        <div class="fs-riassunto">${fsRiassuntoCriteri(m)}</div>
+        ${defs.map(def => {
+          const sel = m[def.campo] || [];
+          const seg = sel.length ? (m[def.modo] === 'tutti_tranne' ? 'tranne' : 'solo') : (FS.critAperto[def.campo] || 'tutti');
+          const opzioni = def.opzioni.filter(o => o.attivo !== false || sel.includes(o.valore));
+          return `<div class="fs-row fs-crit">
+            <span class="fs-crit-t">${escapeHtml(def.titolo)}</span>
+            <div class="fs-seg">${[['tutti', 'Tutti'], ['solo', 'Solo'], ['tranne', 'Tutti tranne']].map(([k, t]) => `<button class="${seg === k ? 'on' : ''}" onclick="fsSetModo(fasiCriteriDef().find(x => x.campo === '${escapeJsAttr(def.campo)}'), '${k}')">${t}</button>`).join('')}</div>
+            <div class="fs-chips">${seg === 'tutti' ? '' : opzioni.map(o => `<button class="fs-chip ${sel.includes(o.valore) ? 'on' : ''}" onclick="fsToggleCriterio('${escapeJsAttr(def.campo)}','${escapeJsAttr(o.valore)}')">${escapeHtml(o.etichetta)}${o.attivo === false ? ' (disattivata)' : ''}</button>`).join('')}</div>
+          </div>`; }).join('')}
+      </div>
+    </div>
+
+    <div class="fs-blocco">
+      <div class="fs-blocco-h"><h3>Macchine</h3><span class="hint">Il piano usa la meno carica tra quelle attive</span></div>
+      <div class="fs-card"><div class="fs-row">
+        <div class="fs-chips">${est ? '<span class="fs-desc" style="margin:0">Fase esterna: nessuna macchina.</span>' : (m.macchine.length ? m.macchine.map(id => { const mm = fsMacchina(id); if (!mm) return ''; const ok = fsMacchinaOk(mm);
+          return `<span class="fs-chip"><span class="${ok ? 'ok' : 'ko'}"></span>${escapeHtml(mm.nome)}${ok ? '' : '<span class="stato">fuori uso</span>'}<button class="fs-chip-x" aria-label="Togli ${escapeHtml(mm.nome)}" onclick="fsTogliMacchina('${escapeJsAttr(id)}')">×</button></span>`; }).join('') : '<span class="fs-desc" style="margin:0">Nessuna macchina assegnata.</span>')}</div>
+        ${est ? '' : `<div class="fs-add" style="margin-top:10px"><select class="fs-inp" id="fs-add-mac" onchange="fsAggiungiMacchina(this.value)"><option value="">+ Aggiungi macchina…</option>${macchineList.filter(x => !m.macchine.includes(x.id)).map(x => `<option value="${escapeHtml(x.id)}">${escapeHtml(x.nome)}${fsMacchinaOk(x) ? '' : ' (fuori uso)'}</option>`).join('')}</select></div>`}
+      </div></div>
+    </div>
+
+    <div class="fs-blocco">
+      <div class="fs-blocco-h"><h3>Tempo</h3></div>
+      <div class="fs-card">${tempo}</div>
+    </div>
+
+    <div class="fs-blocco">
+      <div class="fs-blocco-h"><h3>Tipo di fase</h3></div>
+      <div class="fs-card">
+        <div class="fs-row">
+          <div class="fs-seg" style="flex-wrap:wrap">${Etichette.tipiGestioneFase().map(x => `<button class="${m.tipo_gestione === x[0] ? 'on' : ''}" onclick="fsSet('tipo_gestione','${x[0]}')">${escapeHtml(x[1])}</button>`).join('')}</div>
+          <div class="fs-desc">${escapeHtml((Etichette.tipiGestioneFase().find(x => x[0] === m.tipo_gestione) || [])[2] || '')}</div>
+        </div>
+        <div class="fs-row inline"><div><div class="fs-crit-t">Parte da sola alla creazione dell'ordine</div><div class="fs-desc">Utile per le attese di materiale da fuori.</div></div>${fsSwitch('fs-o-auto', m.avvio_automatico, "fsSet('avvio_automatico',this.checked,false)")}</div>
+        <div class="fs-row inline"><div><div class="fs-crit-t">Fase CNC</div><div class="fs-desc">Mostra il badge CNC sull'ordine e nell'app.</div></div>${fsSwitch('fs-o-cnc', m.e_cnc, "fsSet('e_cnc',this.checked)")}</div>
+        <div class="fs-row inline"><div><div class="fs-crit-t">Opzionale</div><div class="fs-desc">Non si crea da sola: la abiliti tu dall'ordine.</div></div>${fsSwitch('fs-o-opz', m.opzionale, "fsSet('opzionale',this.checked)")}</div>
+        <div class="fs-row inline"><div><div class="fs-crit-t">Chiusura per spedizione unica</div><div class="fs-desc">Chi la completa può chiuderla per tutti gli ordini della stessa spedizione.</div></div>${fsSwitch('fs-o-gs', m.gruppo_spedizione, "fsSet('gruppo_spedizione',this.checked,false)")}</div>
+      </div>
+    </div>
+
+    <div class="fs-blocco">
+      <div class="fs-blocco-h"><h3>Generale</h3></div>
+      <div class="fs-card">
+        <div class="fs-row"><label class="fs-lbl" for="fs-g-nome">Nome</label><input class="fs-inp" id="fs-g-nome" value="${escapeHtml(m.nome)}" oninput="fsSetTesto('nome', this.value)"></div>
+        <div class="fs-row"><label class="fs-lbl" for="fs-g-desc">Descrizione</label><input class="fs-inp" id="fs-g-desc" value="${escapeHtml(m.descrizione)}" placeholder="Facoltativa" oninput="fsSetTesto('descrizione', this.value)"></div>
+        <div class="fs-row fs-two">
+          <div><label class="fs-lbl" for="fs-g-macro">Macro fase</label>
+            <select class="fs-inp" id="fs-g-macro" onchange="fsSet('macro_fase_id', this.value ? Number(this.value) : null)"><option value="">Nessuna</option>${macroFasiCache.map(x => `<option value="${x.id}" ${x.id === m.macro_fase_id ? 'selected' : ''}>${escapeHtml(x.nome)}</option>`).join('')}</select></div>
+          <div><span class="fs-lbl">Posizione nell'elenco</span>
+            <div class="fs-add"><button class="btn btn-secondary" onclick="fsSposta(-1)" ${i === 0 ? 'disabled' : ''} aria-label="Sposta su">▲ Su</button><button class="btn btn-secondary" onclick="fsSposta(1)" ${i === lista.length - 1 ? 'disabled' : ''} aria-label="Sposta giù">▼ Giù</button><span class="fs-desc" style="margin:0">Fase ${i + 1} di ${lista.length}</span></div>
+            <div class="fs-desc">Decide l'ordine di lettura. Cosa parte prima lo decide la Sequenza.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="fs-blocco">
+      <details class="fs-card" ${FS.compAperto ? 'open' : ''} ontoggle="FS.compAperto=this.open">
+        <summary><span><span class="fs-crit-t">Operatori competenti</span> <span class="fs-desc" style="display:inline;margin-left:6px">${m.competenze.length ? escapeHtml(m.competenze.map(nomeOp).filter(Boolean).join(', ')) : 'nessuno'}</span></span><span class="fs-desc" style="margin:0">${FS.compAperto ? 'nascondi' : 'mostra'}</span></summary>
+        <div class="fs-row">
+          <div class="fs-ops">${m.competenze.length ? m.competenze.map((id, k) => `<div class="fs-op"><span class="i">${k + 1}.</span><span class="nm">${escapeHtml(nomeOp(id))}</span>
+            <button class="fs-mini" onclick="fsCompSposta(${k},-1)" ${k === 0 ? 'disabled' : ''} aria-label="Su">▲</button><button class="fs-mini" onclick="fsCompSposta(${k},1)" ${k === m.competenze.length - 1 ? 'disabled' : ''} aria-label="Giù">▼</button><button class="fs-mini" onclick="fsCompTogli(${k})" aria-label="Togli">×</button></div>`).join('') : '<span class="fs-desc" style="margin:0">Nessuno: vanno bene tutti.</span>'}</div>
+          <div class="fs-add" style="margin-top:10px"><select class="fs-inp" id="fs-add-op" onchange="fsCompAggiungi(this.value)"><option value="">+ Aggiungi operatore…</option>${ops.filter(o => !m.competenze.includes(o.id)).map(o => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.nome)} ${escapeHtml(o.cognome)}</option>`).join('')}</select></div>
+          <div class="fs-desc">L'ordine è la priorità di assegnazione.</div>
+        </div>
+      </details>
+    </div>
+
+    <div class="fs-blocco" style="display:flex;justify-content:flex-end"><button class="fs-btn-danger-ghost" onclick="eliminaFase(${m.id})">Disattiva fase</button></div>`;
 }
 
-async function rimuoviCompetenza(faseId, opId) {
-  const f = fasi.find(x => x.id === faseId);
-  if (!f) return;
-  const arr = (f.competenze || []).filter(id => id !== opId);
-  const ok = await aggiornCompetenzeFase(faseId, arr);
-  if (ok) renderFasiConfig();
+// ── flusso ───────────────────────────────────────────────────────────────────────────────────────────────
+function fsLivelli() {
+  const memo = {}, lista = fsLista();
+  const ids = new Set(lista.map(f => f.id));
+  const lv = (id, vis = new Set()) => {
+    if (memo[id] != null) return memo[id];
+    if (vis.has(id)) return 0; vis.add(id);
+    const dip = (fsMod(id)?.dipendenze || []).filter(x => ids.has(x));
+    memo[id] = dip.length ? 1 + Math.max(...dip.map(x => lv(x, vis))) : 0; return memo[id];
+  };
+  lista.forEach(f => lv(f.id));
+  return memo;
+}
+function fsRenderFlusso() {
+  const lista = fsLista(); const lv = fsLivelli(); const max = Math.max(0, ...Object.values(lv));
+  const cols = Array.from({ length: max + 1 }, (_, k) => lista.filter(f => lv[f.id] === k));
+  const ids = new Set(lista.map(f => f.id));
+  const dipDi = id => (fsMod(id)?.dipendenze || []).filter(x => ids.has(x));
+  const pos = {}; const segna = () => cols.forEach(c => c.forEach((f, i) => { pos[f.id] = i; }));
+  const media = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 999;
+  segna();
+  for (let giro = 0; giro < 3; giro++) {   // ordina ogni colonna vicino alle fasi collegate, per ridurre gli incroci
+    for (let k = 1; k <= max; k++) { cols[k].sort((a, b) => media(dipDi(a.id).map(x => pos[x])) - media(dipDi(b.id).map(x => pos[x]))); segna(); }
+    for (let k = max - 1; k >= 0; k--) { cols[k].sort((a, b) => media(fsSuccessori(a.id).map(x => pos[x])) - media(fsSuccessori(b.id).map(x => pos[x]))); segna(); }
+  }
+  const sel = FS.flussoSel;
+  const vicini = sel ? new Set([sel, ...dipDi(sel), ...fsSuccessori(sel)]) : null;
+  document.getElementById('fs-vista-flusso').innerHTML = `
+    <div class="fs-flusso-card">
+      <div class="fs-flusso-top">
+        <span>Da sinistra a destra: una fase si sblocca quando sono completate quelle collegate da sinistra. Clic su una fase per evidenziare cosa la sblocca e cosa sblocca; doppio clic per modificarla.</span>
+        <span class="fs-legenda">${macroFasiCache.map(x => `<span><span class="fs-mdot" style="background:${escapeHtml(x.colore || '')}"></span>${escapeHtml(x.nome)}</span>`).join('')}<span><span class="fs-mdot vuoto"></span>Nessuna</span></span>
+      </div>
+      <div class="fs-flusso"><div class="fs-flusso-in" id="fs-flusso-in">
+        <svg class="fs-archi" id="fs-archi"></svg>
+        ${cols.map((c, k) => `<div class="fs-fcol"><div class="fs-fcol-h">${k === 0 ? 'Partono subito' : 'Passo ' + (k + 1)}</div>
+          ${c.map(f => { const m = fsMod(f.id); const mc = fsMacro(m.macro_fase_id);
+            const mm = m.macchine.map(fsMacchina).filter(Boolean);
+            const ko = !fsEster(m) && mm.length && mm.every(x => !fsMacchinaOk(x));
+            return `<button class="fs-fnodo ${fsEster(m) ? 'ext' : ''} ${f.id === sel ? 'sel' : ''} ${!vicini || vicini.has(f.id) ? '' : 'dim'}" data-id="${f.id}" onclick="fsEvidenzia(${f.id})" ondblclick="fsApri(${f.id})">
+              <span class="t"><span class="fs-mdot ${mc ? '' : 'vuoto'}" style="${mc ? `background:${escapeHtml(mc.colore || '')}` : ''}"></span><span>${fsIdx(f.id) + 1}. ${escapeHtml(m.nome)}</span></span>
+              <span class="m ${ko ? 'ko' : ''}">${fsEster(m) ? (m.tipo_gestione === 'conferma_ricezione' ? 'Arrivo da fuori' : 'Esterna') + (m.opzionale ? ' · opzionale' : '') : (mm.length ? escapeHtml(mm.map(x => x.nome).join(', ')) + (ko ? ' · fuori uso' : '') : 'Nessuna macchina')}</span>
+            </button>`; }).join('')}</div>`).join('')}
+      </div></div>
+    </div>`;
+  requestAnimationFrame(fsDisegnaArchi);
+}
+function fsEvidenzia(id) {
+  FS.flussoSel = FS.flussoSel === id ? null : id;
+  const sel = FS.flussoSel;
+  const ids = new Set(fsLista().map(f => f.id));
+  const vicini = sel ? new Set([sel, ...(fsMod(sel)?.dipendenze || []).filter(x => ids.has(x)), ...fsSuccessori(sel)]) : null;
+  document.querySelectorAll('.fs-fnodo').forEach(n => { const i = Number(n.dataset.id);
+    n.classList.toggle('sel', i === sel); n.classList.toggle('dim', !!vicini && !vicini.has(i)); });
+  fsDisegnaArchi();
+}
+function fsDisegnaArchi() {
+  const box = document.getElementById('fs-flusso-in'), svg = document.getElementById('fs-archi'); if (!box || !svg) return;
+  svg.setAttribute('width', box.scrollWidth); svg.setAttribute('height', box.scrollHeight);
+  const pos = {}; box.querySelectorAll('.fs-fnodo').forEach(n => { pos[n.dataset.id] = { x: n.offsetLeft, y: n.offsetTop, w: n.offsetWidth, h: n.offsetHeight }; });
+  const sel = FS.flussoSel; let out = '';
+  fsLista().forEach(f => (fsMod(f.id)?.dipendenze || []).forEach(dd => {
+    const a = pos[dd], b = pos[f.id]; if (!a || !b) return;
+    const x1 = a.x + a.w, y1 = a.y + a.h / 2, x2 = b.x, y2 = b.y + b.h / 2, mx = (x1 + x2) / 2;
+    const hot = sel && (f.id === sel || dd === sel);
+    out += `<path class="${hot ? 'hot' : sel ? 'dim' : ''}" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}"/>`;
+  }));
+  svg.innerHTML = out;
+}
+window.addEventListener('resize', () => { if (FS.vista === 'flusso') fsDisegnaArchi(); });
+
+// Fasi disattivate (storico conservato): si possono riattivare
+function fsRenderDisattivate() {
+  const disattivate = fasi.filter(f => f.attiva === false);
+  const box = document.getElementById('fasi-disattivate');
+  if (!box) return;
+  box.innerHTML = disattivate.length ? `
+    <details style="margin-top:16px"><summary style="cursor:pointer;font-size:13px;font-weight:600">Fasi disattivate (${disattivate.length})</summary>
+      <div style="margin-top:8px;font-size:12px;color:var(--muted)">Escluse da nuovi ordini, dall'app operatore e dai ricalcoli; lo storico degli ordini già eseguiti è conservato.</div>
+      ${disattivate.map(f => `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span style="flex:1;font-size:13px">${escapeHtml(f.nome)}</span>
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="riattivaFase(${f.id})">Riattiva</button>
+      </div>`).join('')}
+    </details>` : '';
 }
 
 // ─── NUOVA FASE: un'unica scheda (nome, posizione, macro-fase, gestione, criteri, dipendenze) ───
@@ -8447,10 +8868,8 @@ async function creaFaseConferma(dati) {
   if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
   closeModal('modal-nuova-fase');
   nuovaFase = null;
-  const bozze = fasiBozze;
-  await Promise.all([loadFasi(), loadMacroFasi()]);
-  fasiBozze = bozze;
-  renderFasiConfig();
+  await fsCaricaDati();
+  fsApri(data.fase_id);
   toast(`Fase creata e applicata a ${data.ordini_popolati || 0} ordini aperti`, 'ok');
 }
 
@@ -8459,20 +8878,17 @@ async function eliminaFase(id) {
   if (!confirm(`Eliminare "${nomeFase}"?\n\nSe la fase ha già uno storico (ordini spediti o lavorazioni eseguite) viene solo DISATTIVATA: esce da nuovi ordini, app operatore e ricalcoli, ma lo storico resta intatto. Se non è mai stata usata viene cancellata.`)) return;
   const { data, error } = await sb.rpc('elimina_fase', { p_fase_id: id, p_responsabile_id: currentUserRow.id, p_session_token: null });
   if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
-  const bozze = fasiBozze; delete bozze[id];
-  await loadFasi();
-  fasiBozze = bozze;
-  renderFasiConfig();
+  FS.draft = null; if (FS.sel === id) FS.sel = null;
+  await fsCaricaDati();
+  fsRender();
   toast(data.esito === 'disattivata' ? `"${nomeFase}" disattivata (storico conservato)` : `"${nomeFase}" eliminata`, 'ok');
 }
 
 async function riattivaFase(id) {
   const { data, error } = await sb.rpc('imposta_fase_attiva', { p_fase_id: id, p_attiva: true, p_responsabile_id: currentUserRow.id, p_session_token: null });
   if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
-  const bozze = fasiBozze;
-  await loadFasi();
-  fasiBozze = bozze;
-  renderFasiConfig();
+  await fsCaricaDati();
+  fsRender();
   toast('Fase riattivata', 'ok');
 }
 
@@ -8486,20 +8902,6 @@ function _raccogliAttributiBozza(src) {
     else out[k] = v;
   });
   return out;
-}
-
-function modifichePendentiFasi() {
-  return Object.entries(fasiBozze).map(([id, b]) => ({ id: Number(id), ..._raccogliAttributiBozza(b) }));
-}
-
-async function salvaFasiConfig() {
-  const modifiche = modifichePendentiFasi();
-  if (!modifiche.length) { toast('Nessuna modifica da salvare', 'ok'); return; }
-  const { data, error } = await sb.rpc('salva_configurazione_fasi', {
-    p_modifiche: modifiche, p_solo_anteprima: true, p_responsabile_id: currentUserRow.id, p_session_token: null });
-  if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
-  if (!data.n_cambi) { await confermaSalvaFasiConfig(); return; }
-  mostraAnteprimaFasi('Questa modifica', data, confermaSalvaFasiConfig);
 }
 
 // Anteprima dei cambi sugli ordini aperti: distingue fasi attivate, saltate (fasi successive già completate) e disattivate, con i codici ordine.
@@ -8530,18 +8932,6 @@ async function confermaAnteprimaFasi() {
   const fn = _anteprimaFasiConferma;
   _anteprimaFasiConferma = null;
   if (fn) await fn(); else closeModal('modal-anteprima-fasi');
-}
-
-async function confermaSalvaFasiConfig() {
-  const modifiche = modifichePendentiFasi();
-  const { data, error } = await sb.rpc('salva_configurazione_fasi', {
-    p_modifiche: modifiche, p_solo_anteprima: false, p_responsabile_id: currentUserRow.id, p_session_token: null });
-  closeModal('modal-anteprima-fasi');
-  if (error || !data?.ok) { toast('Salvataggio NON riuscito: ' + (data?.errore || error?.message || 'errore sconosciuto'), 'err'); return; }
-  fasiBozze = {};
-  await loadFasi();
-  renderFasiConfig();
-  toast(data.n_cambi ? `Configurazione fasi salvata: ${data.n_cambi} fasi aggiornate su ${data.n_ordini} ordini` : 'Configurazione fasi salvata', 'ok');
 }
 
 function etichettaStatoFase(s) {
