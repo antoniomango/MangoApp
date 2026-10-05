@@ -598,93 +598,111 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const QUEUE_STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
 let db = null;
+let _dbApertura = null;
+const IDB_TIMEOUT_MS = 3000;          // scritture/letture di cache: oltre questo tempo si rinuncia (best effort)
+const IDB_TIMEOUT_CODA_MS = 10000;    // la coda offline è lavoro reale dell'operatore: più margine, ma mai attesa infinita
 
-async function initDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open('mango-op', 2);
+// Apre (o riapre) la connessione IndexedDB. Su iPhone la connessione si chiude spesso dopo che la PWA è stata in background:
+// onclose / onversionchange azzerano `db`, così la prossima operazione la riapre da sola.
+function initDB() {
+  if (_dbApertura) return _dbApertura;
+  _dbApertura = new Promise((resolve, reject) => {
+    let req;
+    try { req = indexedDB.open('mango-op', 2); } catch (e) { _dbApertura = null; reject(e); return; }
     req.onupgradeneeded = (e) => {
       const d = e.target.result;
       if (!d.objectStoreNames.contains('queue')) d.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
       if (!d.objectStoreNames.contains('cache')) d.createObjectStore('cache', { keyPath: 'key' });
     };
-    req.onsuccess = (e) => { db = e.target.result; resolve(); };
-    req.onerror = reject;
+    req.onsuccess = (e) => {
+      const d = e.target.result;
+      d.onclose = () => { if (db === d) db = null; };
+      d.onversionchange = () => { try { d.close(); } catch (_) { /* già chiusa */ } if (db === d) db = null; };
+      db = d; _dbApertura = null; resolve();
+    };
+    req.onerror = () => { _dbApertura = null; reject(req.error || new Error('idb_apertura')); };
+    req.onblocked = () => { /* un'altra scheda tiene aperta una versione vecchia: si resta in attesa */ };
+  });
+  return _dbApertura;
+}
+async function dbPronto() { if (!db) await initDB(); return db; }
+
+// Una transazione IndexedDB con esito sempre definito: oncomplete → risolve, onerror/onabort/timeout → rifiuta.
+// `fn(store)` può restituire una IDBRequest: il suo `result` è il valore risolto.
+function _idbUnaVolta(store, modo, fn, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let concluso = false;
+    const fine = (ok, v) => { if (concluso) return; concluso = true; clearTimeout(t); ok ? resolve(v) : reject(v); };
+    const t = setTimeout(() => fine(false, new Error('idb_timeout')), timeoutMs);
+    dbPronto().then((d) => {
+      const tx = d.transaction(store, modo);
+      let req;
+      tx.oncomplete = () => fine(true, req && 'result' in req ? req.result : undefined);
+      tx.onerror = () => fine(false, tx.error || new Error('idb_errore'));
+      tx.onabort = () => fine(false, tx.error || new Error('idb_abort'));
+      req = fn(tx.objectStore(store), tx);
+    }).catch((e) => fine(false, e));
   });
 }
+// Se la connessione era chiusa o la transazione si è interrotta, la riapre e riprova UNA volta.
+async function idbEsegui(store, modo, fn, timeoutMs = IDB_TIMEOUT_MS) {
+  try { return await _idbUnaVolta(store, modo, fn, timeoutMs); }
+  catch (e1) {
+    if (e1 && e1.message === 'idb_timeout') throw e1;
+    try { if (db) db.close(); } catch (_) { /* già chiusa */ }
+    db = null;
+    return await _idbUnaVolta(store, modo, fn, timeoutMs);
+  }
+}
 
+// La coda offline è l'unica che può rifiutare: se l'azione non è stata salvata l'operatore deve saperlo.
 async function queueAction(action) {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('queue', 'readwrite');
-    tx.objectStore('queue').add({ ...action, ts: Date.now(), tentativiFalliti: 0 });
-    tx.oncomplete = resolve;
-    tx.onerror = reject;
-  });
+  await idbEsegui('queue', 'readwrite', (s) => s.add({ ...action, ts: Date.now(), tentativiFalliti: 0 }), IDB_TIMEOUT_CODA_MS);
 }
 
 async function getQueue() {
-  return new Promise((resolve) => {
-    const tx = db.transaction('queue', 'readonly');
-    const req = tx.objectStore('queue').getAll();
-    req.onsuccess = () => resolve(req.result);
-  });
+  try { return (await idbEsegui('queue', 'readonly', (s) => s.getAll())) || []; }
+  catch (e) { console.warn('getQueue', e); return []; }
 }
 
 async function deleteQueued(id) {
-  return new Promise((resolve) => {
-    const tx = db.transaction('queue', 'readwrite');
-    tx.objectStore('queue').delete(id);
-    tx.oncomplete = resolve;
-  });
+  try { await idbEsegui('queue', 'readwrite', (s) => { s.delete(id); }); } catch (e) { console.warn('deleteQueued', e); }
 }
 
 // Incrementa il contatore di fallimenti di una voce in coda, mantenendo intatto il resto
 // (azione, ts originale) — usato da syncQueue per riconoscere le voci ormai stantie.
 async function segnaFallimentoQueued(item) {
-  return new Promise((resolve) => {
-    const tx = db.transaction('queue', 'readwrite');
-    tx.objectStore('queue').put({ ...item, tentativiFalliti: (item.tentativiFalliti || 0) + 1, ultimoTentativo: Date.now() });
-    tx.oncomplete = resolve;
-  });
+  try { await idbEsegui('queue', 'readwrite', (s) => { s.put({ ...item, tentativiFalliti: (item.tentativiFalliti || 0) + 1, ultimoTentativo: Date.now() }); }); }
+  catch (e) { console.warn('segnaFallimentoQueued', e); }
 }
 
+// Le funzioni di sola cache NON rifiutano mai (best effort): in caso di errore risolvono undefined e lo scrivono in console.
 async function cacheSet(key, value) {
-  return new Promise((resolve) => {
-    const tx = db.transaction('cache', 'readwrite');
-    tx.objectStore('cache').put({ key, value, ts: Date.now() });
-    tx.oncomplete = resolve;
-  });
+  try { await idbEsegui('cache', 'readwrite', (s) => { s.put({ key, value, ts: Date.now() }); }); }
+  catch (e) { console.warn('cacheSet', key, e); }
 }
 
 async function cacheGet(key) {
-  return new Promise((resolve) => {
-    const tx = db.transaction('cache', 'readonly');
-    const req = tx.objectStore('cache').get(key);
-    req.onsuccess = () => {
-      const row = req.result;
-      if (!row) { resolve(undefined); return; }
-      if (Date.now() - (row.ts || 0) > CACHE_TTL_MS) {
-        // Scaduta: la tratta come assente per il chiamante e la ripulisce in background,
-        // invece di continuare a restituire dati potenzialmente stale (o PII di operatori
-        // ormai disattivati) indefinitamente su un tablet condiviso.
-        const delTx = db.transaction('cache', 'readwrite');
-        delTx.objectStore('cache').delete(key);
-        resolve(undefined);
-        return;
-      }
-      resolve(row.value);
-    };
-  });
+  try {
+    const row = await idbEsegui('cache', 'readonly', (s) => s.get(key));
+    if (!row) return undefined;
+    if (Date.now() - (row.ts || 0) > CACHE_TTL_MS) {
+      // Scaduta: la tratta come assente per il chiamante e la ripulisce in background,
+      // invece di continuare a restituire dati potenzialmente stale (o PII di operatori
+      // ormai disattivati) indefinitamente su un tablet condiviso.
+      idbEsegui('cache', 'readwrite', (s) => { s.delete(key); }).catch(() => {});
+      return undefined;
+    }
+    return row.value;
+  } catch (e) { console.warn('cacheGet', key, e); return undefined; }
 }
 
 // Come cacheGet, ma senza applicare i 24h di CACHE_TTL_MS — serve a leggere il timestamp reale
 // dell'ultimo salvataggio (es. per SESSIONE_OFFLINE_TTL_MS sotto, una finestra più stretta e
 // specifica per la sicurezza del login, indipendente dalla scadenza generica dei dati in cache).
 async function cacheGetRaw(key) {
-  return new Promise((resolve) => {
-    const tx = db.transaction('cache', 'readonly');
-    const req = tx.objectStore('cache').get(key);
-    req.onsuccess = () => resolve(req.result || null);
-  });
+  try { return (await idbEsegui('cache', 'readonly', (s) => s.get(key))) || null; }
+  catch (e) { console.warn('cacheGetRaw', key, e); return null; }
 }
 
 // ═══════════════════════════════════════════════
@@ -741,33 +759,31 @@ async function _sessioneOfflineFresca() {
 // da più di QUEUE_STALE_MS) — eseguita una volta all'avvio, non ad ogni singola lettura.
 async function pulisciDatiOfflineScaduti() {
   const now = Date.now();
-  await new Promise((resolve) => {
-    const tx = db.transaction('cache', 'readwrite');
-    const store = tx.objectStore('cache');
-    const req = store.openCursor();
-    req.onsuccess = (e) => {
-      const cursor = e.target.result;
-      if (!cursor) { resolve(); return; }
-      if (now - (cursor.value.ts || 0) > CACHE_TTL_MS) cursor.delete();
-      cursor.continue();
-    };
-    req.onerror = resolve;
-  });
   const scartate = [];
-  await new Promise((resolve) => {
-    const tx = db.transaction('queue', 'readwrite');
-    const store = tx.objectStore('queue');
-    const req = store.openCursor();
-    req.onsuccess = (e) => {
-      const cursor = e.target.result;
-      if (!cursor) { resolve(); return; }
-      const item = cursor.value;
-      const eStantia = (now - (item.ts || 0) > QUEUE_STALE_MS) && (item.tentativiFalliti || 0) > 0;
-      if (eStantia) { scartate.push(item); cursor.delete(); }
-      cursor.continue();
-    };
-    req.onerror = resolve;
-  });
+  try {
+    await idbEsegui('cache', 'readwrite', (store) => {
+      const req = store.openCursor();
+      req.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (!cursor) return;
+        if (now - (cursor.value.ts || 0) > CACHE_TTL_MS) cursor.delete();
+        cursor.continue();
+      };
+    });
+  } catch (e) { console.warn('pulizia cache', e); }
+  try {
+    await idbEsegui('queue', 'readwrite', (store) => {
+      const req = store.openCursor();
+      req.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (!cursor) return;
+        const item = cursor.value;
+        const eStantia = (now - (item.ts || 0) > QUEUE_STALE_MS) && (item.tentativiFalliti || 0) > 0;
+        if (eStantia) { scartate.push(item); cursor.delete(); }
+        cursor.continue();
+      };
+    });
+  } catch (e) { console.warn('pulizia coda', e); }
   if (scartate.length) {
     console.warn('Azioni offline scartate perché stantie (fallite ripetutamente da oltre 7 giorni):', scartate);
     toast(`${scartate.length} azione(i) offline non sincronizzabili da oltre una settimana sono state scartate — verifica lo stato con il responsabile`, 'err');
@@ -1059,7 +1075,7 @@ async function loadFasi() {
         ...f,
         dipendenze: dip.filter(r => r.fase_id === f.id).map(r => r.dipende_da_fase_id),
       }));
-      await cacheSet('fasi', fasi);
+      cacheSet('fasi', fasi);
     } else {
       fasi = await cacheGet('fasi') || [];
     }
@@ -1083,7 +1099,7 @@ async function loadOrdini() {
       if (b.scadenza) return 1;
       return new Date(b.creato_il) - new Date(a.creato_il);
     });
-    await cacheSet('ordini', ordiniCache);
+    cacheSet('ordini', ordiniCache);   // best effort, mai bloccante
   } else {
     ordiniCache = await cacheGet('ordini') || [];
   }
@@ -1477,7 +1493,7 @@ async function renderOrdineDetail(ordineId) {
     let fasiExt = [];
     if (isOnline) {
       fasiExt = dettaglioResp.fasi_extra || [];
-      await cacheSet('fasi-extra-' + ordineId, fasiExt);
+      cacheSet('fasi-extra-' + ordineId, fasiExt);
     } else {
       fasiExt = await cacheGet('fasi-extra-' + ordineId) || [];
     }
@@ -1503,7 +1519,7 @@ async function renderOrdineDetail(ordineId) {
         const posB = b.fase_id ? (fasi.find(f => f.id === b.fase_id)?.posizione ?? 9999) : 99999;
         return posA - posB;
       });
-      await cacheSet('fasi-' + ordineId, ordFasi);
+      cacheSet('fasi-' + ordineId, ordFasi);
     } else {
       ordFasi = (await cacheGet('fasi-' + ordineId) || []).filter(f => f.stato !== 'non_applicabile');
     }
@@ -1764,11 +1780,13 @@ async function completaFaseExtra(faseExtraId, ordineId) {
     const { data, error } = await sb.rpc('completa_fase_diretta', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_fase_extra_id: faseExtraId, p_note_operatore: note });
     if (error || !data?.ok) { toast(erroreCompletamento(data, error), 'err'); return; }
   } else {
-    await queueAction({ type: 'completa_diretta', faseExtraId, note });
-    await updateQueueBadge();
+    try { await queueAction({ type: 'completa_diretta', faseExtraId, note }); }
+    catch (e) { console.warn('queueAction', e); toast('Azione NON salvata: la memoria del telefono non risponde. Riprova tra un momento.', 'err'); return; }
+    try { await updateQueueBadge(); } catch (e) { console.warn(e); }
   }
   toast('Fase completata!', 'ok');
-  await renderFaseExtraDetail(faseExtraId, ordineId);
+  oggiSegnaFataPerFase(null, faseExtraId);
+  try { await renderFaseExtraDetail(faseExtraId, ordineId); } catch (e) { console.warn('renderFaseExtraDetail', e); }
 }
 
 // ═══════════════════════════════════════════════
@@ -2023,11 +2041,18 @@ async function completaFase(ordFaseId, ordineId) {
       toast('Fase completata!', 'ok');
     }
   } else {
-    await queueAction({ type: 'completa_diretta', ordFaseId, note, gruppo: false });
-    await updateQueueBadge();
+    try { await queueAction({ type: 'completa_diretta', ordFaseId, note, gruppo: false }); }
+    catch (e) {
+      console.warn('queueAction', e);
+      if (btnCompleta) { btnCompleta.disabled = false; btnCompleta.textContent = '✓ Completata'; }
+      toast('Azione NON salvata: la memoria del telefono non risponde. Riprova tra un momento.', 'err');
+      return;
+    }
+    try { await updateQueueBadge(); } catch (e) { console.warn(e); }
     toast('Salvato offline — sarà sincronizzato alla riconnessione', 'ok');
   }
-  await renderFaseDetail(ordFaseId, ordineId);
+  oggiSegnaFataPerFase(ordFaseId, null);
+  try { await renderFaseDetail(ordFaseId, ordineId); } catch (e) { console.warn('renderFaseDetail', e); }
 }
 
 // ═══════════════════════════════════════════════
@@ -2384,6 +2409,7 @@ let oggiModoMultiplo = false;
 let oggiTimer = null;
 let oggiCaricando = false;
 let oggiOperazione = false;     // un'azione è in corso: niente ridisegno dall'aggiornamento periodico
+let oggiVociInCorso = new Set(); // voce_id con un'azione in corso: pulsanti disabilitati
 
 function oggiAvviaAggiornamento() {
   if (oggiTimer) return;
@@ -2398,21 +2424,36 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden && currentUser && isOnline && document.getElementById('screen-oggi')?.classList.contains('active')) loadOggi();
 });
 
-async function loadOggi() {
-  if (!currentUser || oggiCaricando) return;
+// Una sola richiesta alla volta: se ne arriva un'altra mentre una è in corso non va persa ("ricarica dopo"), e la risposta
+// partita PRIMA di un'azione non sovrascrive mai lo stato aggiornato. Si ridisegna prima, la cache si scrive dopo (best effort).
+let oggiRicarica = false;
+let _oggiProm = null;
+function loadOggi() {
+  if (!currentUser) return Promise.resolve();
+  if (_oggiProm) { oggiRicarica = true; return _oggiProm; }
+  _oggiProm = (async () => {
+    try {
+      do { oggiRicarica = false; await _oggiUnGiro(); } while (oggiRicarica);
+    } finally { _oggiProm = null; oggiCaricando = false; }
+  })();
+  return _oggiProm;
+}
+async function _oggiUnGiro() {
   oggiCaricando = true;
   try {
     if (isOnline) {
       const { data, error } = await sb.rpc('oggi_squadra', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
-      if (!error && data?.ok) { oggiDati = data; oggiDaCache = false; await cacheSet('oggi', data); }
-      else if (!oggiDati) { oggiDati = await cacheGet('oggi') || null; oggiDaCache = !!oggiDati; }
+      if (oggiRicarica) return;                       // dati di prima di un'azione appena fatta: si scartano, segue un nuovo giro
+      if (!error && data?.ok) { oggiDati = data; oggiDaCache = false; _oggiRender(); cacheSet('oggi', data); return; }
+      if (!oggiDati) { oggiDati = await cacheGet('oggi') || null; oggiDaCache = !!oggiDati; }
     } else {
       oggiDati = await cacheGet('oggi') || oggiDati;
       oggiDaCache = !!oggiDati;
     }
-  } finally { oggiCaricando = false; }
-  renderOggi();
+  } catch (e) { console.warn('loadOggi', e); }
+  _oggiRender();
 }
+function _oggiRender() { try { renderOggi(); } catch (e) { console.warn('renderOggi', e); } }
 
 const oggiVoci = () => (oggiDati?.gruppi || []).flatMap(g => g.voci);
 const oggiTrovaVoce = (id) => [...oggiVoci(), ...(oggiDati?.esterne || [])].find(v => v.voce_id === id);
@@ -2543,18 +2584,19 @@ function renderOggiVoce(v, solaLettura) {
   const sel = oggiModoMultiplo && oggiSelezionabile(v) && !solaLettura
     ? `<input type="checkbox" class="oggi-sel" ${oggiSelezione.has(v.voce_id) ? 'checked' : ''} onchange="oggiToggleSel('${escapeJsAttr(v.voce_id)}')" aria-label="Seleziona">` : '';
   let azioni = '';
+  const occ = oggiVociInCorso.has(v.voce_id) ? ' disabled' : '';
   if (!solaLettura && !oggiModoMultiplo) {
     if (v.fatta) {
-      if (v.annullabile) azioni = `<button class="btn btn-secondary" onclick="oggiAnnulla('${escapeJsAttr(v.voce_id)}')">↩ Annulla</button>`;
+      if (v.annullabile) azioni = `<button class="btn btn-secondary"${occ} onclick="oggiAnnulla('${escapeJsAttr(v.voce_id)}')">↩ Annulla</button>`;
     } else if (bloccata) {
       azioni = '';
     } else if (v.pezzi) {
-      azioni = `<button class="btn btn-secondary piccolo" ${v.pezzi.fatti <= 0 ? 'disabled' : ''} onclick="oggiPezzi('${escapeJsAttr(v.voce_id)}','meno')" aria-label="Togli un pezzo">−</button>
+      azioni = `<button class="btn btn-secondary piccolo" ${v.pezzi.fatti <= 0 || occ ? 'disabled' : ''} onclick="oggiPezzi('${escapeJsAttr(v.voce_id)}','meno')" aria-label="Togli un pezzo">−</button>
         <div class="oggi-pezzi" aria-live="polite">${v.pezzi.fatti} di ${v.pezzi.totali}</div>
-        <button class="btn btn-primary" onclick="oggiPezzi('${escapeJsAttr(v.voce_id)}','piu')">+1 pezzo</button>
-        <button class="btn btn-ok" onclick="oggiCompleta('${escapeJsAttr(v.voce_id)}')">Tutti</button>`;
+        <button class="btn btn-primary"${occ} onclick="oggiPezzi('${escapeJsAttr(v.voce_id)}','piu')">${occ ? '…' : '+1 pezzo'}</button>
+        <button class="btn btn-ok"${occ} onclick="oggiCompleta('${escapeJsAttr(v.voce_id)}')">Tutti</button>`;
     } else {
-      azioni = `<button class="btn btn-ok" onclick="oggiCompleta('${escapeJsAttr(v.voce_id)}')">✓ Completata</button>`;
+      azioni = `<button class="btn btn-ok"${occ} onclick="oggiCompleta('${escapeJsAttr(v.voce_id)}')">${occ ? '…' : '✓ Completata'}</button>`;
     }
   }
   const apri = v.ordine_fase_id ? `openFaseDetail('${escapeJsAttr(v.ordine_fase_id)}','${escapeJsAttr(v.ordine_id)}')` : `openFaseExtraDetail('${escapeJsAttr(v.fase_extra_id)}','${escapeJsAttr(v.ordine_id)}')`;
@@ -2578,18 +2620,50 @@ function oggiToggleMultiplo() { oggiModoMultiplo = !oggiModoMultiplo; oggiSelezi
 function oggiToggleSel(id) { oggiSelezione.has(id) ? oggiSelezione.delete(id) : oggiSelezione.add(id); renderOggi(); }
 function oggiAnnullaSelezione() { oggiSelezione.clear(); renderOggi(); }
 
-// esegue un'azione sul server, poi riallinea la schermata; offline l'azione di completamento va in coda
-async function oggiEsegui(fn) {
+// Aggiornamento locale immediato dopo un'azione riuscita (come già faceva il ramo offline): voce, conteggi del gruppo e avanzamento.
+function oggiRicalcolaConteggi() {
+  if (!oggiDati) return;
+  (oggiDati.gruppi || []).forEach(g => { g.fatte = g.voci.filter(x => x.fatta).length; });
+  if (oggiDati.avanzamento) oggiDati.avanzamento.fatte = (oggiDati.gruppi || []).reduce((s, x) => s + x.fatte, 0);
+}
+function oggiSegnaFatta(v) {
+  if (!v) return;
+  v.fatta = true;
+  v.annullabile = false;                      // l'allineamento col server dirà se si può annullare
+  if (v.pezzi) v.pezzi.fatti = v.pezzi.totali;
+  oggiRicalcolaConteggi();
+}
+// per le azioni fatte fuori dalla schermata Oggi (dettaglio fase / fase extra): la voce è già verde quando si torna
+function oggiSegnaFataPerFase(ordFaseId, faseExtraId) {
+  try {
+    const v = oggiVoci().find(x => (ordFaseId && x.ordine_fase_id === ordFaseId) || (faseExtraId && x.fase_extra_id === faseExtraId));
+    if (v) { oggiSegnaFatta(v); _oggiRender(); }
+    loadOggi().catch(() => {});
+  } catch (e) { console.warn('oggiSegnaFataPerFase', e); }
+}
+
+// Esegue un'azione sul server, poi riallinea la schermata. Mentre l'azione è in corso i pulsanti della voce sono disabilitati.
+// `fn` può restituire una funzione di aggiornamento locale da applicare SUBITO (prima del ricaricamento dal server).
+// Nessun errore qui deve lasciare la schermata vecchia: ogni passaggio è protetto.
+async function oggiEsegui(fn, voceIds = []) {
   if (oggiOperazione) return;
   oggiOperazione = true;
-  try { await fn(); } finally { oggiOperazione = false; }
-  await loadOggi();
-  renderHome();
-  if (currentOrdineId && document.getElementById('screen-ordine')?.classList.contains('active')) renderOrdineDetail(currentOrdineId);
+  oggiVociInCorso = new Set(voceIds);
+  _oggiRender();
+  let aggiorna = null;
+  try { aggiorna = await fn(); }
+  catch (e) { console.warn('azione Oggi', e); toast('Operazione non riuscita: ' + (e?.message || 'errore'), 'err'); }
+  finally { oggiOperazione = false; oggiVociInCorso = new Set(); }
+  try { if (typeof aggiorna === 'function') aggiorna(); } catch (e) { console.warn('aggiornamento locale', e); }
+  _oggiRender();                                  // prima si ridisegna…
+  try { await loadOggi(); } catch (e) { console.warn('loadOggi', e); }   // …poi ci si allinea al server
+  try { renderHome(); } catch (e) { console.warn('renderHome', e); }
+  try { if (currentOrdineId && document.getElementById('screen-ordine')?.classList.contains('active')) await renderOrdineDetail(currentOrdineId); } catch (e) { console.warn('renderOrdineDetail', e); }
 }
 
 async function oggiCompleta(voceId) {
   const v = oggiTrovaVoce(voceId); if (!v) return;
+  if (oggiOperazione) return;
   let gruppo = false;
   if (isOnline && v.ordine_fase_id && faseGruppoSpedizione(v.fase_id) && v.ordine?.gruppo_spedizione_id) {
     const codiciFratelli = ordiniCache.filter(o => o.gruppo_spedizione_id === v.ordine.gruppo_spedizione_id && o.id !== v.ordine_id).map(o => o.codice || '—');
@@ -2601,20 +2675,28 @@ async function oggiCompleta(voceId) {
   }
   await oggiEsegui(async () => {
     if (!isOnline) {
-      await queueAction({ type: 'completa_diretta', ordFaseId: v.ordine_fase_id || null, faseExtraId: v.fase_extra_id || null, note: null, gruppo: false });
-      await updateQueueBadge();
-      v.fatta = true;                                   // aggiornamento locale: il server confermerà alla sincronizzazione
-      const g = (oggiDati.gruppi || []).find(x => x.voci.includes(v)); if (g) g.fatte = g.voci.filter(x => x.fatta).length;
-      oggiDati.avanzamento.fatte = (oggiDati.gruppi || []).reduce((s, x) => s + x.fatte, 0);
-      await cacheSet('oggi', oggiDati);
+      try {
+        await queueAction({ type: 'completa_diretta', ordFaseId: v.ordine_fase_id || null, faseExtraId: v.fase_extra_id || null, note: null, gruppo: false });
+      } catch (e) {
+        console.warn('queueAction', e);
+        toast('Azione NON salvata: la memoria del telefono non risponde. Riprova tra un momento.', 'err');
+        return;
+      }
+      try { await updateQueueBadge(); } catch (e) { console.warn(e); }
       toast('Salvato offline — sarà sincronizzato alla riconnessione', 'ok');
-      return;
+      return () => { oggiSegnaFatta(v); cacheSet('oggi', oggiDati); };   // il server confermerà alla sincronizzazione
     }
     const { data, error } = await sb.rpc('completa_fase_diretta', { p_operatore_id: currentUser.id, p_session_token: sessionToken,
       p_ordine_fase_id: v.ordine_fase_id || null, p_fase_extra_id: v.fase_extra_id || null, p_gruppo: gruppo });
     if (error || !data?.ok) { toast(erroreCompletamento(data, error), 'err'); return; }
-    toast(gruppo ? 'Completate per tutta la spedizione' : 'Completata!', 'ok');
-  });
+    if (gruppo && data.risultati) {
+      const gia = data.risultati.filter(r => r.esito === 'gia_completata').length;
+      toast(gia === data.risultati.length ? 'Era già completata' : 'Completate per tutta la spedizione', 'ok');
+    } else {
+      toast(data.gia_completata ? 'Era già completata' : 'Completata!', 'ok');
+    }
+    return () => oggiSegnaFatta(v);
+  }, [voceId]);
 }
 
 async function oggiPezzi(voceId, azione) {
@@ -2623,8 +2705,13 @@ async function oggiPezzi(voceId, azione) {
   await oggiEsegui(async () => {
     const { data, error } = await sb.rpc('pezzi_fase_oggi', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_fase_id: v.ordine_fase_id, p_azione: azione });
     if (error || !data?.ok) { toast(erroreCompletamento(data, error), 'err'); return; }
-    if (data.completata) toast('Tutti i pezzi fatti!', 'ok');
-  });
+    if (data.completata) toast(data.gia_completata ? 'Era già completata' : 'Tutti i pezzi fatti!', 'ok');
+    return () => {
+      if (data.completata) { oggiSegnaFatta(v); return; }
+      if (v.pezzi && typeof data.pezzi_fatti === 'number') v.pezzi.fatti = data.pezzi_fatti;
+      if (azione === 'meno' && v.fatta) { v.fatta = false; oggiRicalcolaConteggi(); }
+    };
+  }, [voceId]);
 }
 
 async function oggiAnnulla(voceId) {
@@ -2635,7 +2722,8 @@ async function oggiAnnulla(voceId) {
       p_ordine_fase_id: v.ordine_fase_id || null, p_fase_extra_id: v.fase_extra_id || null });
     if (error || !data?.ok) { toast(erroreCompletamento(data, error), 'err'); return; }
     toast('Completamento annullato', 'ok');
-  });
+    return () => { v.fatta = false; v.annullabile = false; if (v.pezzi && v.pezzi.fatti >= v.pezzi.totali) v.pezzi.fatti = Math.max(0, v.pezzi.totali - 1); oggiRicalcolaConteggi(); };
+  }, [voceId]);
 }
 
 async function oggiCompletaSelezione() {
@@ -2646,10 +2734,13 @@ async function oggiCompletaSelezione() {
     const { data, error } = await sb.rpc('completa_fasi_diretta_multi', { p_operatore_id: currentUser.id, p_session_token: sessionToken,
       p_ordine_fase_ids: scelte.filter(v => v.ordine_fase_id).map(v => v.ordine_fase_id), p_fase_extra_ids: scelte.filter(v => v.fase_extra_id).map(v => v.fase_extra_id) });
     if (error || !data?.ok) { toast(erroreCompletamento(data, error), 'err'); return; }
-    const errori = (data.risultati || []).filter(r => !r.ok);
-    toast(errori.length ? `${data.completate} completate, ${errori.length} non completabili` : `${data.completate} completate!`, errori.length ? 'err' : 'ok');
+    const risultati = data.risultati || [];
+    const errori = risultati.filter(r => !r.ok);
+    toast(errori.length ? `${data.completate} completate, ${errori.length} non completabili`
+      : (data.completate === 0 && risultati.length ? (risultati.length === 1 ? 'Era già completata' : 'Erano già completate') : `${data.completate} completate!`), errori.length ? 'err' : 'ok');
     oggiSelezione.clear(); oggiModoMultiplo = false;
-  });
+    return () => risultati.forEach(r => { if (!r.ok) return; oggiSegnaFatta(oggiVoci().find(x => (r.ordine_fase_id && x.ordine_fase_id === r.ordine_fase_id) || (r.fase_extra_id && x.fase_extra_id === r.fase_extra_id))); });
+  }, scelte.map(v => v.voce_id));
 }
 
 // spedizioni e ricezioni (fasi esterne): invariate, raggiungibili anche da qui
@@ -2669,7 +2760,8 @@ async function oggiEsterna(voceId, tipo) {
       : await sb.rpc('conferma_ricezione_fase', { p_ordine_fase_id: v.ordine_fase_id, p_operatore_id: currentUser.id, p_session_token: sessionToken });
     if (r.error || !r.data?.ok) { toast('Errore: ' + (r.error?.message || r.data?.errore || ''), 'err'); return; }
     toast(tipo === 'spedizione' ? 'Spedizione registrata!' : 'Ricezione confermata!', 'ok');
-  });
+    return tipo === 'spedizione' ? null : () => { v.fatta = true; v.annullabile = false; };
+  }, [voceId]);
 }
 
 // ═══════════════════════════════════════════════
@@ -2842,7 +2934,7 @@ function toast(msg, type = '') {
 // START
 // ═══════════════════════════════════════════════
 async function start() {
-  await initDB();
+  await initDB().catch(e => console.warn("IndexedDB non disponibile all'avvio (si riprova alla prima scrittura)", e));
   await pulisciDatiOfflineScaduti();
   await caricaFlagFotocameraInterna();
   if (new URLSearchParams(window.location.search).get('logout') === '1') {
