@@ -133,55 +133,87 @@ const Etichette = (() => {
     return `<span class="badge" style="background:${c.bg};color:${c.ink}">${esc(prioritaEtichetta(id))}</span>`;
   }
 
-  // Riquadro "In attesa esterna" (responsabile) e badge "Urgente" (operatore e responsabile): testi in un solo punto
+  // Ricezioni, data limite di arrivo e badge "Urgente": tutti i testi stanno qui (app operatore e pagina responsabile)
   const ATTESA_ESTERNA = {
     titolo: 'In attesa esterna', urgente: 'Urgente', nonStimabile: 'Non stimabile', senzaScadenza: '—',
-    motivi: { oltre_orizzonte: 'il lavoro non finisce entro l\'orizzonte della simulazione' },
+    motivi: { oltre_orizzonte: "il lavoro non finisce entro l'orizzonte della simulazione" },
   };
   const _GIORNI_BREVI = ['dom', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab'];
   const dataBreve = iso => { if (!iso) return '—'; const d = new Date(String(iso).slice(0, 10) + 'T12:00:00'); return _GIORNI_BREVI[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1); };
   const minutiTesto = m => { const n = Math.round(Number(m) || 0); return n >= 90 ? Math.floor(n / 60) + ' h ' + String(n % 60).padStart(2, '0') : n + ' min'; };
-  // { testo, tono: 'alert' | 'warn' | 'neutro' } per la data limite di arrivo; oggiIso = giorno di oggi (yyyy-mm-dd)
-  function badgeLimiteArrivo(r, oggiIso) {
-    switch (r.stato_limite) {
-      case 'in_ritardo': { const x = Math.abs(r.giorni_lavorativi_mancanti || 0); return { testo: 'In ritardo di ' + x + ' g', tono: 'alert' }; }
-      case 'in_scadenza': case 'ok': {
-        const dl = String(r.data_limite || '').slice(0, 10);
-        const domani = new Date(new Date(oggiIso + 'T12:00:00').getTime() + 86400000); const dom = domani.getFullYear() + '-' + String(domani.getMonth() + 1).padStart(2, '0') + '-' + String(domani.getDate()).padStart(2, '0');
-        const testo = r.stato_limite === 'in_scadenza' && dl === oggiIso ? 'Entro oggi' : r.stato_limite === 'in_scadenza' && dl === dom ? 'Entro domani' : 'Entro ' + dataBreve(dl);
-        return { testo, tono: r.stato_limite === 'in_scadenza' ? 'warn' : 'neutro' };
+  const _elencoMacchine = ip => ip.length === 1 ? ip[0] : ip.slice(0, -1).join(', ') + ' e ' + ip[ip.length - 1];
+  const _avvisoMacchine = ip => '⚠ Stima fatta come se ' + _elencoMacchine(ip) + (ip.length === 1 ? ' funzionasse' : ' funzionassero') + ': se restano ferme, la data va anticipata';
+
+  // ── App operatore: pannello "Ricevi materiale" ──
+  const RICEZIONE = {
+    gruppoUrgenti: 'Serve per lavorare', gruppoAltro: 'Altro in arrivo',
+    materiale: r => r.materiale || r.fase_nome || '',
+    sotto: r => 'per ' + (r.codice || '') + ' — ' + (r.cliente || ''),
+    quandoArriva: r => (r.urgente && (r.sblocca || []).length) ? 'Quando arriva si potrà fare: ' + r.sblocca.join(', ') : '',
+    pulsante: r => '✓ ' + (r.tipo === 'rientro' ? 'Conferma rientro ' + (r.materiale || r.fase_nome || '') : 'Conferma arrivo ' + String(r.materiale || r.fase_nome || '').toLowerCase()),
+    conferma: r => 'Confermi che è ' + (r.tipo === 'rientro' ? 'rientrato' : 'arrivato') + ' il materiale «' + (r.materiale || r.fase_nome || '') + '» per ' + (r.codice || '') + ' (' + (r.cliente || '') + ')?',
+    toast: r => (r.tipo === 'rientro' ? 'Rientro' : 'Arrivo') + ' di «' + (r.materiale || r.fase_nome || '') + '» confermato per ' + (r.codice || ''),
+    cercabile: r => [r.cliente, r.codice, r.materiale, r.fase_nome].filter(Boolean).join(' ').toLowerCase(),
+  };
+
+  // ── Pagina responsabile: riquadro "In attesa esterna" ──
+  // Verdetto (cosa fare) → perché → avvertenze. oggiIso = giorno di oggi (yyyy-mm-dd).
+  function limiteArrivoTesti(r, oggiIso) {
+    const mat = r.materiale || r.fase_nome || '';
+    const dl = String(r.data_limite || '').slice(0, 10);
+    const ms = new Date(oggiIso + 'T12:00:00').getTime() + 86400000; const dd = new Date(ms);
+    const domani = dd.getFullYear() + '-' + String(dd.getMonth() + 1).padStart(2, '0') + '-' + String(dd.getDate()).padStart(2, '0');
+    const entro = dl === oggiIso ? 'oggi' : dl === domani ? 'domani' : dataBreve(dl);
+    const t = { stato: r.stato_limite, tono: 'neutro', badge: '—', principale: '', esito: '', perche: '', avvertenze: [] };
+    const ip = r.macchine_ipotizzate_attive || [];
+    if (r.stato_limite === 'in_ritardo') {
+      t.tono = 'alert'; t.badge = 'In ritardo di ' + Math.abs(r.giorni_lavorativi_mancanti || 0) + ' g';
+      t.principale = 'Sollecita subito: ' + mat + ' doveva arrivare entro ' + dataBreve(dl);
+      if (r.fine_prevista_se_arriva_oggi) {
+        t.esito = 'Anche arrivando oggi, ' + (r.codice || "l'ordine") + ' sarebbe pronto ' + dataBreve(r.fine_prevista_se_arriva_oggi)
+          + (r.esito_spedizione === 'dopo_spedizione' ? ', dopo la spedizione del ' + dataBreve(r.scadenza)
+             : r.esito_spedizione === 'appena_in_tempo' ? ', appena in tempo per la spedizione del ' + dataBreve(r.scadenza)
+             : r.esito_spedizione === 'in_tempo' ? ', in tempo per la spedizione del ' + dataBreve(r.scadenza) : '');
       }
-      case 'non_stimabile': return { testo: ATTESA_ESTERNA.nonStimabile, tono: 'neutro' };
-      default: return { testo: ATTESA_ESTERNA.senzaScadenza, tono: 'neutro' };
+    } else if (r.stato_limite === 'in_scadenza' || r.stato_limite === 'ok') {
+      const sc = r.stato_limite === 'in_scadenza';
+      t.tono = sc ? 'warn' : 'neutro'; t.badge = sc ? 'Da sollecitare' : 'Nessun sollecito';
+      t.principale = (sc ? 'Sollecita il fornitore: ' + mat + ' deve arrivare entro ' + entro : 'Nessun sollecito per ora: ' + mat + ' deve arrivare entro ' + dataBreve(dl));
+      t.esito = 'Se arriva entro ' + dataBreve(dl) + ', ' + (r.codice || "l'ordine") + ' è pronto per la spedizione di ' + dataBreve(r.scadenza);
+    } else if (r.stato_limite === 'non_stimabile') {
+      t.badge = ATTESA_ESTERNA.nonStimabile; t.principale = 'Impossibile stimare: ' + (ATTESA_ESTERNA.motivi[r.motivo] || 'dati insufficienti');
+    } else {
+      t.badge = ATTESA_ESTERNA.senzaScadenza; t.principale = 'Ordine senza data di spedizione: impossibile calcolare';
     }
-  }
-  // Motivo per cui un ordine è "a rischio" (da rischio_ordini): "finirebbe il gio 15/10, spedizione 15/10 · stima con X ipotizzata attiva"
-  function rischioTesto(r, scadenzaIso) {
-    if (!r) return '';
-    const sc = scadenzaIso ? dataBreve(scadenzaIso).replace(/^\S+ /, '') : '';
-    let t = r.motivo === 'scadenza_passata' ? 'scadenza passata o in giornata, lavoro ancora da fare'
-          : r.motivo === 'oltre_orizzonte' ? 'non finirebbe entro l\'orizzonte della simulazione' + (sc ? ', spedizione ' + sc : '')
-          : 'finirebbe il ' + dataBreve(r.fine_prevista) + (sc ? ', spedizione ' + sc : '');
-    const ip = r.macchine_ipotizzate || [];
-    if (ip.length) t += ' · stima con ' + ip.join(', ') + ' ipotizzata attiva';
+    if ('fasi_dopo' in r && r.stato_limite !== 'non_stimabile' && r.stato_limite !== 'senza_scadenza') {
+      const n = r.fasi_dopo || 0, g = r.giorni_necessari || 0, m = r.margine_giorni || 0;
+      t.perche = n ? "Perché: dopo l'arrivo " + (n === 1 ? 'resta 1 fase' : 'restano ' + n + ' fasi') + ' (' + minutiTesto(r.minuti_dopo) + ' di lavoro); con gli altri ordini in coda '
+                     + (g === 1 ? 'serve 1 giorno lavorativo' : 'servono ' + g + ' giorni lavorativi') + (m > 0 ? ', più ' + m + (m === 1 ? ' giorno' : ' giorni') + ' di margine' : '')
+                 : "Perché: dopo l'arrivo non restano fasi interne da fare" + (m > 0 ? ', più ' + m + (m === 1 ? ' giorno' : ' giorni') + ' di margine' : '');
+    }
+    if (ip.length) t.avvertenze.push(_avvisoMacchine(ip));
+    if (r.rientro_ipotizzato) t.avvertenze.push('⚠ Si è ipotizzato che la lavorazione esterna rientri il giorno dopo la spedizione');
     return t;
   }
-  // "Dopo l'arrivo restano 7 fasi (2 h 07): con il carico attuale servono 3 giorni lavorativi · spedizione 12/10" + note sulle ipotesi
-  function spiegazioneLimiteArrivo(r) {
-    if (r.stato_limite === 'non_stimabile') return ATTESA_ESTERNA.motivi[r.motivo] ? 'Non stimabile: ' + ATTESA_ESTERNA.motivi[r.motivo] : 'Non stimabile';
-    if (!('fasi_dopo' in r)) return '';
-    const n = r.fasi_dopo || 0;
-    let t = n ? 'Dopo l\'arrivo ' + (n === 1 ? 'resta 1 fase' : 'restano ' + n + ' fasi') + ' (' + minutiTesto(r.minuti_dopo) + '): con il carico attuale ' + ((r.giorni_necessari || 0) === 1 ? 'serve 1 giorno lavorativo' : 'servono ' + (r.giorni_necessari || 0) + ' giorni lavorativi')
-             : 'Dopo l\'arrivo non restano fasi interne da fare';
-    if (r.scadenza) t += ' · spedizione ' + dataBreve(r.scadenza).replace(/^\S+ /, '');
-    const ip = r.macchine_ipotizzate_attive || [];
-    if (ip.length) t += ' · stima con ' + ip.join(', ') + ' ipotizzata attiva';
-    if (r.rientro_ipotizzato) t += ' · rientro ipotizzato il giorno dopo la spedizione';
+  // Riepilogo in cima al riquadro: "Da sollecitare: 3 (di cui 1 in ritardo)"
+  function riepilogoSolleciti(lista) {
+    const rit = lista.filter(r => r.stato_limite === 'in_ritardo').length, sc = lista.filter(r => r.stato_limite === 'in_scadenza').length;
+    return rit + sc ? 'Da sollecitare: ' + (rit + sc) + (rit ? ' (di cui ' + rit + ' in ritardo)' : '') : '';
+  }
+  // Motivo per cui un ordine è "a rischio" (da rischio_ordini): prima l'esito, poi le avvertenze sulle macchine ipotizzate
+  function rischioTesto(r, scadenzaIso) {
+    if (!r) return '';
+    const sc = scadenzaIso ? dataBreve(scadenzaIso) : '';
+    let t = r.motivo === 'scadenza_passata' ? 'Rischia di non essere pronto' + (sc ? ': la spedizione era prevista ' + sc : '') + ' e c’è ancora lavoro da fare'
+          : r.motivo === 'oltre_orizzonte' ? 'Rischia di non essere pronto' + (sc ? ' per la spedizione di ' + sc : '') + ": il lavoro non finisce entro l'orizzonte della simulazione"
+          : 'Rischia di non essere pronto' + (sc ? ' per la spedizione di ' + sc : '') + ': finirebbe ' + dataBreve(r.fine_prevista);
+    const ip = r.macchine_ipotizzate || [];
+    if (ip.length) t += ' · ' + _avvisoMacchine(ip);
     return t;
   }
 
   return {
-    attesaEsterna: ATTESA_ESTERNA, rischioTesto, dataBreve, minutiTesto, badgeLimiteArrivo, spiegazioneLimiteArrivo,
+    attesaEsterna: ATTESA_ESTERNA, ricezione: RICEZIONE, limiteArrivoTesti, riepilogoSolleciti, rischioTesto, dataBreve, minutiTesto,
     PALETTE, imposta, esporta, carica,
     tipoProdotto, attributo, opzione, struttura, materiale, attributiCustom, attributiLato, latoEtichetta, latiAttivi, valoriLatoOrdine, riepilogoLato, lavorazioniCncOrdine, valoreAttributoCustom, attributiOrdine,
     priorita: () => priorita, lati: () => lati, tipi: () => tipi, attributi: () => attributi,

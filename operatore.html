@@ -243,8 +243,8 @@ textarea:focus { border-color: var(--accent); }
 .ricevi-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-bottom: 12px; padding: 12px 14px; font-size: 15px; font-weight: 600; }
 .ricevi-conta { font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--warn-ink); background: var(--warn-soft); border-radius: 20px; padding: 3px 9px; white-space: nowrap; }
 .ricevi-cerca { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; font-size: 15px; background: var(--surface); color: var(--ink); outline: none; margin-bottom: 12px; }
-.ricevi-sotto { font-size: 12px; color: var(--ink-2); margin-top: 3px; }
-.ricevi-sotto strong { color: var(--warn-ink); }
+.ricevi-sotto { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.ricevi-titolo { font-size: 17px; font-weight: 700; }
 
 /* ── TOAST ── */
 .toast { position: fixed; bottom: 72px; left: 16px; right: 16px; z-index: 300; background: var(--inverse); color: var(--on-inverse); padding: 13px 18px; border-radius: 10px; font-size: 14px; opacity: 0; transform: translateY(6px); transition: all 0.25s; pointer-events: none; text-align: center; }
@@ -2813,22 +2813,23 @@ function riceviFiltra(testo) {
 }
 function renderRiceviLista(solaLettura) {
   if (!ricezioniDati) return `<div class="empty-state"><div class="icon"><i data-ic="pacco"></i></div><p>${isOnline ? 'Caricamento…' : 'Elenco non disponibile offline'}</p></div>`;
+  const E = Etichette.ricezione;
   const q = riceviCerca.toLowerCase().trim();
   const tutte = ricezioniDati.ricezioni || [];
-  const lista = tutte.filter(r => !q || `${r.cliente || ''} ${r.codice || ''}`.toLowerCase().includes(q));
+  const lista = tutte.filter(r => !q || E.cercabile(r).includes(q));
   if (!tutte.length) return '<div class="empty-state"><div class="icon"><i data-ic="spunta"></i></div><p>Nessuna ricezione in attesa</p></div>';
   if (!lista.length) return '<div class="empty-state"><p>Nessun risultato</p></div>';
   const voce = (r) => {
     const k = riceviChiave(r), occ = ricezioniInCorso.has(k) ? ' disabled' : '';
-    const sblocca = r.urgente && (r.sblocca || []).length ? `<div class="ricevi-sotto"><strong>sblocca:</strong> ${escapeHtml(r.sblocca.join(', '))}</div>` : '';
-    const azione = solaLettura ? '' : `<div class="ov-azioni"><button class="btn btn-ok"${occ}${isOnline ? '' : ' disabled'} onclick="riceviConferma('${escapeJsAttr(k)}')">${occ ? '…' : '<i data-ic="spunta"></i> ' + (r.tipo === 'rientro' ? 'Rientrato' : 'Arrivato')}</button></div>`;
-    return `<div class="oggi-voce"><div class="ov-testa"><div class="ov-titolo">${escapeHtml(r.cliente || '')} — ${escapeHtml(r.codice || '')}</div></div>
-      <div class="ov-sub">${escapeHtml(r.fase_nome || '')}${r.tipo === 'rientro' ? ' · dal fornitore' : ''}</div>${sblocca}${azione}</div>`;
+    const quando = E.quandoArriva(r);
+    const azione = solaLettura ? '' : `<div class="ov-azioni"><button class="btn btn-ok"${occ}${isOnline ? '' : ' disabled'} onclick="riceviConferma('${escapeJsAttr(k)}')">${occ ? '…' : escapeHtml(E.pulsante(r))}</button></div>`;
+    return `<div class="oggi-voce"><div class="ov-testa"><div class="ov-titolo ricevi-titolo">${escapeHtml(E.materiale(r))}</div></div>
+      <div class="ov-sub">${escapeHtml(E.sotto(r))}</div>${quando ? `<div class="ricevi-sotto">${escapeHtml(quando)}</div>` : ''}${azione}</div>`;
   };
   const urg = lista.filter(r => r.urgente), altre = lista.filter(r => !r.urgente);
   let html = '';
-  if (urg.length) html += '<div class="section-title">Servono adesso</div><div class="card">' + urg.map(voce).join('') + '</div>';
-  if (altre.length) html += '<div class="section-title">Altro in arrivo</div><div class="card">' + altre.map(voce).join('') + '</div>';
+  if (urg.length) html += `<div class="section-title">${E.gruppoUrgenti}</div><div class="card">` + urg.map(voce).join('') + '</div>';
+  if (altre.length) html += `<div class="section-title">${E.gruppoAltro}</div><div class="card">` + altre.map(voce).join('') + '</div>';
   return html;
 }
 async function riceviConferma(chiave) {
@@ -2836,7 +2837,7 @@ async function riceviConferma(chiave) {
   if (!isOnline) { toast('Serve la connessione per confermare', 'err'); return; }
   if (oggiOperazione || ricezioniInCorso.has(chiave)) return;
   const extra = !!r.fase_extra_id;
-  if (!confirm(extra || r.tipo === 'rientro' ? 'Il pezzo è tornato dal fornitore? Confermi la ricezione?' : 'Confermi la ricezione del materiale? La fase verrà chiusa.')) return;
+  if (!confirm(Etichette.ricezione.conferma(r))) return;
   if (!extra && !confirm('Confermi di aver ricevuto davvero il materiale per questo pezzo?')) return;
   ricezioniInCorso.add(chiave);
   riceviFiltra(riceviCerca);
@@ -2847,7 +2848,7 @@ async function riceviConferma(chiave) {
         : await sb.rpc('conferma_ricezione_fase', { p_ordine_fase_id: r.ordine_fase_id, p_operatore_id: currentUser.id, p_session_token: sessionToken });
       const giaFatta = x.data?.errore === 'stato_non_in_attesa';
       if (x.error || (!x.data?.ok && !giaFatta)) { toast('Errore: ' + (x.error?.message || x.data?.messaggio || x.data?.errore || ''), 'err'); return; }
-      toast(giaFatta ? (x.data?.messaggio || 'Ricezione già confermata') : 'Ricezione confermata', giaFatta ? 'err' : 'ok');
+      toast(giaFatta ? (x.data?.messaggio || 'Ricezione già confermata') : Etichette.ricezione.toast(r), giaFatta ? 'err' : 'ok');
       // la voce sparisce subito dal pannello; poi ci si riallinea al server (Oggi si ricarica: le fasi sbloccate possono essere entrate nel piano)
       return () => {
         if (!ricezioniDati) return;
