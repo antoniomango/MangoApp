@@ -710,6 +710,29 @@ svg.fs-archi path.dim { opacity: .25; }
   .fs-det-title { flex-wrap: wrap; }
   select.fs-inp { min-width: 0; width: 100%; }
 }
+
+/* ── Sezione Macchine (mango-v56): riusa le classi fs-* della sezione Fasi ── */
+#sec-macchine-config [hidden] { display: none !important; }
+.fm-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; }
+.fm-dot.attiva { background: var(--ok); } .fm-dot.manutenzione { background: var(--warn); } .fm-dot.fuori_uso { background: var(--alert); }
+.fm-tag-man { background: var(--warn-soft); color: var(--warn-ink); } .fm-tag-ko { background: var(--alert-soft); color: var(--alert-ink); }
+.fm-carico { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; min-width: 64px; }
+.fm-carico .v { font-family: var(--font-mono); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.fm-barra { display: block; width: 64px; height: 5px; border-radius: 3px; background: var(--fill); overflow: hidden; }
+.fm-barra > span { display: block; height: 100%; background: var(--ink-2); border-radius: 3px; }
+.fm-barra.grande { width: 100%; height: 8px; border-radius: 4px; }
+.fm-riepilogo { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 14px; border-radius: 10px; background: var(--alert-bg); color: var(--alert-ink); font-size: 13px; margin-bottom: 18px; }
+.fm-riepilogo button { margin-left: auto; }
+.fm-manut { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.fm-manut:last-child { border-bottom: none; }
+.fm-manut .d { font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.fm-manut.passata { color: var(--muted); }
+.fm-date-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.fs-chip .alt { font-size: 10.5px; color: var(--muted); }
+.fs-chip .unica { font-size: 10.5px; font-weight: 600; color: var(--warn-ink); }
+.fm-chipfase { flex-wrap: wrap; }
+.fm-fatt { font-size: 11.5px; padding: 2px 4px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg); color: var(--ink); }
+@media (max-width: 760px) { .fm-manut { grid-template-columns: auto minmax(0, 1fr) auto; } .fm-manut .al { display: none; } }
 </style>
 <script>window.OneSignalDeferred = window.OneSignalDeferred || [];   // prima della libreria: le chiamate si accodano finché non è pronta</script>
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
@@ -1605,11 +1628,23 @@ svg.fs-archi path.dim { opacity: .25; }
         <div class="page-hdr">
           <div>
             <h1>Macchine</h1>
-            <div class="sub">Gestisci le macchine e le loro capacità giornaliere</div>
+            <div class="sub">Scegli una macchina dall'elenco per vederne stato, fasi e carico di oggi.</div>
           </div>
-          <button class="btn btn-primary" onclick="avviaNuovaMacchina()">+ Nuova macchina</button>
+          <div class="fs-hdr-actions">
+            <button class="btn btn-secondary" onclick="fmNuova()">+ Nuova macchina</button>
+          </div>
         </div>
-        <div id="macchine-list">Caricamento…</div>
+        <div id="fm-riepilogo"></div>
+        <div id="fm-grid" class="fs-grid">
+          <aside class="fs-lista" aria-label="Elenco macchine">
+            <div class="fs-lista-top">
+              <input id="fm-cerca" class="fs-cerca" type="search" placeholder="Cerca macchina o fase" oninput="FM.cerca=this.value; fmRenderLista()">
+              <div class="fs-filtri" id="fm-filtri"></div>
+            </div>
+            <div class="fs-righe" id="fm-righe">Caricamento…</div>
+          </aside>
+          <section class="fs-dettaglio" id="fm-dettaglio" aria-live="polite"></section>
+        </div>
       </section>
 
       <!-- CONFIG FASI EXTRA -->
@@ -2995,7 +3030,7 @@ function tipiScheda(v) {
 }
 
 function showSection(name) {
-  if (!fsPuoUscire(name)) return;   // modifiche non salvate in Fasi: barra di scelta nell'intestazione del dettaglio
+  if (!fsPuoUscire(name) || !fmPuoUscire(name)) return;   // modifiche non salvate in Fasi: barra di scelta nell'intestazione del dettaglio
   // Alias storici: Richieste e Assenze squadra sono ora schede della sezione Operatori
   if (name === 'richieste' || name === 'assenze') { _opsScheda = name; _opsSalvaScheda(name); name = 'operatori'; }
   chiudiAltro();
@@ -3033,7 +3068,7 @@ function showSection(name) {
   else if (name === 'priorita-config') renderPrioritaConfig();
   else if (name === 'oggi') loadOggiResp();
   else if (name === 'piano-config') loadPianoConfig();
-  else if (name === 'macchine-config') { loadMacchine().then(renderMacchine); }
+  else if (name === 'macchine-config') fmApriSezione();
   else if (name === 'fasi-extra-config') { loadCatalogoFasiExtra(); }
   else if (name === 'notif-config') { loadNotifDestinatari(); }
   else if (name === 'sistema-config') { loadSistemaConfig(); }
@@ -3121,7 +3156,7 @@ function renderOggiResp() {
     const o = v.ordine || {};
     const bl = v.bloccata_da && v.bloccata_da.length ? `<div style="font-size:11px;color:var(--violet)">dopo: ${escapeHtml(v.bloccata_da.join(', '))}</div>` : '';
     return `<tr style="${v.fatta ? 'background:var(--ok-bg)' : ''}">
-      <td><div style="font-weight:600">${escapeHtml(o.cliente || '')} — ${escapeHtml(o.codice || '')}</div><div style="font-size:11px;color:var(--muted)">${o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo'}${v.macchina ? ' · ' + escapeHtml(v.macchina) : ''}</div>${bl}</td>
+      <td><div style="font-weight:600">${escapeHtml(o.cliente || '')} — ${escapeHtml(o.codice || '')}</div><div style="font-size:11px;color:var(--muted)">${o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo'}${v.macchina ? ' · ' + escapeHtml(v.macchina) + (v.minuti_macchina != null && Math.round(v.minuti_macchina) !== Math.round(v.minuti_stimati) ? ' (occupa ' + _fmtMin(v.minuti_macchina) + ')' : '') : ''}</div>${bl}</td>
       <td style="white-space:nowrap">${v.esterna ? '—' : _fmtMin(v.minuti_stimati)}</td>
       <td style="white-space:nowrap">${v.pezzi ? `${v.pezzi.fatti} di ${v.pezzi.totali}` : ''}</td>
       <td>${v.fatta ? '<span class="badge" style="background:var(--ok-soft);color:var(--ok-ink)">✓ fatta</span>' : '<span style="color:var(--muted)">da fare</span>'} ${tag(v)}</td>
@@ -8187,7 +8222,7 @@ function fsModello(f) {
     e_cnc: !!f.e_cnc, opzionale: !!f.opzionale, gruppo_spedizione: !!f.gruppo_spedizione, ambito_tempo: f.ambito_tempo || 'anta',
     tempo_da_lavorazioni_cnc: !!f.tempo_da_lavorazioni_cnc,
     dipendenze: [...(f.dipendenze || [])].sort((a, b) => a - b),
-    macchine: macchineList.filter(x => (x.fase_ids || []).includes(f.id)).map(x => x.id).sort(),
+    macchine: macchineList.filter(x => (x.fase_ids || []).includes(f.id)).map(x => ({ id: x.id, fattore: Number((x.fattori || {})[f.id] ?? 1) })).sort((a, b) => a.id < b.id ? -1 : 1),
     competenze: [...(f.competenze || [])],
     tempo: base ? { tipico: String(base.minuti_tipici), massimo: String(base.minuti_max) } : { tipico: '', massimo: '' },
   };
@@ -8212,6 +8247,8 @@ function fsMacchinaOk(m) {   // attiva e non in manutenzione oggi
   const oggi = Calendario.oggiIso();
   return !!m && m.stato === 'attiva' && !(m.manutenzioni || []).some(x => x.data_inizio <= oggi && oggi <= x.data_fine);
 }
+// Una sola regola per "fase bloccata oggi" (sezioni Fasi e Macchine): fase con macchine assegnate, nessuna utilizzabile oggi.
+const faseSenzaMacchinaUtilizzabile = (macchineAssegnate) => macchineAssegnate.length > 0 && macchineAssegnate.every(x => !fsMacchinaOk(x));
 function fsSuccessori(id) { return fsLista().filter(g => (fsMod(g.id)?.dipendenze || []).includes(id)).map(g => g.id); }
 function fsDipendeDa(a, b, visti = new Set()) {   // a aspetta (anche indirettamente) b?
   if (visti.has(a)) return false; visti.add(a);
@@ -8229,8 +8266,8 @@ function fsFineFlusso(m) { return !fsSuccessori(m.id).length && !fsEster(m) && !
 function fsAvvisi(m) {
   const out = [];
   if (!fsEster(m)) {
-    const mac = m.macchine.map(fsMacchina).filter(Boolean);
-    if (mac.length && mac.every(x => !fsMacchinaOk(x))) out.push(['alert', `${mac.map(x => x.nome).join(', ')} fuori uso: la fase non entra nel piano finché la macchina non torna attiva.`]);
+    const mac = m.macchine.map(x => fsMacchina(x.id)).filter(Boolean);
+    if (faseSenzaMacchinaUtilizzabile(mac)) out.push(['alert', `${mac.map(x => x.nome).join(', ')} fuori uso: la fase non entra nel piano finché la macchina non torna attiva.`]);
     if (!mac.length) out.push(['info', 'Nessuna macchina: il piano non ne limita il carico.']);
     const haTempo = m.tempo_da_lavorazioni_cnc || (m.tempo.tipico !== '' && m.tempo.massimo !== '') || fsRigheTempo(m.id).length > 0;
     if (!haTempo) out.push(['warn', 'Manca il tempo di riferimento: il piano usa il valore predefinito.']);
@@ -8294,14 +8331,14 @@ function fsRenderLista() {
   const q = FS.cerca.trim().toLowerCase();
   const fn = FS_FILTRI.find(x => x[0] === FS.filtro)[2];
   const righe = lista.map((f, i) => [fsMod(f.id), i]).filter(([m]) => fn(m) &&
-    (!q || m.nome.toLowerCase().includes(q) || m.macchine.some(id => (fsMacchina(id)?.nome || '').toLowerCase().includes(q))));
+    (!q || m.nome.toLowerCase().includes(q) || m.macchine.some(x => (fsMacchina(x.id)?.nome || '').toLowerCase().includes(q))));
   document.getElementById('fs-righe').innerHTML = righe.length ? righe.map(([m, i]) => {
     const lv = fsLivello(m), mac = fsMacro(m.macro_fase_id);
     const meta = [];
     if (fsEster(m)) meta.push(fsTagEsterna(m));
     if (m.e_cnc) meta.push('<span class="fs-tag fs-tag-cnc">CNC</span>');
     if (m.opzionale) meta.push('<span class="fs-tag fs-tag-opz">Opzionale</span>');
-    if (m.macchine.length) meta.push(escapeHtml(m.macchine.map(id => fsMacchina(id)?.nome || '').filter(Boolean).join(', ')));
+    if (m.macchine.length) meta.push(escapeHtml(m.macchine.map(x => fsMacchina(x.id)?.nome || '').filter(Boolean).join(', ')));
     meta.push(m.dipendenze.length ? `dopo ${m.dipendenze.length} ${m.dipendenze.length === 1 ? 'fase' : 'fasi'}` : 'parte subito');
     const ico = lv === 'alert' ? '●' : lv === 'warn' ? '▲' : '';
     const sporca = fsSporca() && FS.draft.id === m.id;
@@ -8378,8 +8415,9 @@ function fsAggiungiDip(v) {
   fsAggiornaStato(); fsRenderDettaglio();
 }
 function fsTogliDip(id) { FS.draft.dipendenze = FS.draft.dipendenze.filter(x => x !== id); FS.depErr = ''; fsAggiornaStato(); fsRenderDettaglio(); }
-function fsAggiungiMacchina(id) { if (!id || FS.draft.macchine.includes(id)) return; FS.draft.macchine.push(id); FS.draft.macchine.sort(); fsAggiornaStato(); fsRenderDettaglio(); }
-function fsTogliMacchina(id) { FS.draft.macchine = FS.draft.macchine.filter(x => x !== id); fsAggiornaStato(); fsRenderDettaglio(); }
+function fsAggiungiMacchina(id) { if (!id || FS.draft.macchine.some(x => x.id === id)) return; FS.draft.macchine.push({ id, fattore: 1 }); FS.draft.macchine.sort((a, b) => a.id < b.id ? -1 : 1); fsAggiornaStato(); fsRenderDettaglio(); }
+function fsTogliMacchina(id) { FS.draft.macchine = FS.draft.macchine.filter(x => x.id !== id); fsAggiornaStato(); fsRenderDettaglio(); }
+function fsSetFattoreMacchina(id, v) { const x = FS.draft.macchine.find(y => y.id === id); if (x) x.fattore = Number(v); fsAggiornaStato(); fsRenderDettaglio(); }
 function fsCompSposta(i, dir) { const a = FS.draft.competenze; [a[i], a[i + dir]] = [a[i + dir], a[i]]; fsAggiornaStato(); fsRenderDettaglio(); }
 function fsCompTogli(i) { FS.draft.competenze.splice(i, 1); fsAggiornaStato(); fsRenderDettaglio(); }
 function fsCompAggiungi(id) { if (!id || FS.draft.competenze.includes(id)) return; FS.draft.competenze.push(id); fsAggiornaStato(); fsRenderDettaglio(); }
@@ -8410,7 +8448,7 @@ function fsPayload() {
   fasiCriteriDef().forEach(def => [def.campo, def.modo].forEach(k => { if (JSON.stringify(d[k]) !== JSON.stringify(o[k])) crit[k] = d[k]; }));
   Object.assign(p, _raccogliAttributiBozza(crit));
   if (JSON.stringify(d.dipendenze) !== JSON.stringify(o.dipendenze)) p.dipendenze = d.dipendenze;
-  if (JSON.stringify(d.macchine) !== JSON.stringify(o.macchine)) p.macchine = d.macchine;
+  if (JSON.stringify(d.macchine) !== JSON.stringify(o.macchine)) p.macchine = d.macchine.map(x => ({ macchina_id: x.id, fattore_tempo: x.fattore }));
   if (JSON.stringify(d.competenze) !== JSON.stringify(o.competenze)) p.competenze = d.competenze;
   if (JSON.stringify(d.tempo) !== JSON.stringify(o.tempo) && fsTempoModificabile(d.id)) {
     const riga = fsRigaBase(d.id);
@@ -8601,11 +8639,11 @@ function fsRenderDettaglio() {
     </div>
 
     <div class="fs-blocco">
-      <div class="fs-blocco-h"><h3>Macchine</h3><span class="hint">Il piano usa la meno carica tra quelle attive</span></div>
+      <div class="fs-blocco-h"><h3>Macchine</h3><span class="hint">Il piano usa prima quella dove la fase è più veloce</span></div>
       <div class="fs-card"><div class="fs-row">
-        <div class="fs-chips">${est ? '<span class="fs-desc" style="margin:0">Fase esterna: nessuna macchina.</span>' : (m.macchine.length ? m.macchine.map(id => { const mm = fsMacchina(id); if (!mm) return ''; const ok = fsMacchinaOk(mm);
-          return `<span class="fs-chip"><span class="${ok ? 'ok' : 'ko'}"></span>${escapeHtml(mm.nome)}${ok ? '' : '<span class="stato">fuori uso</span>'}<button class="fs-chip-x" aria-label="Togli ${escapeHtml(mm.nome)}" onclick="fsTogliMacchina('${escapeJsAttr(id)}')">×</button></span>`; }).join('') : '<span class="fs-desc" style="margin:0">Nessuna macchina assegnata.</span>')}</div>
-        ${est ? '' : `<div class="fs-add" style="margin-top:10px"><select class="fs-inp" id="fs-add-mac" onchange="fsAggiungiMacchina(this.value)"><option value="">+ Aggiungi macchina…</option>${macchineList.filter(x => !m.macchine.includes(x.id)).map(x => `<option value="${escapeHtml(x.id)}">${escapeHtml(x.nome)}${fsMacchinaOk(x) ? '' : ' (fuori uso)'}</option>`).join('')}</select></div>`}
+        <div class="fs-chips">${est ? '<span class="fs-desc" style="margin:0">Fase esterna: nessuna macchina.</span>' : (m.macchine.length ? m.macchine.map(x => { const mm = fsMacchina(x.id); if (!mm) return ''; const ok = fsMacchinaOk(mm); const opz = Etichette.fattoriTempoMacchina().map(y => y[0]); const opzioni = (opz.includes(x.fattore) ? opz : [...opz, x.fattore].sort((p, q) => p - q)).map(v => `<option value="${v}" ${v === x.fattore ? 'selected' : ''}>${escapeHtml(Etichette.fattoreTempoEtichetta(v))}</option>`).join('');
+          return `<span class="fs-chip"><span class="${ok ? 'ok' : 'ko'}"></span>${escapeHtml(mm.nome)}${ok ? '' : '<span class="stato">fuori uso</span>'}<select class="fm-fatt" aria-label="Tempo macchina su ${escapeHtml(mm.nome)}" onchange="fsSetFattoreMacchina('${escapeJsAttr(x.id)}', this.value)">${opzioni}</select><button class="fs-chip-x" aria-label="Togli ${escapeHtml(mm.nome)}" onclick="fsTogliMacchina('${escapeJsAttr(x.id)}')">×</button></span>`; }).join('') : '<span class="fs-desc" style="margin:0">Nessuna macchina assegnata.</span>')}</div>
+        ${est ? '' : `<div class="fs-add" style="margin-top:10px"><select class="fs-inp" id="fs-add-mac" onchange="fsAggiungiMacchina(this.value)"><option value="">+ Aggiungi macchina…</option>${macchineList.filter(x => !m.macchine.some(y => y.id === x.id)).map(x => `<option value="${escapeHtml(x.id)}">${escapeHtml(x.nome)}${fsMacchinaOk(x) ? '' : ' (fuori uso)'}</option>`).join('')}</select></div>`}
       </div></div>
     </div>
 
@@ -8695,7 +8733,7 @@ function fsRenderFlusso() {
         <svg class="fs-archi" id="fs-archi"></svg>
         ${cols.map((c, k) => `<div class="fs-fcol"><div class="fs-fcol-h">${k === 0 ? 'Partono subito' : 'Passo ' + (k + 1)}</div>
           ${c.map(f => { const m = fsMod(f.id); const mc = fsMacro(m.macro_fase_id);
-            const mm = m.macchine.map(fsMacchina).filter(Boolean);
+            const mm = m.macchine.map(x => fsMacchina(x.id)).filter(Boolean);
             const ko = !fsEster(m) && mm.length && mm.every(x => !fsMacchinaOk(x));
             return `<button class="fs-fnodo ${fsEster(m) ? 'ext' : ''} ${f.id === sel ? 'sel' : ''} ${!vicini || vicini.has(f.id) ? '' : 'dim'}" data-id="${f.id}" onclick="fsEvidenzia(${f.id})" ondblclick="fsApri(${f.id})">
               <span class="t"><span class="fs-mdot ${mc ? '' : 'vuoto'}" style="${mc ? `background:${escapeHtml(mc.colore || '')}` : ''}"></span><span>${fsIdx(f.id) + 1}. ${escapeHtml(m.nome)}</span></span>
@@ -10784,312 +10822,386 @@ function aggiornaAttesaEsterna(faseId) {
 }
 
 // ═══════════════════════════════════════════════
-// MACCHINE CONFIG
+// MACCHINE CONFIG — elenco + dettaglio di una macchina (mango-v56)
 // ═══════════════════════════════════════════════
-let macchineList = [];
+// Stesso schema della sezione Fasi: bozza in memoria (FM.draft) aggiornata a ogni modifica, mai letta dal DOM al clic; un solo Salva (RPC salva_macchina).
+// Le manutenzioni programmate si salvano subito (RPC dedicate). Nessun valore di configurazione nel codice: macchine, fasi, fattori, ore dell'orario,
+// competenze e carico di oggi vengono dal database; le etichette (stati, fattori) sono in js/etichette.js.
+let macchineList = [];   // [{id, nome, stato, ore_default, fase_ids, fattori:{faseId:fattore}, competenze, manutenzioni}]
+const FM = { sel: null, draft: null, cerca: '', filtro: 'tutte', guard: null, mobileDettaglio: false, carico: {}, extra: {}, confermaElimina: false, salvando: false, compAperto: false };
 
 async function loadMacchine() {
   const [{ data: macchine }, { data: faseMac }, { data: compMac }, { data: manut }] = await Promise.all([
     sb.from('macchine').select('*').order('nome'),
-    sb.from('fase_macchine').select('fase_id, macchina_id'),
+    sb.from('fase_macchine').select('fase_id, macchina_id, fattore_tempo'),
     sb.from('competenze_operatore_macchina').select('operatore_id, macchina_id, priorita').order('priorita'),
     sb.from('manutenzioni_macchina').select('*').order('data_inizio'),
   ]);
   macchineList = (macchine || []).map(m => ({
     ...m,
     fase_ids:     (faseMac || []).filter(r => r.macchina_id === m.id).map(r => r.fase_id),
-    competenze:   (compMac || []).filter(r => r.macchina_id === m.id).sort((a,b) => a.priorita - b.priorita).map(r => r.operatore_id),
+    fattori:      Object.fromEntries((faseMac || []).filter(r => r.macchina_id === m.id).map(r => [r.fase_id, Number(r.fattore_tempo)])),
+    competenze:   (compMac || []).filter(r => r.macchina_id === m.id).sort((a, b) => a.priorita - b.priorita).map(r => r.operatore_id),
     manutenzioni: (manut || []).filter(r => r.macchina_id === m.id),
   }));
 }
 
-function renderMacchine() {
-  const container = document.getElementById('macchine-list');
-  if (!container) return;
-  if (!macchineList.length) {
-    container.innerHTML = '<div class="card" style="padding:20px;color:var(--muted);text-align:center">Nessuna macchina configurata. Clicca "+ Nuova macchina" per aggiungerne una.</div>';
-    return;
+const fmFasiInterne = () => fasiAttive().filter(f => (f.tipo_gestione || 'standard') === 'standard' && !f.e_attesa_esterna);
+const fmFaseNome = id => fasi.find(f => f.id === id)?.nome || ('Fase ' + id);
+const fmFaseNum = id => fsIdx(id) + 1;
+const fmInManutOggi = m => (m.manutenzioni || []).some(x => x.data_inizio <= Calendario.oggiIso() && Calendario.oggiIso() <= x.data_fine);
+const fmOreOggi = m => m.ore_default != null ? Number(m.ore_default) : Calendario.minutiGiorno(Calendario.oggiIso()) / 60;
+const fmOreOrario = () => Calendario.minutiGiorno(Calendario.oggiIso()) / 60;
+const fmFmtMin = (min) => { const h = Math.floor(min / 60), r = Math.round(min % 60); return h ? `${h} h${r ? ' ' + String(r).padStart(2, '0') : ''}` : `${r} min`; };
+const fmFmtOre = (h) => String(Math.round(Number(h) * 100) / 100).replace('.', ',');
+
+// modello (bozza) di una macchina
+function fmModello(m) {
+  return {
+    id: m.id, nome: m.nome || '', stato: m.stato || 'attiva', ore: m.ore_default != null ? Number(m.ore_default) : null,
+    fasi: (m.fase_ids || []).map(fid => ({ fase_id: fid, fattore: Number((m.fattori || {})[fid] ?? 1) })).sort((a, b) => fmFaseNum(a.fase_id) - fmFaseNum(b.fase_id)),
+    comp: [...(m.competenze || [])],
+    manutenzioni: m.manutenzioni || [],
+  };
+}
+const fmOrig = id => { const m = macchineList.find(x => x.id === id); return m ? fmModello(m) : null; };
+const fmNuovoModello = () => ({ id: null, nome: '', stato: 'attiva', ore: null, fasi: [], comp: [], manutenzioni: [] });
+const fmPulito = m => ({ nome: m.nome.trim(), stato: m.stato, ore: m.ore, fasi: m.fasi, comp: m.comp });
+const fmSporca = () => {
+  if (!FM.draft) return false;
+  if (FM.draft.id === null) return FM.draft.nome.trim() !== '' || FM.draft.fasi.length > 0 || FM.draft.comp.length > 0 || FM.draft.stato !== 'attiva' || FM.draft.ore !== null;
+  const o = fmOrig(FM.draft.id);
+  return !!o && JSON.stringify(fmPulito(FM.draft)) !== JSON.stringify(fmPulito(o));
+};
+// macchina come "vista" per le regole condivise (stato della bozza + manutenzioni salvate)
+const fmCorrente = m => (FM.draft && FM.draft.id === m.id) ? { ...m, stato: FM.draft.stato, fase_ids: FM.draft.fasi.map(f => f.fase_id), fattori: Object.fromEntries(FM.draft.fasi.map(f => [f.fase_id, f.fattore])) } : m;
+const fmElencoCorrente = () => macchineList.map(fmCorrente);
+const fmUtilizzabile = m => fsMacchinaOk(m);
+function fmAltreMacchine(faseId, escludiId) { return fmElencoCorrente().filter(x => x.id !== escludiId && (x.fase_ids || []).includes(faseId)); }
+function fmFasiBloccate(m) {   // fasi che restano senza nessuna macchina utilizzabile se questa non lo è
+  if (fmUtilizzabile(m)) return [];
+  return fmFasiInterne().filter(f => (m.fase_ids || []).includes(f.id) && faseSenzaMacchinaUtilizzabile([m, ...fmAltreMacchine(f.id, m.id)])).map(f => f.id);
+}
+const fmFaseBloccataGlobale = fid => faseSenzaMacchinaUtilizzabile(fmElencoCorrente().filter(x => (x.fase_ids || []).includes(fid)));
+
+async function fmCaricaDati() {
+  await Promise.all([loadFasi(), loadMacchine(), loadCatalogoFasiExtra()]);
+  fsRicostruisciModelli();
+  const oggi = Calendario.oggiIso();
+  const { data } = await sb.from('piano_giorno_voci').select('macchina_id, minuti_macchina, minuti_stimati').eq('data', oggi).is('uscita_il', null).not('macchina_id', 'is', null);
+  FM.carico = {};
+  (data || []).forEach(v => { FM.carico[v.macchina_id] = (FM.carico[v.macchina_id] || 0) + Number(v.minuti_macchina ?? v.minuti_stimati ?? 0); });
+  FM.extra = {};
+  (catalogoFasiExtra || []).forEach(c => (c.macchine_ids || []).forEach(mid => { (FM.extra[mid] ||= []).push(c.nome); }));
+  const bozza = fmSporca() ? FM.draft : null;
+  if (FM.draft && FM.draft.id !== null && !fmOrig(FM.draft.id)) FM.draft = null;
+  if (!bozza && FM.draft && FM.draft.id !== null) FM.draft = fmOrig(FM.draft.id);
+}
+async function fmApriSezione() { await fmCaricaDati(); fmRender(); }
+
+function fmRender() {
+  if (!FM.draft || (FM.draft.id !== null && !fmOrig(FM.draft.id))) {
+    const prima = macchineList[0];
+    FM.sel = prima ? prima.id : null; FM.draft = prima ? fmModello(prima) : null;
   }
-  const operatori = operatoriCache.filter(o => o.ruolo === 'operatore' && o.attivo);
-  container.innerHTML = macchineList.map(m => {
-    const statoColor = m.stato === 'attiva' ? 'var(--ok)' : m.stato === 'manutenzione' ? 'var(--warn)' : 'var(--alert)';
-    const statoLabel = m.stato === 'attiva' ? 'Attiva' : m.stato === 'manutenzione' ? 'In manutenzione' : 'Fuori uso';
-    return `
-    <div class="card" style="padding:20px;margin-bottom:16px" id="mac-card-${m.id}">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-        <div style="display:flex;align-items:center;gap:12px">
-          <input type="text" value="${escapeHtml(m.nome)}" id="mac-nome-${m.id}"
-            style="font-size:16px;font-weight:600;border:none;background:transparent;color:var(--ink);width:240px;padding:4px 0;border-bottom:1px solid var(--border)">
-          <span style="font-size:11px;font-weight:600;color:${statoColor};text-transform:uppercase">${statoLabel}</span>
-        </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-primary" style="font-size:12px" onclick="salvaMacchina('${m.id}')"><i data-ic="salva"></i> Salva</button>
-          <button class="btn btn-secondary" style="font-size:12px;color:var(--alert)" onclick="eliminaMacchina('${m.id}', '${escapeJsAttr(m.nome)}')">✕ Elimina</button>
+  document.getElementById('fm-grid').classList.toggle('fs-mostra-dettaglio', FM.mobileDettaglio);
+  fmRenderRiepilogo(); fmRenderLista();
+  if (FM.draft) fmRenderDettaglio(); else document.getElementById('fm-dettaglio').innerHTML = '<div class="empty-state"><p>Nessuna macchina configurata. Usa "+ Nuova macchina".</p></div>';
+}
+
+// ── riepilogo + elenco ───────────────────────────────────────────────────────────────────────────────────
+function fmRenderRiepilogo() {
+  const ferme = fmElencoCorrente().filter(m => !fmUtilizzabile(m));
+  const bloccate = fmFasiInterne().filter(f => fmFaseBloccataGlobale(f.id));
+  document.getElementById('fm-riepilogo').innerHTML = ferme.length ? `<div class="fm-riepilogo" role="status"><span>●</span>
+    <span><b>${ferme.length} ${ferme.length === 1 ? 'macchina ferma' : 'macchine ferme'}</b> (${ferme.map(m => escapeHtml(m.nome)).join(', ')}): <b>${bloccate.length} ${bloccate.length === 1 ? 'fase' : 'fasi'}</b> non ${bloccate.length === 1 ? 'entra' : 'entrano'} nel piano di oggi.</span>
+    <button class="btn btn-secondary" onclick="FM.filtro='ferme';fmRenderLista()">Mostra</button></div>` : '';
+}
+const FM_FILTRI = [['tutte', 'Tutte', () => true], ['ferme', 'Ferme', m => !fmUtilizzabile(m)], ['attive', 'Attive', m => fmUtilizzabile(m)]];
+function fmDotClass(m) { return fmInManutOggi(m) && m.stato === 'attiva' ? 'manutenzione' : m.stato; }
+function fmRenderLista() {
+  const elenco = fmElencoCorrente();
+  document.getElementById('fm-filtri').innerHTML = FM_FILTRI.map(([k, t, fn]) =>
+    `<button class="fs-filtro ${FM.filtro === k ? 'on' : ''}" onclick="FM.filtro='${k}';fmRenderLista()">${t}<span class="n">${elenco.filter(fn).length}</span></button>`).join('');
+  const q = FM.cerca.trim().toLowerCase();
+  const fn = FM_FILTRI.find(x => x[0] === FM.filtro)[2];
+  const righe = elenco.filter(m => fn(m) && (!q || m.nome.toLowerCase().includes(q) || (m.fase_ids || []).some(fid => fmFaseNome(fid).toLowerCase().includes(q))));
+  const nuova = FM.draft && FM.draft.id === null
+    ? `<button class="fs-riga on" style="grid-template-columns:14px minmax(0,1fr) auto"><span style="padding-top:5px"><span class="fm-dot attiva"></span></span><span style="min-width:0"><span class="nome">${escapeHtml(FM.draft.nome || 'Nuova macchina')}<span class="fs-mod-dot" title="Non ancora salvata"></span></span><span class="meta">non ancora salvata</span></span><span></span></button>` : '';
+  document.getElementById('fm-righe').innerHTML = nuova + (righe.length ? righe.map(m => {
+    const ok = fmUtilizzabile(m), cap = fmOreOggi(m) * 60, pm = FM.carico[m.id] || 0;
+    const destra = ok
+      ? `<span class="fm-carico" title="In lista oggi: ${fmFmtMin(pm)} su ${fmFmtOre(fmOreOggi(m))} h"><span class="v">${pm ? fmFmtMin(pm) : '—'}</span><span class="fm-barra"><span style="width:${Math.min(100, pm / cap * 100)}%"></span></span></span>`
+      : `<span class="fs-tag ${m.stato === 'fuori_uso' ? 'fm-tag-ko' : 'fm-tag-man'}">${fmInManutOggi(m) && m.stato === 'attiva' ? 'Manutenzione oggi' : Etichette.statoMacchina(m.stato)}</span>`;
+    const meta = [`${(m.fase_ids || []).length} ${(m.fase_ids || []).length === 1 ? 'fase' : 'fasi'}`];
+    if ((FM.extra[m.id] || []).length) meta.push(`${FM.extra[m.id].length} extra`);
+    meta.push(m.ore_default == null ? `${fmFmtOre(fmOreOrario())} h (orario)` : `${fmFmtOre(m.ore_default)} h/giorno`);
+    if (Object.values(m.fattori || {}).some(f => f !== 1)) meta.push('pressa più lenta per alcune fasi');
+    const sporca = FM.draft && FM.draft.id === m.id && fmSporca();
+    return `<button class="fs-riga ${m.id === FM.sel && FM.draft && FM.draft.id === m.id ? 'on' : ''}" onclick="fmSeleziona('${escapeJsAttr(m.id)}')" style="grid-template-columns:14px minmax(0,1fr) auto">
+      <span style="padding-top:5px"><span class="fm-dot ${fmDotClass(m)}"></span></span>
+      <span style="min-width:0"><span class="nome">${escapeHtml(m.nome)}${sporca ? '<span class="fs-mod-dot" title="Modifiche non salvate"></span>' : ''}</span>
+        <span class="meta">${meta.map(escapeHtml).join('<span aria-hidden="true">·</span>')}</span></span>
+      ${destra}
+    </button>`;
+  }).join('') : (nuova ? '' : '<div style="padding:20px;color:var(--muted);font-size:13px">Nessuna macchina trovata.</div>'));
+}
+
+function fmSeleziona(id) {
+  if (FM.draft && FM.draft.id === id) { if (window.innerWidth <= 760) { FM.mobileDettaglio = true; fmRender(); } return; }
+  if (fmSporca()) { FM.guard = { tipo: 'macchina', id }; fmRenderDettaglio(); fmVaiInAlto(); return; }
+  fmApri(id);
+}
+function fmApri(id) {
+  const m = fmOrig(id); if (!m) return;
+  FM.sel = id; FM.draft = m; FM.guard = null; FM.confermaElimina = false;
+  if (window.innerWidth <= 760) FM.mobileDettaglio = true;
+  fmRender();
+  document.querySelector('#fm-righe .fs-riga.on')?.scrollIntoView({ block: 'nearest' });
+}
+function fmVaiInAlto() { document.getElementById('fm-dettaglio')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+function fmTornaElenco() { FM.mobileDettaglio = false; fmRender(); }
+function fmNuova() {
+  if (fmSporca()) { FM.guard = { tipo: 'nuova' }; fmRenderDettaglio(); fmVaiInAlto(); return; }
+  fmApriNuova();
+}
+function fmApriNuova() { FM.draft = fmNuovoModello(); FM.sel = null; FM.guard = null; FM.confermaElimina = false; if (window.innerWidth <= 760) FM.mobileDettaglio = true; fmRender(); document.getElementById('fm-g-nome')?.focus(); }
+
+// ── modifiche alla bozza ─────────────────────────────────────────────────────────────────────────────────
+function fmAggiornaStato(rerender = false) {
+  const d = fmSporca();
+  const el = document.getElementById('fm-stato-mod'); if (el) el.hidden = !d;
+  document.querySelectorAll('[data-fm-salva]').forEach(b => { b.disabled = !d || FM.salvando; });
+  fmRenderRiepilogo(); fmRenderLista();
+  if (rerender) fmRenderDettaglio();
+}
+function fmSet(campo, v) { FM.draft[campo] = v; fmAggiornaStato(true); }
+function fmSetNome(v) { FM.draft.nome = v; const h = document.querySelector('.fs-det-title h2'); if (h) h.textContent = v || (FM.draft.id === null ? 'Nuova macchina' : 'Senza nome'); fmAggiornaStato(); }
+function fmSetOreModo(modo) { FM.draft.ore = modo === 'orario' ? null : (FM.draft.ore ?? (fmOrig(FM.draft.id)?.ore ?? Math.round(fmOreOrario() * 2) / 2)); fmAggiornaStato(true); }
+function fmSetOre(v) { FM.draft.ore = v === '' ? null : Number(v); fmAggiornaStato(); }
+function fmAggiungiFase(v) {
+  const id = Number(v); if (!id || FM.draft.fasi.some(f => f.fase_id === id)) return;
+  FM.draft.fasi.push({ fase_id: id, fattore: 1 }); FM.draft.fasi.sort((a, b) => fmFaseNum(a.fase_id) - fmFaseNum(b.fase_id)); fmAggiornaStato(true);
+}
+function fmTogliFase(id) { FM.draft.fasi = FM.draft.fasi.filter(f => f.fase_id !== id); fmAggiornaStato(true); }
+function fmSetFattore(id, v) { const f = FM.draft.fasi.find(x => x.fase_id === id); if (f) f.fattore = Number(v); fmAggiornaStato(true); }
+function fmCompSposta(i, dir) { const a = FM.draft.comp; [a[i], a[i + dir]] = [a[i + dir], a[i]]; fmAggiornaStato(true); }
+function fmCompTogli(i) { FM.draft.comp.splice(i, 1); fmAggiornaStato(true); }
+function fmCompAggiungi(id) { if (!id || FM.draft.comp.includes(id)) return; FM.draft.comp.push(id); fmAggiornaStato(true); }
+function fmAnnulla() { FM.draft = FM.draft.id === null ? fmNuovoModello() : fmOrig(FM.draft.id); FM.guard = null; fmRender(); }
+
+// ── salvataggio ──────────────────────────────────────────────────────────────────────────────────────────
+const FM_ERRORI = { nome_obbligatorio: 'Il nome è obbligatorio.', nome_gia_esistente: 'Esiste già una macchina con questo nome.', stato_non_valido: 'Stato non valido.', ore_non_valide: 'Le ore devono stare tra 0,5 e 24.',
+  fase_non_trovata: 'Una fase scelta non esiste più.', fattore_non_valido: 'Il tempo macchina non è valido.', operatore_non_trovato: 'Un operatore scelto non è più disponibile.', competenze_duplicate: 'Operatore ripetuto.',
+  macchina_in_uso: 'È usata da un ordine aperto: mettila Fuori uso invece di eliminarla.', macchina_non_trovata: 'Macchina non trovata.' };
+function fmPayload() {
+  const d = FM.draft, nuova = d.id === null, o = nuova ? null : fmOrig(d.id), p = {};
+  if (nuova || d.nome.trim() !== o.nome) p.nome = d.nome.trim();
+  if (nuova || d.stato !== o.stato) p.stato = d.stato;
+  if (nuova || d.ore !== o.ore) p.ore_default = d.ore;
+  if (nuova || JSON.stringify(d.fasi) !== JSON.stringify(o.fasi)) p.fasi = d.fasi.map(f => ({ fase_id: f.fase_id, fattore_tempo: f.fattore }));
+  if (nuova || JSON.stringify(d.comp) !== JSON.stringify(o.comp)) p.competenze = d.comp;
+  return p;
+}
+async function fmSalva(poi) {
+  if (FM.salvando || !fmSporca()) return;
+  const d = FM.draft;
+  if (!d.nome.trim()) { toast('Inserisci il nome della macchina.', 'err'); return; }
+  if (d.ore !== null && (!(d.ore >= 0.5) || d.ore > 24)) { toast('Le ore devono stare tra 0,5 e 24.', 'err'); return; }
+  const prima = d.id === null ? null : macchineList.find(x => x.id === d.id);
+  const bloccavaPrima = prima ? new Set(fmFasiBloccate(prima)) : new Set();
+  FM.salvando = true; fmAggiornaStato();
+  const { data, error } = await sb.rpc('salva_macchina', { p_id: d.id, p_dati: fmPayload(), p_responsabile_id: currentUserRow.id, p_session_token: null });
+  FM.salvando = false;
+  if (error || !data?.ok) { fmAggiornaStato(); toast('Salvataggio NON riuscito: ' + (FM_ERRORI[data?.errore] || data?.errore || error?.message || 'errore sconosciuto'), 'err'); return; }
+  const id = data.id;
+  FM.draft = null;
+  await fmCaricaDati();
+  FM.draft = fmOrig(id); FM.sel = id; FM.guard = null;
+  const ora = macchineList.find(x => x.id === id);
+  const bloccaOra = ora ? fmFasiBloccate(ora) : [];
+  const nuove = bloccaOra.filter(x => !bloccavaPrima.has(x)).length, liberate = [...bloccavaPrima].filter(x => !bloccaOra.includes(x)).length;
+  toast(`Macchina salvata. Il piano di oggi si aggiorna da solo${nuove ? ` (${nuove} fasi escono)` : liberate ? ` (${liberate} fasi possono rientrare)` : ''}.`, 'ok');
+  if (poi) poi(); else fmRender();
+}
+function fmGuardSalva() { const g = FM.guard; if (g) fmSalva(() => fmVaiA(g)); }
+function fmGuardScarta() { const g = FM.guard; if (!g) return; FM.draft = FM.draft.id === null ? null : fmOrig(FM.draft.id); fmVaiA(g); }
+function fmGuardResta() { FM.guard = null; fmRenderDettaglio(); }
+function fmVaiA(g) {
+  FM.guard = null;
+  if (g.tipo === 'macchina') fmApri(g.id);
+  else if (g.tipo === 'nuova') fmApriNuova();
+  else if (g.tipo === 'sezione') { FM.draft = FM.draft && FM.draft.id !== null ? fmOrig(FM.draft.id) : null; showSection(g.nome); }
+}
+function fmPuoUscire(nome) {
+  if (nome === 'macchine-config' || !fmSporca() || !document.getElementById('sec-macchine-config')?.classList.contains('active')) return true;
+  FM.guard = { tipo: 'sezione', nome }; fmRender(); fmVaiInAlto();
+  return false;
+}
+async function fmElimina() {
+  const id = FM.draft?.id; if (!id) return;
+  const { data, error } = await sb.rpc('elimina_macchina', { p_id: id, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { FM.confermaElimina = false; fmRenderDettaglio(); toast('Non eliminata: ' + (FM_ERRORI[data?.errore] || data?.errore || error?.message || ''), 'err'); return; }
+  FM.draft = null; FM.sel = null; FM.confermaElimina = false; FM.mobileDettaglio = false;
+  await fmCaricaDati(); fmRender();
+  toast('Macchina eliminata', 'ok');
+}
+
+// ── manutenzioni programmate (salvataggio immediato) ─────────────────────────────────────────────────────
+function fmDataIso(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function fmManutRapida(k) {
+  const base = new Date(Calendario.oggiIso() + 'T12:00:00'); const add = n => { const x = new Date(base); x.setDate(x.getDate() + n); return fmDataIso(x); };
+  const dow = (base.getDay() + 6) % 7;   // lunedì = 0
+  const [dal, al] = k === 'oggi' ? [add(0), add(0)] : k === 'domani' ? [add(1), add(1)] : [add(7 - dow), add(11 - dow)];
+  document.getElementById('fm-mn-dal').value = dal; document.getElementById('fm-mn-al').value = al;
+}
+async function fmAggiungiManut() {
+  const id = FM.draft?.id; if (!id) return;
+  const dal = document.getElementById('fm-mn-dal').value, al = document.getElementById('fm-mn-al').value, desc = document.getElementById('fm-mn-desc').value.trim() || null;
+  if (!dal || !al) { toast('Indica le date Dal e Al.', 'err'); return; }
+  if (al < dal) { toast('La data Al non può essere prima di Dal.', 'err'); return; }
+  const { data, error } = await sb.rpc('imposta_manutenzione_macchina', { p_macchina_id: id, p_data_inizio: dal, p_data_fine: al, p_descrizione: desc, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast(data?.errore === 'data_fine_precedente_inizio' ? 'La data Al non può essere prima di Dal.' : ('Errore: ' + (data?.errore || error?.message || '')), 'err'); return; }
+  await fmDopoManutenzione(id); toast('Manutenzione aggiunta. Il piano dei giorni interessati si aggiorna da solo.', 'ok');
+}
+async function fmTogliManut(mid) {
+  const id = FM.draft?.id; if (!id) return;
+  const { data, error } = await sb.rpc('elimina_manutenzione_macchina', { p_id: mid, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
+  await fmDopoManutenzione(id); toast('Manutenzione eliminata.', 'ok');
+}
+async function fmDopoManutenzione(id) {   // ricarica le manutenzioni senza toccare le altre modifiche in bozza
+  const bozza = FM.draft;
+  await loadMacchine();
+  const m = macchineList.find(x => x.id === id);
+  if (m) bozza.manutenzioni = m.manutenzioni;
+  FM.draft = bozza;
+  fmRender();
+}
+
+// ── dettaglio ────────────────────────────────────────────────────────────────────────────────────────────
+function fmRenderDettaglio() {
+  const d = FM.draft; if (!d) return;
+  const nuova = d.id === null;
+  const orig = nuova ? null : macchineList.find(x => x.id === d.id);
+  const m = { ...(orig || { id: null, manutenzioni: [], fattori: {}, fase_ids: [], ore_default: null }), nome: d.nome, stato: d.stato, ore_default: d.ore, fase_ids: d.fasi.map(f => f.fase_id), manutenzioni: d.manutenzioni };
+  const ok = fmUtilizzabile(m), sporca = fmSporca(), oggi = Calendario.oggiIso();
+  const cap = fmOreOggi(m) * 60, pm = nuova ? 0 : (FM.carico[d.id] || 0);
+  const bloccate = fmFasiBloccate({ ...m, id: nuova ? '__nuova__' : m.id });
+  const cambioStato = !nuova && d.stato !== orig.stato;
+  const g = FM.guard;
+  const nomeDest = g ? (g.tipo === 'macchina' ? `«${escapeHtml(macchineList.find(x => x.id === g.id)?.nome || '')}»` : g.tipo === 'nuova' ? 'una nuova macchina' : 'un\'altra sezione') : '';
+  const guard = g ? `<div class="fs-guard" role="alert"><span>Hai modifiche non salvate su «${escapeHtml(d.nome || 'Nuova macchina')}». Cosa vuoi fare prima di aprire ${nomeDest}?</span>
+      <button class="btn btn-primary" onclick="fmGuardSalva()">Salva e apri</button><button class="btn btn-secondary" onclick="fmGuardScarta()">Scarta</button><button class="fs-btn-ghost" onclick="fmGuardResta()">Resta qui</button></div>` : '';
+  let avvisi = '';
+  const av = (cls, ico, txt) => `<div class="fs-avviso ${cls}">${ico}<span>${txt}</span></div>`;
+  if (!ok && bloccate.length) avvisi += av('alert', '●', `${cambioStato ? 'Salvando, queste fasi escono dal piano di oggi' : 'Queste fasi non entrano nel piano finché la macchina non torna attiva'}: <b>${bloccate.map(f => escapeHtml(fmFaseNome(f))).join(', ')}</b>.`);
+  else if (!ok && d.fasi.length) avvisi += av('info', 'i', 'La macchina è ferma ma nessuna fase dipende solo da lei: il piano usa le altre macchine.');
+  else if (ok && cambioStato && d.fasi.length) avvisi += av('info', 'i', 'Salvando, le fasi di questa macchina possono rientrare nel piano di oggi se c\'è spazio.');
+  if (ok && !d.fasi.length && !(FM.extra[d.id] || []).length && !nuova) avvisi += av('info', 'i', 'Nessuna fase usa questa macchina: per il piano è come se non ci fosse.');
+
+  const aggiungibili = fmFasiInterne().filter(f => !d.fasi.some(x => x.fase_id === f.id));
+  const fmtF = f => Etichette.fattoreTempoEtichetta(f);
+  const chipFase = (f) => {
+    const alt = fmAltreMacchine(f.fase_id, d.id);
+    const opz = Etichette.fattoriTempoMacchina().map(x => x[0]);
+    const opzioni = (opz.includes(f.fattore) ? opz : [...opz, f.fattore].sort((a, b) => a - b)).map(v => `<option value="${v}" ${v === f.fattore ? 'selected' : ''}>${escapeHtml(fmtF(v))}</option>`).join('');
+    return `<span class="fs-chip link fm-chipfase"><span>${fmFaseNum(f.fase_id)}. ${escapeHtml(fmFaseNome(f.fase_id))}</span>
+      <select class="fm-fatt" aria-label="Tempo macchina per ${escapeHtml(fmFaseNome(f.fase_id))}" onchange="fmSetFattore(${f.fase_id}, this.value)">${opzioni}</select>
+      ${alt.length ? `<span class="alt">anche ${escapeHtml(alt.map(x => x.nome + (Number(x.fattori?.[f.fase_id] ?? 1) !== 1 ? ' (' + fmtF(Number(x.fattori[f.fase_id])) + ')' : '')).join(', '))}</span>` : '<span class="unica" title="Nessun\'altra macchina fa questa fase">unica</span>'}
+      <button class="fs-chip-x" aria-label="Togli ${escapeHtml(fmFaseNome(f.fase_id))}" onclick="fmTogliFase(${f.fase_id})">×</button></span>`;
+  };
+  const extra = FM.extra[d.id] || [];
+  const manut = (d.manutenzioni || []).filter(x => x.data_fine >= fmDataIso(new Date(new Date(oggi + 'T12:00:00').getTime() - 30 * 86400000))).sort((a, b) => a.data_inizio.localeCompare(b.data_inizio));
+  const dataIt = s => new Date(s + 'T12:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+  const opsDisp = operatoriCache.filter(o => o.ruolo === 'operatore' && o.attivo && !d.comp.includes(o.id));
+  const nomeOp = id => { const o = operatoriCache.find(x => x.id === id); return o ? `${o.nome} ${o.cognome}` : ''; };
+  const eliminaBox = nuova ? '' : (FM.confermaElimina
+    ? `<div class="fs-guard" role="alert" style="margin:0"><span>Eliminare «${escapeHtml(d.nome)}»? Non si può annullare.</span><button class="fs-btn-danger-ghost" onclick="fmElimina()">Elimina</button><button class="fs-btn-ghost" onclick="FM.confermaElimina=false;fmRenderDettaglio()">Annulla</button></div>`
+    : `<span class="fs-desc" style="margin:0">Si può eliminare solo se nessun ordine aperto la usa; altrimenti mettila Fuori uso.</span><button class="fs-btn-danger-ghost" onclick="FM.confermaElimina=true;fmRenderDettaglio()">Elimina macchina</button>`);
+
+  document.getElementById('fm-dettaglio').innerHTML = `
+    <div class="fs-det-hdr">
+      <div class="fs-det-hdr-row">
+        <div class="fs-det-title"><button class="fs-btn-ghost fs-back" onclick="fmTornaElenco()">← Macchine</button><span class="fm-dot ${fmDotClass(m)}" style="align-self:center"></span><h2>${escapeHtml(d.nome || (nuova ? 'Nuova macchina' : 'Senza nome'))}</h2></div>
+        <div class="fs-hdr-actions">
+          <span class="fs-stato-mod" id="fm-stato-mod" ${sporca ? '' : 'hidden'}>Modifiche non salvate</span>
+          <button class="btn btn-secondary" data-fm-salva onclick="fmAnnulla()" ${sporca ? '' : 'disabled'}>Annulla</button>
+          <button class="btn btn-primary" data-fm-salva onclick="fmSalva()" ${sporca && !FM.salvando ? '' : 'disabled'}>Salva</button>
         </div>
       </div>
+      <div class="fs-det-sub">${escapeHtml(Etichette.statoMacchina(d.stato))}${fmInManutOggi(m) ? ' · manutenzione programmata oggi' : ''} · ${d.fasi.length} ${d.fasi.length === 1 ? 'fase' : 'fasi'}${extra.length ? ' · ' + extra.length + (extra.length === 1 ? ' fase extra' : ' fasi extra') : ''}</div>
+      ${guard}
+    </div>
+    ${avvisi ? `<div class="fs-avvisi">${avvisi}</div>` : ''}
 
-      <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">
-        <div class="form-group" style="flex:1;min-width:140px">
-          <label style="font-size:12px;font-weight:600">Stato</label>
-          <select id="mac-stato-${m.id}" style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
-            <option value="attiva" ${m.stato==='attiva'?'selected':''}>Attiva</option>
-            <option value="manutenzione" ${m.stato==='manutenzione'?'selected':''}>In manutenzione</option>
-            <option value="fuori_uso" ${m.stato==='fuori_uso'?'selected':''}>Fuori uso</option>
-          </select>
-        </div>
-        <div class="form-group" style="flex:1;min-width:140px">
-          <label style="font-size:12px;font-weight:600">Ore/giorno disponibili</label>
-          <input type="number" id="mac-ore-${m.id}" value="${m.ore_default ?? ''}" placeholder="come da orario" min="0.5" max="24" step="0.5"
-            style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-top:4px">
-        </div>
+    <div class="fs-blocco">
+      <div class="fs-blocco-h"><h3>Stato</h3><span class="hint">Il cambio vale subito per il piano di oggi</span></div>
+      <div class="fs-card"><div class="fs-row">
+        <div class="fs-seg" style="flex-wrap:wrap">${Etichette.statiMacchina().map(([k, t]) => `<button class="${d.stato === k ? 'on' : ''}" onclick="fmSet('stato','${k}')">${escapeHtml(t)}</button>`).join('')}</div>
+        <div class="fs-desc">"In manutenzione" e "Fuori uso" hanno lo stesso effetto: la macchina non viene usata finché non torna Attiva. Per un fermo con date precise usa le Manutenzioni programmate qui sotto: alla fine torna disponibile da sola.</div>
+      </div></div>
+    </div>
+
+    <div class="fs-blocco">
+      <div class="fs-blocco-h"><h3>Capacità</h3><span class="hint">Quante ore al giorno il piano può caricarla</span></div>
+      <div class="fs-card"><div class="fs-row fs-two">
+        <div><span class="fs-lbl">Ore al giorno</span>
+          <div class="fs-seg"><button class="${d.ore === null ? 'on' : ''}" onclick="fmSetOreModo('orario')">Come l'orario</button><button class="${d.ore !== null ? 'on' : ''}" onclick="fmSetOreModo('fisse')">Ore fisse</button></div>
+          ${d.ore !== null ? `<div class="fs-add" style="margin-top:10px"><input class="fs-inp num" id="fm-g-ore" type="number" min="0.5" max="24" step="0.5" value="${d.ore}" oninput="fmSetOre(this.value)" aria-label="Ore al giorno"><span class="fs-desc" style="margin:0">ore</span></div>` : ''}
+          <div class="fs-desc">${d.ore === null ? `Segue l'orario di lavoro: oggi ${fmFmtOre(fmOreOrario())} h.` : 'Utile se la macchina lavora meno del turno (es. pressa che deve scaldare).'}</div></div>
+        <div><span class="fs-lbl">In lista oggi</span>
+          ${nuova ? '<div class="fs-desc" style="margin:0">Dopo il salvataggio.</div>' : ok ? `<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span>${pm ? fmFmtMin(pm) : 'Niente'}</span><span class="fs-desc" style="margin:0">su ${fmFmtOre(fmOreOggi(m))} h</span></div>
+          <span class="fm-barra grande"><span style="width:${Math.min(100, pm / cap * 100)}%"></span></span>
+          <div class="fs-desc">Somma dei tempi di occupazione delle voci di oggi assegnate a questa macchina.</div>` : '<div class="fs-desc" style="margin:0">Ferma: oggi il piano non le assegna lavoro.</div>'}</div>
+      </div></div>
+    </div>
+
+    <div class="fs-blocco">
+      <div class="fs-blocco-h"><h3>Fasi che la usano</h3><span class="hint">Se una fase ha più macchine, il piano usa prima la più veloce</span></div>
+      <div class="fs-card"><div class="fs-row">
+        <div class="fs-chips">${d.fasi.length ? d.fasi.map(chipFase).join('') : '<span class="fs-desc" style="margin:0">Nessuna fase.</span>'}</div>
+        <div class="fs-add" style="margin-top:10px"><select class="fs-inp" id="fm-add-fase" onchange="fmAggiungiFase(this.value)"><option value="">+ Aggiungi fase…</option>${aggiungibili.map(f => `<option value="${f.id}">${fmFaseNum(f.id)}. ${escapeHtml(f.nome)}</option>`).join('')}</select></div>
+        <div class="fs-desc">Il tempo macchina dice quanto questa macchina resta occupata rispetto al tempo di riferimento della fase (es. una pressa più lenta ×2); la squadra conta sempre il tempo di riferimento. Il piano sceglie prima la macchina dove la fase è più veloce e passa all'altra solo se la prima è piena o ferma. «Unica» vuol dire che nessun'altra macchina fa quella fase: se questa si ferma, la fase si blocca. È lo stesso dato del blocco Macchine nella sezione Fasi.</div>
       </div>
-
-      <div style="background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:10px;padding:14px;margin-bottom:14px">
-        <div style="font-size:12px;font-weight:600;color:var(--warn-ink);margin-bottom:10px">Fasi che richiedono questa macchina</div>
-        <div style="display:flex;flex-wrap:wrap;gap:10px">
-          ${fasiAttive().map(f => `
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-              <input type="checkbox"
-                ${m.fase_ids.includes(f.id)?'checked':''}
-                onchange="toggleFaseMacchina('${m.id}', ${f.id}, this.checked)"
-                style="accent-color:var(--accent)">
-              ${escapeHtml(f.nome)}
-            </label>
-          `).join('')}
-        </div>
+      ${extra.length ? `<div class="fs-row"><span class="fs-lbl">Fasi extra</span><div class="fs-chips">${extra.map(x => `<span class="fs-chip">${escapeHtml(x)}</span>`).join('')}</div><div class="fs-desc">Si cambiano nella sezione Fasi extra.</div></div>` : ''}
       </div>
+    </div>
 
-      <div style="background:var(--ok-bg);border:1px solid var(--ok-line);border-radius:10px;padding:14px;margin-bottom:14px">
-        <div style="font-size:12px;font-weight:600;color:var(--ok-ink);margin-bottom:4px">Chi la sa usare</div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Nessuna selezione = chiunque può usarla.</div>
-        <div id="mac-comp-list-${m.id}" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
-          ${_renderCompMacchina(m, operatori)}
-        </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <select id="mac-add-comp-${m.id}" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px">
-            <option value="">+ Aggiungi operatore…</option>
-            ${operatori.filter(o => !m.competenze.includes(o.id)).map(o =>
-              `<option value="${o.id}">${escapeHtml(o.nome+' '+o.cognome)}</option>`
-            ).join('')}
-          </select>
-          <button class="btn btn-secondary" style="font-size:12px" onclick="aggiungiCompMacchina('${m.id}')">Aggiungi</button>
-        </div>
-      </div>
-
-      <div style="background:var(--violet-bg);border:1px solid var(--violet-line);border-radius:10px;padding:14px">
-        <div style="font-size:12px;font-weight:600;color:var(--violet-ink);margin-bottom:10px">Manutenzioni programmate</div>
-        ${m.manutenzioni.length ? `
-        <table style="width:100%;font-size:12px;border-collapse:collapse;margin-bottom:12px">
-          <thead><tr style="color:var(--muted)">
-            <th style="text-align:left;padding:4px 8px">Dal</th>
-            <th style="text-align:left;padding:4px 8px">Al</th>
-            <th style="text-align:left;padding:4px 8px">Descrizione</th>
-            <th style="padding:4px 8px"></th>
-          </tr></thead>
-          <tbody>
-            ${m.manutenzioni.map(mn => `
-            <tr style="border-top:1px solid var(--violet-soft)">
-              <td style="padding:6px 8px">${mn.data_inizio}</td>
-              <td style="padding:6px 8px">${mn.data_fine}</td>
-              <td style="padding:6px 8px">${escapeHtml(mn.descrizione || '—')}</td>
-              <td style="padding:6px 8px">
-                <button class="btn btn-secondary" style="font-size:11px;color:var(--alert)"
-                  onclick="eliminaManutenzione('${mn.id}', '${m.id}')" aria-label="Elimina">✕</button>
-              </td>
-            </tr>`).join('')}
-          </tbody>
-        </table>` : `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Nessuna manutenzione programmata</div>`}
-        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
-          <div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:3px">Dal</div>
-            <input type="date" id="mac-mnt-dal-${m.id}" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px">
+    <div class="fs-blocco">
+      <div class="fs-blocco-h"><h3>Manutenzioni programmate</h3><span class="hint">Si salvano subito</span></div>
+      <div class="fs-card">${nuova ? '<div class="fs-row"><span class="fs-desc" style="margin:0">Salva la macchina per aggiungere le manutenzioni.</span></div>' : `
+        <div class="fs-row">${manut.length ? manut.map(x => `<div class="fm-manut ${x.data_fine < oggi ? 'passata' : ''}"><span class="d">${dataIt(x.data_inizio)}</span><span class="d al">→ ${dataIt(x.data_fine)}</span><span>${escapeHtml(x.descrizione || '—')}${x.data_inizio <= oggi && oggi <= x.data_fine ? ' <span class="fs-tag fm-tag-man">in corso</span>' : ''}</span><button class="fs-mini" aria-label="Elimina" onclick="fmTogliManut('${escapeJsAttr(x.id)}')">×</button></div>`).join('') : '<span class="fs-desc" style="margin:0">Nessuna manutenzione programmata.</span>'}</div>
+        <div class="fs-row">
+          <div class="fs-chips" style="margin-bottom:10px"><button class="fs-chip" onclick="fmManutRapida('oggi')">Oggi</button><button class="fs-chip" onclick="fmManutRapida('domani')">Domani</button><button class="fs-chip" onclick="fmManutRapida('settimana')">Settimana prossima</button></div>
+          <div class="fm-date-row">
+            <div><label class="fs-lbl" for="fm-mn-dal">Dal</label><input class="fs-inp" style="width:auto" type="date" id="fm-mn-dal"></div>
+            <div><label class="fs-lbl" for="fm-mn-al">Al</label><input class="fs-inp" style="width:auto" type="date" id="fm-mn-al"></div>
+            <div style="flex:1;min-width:160px"><label class="fs-lbl" for="fm-mn-desc">Descrizione</label><input class="fs-inp" id="fm-mn-desc" placeholder="Facoltativa, es. cambio cinghie"></div>
+            <button class="btn btn-primary" onclick="fmAggiungiManut()">+ Aggiungi</button>
           </div>
-          <div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:3px">Al</div>
-            <input type="date" id="mac-mnt-al-${m.id}" style="padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px">
-          </div>
-          <div style="flex:1;min-width:120px">
-            <div style="font-size:11px;color:var(--muted);margin-bottom:3px">Descrizione</div>
-            <input type="text" id="mac-mnt-desc-${m.id}" placeholder="opzionale"
-              style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:12px">
-          </div>
-          <button class="btn btn-primary" style="font-size:12px" onclick="aggiungiManutenzione('${m.id}')">+ Aggiungi</button>
+          <div class="fs-desc">Nei giorni indicati la macchina non entra nel piano; finita la manutenzione torna disponibile senza toccare lo stato.</div>
+        </div>`}
+      </div>
+    </div>
+
+    <div class="fs-blocco">
+      <details class="fs-card" ${FM.compAperto ? 'open' : ''} ontoggle="FM.compAperto=this.open">
+        <summary><span><span class="fs-crit-t">Chi la sa usare</span> <span class="fs-desc" style="display:inline;margin-left:6px">${d.comp.length ? escapeHtml(d.comp.map(nomeOp).filter(Boolean).join(', ')) : 'tutti'}</span></span><span class="fs-desc" style="margin:0">${FM.compAperto ? 'nascondi' : 'mostra'}</span></summary>
+        <div class="fs-row">
+          <div class="fs-ops">${d.comp.length ? d.comp.map((id, k) => `<div class="fs-op"><span class="i">${k + 1}.</span><span class="nm">${escapeHtml(nomeOp(id))}</span>
+            <button class="fs-mini" onclick="fmCompSposta(${k},-1)" ${k === 0 ? 'disabled' : ''} aria-label="Su">▲</button><button class="fs-mini" onclick="fmCompSposta(${k},1)" ${k === d.comp.length - 1 ? 'disabled' : ''} aria-label="Giù">▼</button><button class="fs-mini" onclick="fmCompTogli(${k})" aria-label="Togli">×</button></div>`).join('') : '<span class="fs-desc" style="margin:0">Nessuno indicato: vanno bene tutti.</span>'}</div>
+          <div class="fs-add" style="margin-top:10px"><select class="fs-inp" id="fm-add-op" onchange="fmCompAggiungi(this.value)"><option value="">+ Aggiungi operatore…</option>${opsDisp.map(o => `<option value="${escapeHtml(o.id)}">${escapeHtml(o.nome)} ${escapeHtml(o.cognome)}</option>`).join('')}</select></div>
         </div>
-      </div>
-    </div>`;
-  }).join('');
-}
+      </details>
+    </div>
 
-function _renderCompMacchina(m, operatori) {
-  const comp = m.competenze.map(opId => operatori.find(o => o.id === opId)).filter(Boolean);
-  if (!comp.length) return '<div style="font-size:12px;color:var(--muted)">Nessuno configurato — chiunque può usarla</div>';
-  return comp.map((o, i) => `
-    <div style="display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 12px">
-      <span style="color:var(--muted);font-size:12px;min-width:18px">${i+1}</span>
-      <span style="flex:1;font-size:13px">${escapeHtml(o.nome+' '+o.cognome)}</span>
-      <button onclick="rimuoviCompMacchina('${m.id}','${o.id}')"
-        style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;line-height:1" aria-label="Rimuovi">✕</button>
-    </div>`).join('');
-}
+    <div class="fs-blocco">
+      <div class="fs-blocco-h"><h3>Generale</h3></div>
+      <div class="fs-card"><div class="fs-row"><label class="fs-lbl" for="fm-g-nome">Nome</label><input class="fs-inp" id="fm-g-nome" value="${escapeHtml(d.nome)}" placeholder="es. Pressa a caldo" oninput="fmSetNome(this.value)"></div></div>
+    </div>
 
-function avviaNuovaMacchina() {
-  const container = document.getElementById('macchine-list');
-  const existing = document.getElementById('mac-new-form');
-  if (existing) { existing.remove(); return; }
-  const div = document.createElement('div');
-  div.id = 'mac-new-form';
-  div.className = 'card';
-  div.style.cssText = 'padding:20px;margin-bottom:16px;border:2px dashed var(--accent)';
-  div.innerHTML = `
-    <div style="font-size:14px;font-weight:600;margin-bottom:14px;color:var(--accent)">Nuova macchina</div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
-      <div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:3px">Nome</div>
-        <input type="text" id="mac-new-nome" placeholder="es. CNC Biesse"
-          style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:220px">
-      </div>
-      <div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:3px">Stato</div>
-        <select id="mac-new-stato" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">
-          <option value="attiva">Attiva</option>
-          <option value="manutenzione">In manutenzione</option>
-          <option value="fuori_uso">Fuori uso</option>
-        </select>
-      </div>
-      <div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:3px">Ore/giorno</div>
-        <input type="number" id="mac-new-ore" value="" placeholder="come da orario" min="0.5" max="24" step="0.5"
-          style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;width:90px">
-      </div>
-      <button class="btn btn-primary" onclick="confermaNuovaMacchina()">✓ Crea</button>
-      <button class="btn btn-secondary" onclick="document.getElementById('mac-new-form').remove()">Annulla</button>
-    </div>`;
-  container.insertBefore(div, container.firstChild);
-  document.getElementById('mac-new-nome')?.focus();
-}
-
-async function confermaNuovaMacchina() {
-  const nome  = document.getElementById('mac-new-nome')?.value.trim();
-  const stato = document.getElementById('mac-new-stato')?.value;
-  const ore   = numeroOLiteral(document.getElementById('mac-new-ore')?.value);   // vuoto = come da orario
-  if (!nome) { toast('Inserisci un nome', 'err'); return; }
-  const { data } = await sb.rpc('imposta_macchina', {
-    p_nome: nome, p_stato: stato, p_ore_default: ore,
-    p_responsabile_id: currentUserRow.id, p_session_token: null,
-  });
-  if (!data?.ok) { toast(data?.errore || 'Errore creazione macchina', 'err'); return; }
-  document.getElementById('mac-new-form')?.remove();
-  await loadMacchine();
-  renderMacchine();
-  toast('Macchina creata');
-}
-
-function toggleFaseMacchina(macId, faseId, checked) {
-  const m = macchineList.find(x => x.id === macId);
-  if (!m) return;
-  if (checked) {
-    if (!m.fase_ids.includes(faseId)) m.fase_ids.push(faseId);
-  } else {
-    m.fase_ids = m.fase_ids.filter(id => id !== faseId);
-  }
-}
-
-async function salvaMacchina(macId) {
-  const m = macchineList.find(x => x.id === macId);
-  if (!m) return;
-  const nome  = document.getElementById(`mac-nome-${macId}`)?.value?.trim() || m.nome;
-  const stato = document.getElementById(`mac-stato-${macId}`)?.value || m.stato;
-  const ore   = numeroOLiteral(document.getElementById(`mac-ore-${macId}`)?.value);   // vuoto = come da orario
-  const [r1, r2, r3] = await Promise.all([
-    sb.rpc('imposta_macchina', { p_id: macId, p_nome: nome, p_stato: stato, p_ore_default: ore, p_responsabile_id: currentUserRow.id, p_session_token: null }),
-    sb.rpc('imposta_fasi_macchina', { p_macchina_id: macId, p_fase_ids: m.fase_ids, p_responsabile_id: currentUserRow.id, p_session_token: null }),
-    sb.rpc('imposta_competenze_macchina', { p_macchina_id: macId, p_operatori_ordinati: m.competenze, p_responsabile_id: currentUserRow.id, p_session_token: null }),
-  ]);
-  if (!r1.data?.ok) { toast(r1.data?.errore || 'Errore salvataggio', 'err'); return; }
-  if (!r2.data?.ok) { toast(r2.data?.errore || 'Errore salvataggio fasi', 'err'); return; }
-  if (!r3.data?.ok) { toast(r3.data?.errore || 'Errore salvataggio competenze', 'err'); return; }
-  await loadMacchine();
-  renderMacchine();
-  toast('Macchina salvata');
-}
-
-async function eliminaMacchina(macId, nome) {
-  if (!confirm(`Eliminare la macchina "${nome}"?`)) return;
-  const { data } = await sb.rpc('elimina_macchina', { p_id: macId, p_responsabile_id: currentUserRow.id, p_session_token: null });
-  if (!data?.ok) {
-    toast(data?.errore === 'macchina_in_uso' ? 'Macchina in uso su ordini attivi — imposta come "fuori uso" invece di eliminarla' : (data?.errore || 'Errore'), 'err');
-    return;
-  }
-  await loadMacchine();
-  renderMacchine();
-  toast('Macchina eliminata');
-}
-
-function aggiungiCompMacchina(macId) {
-  const sel  = document.getElementById(`mac-add-comp-${macId}`);
-  const opId = sel?.value;
-  if (!opId) return;
-  const m = macchineList.find(x => x.id === macId);
-  if (!m || m.competenze.includes(opId)) return;
-  m.competenze.push(opId);
-  const operatori = operatoriCache.filter(o => o.ruolo === 'operatore' && o.attivo);
-  document.getElementById(`mac-comp-list-${macId}`).innerHTML = _renderCompMacchina(m, operatori);
-  sel.innerHTML = '<option value="">+ Aggiungi operatore…</option>' +
-    operatori.filter(o => !m.competenze.includes(o.id)).map(o =>
-      `<option value="${o.id}">${escapeHtml(o.nome+' '+o.cognome)}</option>`).join('');
-}
-
-function rimuoviCompMacchina(macId, opId) {
-  const m = macchineList.find(x => x.id === macId);
-  if (!m) return;
-  m.competenze = m.competenze.filter(id => id !== opId);
-  const operatori = operatoriCache.filter(o => o.ruolo === 'operatore' && o.attivo);
-  document.getElementById(`mac-comp-list-${macId}`).innerHTML = _renderCompMacchina(m, operatori);
-  const sel = document.getElementById(`mac-add-comp-${macId}`);
-  if (sel) sel.innerHTML = '<option value="">+ Aggiungi operatore…</option>' +
-    operatori.filter(o => !m.competenze.includes(o.id)).map(o =>
-      `<option value="${o.id}">${escapeHtml(o.nome+' '+o.cognome)}</option>`).join('');
-}
-
-async function salvaCompMacchina(macId) {
-  const m = macchineList.find(x => x.id === macId);
-  if (!m) return;
-  const { data } = await sb.rpc('imposta_competenze_macchina', {
-    p_macchina_id: macId, p_operatori_ordinati: m.competenze,
-    p_responsabile_id: currentUserRow.id, p_session_token: null,
-  });
-  if (!data?.ok) { toast(data?.errore || 'Errore salvataggio competenze', 'err'); return; }
-  await loadMacchine();
-  renderMacchine();
-  toast('Competenze salvate');
-}
-
-async function aggiungiManutenzione(macId) {
-  const dal  = document.getElementById(`mac-mnt-dal-${macId}`)?.value;
-  const al   = document.getElementById(`mac-mnt-al-${macId}`)?.value;
-  const desc = document.getElementById(`mac-mnt-desc-${macId}`)?.value.trim() || null;
-  if (!dal || !al) { toast('Inserisci le date dal/al', 'err'); return; }
-  const { data } = await sb.rpc('imposta_manutenzione_macchina', {
-    p_macchina_id: macId, p_data_inizio: dal, p_data_fine: al, p_descrizione: desc,
-    p_responsabile_id: currentUserRow.id, p_session_token: null,
-  });
-  if (!data?.ok) {
-    toast(data?.errore === 'data_fine_precedente_inizio' ? 'La data di fine deve essere ≥ data inizio' : (data?.errore || 'Errore'), 'err');
-    return;
-  }
-  await loadMacchine();
-  renderMacchine();
-  toast('Manutenzione aggiunta');
-}
-
-async function eliminaManutenzione(manutId, macId) {
-  const { data } = await sb.rpc('elimina_manutenzione_macchina', {
-    p_id: manutId, p_responsabile_id: currentUserRow.id, p_session_token: null,
-  });
-  if (!data?.ok) { toast(data?.errore || 'Errore', 'err'); return; }
-  await loadMacchine();
-  renderMacchine();
-  toast('Manutenzione eliminata');
+    ${eliminaBox ? `<div class="fs-blocco" style="display:flex;justify-content:flex-end;align-items:center;gap:12px;flex-wrap:wrap">${eliminaBox}</div>` : ''}`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

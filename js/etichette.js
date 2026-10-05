@@ -34,6 +34,11 @@ const Etichette = (() => {
     ['conferma_ricezione', 'Arrivo da fuori', 'Si chiude confermando che il materiale è arrivato.'],
     ['spedizione_esterna', 'Lavorazione esterna', 'Si spedisce e si conferma il rientro. Non usa tempo interno.'],
   ];
+  // Macchine: stati (valori del database) e tempo macchina per fase (quanto la macchina resta occupata rispetto al tempo di riferimento).
+  // I valori offerti sono qui; un valore salvato diverso si mostra comunque (`fattoreTempoEtichetta`).
+  const STATI_MACCHINA = [['attiva', 'Attiva'], ['manutenzione', 'In manutenzione'], ['fuori_uso', 'Fuori uso']];
+  const FATTORI_TEMPO_MACCHINA = [[1, 'tempo normale'], [1.5, 'pressa ×1,5'], [2, 'pressa ×2'], [3, 'pressa ×3']];
+  const fattoreTempoEtichetta = f => (FATTORI_TEMPO_MACCHINA.find(x => x[0] === Number(f)) || [0, '×' + String(Number(f)).replace('.', ',')])[1];
   const STATI_RICHIESTA = { in_attesa: 'In attesa', approvata: 'Approvata', rifiutata: 'Non approvata', annullata: 'Annullata' };
   const AZIONI_LOG = {
     ordine_creato: 'Ordine creato', ordine_modificato: 'Ordine modificato', ordine_sospeso: 'Ordine sospeso',
@@ -138,6 +143,10 @@ const Etichette = (() => {
     statoRichiesta: s => STATI_RICHIESTA[s] || vuoto(s),
     azioneLog: a => AZIONI_LOG[a] || a,
     tipiGestioneFase: () => TIPI_GESTIONE_FASE,
+    statiMacchina: () => STATI_MACCHINA,
+    statoMacchina: s => (STATI_MACCHINA.find(x => x[0] === s) || [s, s])[1],
+    fattoriTempoMacchina: () => FATTORI_TEMPO_MACCHINA,
+    fattoreTempoEtichetta,
     motivoUscitaPiano: m => MOTIVI_USCITA_PIANO[m] || vuoto(m),
     origineVocePiano: o => ORIGINI_VOCE_PIANO[o] || '',
     STATI_RICHIESTA,
