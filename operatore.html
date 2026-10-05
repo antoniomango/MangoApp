@@ -2526,7 +2526,7 @@ function renderOggi() {
     testa.innerHTML = riceviBottone();
     corpo.innerHTML = `<div class="page-title">Oggi</div>${offline}<div class="oggi-riepilogo"><div class="oggi-data">${escapeHtml(dataTesto)}</div></div>
       <div class="empty-state"><div class="icon"><i data-ic="calendario"></i></div><p>${oggiDati.lavorativo
-        ? 'Il piano di oggi non è ancora pronto: viene creato all\'inizio del turno.'
+        ? (oggiDati.creazione_prevista ? 'Il piano di oggi viene creato alle ' + oggiDati.creazione_prevista : 'Il piano di oggi non è ancora pronto: viene creato all\'inizio del turno.')
         : 'Oggi non è un giorno lavorativo.'}</p></div>`;
     return;
   }

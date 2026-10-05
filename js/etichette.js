@@ -155,6 +155,17 @@ const Etichette = (() => {
       default: return { testo: ATTESA_ESTERNA.senzaScadenza, tono: 'neutro' };
     }
   }
+  // Motivo per cui un ordine è "a rischio" (da rischio_ordini): "finirebbe il gio 15/10, spedizione 15/10 · stima con X ipotizzata attiva"
+  function rischioTesto(r, scadenzaIso) {
+    if (!r) return '';
+    const sc = scadenzaIso ? dataBreve(scadenzaIso).replace(/^\S+ /, '') : '';
+    let t = r.motivo === 'scadenza_passata' ? 'scadenza passata o in giornata, lavoro ancora da fare'
+          : r.motivo === 'oltre_orizzonte' ? 'non finirebbe entro l\'orizzonte della simulazione' + (sc ? ', spedizione ' + sc : '')
+          : 'finirebbe il ' + dataBreve(r.fine_prevista) + (sc ? ', spedizione ' + sc : '');
+    const ip = r.macchine_ipotizzate || [];
+    if (ip.length) t += ' · stima con ' + ip.join(', ') + ' ipotizzata attiva';
+    return t;
+  }
   // "Dopo l'arrivo restano 7 fasi (2 h 07): con il carico attuale servono 3 giorni lavorativi · spedizione 12/10" + note sulle ipotesi
   function spiegazioneLimiteArrivo(r) {
     if (r.stato_limite === 'non_stimabile') return ATTESA_ESTERNA.motivi[r.motivo] ? 'Non stimabile: ' + ATTESA_ESTERNA.motivi[r.motivo] : 'Non stimabile';
@@ -170,7 +181,7 @@ const Etichette = (() => {
   }
 
   return {
-    attesaEsterna: ATTESA_ESTERNA, dataBreve, minutiTesto, badgeLimiteArrivo, spiegazioneLimiteArrivo,
+    attesaEsterna: ATTESA_ESTERNA, rischioTesto, dataBreve, minutiTesto, badgeLimiteArrivo, spiegazioneLimiteArrivo,
     PALETTE, imposta, esporta, carica,
     tipoProdotto, attributo, opzione, struttura, materiale, attributiCustom, attributiLato, latoEtichetta, latiAttivi, valoriLatoOrdine, riepilogoLato, lavorazioniCncOrdine, valoreAttributoCustom, attributiOrdine,
     priorita: () => priorita, lati: () => lati, tipi: () => tipi, attributi: () => attributi,

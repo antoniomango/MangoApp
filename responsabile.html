@@ -3201,7 +3201,7 @@ function renderOggiResp() {
     const o = v.ordine || {};
     const bl = v.bloccata_da && v.bloccata_da.length ? `<div style="font-size:11px;color:var(--violet)">dopo: ${escapeHtml(v.bloccata_da.join(', '))}</div>` : '';
     return `<tr style="${v.fatta ? 'background:var(--ok-bg)' : ''}">
-      <td><div style="font-weight:600">${escapeHtml(o.cliente || '')} — ${escapeHtml(o.codice || '')}${v.urgente && !v.fatta ? ` <span class="badge" style="background:var(--urgente-bg);color:var(--urgente-ink)">${Etichette.attesaEsterna.urgente}</span>` : ''}</div><div style="font-size:11px;color:var(--muted)">${o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo'}${v.macchina ? ' · ' + escapeHtml(v.macchina) + (v.minuti_macchina != null && Math.round(v.minuti_macchina) !== Math.round(v.minuti_stimati) ? ' (occupa ' + _fmtMin(v.minuti_macchina) + ')' : '') : ''}</div>${bl}</td>
+      <td><div style="font-weight:600">${escapeHtml(o.cliente || '')} — ${escapeHtml(o.codice || '')}${v.urgente && !v.fatta ? ` <span class="badge" style="background:var(--urgente-bg);color:var(--urgente-ink)" title="${escapeHtml(Etichette.rischioTesto(v.rischio, o.scadenza))}">${Etichette.attesaEsterna.urgente}</span>` : ''}</div>${v.urgente && !v.fatta && v.rischio ? `<div style="font-size:11px;color:var(--urgente-ink)">${escapeHtml(Etichette.rischioTesto(v.rischio, o.scadenza))}</div>` : ''}<div style="font-size:11px;color:var(--muted)">${o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo'}${v.macchina ? ' · ' + escapeHtml(v.macchina) + (v.minuti_macchina != null && Math.round(v.minuti_macchina) !== Math.round(v.minuti_stimati) ? ' (occupa ' + _fmtMin(v.minuti_macchina) + ')' : '') : ''}</div>${bl}</td>
       <td style="white-space:nowrap">${v.esterna ? '—' : _fmtMin(v.minuti_stimati)}</td>
       <td style="white-space:nowrap">${v.pezzi ? `${v.pezzi.fatti} di ${v.pezzi.totali}` : ''}</td>
       <td>${v.fatta ? '<span class="badge" style="background:var(--ok-soft);color:var(--ok-ink)">✓ fatta</span>' : '<span style="color:var(--muted)">da fare</span>'} ${tag(v)}</td>
@@ -10245,9 +10245,10 @@ async function loadKpi() {
           isOggi ? `<span style="color:var(--alert)">oggi</span>` :
           `+${o.giorni_scadenza}gg`;
         const stimaColor = o.a_rischio ? 'var(--alert)' : 'var(--muted)';
-        return `<tr style="${rowStyle}">
+        const motivoRischio = o.a_rischio ? Etichette.rischioTesto({ motivo: o.motivo_rischio, fine_prevista: o.fine_prevista, macchine_ipotizzate: o.macchine_ipotizzate }, o.scadenza) : '';
+        return `<tr style="${rowStyle}" title="${escapeHtml(motivoRischio)}">
           <td style="color:var(--muted);font-size:11px">${i+1}</td>
-          <td>${escapeHtml(o.cliente||'')} <span style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">${escapeHtml(o.codice||'')}</span></td>
+          <td>${escapeHtml(o.cliente||'')} <span style="font-family:var(--font-mono);font-size:10px;color:var(--muted)">${escapeHtml(o.codice||'')}</span>${motivoRischio ? `<div style="font-size:11px;color:var(--alert-ink)">A rischio: ${escapeHtml(motivoRischio)}</div>` : ''}</td>
           <td><span style="color:${Etichette.colorePriorita(o.priorita).ink};font-size:11px">${escapeHtml(prioLabel(o.priorita))}</span></td>
           <td>${formatDate(o.scadenza)} ${ggStr}</td>
           <td style="font-family:var(--font-mono)">${o.ore_rimaste}h</td>
