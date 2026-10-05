@@ -1,4 +1,4 @@
-const CACHE = 'mango-v57';
+const CACHE = 'mango-v58';
 const ASSETS = [
   '/MangoApp/operatore.html',
   '/MangoApp/responsabile.html',

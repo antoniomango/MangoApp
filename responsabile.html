@@ -3116,17 +3116,25 @@ function riquadroFornitori() {
   const giorni = (n) => n === 1 ? '1 giorno' : n + ' giorni';
   const riga = (r) => {
     const k = r.ordine_fase_id || r.fase_extra_id;
+    const oggiIso = oggiR?.data || new Date().toISOString().slice(0, 10);
+    const bl = Etichette.badgeLimiteArrivo(r, oggiIso);
+    const stile = bl.tono === 'alert' ? 'background:var(--alert-soft);color:var(--alert-ink)' : bl.tono === 'warn' ? 'background:var(--warn-soft);color:var(--warn-ink)' : 'color:var(--ink-2)';
+    const spieg = Etichette.spiegazioneLimiteArrivo(r);
     return `<tr style="${r.urgente ? 'background:var(--warn-bg)' : ''}">
       <td><div style="font-weight:600">${escapeHtml(r.cliente || '')} — ${escapeHtml(r.codice || '')}</div>
         ${r.urgente && (r.sblocca || []).length ? `<div style="font-size:12px;font-weight:700;color:var(--warn-ink)">blocca: ${escapeHtml(r.sblocca.join(', '))}</div>` : ''}</td>
       <td>${escapeHtml(r.fase_nome || '')}<div style="font-size:11px;color:var(--muted)">${r.tipo === 'rientro' ? 'rientro da lavorazione esterna' : 'arrivo di materiale'}</div></td>
       <td style="white-space:nowrap">${giorni(r.giorni_attesa || 0)}</td>
+      <td style="min-width:150px"><span class="badge" style="${stile};white-space:nowrap">${escapeHtml(bl.testo)}</span>${spieg ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;max-width:340px">${escapeHtml(spieg)}</div>` : ''}</td>
       <td style="text-align:right"><button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="confermaRicezioneResp('${escapeJsAttr(k)}')">${r.tipo === 'rientro' ? 'Conferma rientro' : 'Conferma arrivo'}</button></td>
     </tr>`;
   };
   const urgenti = lista.filter(r => r.urgente).length;
-  return `<div class="card"><div class="card-hdr"><h3>In attesa dai fornitori</h3><span style="font-size:12px;color:var(--muted)">${lista.length ? lista.length + (lista.length === 1 ? ' ricezione' : ' ricezioni') + (urgenti ? ' · ' + urgenti + (urgenti === 1 ? ' blocca lavoro' : ' bloccano lavoro') : '') : ''}</span></div>
-    ${lista.length ? `<div style="overflow-x:auto"><table><thead><tr><th>Ordine</th><th>Fase</th><th>Attesa</th><th></th></tr></thead><tbody>${lista.map(riga).join('')}</tbody></table></div>` : '<div style="color:var(--muted);font-size:13px;padding:8px 0">Nessuna ricezione in attesa.</div>'}</div>`;
+  const nRitardo = lista.filter(r => r.stato_limite === 'in_ritardo').length, nScadenza = lista.filter(r => r.stato_limite === 'in_scadenza').length;
+  const riassunto = [nRitardo ? nRitardo + ' in ritardo' : '', nScadenza ? nScadenza + ' in scadenza' : ''].filter(Boolean).join(' · ');
+  return `<div class="card"><div class="card-hdr"><h3>${Etichette.attesaEsterna.titolo}</h3><span style="font-size:12px;color:var(--muted)">${lista.length ? lista.length + (lista.length === 1 ? ' ricezione' : ' ricezioni') + (urgenti ? ' · ' + urgenti + (urgenti === 1 ? ' blocca lavoro' : ' bloccano lavoro') : '') : ''}</span></div>
+    ${riassunto ? `<div style="font-size:13px;font-weight:700;color:var(--${nRitardo ? 'alert' : 'warn'}-ink);margin:2px 0 8px">${riassunto}</div>` : ''}
+    ${lista.length ? `<div style="overflow-x:auto"><table><thead><tr><th>Ordine</th><th>Fase</th><th>Attesa</th><th>Data limite di arrivo</th><th></th></tr></thead><tbody>${lista.map(riga).join('')}</tbody></table></div>` : '<div style="color:var(--muted);font-size:13px;padding:8px 0">Nessuna ricezione in attesa.</div>'}</div>`;
 }
 async function confermaRicezioneResp(chiave) {
   const r = (ricezioniR?.ricezioni || []).find(x => (x.ordine_fase_id || x.fase_extra_id) === chiave); if (!r) return;
@@ -3173,7 +3181,7 @@ function renderOggiResp() {
   if (agg) {
     const n = (x, s, pl) => (x || 0) + ' ' + (x === 1 ? s : pl);
     if (String(p.ultimo_ricalcolo_motivo || '').startsWith('errore')) { agg.style.color = 'var(--warn-ink)'; agg.textContent = 'Ultimo aggiornamento non riuscito: premi Rigenera'; }
-    else if (p.ultimo_ricalcolo_il) { agg.style.color = ''; agg.textContent = 'Aggiornato alle ' + new Date(p.ultimo_ricalcolo_il).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) + ' · ' + n(p.ultimo_ricalcolo_aggiunte, 'aggiunta', 'aggiunte') + ', ' + n(p.ultimo_ricalcolo_uscite, 'uscita', 'uscite'); }
+    else if (p.ultimo_ricalcolo_il) { agg.style.color = ''; agg.textContent = 'Aggiornato alle ' + new Date(p.ultimo_ricalcolo_il).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) + ' · ' + n(p.ultimo_ricalcolo_aggiunte, 'aggiunta', 'aggiunte') + ', ' + n(p.ultimo_ricalcolo_uscite, 'uscita', 'uscite') + (p.ultimo_ricalcolo_oltre > 0 ? ' (di cui ' + n(p.ultimo_ricalcolo_oltre, 'urgente', 'urgenti') + ' oltre la capacità)' : ''); }
     else { agg.style.color = ''; agg.textContent = ''; }
   }
   const av = d.avanzamento || { fatte: 0, totali: 0 };
@@ -3193,7 +3201,7 @@ function renderOggiResp() {
     const o = v.ordine || {};
     const bl = v.bloccata_da && v.bloccata_da.length ? `<div style="font-size:11px;color:var(--violet)">dopo: ${escapeHtml(v.bloccata_da.join(', '))}</div>` : '';
     return `<tr style="${v.fatta ? 'background:var(--ok-bg)' : ''}">
-      <td><div style="font-weight:600">${escapeHtml(o.cliente || '')} — ${escapeHtml(o.codice || '')}</div><div style="font-size:11px;color:var(--muted)">${o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo'}${v.macchina ? ' · ' + escapeHtml(v.macchina) + (v.minuti_macchina != null && Math.round(v.minuti_macchina) !== Math.round(v.minuti_stimati) ? ' (occupa ' + _fmtMin(v.minuti_macchina) + ')' : '') : ''}</div>${bl}</td>
+      <td><div style="font-weight:600">${escapeHtml(o.cliente || '')} — ${escapeHtml(o.codice || '')}${v.urgente && !v.fatta ? ` <span class="badge" style="background:var(--urgente-bg);color:var(--urgente-ink)">${Etichette.attesaEsterna.urgente}</span>` : ''}</div><div style="font-size:11px;color:var(--muted)">${o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo'}${v.macchina ? ' · ' + escapeHtml(v.macchina) + (v.minuti_macchina != null && Math.round(v.minuti_macchina) !== Math.round(v.minuti_stimati) ? ' (occupa ' + _fmtMin(v.minuti_macchina) + ')' : '') : ''}</div>${bl}</td>
       <td style="white-space:nowrap">${v.esterna ? '—' : _fmtMin(v.minuti_stimati)}</td>
       <td style="white-space:nowrap">${v.pezzi ? `${v.pezzi.fatti} di ${v.pezzi.totali}` : ''}</td>
       <td>${v.fatta ? '<span class="badge" style="background:var(--ok-soft);color:var(--ok-ink)">✓ fatta</span>' : '<span style="color:var(--muted)">da fare</span>'} ${tag(v)}</td>
@@ -3209,7 +3217,7 @@ function renderOggiResp() {
     if (ok.length) principali.push({ ...g, voci: ok, fatte: ok.filter(v => v.fatta).length, totali: ok.length });
     if (bl.length) inArrivo.push({ ...g, voci: bl, fatte: 0, totali: bl.length });
   });
-  let html = riquadroFornitori() + principali.map(g => `<div class="card"><div class="card-hdr"><h3>${escapeHtml(g.fase_nome)}</h3><span style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${g.fatte} di ${g.totali}</span></div>${tabella(g.voci)}</div>`).join('');
+  let html = riquadroFornitori() + principali.map(g => `<div class="card"><div class="card-hdr"><h3>${escapeHtml(g.fase_nome)}${g.voci.some(v => v.urgente && !v.fatta) ? ` <span class="badge" style="background:var(--urgente-bg);color:var(--urgente-ink);font-size:10px">${Etichette.attesaEsterna.urgente}</span>` : ''}</h3><span style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${g.fatte} di ${g.totali}</span></div>${tabella(g.voci)}</div>`).join('');
   if (!principali.length) html += '<div class="empty-state"><p>Nessuna attività eseguibile adesso.</p></div>';
   if (inArrivo.length) {
     const minArrivo = inArrivo.reduce((t, g) => t + g.voci.reduce((u, v) => u + (Number(v.minuti_stimati) || 0), 0), 0);

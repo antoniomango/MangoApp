@@ -239,6 +239,7 @@ textarea:focus { border-color: var(--accent); }
 .oggi-barra { position: sticky; bottom: 8px; z-index: 5; display: flex; gap: 8px; align-items: center; background: var(--inverse); color: var(--on-inverse); padding: 10px 14px; border-radius: 12px; box-shadow: var(--shadow-bar); margin-top: 12px; }
 .oggi-barra strong { flex: 1; font-size: 13px; }
 .oggi-barra .btn { width: auto; padding: 9px 14px; font-size: 13px; }
+.oggi-urgente { font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--urgente-ink); background: var(--urgente-bg); border-radius: 20px; padding: 2px 7px; white-space: nowrap; }
 .ricevi-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-bottom: 12px; padding: 12px 14px; font-size: 15px; font-weight: 600; }
 .ricevi-conta { font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--warn-ink); background: var(--warn-soft); border-radius: 20px; padding: 3px 9px; white-space: nowrap; }
 .ricevi-cerca { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; font-size: 15px; background: var(--surface); color: var(--ink); outline: none; margin-bottom: 12px; }
@@ -2549,7 +2550,7 @@ function oggiPartiziona() {
   const principali = [], inArrivo = [];
   (oggiDati.gruppi || []).forEach(g => {
     const ok = g.voci.filter(v => !oggiBloccata(v)), bl = g.voci.filter(oggiBloccata);
-    if (ok.length) principali.push({ ...g, voci: ok, fatte: ok.filter(v => v.fatta).length, totali: ok.length });
+    if (ok.length) principali.push({ ...g, voci: ok, fatte: ok.filter(v => v.fatta).length, totali: ok.length, urgente: ok.some(v => v.urgente && !v.fatta) });
     if (bl.length) inArrivo.push({ ...g, voci: bl, fatte: 0, totali: bl.length });
   });
   return { principali, inArrivo };
@@ -2565,6 +2566,7 @@ function renderOggiElenco() {
       const finito = g.totali > 0 && g.fatte === g.totali;
       return `<div class="oggi-gruppo ${finito ? 'finito' : ''}" role="button" tabindex="0" onclick="oggiApriGruppo('${escapeJsAttr(g.chiave)}')" onkeydown="if(event.key==='Enter')this.click()">
         <div class="og-nome">${escapeHtml(g.fase_nome)}</div>
+        ${g.urgente ? `<span class="oggi-urgente">${Etichette.attesaEsterna.urgente}</span>` : ''}
         <div class="og-conta">${finito ? '✓ ' : ''}${oggiConta(g.fatte, g.totali)}</div>
         <span class="arrow">›</span>
       </div>`;
@@ -2574,7 +2576,7 @@ function renderOggiElenco() {
     html += '<div class="oggi-inarrivo" role="separator" aria-label="In arrivo"><span>In arrivo</span></div>';
     html += inArrivo.map(g => `<div class="card oggi-arrivo-card"><div class="oggi-arrivo-fase">${escapeHtml(g.fase_nome)}</div>` + g.voci.map(v => {
       const o = v.ordine || {};
-      return `<div class="oggi-voce bloccata" aria-disabled="true"><div class="ov-titolo">${escapeHtml(o.cliente || '')} — ${escapeHtml(o.codice || '')}</div><div class="ov-sub">dopo ${escapeHtml(v.bloccata_da.join(', '))}</div></div>`;
+      return `<div class="oggi-voce bloccata" aria-disabled="true"><div class="ov-testa"><div class="ov-titolo">${escapeHtml(o.cliente || '')} — ${escapeHtml(o.codice || '')}</div>${v.urgente ? `<span class="oggi-urgente">${Etichette.attesaEsterna.urgente}</span>` : ''}</div><div class="ov-sub">dopo ${escapeHtml(v.bloccata_da.join(', '))}</div></div>`;
     }).join('') + '</div>').join('');
   }
   return html;
@@ -2636,6 +2638,7 @@ function renderOggiVoce(v, solaLettura) {
     <div class="ov-testa">
       ${sel}
       <div class="ov-titolo" style="cursor:pointer" onclick="${apri}">${oggiTitoloVoce(v)}</div>
+      ${v.urgente && !v.fatta ? `<span class="oggi-urgente">${Etichette.attesaEsterna.urgente}</span>` : ''}
       ${v.aggiunta ? '<span class="oggi-segno">aggiunta</span>' : ''}
       ${v.fatta ? '<span class="oggi-segno" style="background:var(--ok-soft);color:var(--ok-ink)">✓ Fatta</span>' : ''}
       ${ordiniCache.some(x => x.id === v.ordine_id) ? `<button type="button" class="btn btn-secondary piccolo" style="width:auto;flex:0 0 auto" onclick="openOrdineDetail('${escapeJsAttr(v.ordine_id)}')" aria-label="Foto e dettaglio ordine"><i data-ic="fotocamera"></i> Foto</button>` : ''}

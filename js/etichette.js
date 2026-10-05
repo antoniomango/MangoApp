@@ -133,7 +133,44 @@ const Etichette = (() => {
     return `<span class="badge" style="background:${c.bg};color:${c.ink}">${esc(prioritaEtichetta(id))}</span>`;
   }
 
+  // Riquadro "In attesa esterna" (responsabile) e badge "Urgente" (operatore e responsabile): testi in un solo punto
+  const ATTESA_ESTERNA = {
+    titolo: 'In attesa esterna', urgente: 'Urgente', nonStimabile: 'Non stimabile', senzaScadenza: '—',
+    motivi: { oltre_orizzonte: 'il lavoro non finisce entro l\'orizzonte della simulazione' },
+  };
+  const _GIORNI_BREVI = ['dom', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab'];
+  const dataBreve = iso => { if (!iso) return '—'; const d = new Date(String(iso).slice(0, 10) + 'T12:00:00'); return _GIORNI_BREVI[d.getDay()] + ' ' + d.getDate() + '/' + (d.getMonth() + 1); };
+  const minutiTesto = m => { const n = Math.round(Number(m) || 0); return n >= 90 ? Math.floor(n / 60) + ' h ' + String(n % 60).padStart(2, '0') : n + ' min'; };
+  // { testo, tono: 'alert' | 'warn' | 'neutro' } per la data limite di arrivo; oggiIso = giorno di oggi (yyyy-mm-dd)
+  function badgeLimiteArrivo(r, oggiIso) {
+    switch (r.stato_limite) {
+      case 'in_ritardo': { const x = Math.abs(r.giorni_lavorativi_mancanti || 0); return { testo: 'In ritardo di ' + x + ' g', tono: 'alert' }; }
+      case 'in_scadenza': case 'ok': {
+        const dl = String(r.data_limite || '').slice(0, 10);
+        const domani = new Date(new Date(oggiIso + 'T12:00:00').getTime() + 86400000); const dom = domani.getFullYear() + '-' + String(domani.getMonth() + 1).padStart(2, '0') + '-' + String(domani.getDate()).padStart(2, '0');
+        const testo = r.stato_limite === 'in_scadenza' && dl === oggiIso ? 'Entro oggi' : r.stato_limite === 'in_scadenza' && dl === dom ? 'Entro domani' : 'Entro ' + dataBreve(dl);
+        return { testo, tono: r.stato_limite === 'in_scadenza' ? 'warn' : 'neutro' };
+      }
+      case 'non_stimabile': return { testo: ATTESA_ESTERNA.nonStimabile, tono: 'neutro' };
+      default: return { testo: ATTESA_ESTERNA.senzaScadenza, tono: 'neutro' };
+    }
+  }
+  // "Dopo l'arrivo restano 7 fasi (2 h 07): con il carico attuale servono 3 giorni lavorativi · spedizione 12/10" + note sulle ipotesi
+  function spiegazioneLimiteArrivo(r) {
+    if (r.stato_limite === 'non_stimabile') return ATTESA_ESTERNA.motivi[r.motivo] ? 'Non stimabile: ' + ATTESA_ESTERNA.motivi[r.motivo] : 'Non stimabile';
+    if (!('fasi_dopo' in r)) return '';
+    const n = r.fasi_dopo || 0;
+    let t = n ? 'Dopo l\'arrivo ' + (n === 1 ? 'resta 1 fase' : 'restano ' + n + ' fasi') + ' (' + minutiTesto(r.minuti_dopo) + '): con il carico attuale ' + ((r.giorni_necessari || 0) === 1 ? 'serve 1 giorno lavorativo' : 'servono ' + (r.giorni_necessari || 0) + ' giorni lavorativi')
+             : 'Dopo l\'arrivo non restano fasi interne da fare';
+    if (r.scadenza) t += ' · spedizione ' + dataBreve(r.scadenza).replace(/^\S+ /, '');
+    const ip = r.macchine_ipotizzate_attive || [];
+    if (ip.length) t += ' · stima con ' + ip.join(', ') + ' ipotizzata attiva';
+    if (r.rientro_ipotizzato) t += ' · rientro ipotizzato il giorno dopo la spedizione';
+    return t;
+  }
+
   return {
+    attesaEsterna: ATTESA_ESTERNA, dataBreve, minutiTesto, badgeLimiteArrivo, spiegazioneLimiteArrivo,
     PALETTE, imposta, esporta, carica,
     tipoProdotto, attributo, opzione, struttura, materiale, attributiCustom, attributiLato, latoEtichetta, latiAttivi, valoriLatoOrdine, riepilogoLato, lavorazioniCncOrdine, valoreAttributoCustom, attributiOrdine,
     priorita: () => priorita, lati: () => lati, tipi: () => tipi, attributi: () => attributi,
