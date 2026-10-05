@@ -3150,7 +3150,7 @@ function renderOggiResp() {
   }
   // uscite dal piano, con il motivo leggibile
   if ((d.uscite || []).length) {
-    html += `<details class="card"><summary style="cursor:pointer;font-weight:600">Uscite dal piano (${d.uscite.length})</summary><div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>Ordine</th><th>Fase</th><th>Motivo</th></tr></thead><tbody>${d.uscite.map(u => `<tr><td>${escapeHtml(u.cliente || '')} — ${escapeHtml(u.ordine_codice || '')}</td><td>${escapeHtml(u.fase_nome || '')}</td><td>${escapeHtml(Etichette.motivoUscitaPiano(u.motivo))}</td></tr>`).join('')}</tbody></table></div></details>`;
+    html += `<details class="card"><summary style="cursor:pointer;font-weight:600">Uscite dal piano (${d.uscite.length})</summary><div style="overflow-x:auto;margin-top:10px"><table><thead><tr><th>Ordine</th><th>Fase</th><th>Motivo</th></tr></thead><tbody>${d.uscite.map(u => `<tr><td>${escapeHtml(u.cliente || '')} — ${escapeHtml(u.ordine_codice || '')}</td><td>${escapeHtml(u.fase_nome || '')}</td><td>${escapeHtml(Etichette.motivoUscitaPiano(u.motivo))}${(u.manca || []).length ? `<div style="font-size:11px;color:var(--muted)">manca: ${u.manca.map(m => escapeHtml(m.nome) + (m.macchina_ferma ? ' (macchina fuori uso)' : '')).join(', ')}</div>` : ''}</td></tr>`).join('')}</tbody></table></div></details>`;
   }
   corpo.innerHTML = html;
 }
