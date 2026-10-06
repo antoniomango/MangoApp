@@ -103,11 +103,11 @@ const Etichette = (() => {
     // responsabile
     inPressaSu: (macchina, fino) => 'In pressa' + (macchina ? ' su ' + macchina : '') + (fino ? ' fino alle ' + _oraBreve(fino) : ''),
     config: {
-      titolo: 'Tempo di presa', minuti: 'Minuti sotto pressa', ordini: 'Ordini per carico',
-      spiega: 'Il pezzo resta sulla macchina senza bisogno dell\'operatore. La macchina è occupata per i minuti di presa divisi per gli ordini per carico; la fase dopo parte solo quando la presa è finita.',
+      titolo: 'Tempo di presa', minuti: 'Minuti sotto pressa', ordini: 'Ante per pressata',
+      spiega: 'Il pezzo resta sulla macchina senza bisogno dell\'operatore. Quante ante stanno al massimo in una pressata su questa macchina. La pressa resta occupata tutta la durata della presa per ogni pressata, anche se non piena. La fase dopo parte solo quando la presa è finita.',
       moltiplicatore: 'Con la presa il moltiplicatore di tempo non si usa.',
-      errore: 'Tempo di presa non valido: minuti da 1 a 1440 e ordini per carico da 1 a 50, sempre insieme.',
-      occupa: (presa, ordini) => 'Occupa la macchina ' + Math.round(presa / ordini) + ' min per ordine',
+      errore: 'Tempo di presa non valido: minuti da 1 a 1440 e ante per pressata da 1 a 50, sempre insieme.',
+      occupa: (presa) => 'Occupa la macchina ' + presa + ' min per ogni pressata',
     },
   };
   // Spedizione unica nel piano e nell'app operatore
@@ -227,7 +227,7 @@ const Etichette = (() => {
   const RICEZIONE = {
     gruppoUrgenti: 'Serve per lavorare', gruppoAltro: 'Altro in arrivo',
     materiale: r => r.materiale || r.fase_nome || '',
-    sotto: r => 'per ' + (r.codice || '') + ' — ' + (r.cliente || ''),
+    sotto: r => (r.cliente || '') + ' — ' + (r.codice || ''),
     quandoArriva: r => (r.urgente && (r.sblocca || []).length) ? 'Quando arriva si potrà fare: ' + r.sblocca.join(', ') : '',
     pulsante: r => '✓ ' + (r.tipo === 'rientro' ? 'Conferma rientro ' + (r.materiale || r.fase_nome || '') : 'Conferma arrivo ' + String(r.materiale || r.fase_nome || '').toLowerCase()),
     conferma: r => 'Confermi che è ' + (r.tipo === 'rientro' ? 'rientrato' : 'arrivato') + ' il materiale «' + (r.materiale || r.fase_nome || '') + '» per ' + (r.codice || '') + ' (' + (r.cliente || '') + ')?',

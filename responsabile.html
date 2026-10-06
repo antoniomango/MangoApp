@@ -8394,7 +8394,7 @@ function fsModello(f) {
     tempo_da_lavorazioni_cnc: !!f.tempo_da_lavorazioni_cnc, materiale_ricezione: f.materiale_ricezione || '',
     solo_per_consegna: f.solo_per_consegna ? [...f.solo_per_consegna].sort() : null,   // null = sempre
     dipendenze: [...(f.dipendenze || [])].sort((a, b) => a - b),
-    macchine: macchineList.filter(x => (x.fase_ids || []).includes(f.id)).map(x => ({ id: x.id, fattore: Number((x.fattori || {})[f.id] ?? 1), presa_attiva: !!(x.prese || {})[f.id], presa_minuti: (x.prese || {})[f.id]?.minuti ?? null, ordini_per_carico: (x.prese || {})[f.id]?.ordini ?? null })).sort((a, b) => a.id < b.id ? -1 : 1),
+    macchine: macchineList.filter(x => (x.fase_ids || []).includes(f.id)).map(x => ({ id: x.id, fattore: Number((x.fattori || {})[f.id] ?? 1), presa_attiva: !!(x.prese || {})[f.id], presa_minuti: (x.prese || {})[f.id]?.minuti ?? null, ante_per_pressata: (x.prese || {})[f.id]?.ordini ?? null })).sort((a, b) => a.id < b.id ? -1 : 1),
     competenze: [...(f.competenze || [])],
     tempo: base ? { tipico: String(base.minuti_tipici), massimo: String(base.minuti_max) } : { tipico: '', massimo: '' },
   };
@@ -8611,9 +8611,9 @@ function fsAggiungiDip(v) {
   fsAggiornaStato(); fsRenderDettaglio();
 }
 function fsTogliDip(id) { FS.draft.dipendenze = FS.draft.dipendenze.filter(x => x !== id); FS.depErr = ''; fsAggiornaStato(); fsRenderDettaglio(); }
-function fsAggiungiMacchina(id) { if (!id || FS.draft.macchine.some(x => x.id === id)) return; FS.draft.macchine.push({ id, fattore: 1, presa_attiva: false, presa_minuti: null, ordini_per_carico: null }); FS.draft.macchine.sort((a, b) => a.id < b.id ? -1 : 1); fsAggiornaStato(); fsRenderDettaglio(); }
+function fsAggiungiMacchina(id) { if (!id || FS.draft.macchine.some(x => x.id === id)) return; FS.draft.macchine.push({ id, fattore: 1, presa_attiva: false, presa_minuti: null, ante_per_pressata: null }); FS.draft.macchine.sort((a, b) => a.id < b.id ? -1 : 1); fsAggiornaStato(); fsRenderDettaglio(); }
 function fsTogliMacchina(id) { FS.draft.macchine = FS.draft.macchine.filter(x => x.id !== id); fsAggiornaStato(); fsRenderDettaglio(); }
-function fsSetPresaMacchina(id, on) { const x = FS.draft.macchine.find(y => y.id === id); if (!x) return; x.presa_attiva = !!on; if (on) x.fattore = 1; else { x.presa_minuti = null; x.ordini_per_carico = null; } fsAggiornaStato(); fsRenderDettaglio(); }
+function fsSetPresaMacchina(id, on) { const x = FS.draft.macchine.find(y => y.id === id); if (!x) return; x.presa_attiva = !!on; if (on) x.fattore = 1; else { x.presa_minuti = null; x.ante_per_pressata = null; } fsAggiornaStato(); fsRenderDettaglio(); }
 function fsPresaCampoMacchina(id, campo, v) { const x = FS.draft.macchine.find(y => y.id === id); if (!x) return; x[campo] = presaNumero(v); fsAggiornaStato(); }
 function fsSetFattoreMacchina(id, v) { const x = FS.draft.macchine.find(y => y.id === id); if (x) x.fattore = Number(v); fsAggiornaStato(); fsRenderDettaglio(); }
 function fsCompSposta(i, dir) { const a = FS.draft.competenze; [a[i], a[i + dir]] = [a[i + dir], a[i]]; fsAggiornaStato(); fsRenderDettaglio(); }
@@ -8646,7 +8646,7 @@ function fsPayload() {
   fasiCriteriDef().forEach(def => [def.campo, def.modo].forEach(k => { if (JSON.stringify(d[k]) !== JSON.stringify(o[k])) crit[k] = d[k]; }));
   Object.assign(p, _raccogliAttributiBozza(crit));
   if (JSON.stringify(d.dipendenze) !== JSON.stringify(o.dipendenze)) p.dipendenze = d.dipendenze;
-  if (JSON.stringify(d.macchine) !== JSON.stringify(o.macchine)) p.macchine = d.macchine.map(x => x.presa_attiva ? ({ macchina_id: x.id, fattore_tempo: 1, presa_minuti: x.presa_minuti, ordini_per_carico: x.ordini_per_carico }) : ({ macchina_id: x.id, fattore_tempo: x.fattore }));
+  if (JSON.stringify(d.macchine) !== JSON.stringify(o.macchine)) p.macchine = d.macchine.map(x => x.presa_attiva ? ({ macchina_id: x.id, fattore_tempo: 1, presa_minuti: x.presa_minuti, ante_per_pressata: x.ante_per_pressata }) : ({ macchina_id: x.id, fattore_tempo: x.fattore }));
   if (JSON.stringify(d.competenze) !== JSON.stringify(o.competenze)) p.competenze = d.competenze;
   if (JSON.stringify(d.tempo) !== JSON.stringify(o.tempo) && fsTempoModificabile(d.id)) {
     const riga = fsRigaBase(d.id);
@@ -8663,7 +8663,7 @@ function fsValida() {
     else if (!(a > 0) || !(b > 0)) return 'Il tempo di riferimento deve avere i minuti (tipico e massimo) maggiori di zero.';
     else if (b < a) return 'Il massimo non può essere minore del tipico.';
   }
-  if (d.macchine.some(x => x.presa_attiva && !presaValida(x.presa_minuti, x.ordini_per_carico))) return Etichette.presa.config.errore;
+  if (d.macchine.some(x => x.presa_attiva && !presaValida(x.presa_minuti, x.ante_per_pressata))) return Etichette.presa.config.errore;
   if (d.ambito_tempo === 'lato' && d.tempo_da_lavorazioni_cnc) return 'Il tempo vale «ogni lato» solo per le fasi che non sommano le lavorazioni CNC.';
   return null;
 }
@@ -8842,7 +8842,7 @@ function fsRenderDettaglio() {
       <div class="fs-card"><div class="fs-row">
         <div class="fs-chips">${est ? '<span class="fs-desc" style="margin:0">Fase esterna: nessuna macchina.</span>' : (m.macchine.length ? m.macchine.map(x => { const mm = fsMacchina(x.id); if (!mm) return ''; const ok = fsMacchinaOk(mm); const opz = Etichette.fattoriTempoMacchina().map(y => y[0]); const opzioni = (opz.includes(x.fattore) ? opz : [...opz, x.fattore].sort((p, q) => p - q)).map(v => `<option value="${v}" ${v === x.fattore ? 'selected' : ''}>${escapeHtml(Etichette.fattoreTempoEtichetta(v))}</option>`).join('');
           return `<span class="fs-chip" style="flex-wrap:wrap"><span class="${ok ? 'ok' : 'ko'}"></span>${escapeHtml(mm.nome)}${ok ? '' : '<span class="stato">fuori uso</span>'}${x.presa_attiva ? '' : `<select class="fm-fatt" aria-label="Tempo macchina su ${escapeHtml(mm.nome)}" onchange="fsSetFattoreMacchina('${escapeJsAttr(x.id)}', this.value)">${opzioni}</select>`}<button class="fs-chip-x" aria-label="Togli ${escapeHtml(mm.nome)}" onclick="fsTogliMacchina('${escapeJsAttr(x.id)}')">×</button>
-          <div class="presa-box" style="flex:1 1 100%">${presaBloccoHtml(x.presa_attiva, x.presa_minuti, x.ordini_per_carico, 'fsSetPresaMacchina', 'fsPresaCampoMacchina', "'" + escapeJsAttr(x.id) + "'")}</div></span>`; }).join('') : '<span class="fs-desc" style="margin:0">Nessuna macchina assegnata.</span>')}</div>
+          <div class="presa-box" style="flex:1 1 100%">${presaBloccoHtml(x.presa_attiva, x.presa_minuti, x.ante_per_pressata, 'fsSetPresaMacchina', 'fsPresaCampoMacchina', "'" + escapeJsAttr(x.id) + "'")}</div></span>`; }).join('') : '<span class="fs-desc" style="margin:0">Nessuna macchina assegnata.</span>')}</div>
         ${est ? '' : `<div class="fs-add" style="margin-top:10px"><select class="fs-inp" id="fs-add-mac" onchange="fsAggiungiMacchina(this.value)"><option value="">+ Aggiungi macchina…</option>${macchineList.filter(x => !m.macchine.some(y => y.id === x.id)).map(x => `<option value="${escapeHtml(x.id)}">${escapeHtml(x.nome)}${fsMacchinaOk(x) ? '' : ' (fuori uso)'}</option>`).join('')}</select></div>`}
       </div></div>
     </div>
@@ -10046,7 +10046,7 @@ function presaBloccoHtml(attiva, minuti, ordini, fnToggle, fnCampo, idArg) {
   const val = v => (v === null || v === undefined || Number.isNaN(v)) ? '' : v;
   return `<label style="cursor:pointer"><input type="checkbox" ${attiva ? 'checked' : ''} onchange="${fnToggle}(${idArg}, this.checked)"> ${escapeHtml(C.titolo)}</label>` + (attiva ? `
     <label>${escapeHtml(C.minuti)} <input type="number" min="1" max="1440" step="1" inputmode="numeric" value="${val(minuti)}" oninput="${fnCampo}(${idArg}, 'presa_minuti', this.value)"></label>
-    <label>${escapeHtml(C.ordini)} <input type="number" min="1" max="50" step="1" inputmode="numeric" value="${val(ordini)}" oninput="${fnCampo}(${idArg}, 'ordini_per_carico', this.value)"></label>
+    <label>${escapeHtml(C.ordini)} <input type="number" min="1" max="50" step="1" inputmode="numeric" value="${val(ordini)}" oninput="${fnCampo}(${idArg}, 'ante_per_pressata', this.value)"></label>
     <span class="presa-nota">${escapeHtml(Etichette.presa.config.spiega)} ${escapeHtml(C.moltiplicatore)}${minuti > 0 && ordini > 0 ? ' ' + escapeHtml(C.occupa(minuti, ordini)) + '.' : ''}</span>` : '');
 }
 const presaNumero = v => (v === '' || v === null || v === undefined) ? null : Number(v);
@@ -11065,7 +11065,7 @@ const FM = { sel: null, draft: null, cerca: '', filtro: 'tutte', guard: null, mo
 async function loadMacchine() {
   const [{ data: macchine }, { data: faseMac }, { data: compMac }, { data: manut }] = await Promise.all([
     sb.from('macchine').select('*').order('nome'),
-    sb.from('fase_macchine').select('fase_id, macchina_id, fattore_tempo, presa_minuti, ordini_per_carico'),
+    sb.from('fase_macchine').select('fase_id, macchina_id, fattore_tempo, presa_minuti, ante_per_pressata'),
     sb.from('competenze_operatore_macchina').select('operatore_id, macchina_id, priorita').order('priorita'),
     sb.from('manutenzioni_macchina').select('*').order('data_inizio'),
   ]);
@@ -11073,7 +11073,7 @@ async function loadMacchine() {
     ...m,
     fase_ids:     (faseMac || []).filter(r => r.macchina_id === m.id).map(r => r.fase_id),
     fattori:      Object.fromEntries((faseMac || []).filter(r => r.macchina_id === m.id).map(r => [r.fase_id, Number(r.fattore_tempo)])),
-    prese:        Object.fromEntries((faseMac || []).filter(r => r.macchina_id === m.id && r.presa_minuti != null).map(r => [r.fase_id, { minuti: Number(r.presa_minuti), ordini: Number(r.ordini_per_carico) }])),
+    prese:        Object.fromEntries((faseMac || []).filter(r => r.macchina_id === m.id && r.presa_minuti != null).map(r => [r.fase_id, { minuti: Number(r.presa_minuti), ordini: Number(r.ante_per_pressata) }])),
     competenze:   (compMac || []).filter(r => r.macchina_id === m.id).sort((a, b) => a.priorita - b.priorita).map(r => r.operatore_id),
     manutenzioni: (manut || []).filter(r => r.macchina_id === m.id),
   }));
@@ -11092,7 +11092,7 @@ const fmFmtOre = (h) => String(Math.round(Number(h) * 100) / 100).replace('.', '
 function fmModello(m) {
   return {
     id: m.id, nome: m.nome || '', stato: m.stato || 'attiva', ore: m.ore_default != null ? Number(m.ore_default) : null,
-    fasi: (m.fase_ids || []).map(fid => ({ fase_id: fid, fattore: Number((m.fattori || {})[fid] ?? 1), presa_attiva: !!(m.prese || {})[fid], presa_minuti: (m.prese || {})[fid]?.minuti ?? null, ordini_per_carico: (m.prese || {})[fid]?.ordini ?? null })).sort((a, b) => fmFaseNum(a.fase_id) - fmFaseNum(b.fase_id)),
+    fasi: (m.fase_ids || []).map(fid => ({ fase_id: fid, fattore: Number((m.fattori || {})[fid] ?? 1), presa_attiva: !!(m.prese || {})[fid], presa_minuti: (m.prese || {})[fid]?.minuti ?? null, ante_per_pressata: (m.prese || {})[fid]?.ordini ?? null })).sort((a, b) => fmFaseNum(a.fase_id) - fmFaseNum(b.fase_id)),
     comp: [...(m.competenze || [])],
     manutenzioni: m.manutenzioni || [],
   };
@@ -11214,10 +11214,10 @@ function fmSetOreModo(modo) { FM.draft.ore = modo === 'orario' ? null : (FM.draf
 function fmSetOre(v) { FM.draft.ore = v === '' ? null : Number(v); fmAggiornaStato(); }
 function fmAggiungiFase(v) {
   const id = Number(v); if (!id || FM.draft.fasi.some(f => f.fase_id === id)) return;
-  FM.draft.fasi.push({ fase_id: id, fattore: 1, presa_attiva: false, presa_minuti: null, ordini_per_carico: null }); FM.draft.fasi.sort((a, b) => fmFaseNum(a.fase_id) - fmFaseNum(b.fase_id)); fmAggiornaStato(true);
+  FM.draft.fasi.push({ fase_id: id, fattore: 1, presa_attiva: false, presa_minuti: null, ante_per_pressata: null }); FM.draft.fasi.sort((a, b) => fmFaseNum(a.fase_id) - fmFaseNum(b.fase_id)); fmAggiornaStato(true);
 }
 function fmTogliFase(id) { FM.draft.fasi = FM.draft.fasi.filter(f => f.fase_id !== id); fmAggiornaStato(true); }
-function fmSetPresa(id, on) { const f = FM.draft.fasi.find(x => x.fase_id === id); if (!f) return; f.presa_attiva = !!on; if (on) f.fattore = 1; else { f.presa_minuti = null; f.ordini_per_carico = null; } fmAggiornaStato(true); }
+function fmSetPresa(id, on) { const f = FM.draft.fasi.find(x => x.fase_id === id); if (!f) return; f.presa_attiva = !!on; if (on) f.fattore = 1; else { f.presa_minuti = null; f.ante_per_pressata = null; } fmAggiornaStato(true); }
 function fmPresaCampo(id, campo, v) { const f = FM.draft.fasi.find(x => x.fase_id === id); if (!f) return; f[campo] = presaNumero(v); fmAggiornaStato(); }
 function fmSetFattore(id, v) { const f = FM.draft.fasi.find(x => x.fase_id === id); if (f) f.fattore = Number(v); fmAggiornaStato(true); }
 function fmCompSposta(i, dir) { const a = FM.draft.comp; [a[i], a[i + dir]] = [a[i + dir], a[i]]; fmAggiornaStato(true); }
@@ -11234,7 +11234,7 @@ function fmPayload() {
   if (nuova || d.nome.trim() !== o.nome) p.nome = d.nome.trim();
   if (nuova || d.stato !== o.stato) p.stato = d.stato;
   if (nuova || d.ore !== o.ore) p.ore_default = d.ore;
-  if (nuova || JSON.stringify(d.fasi) !== JSON.stringify(o.fasi)) p.fasi = d.fasi.map(f => f.presa_attiva ? ({ fase_id: f.fase_id, fattore_tempo: 1, presa_minuti: f.presa_minuti, ordini_per_carico: f.ordini_per_carico }) : ({ fase_id: f.fase_id, fattore_tempo: f.fattore }));
+  if (nuova || JSON.stringify(d.fasi) !== JSON.stringify(o.fasi)) p.fasi = d.fasi.map(f => f.presa_attiva ? ({ fase_id: f.fase_id, fattore_tempo: 1, presa_minuti: f.presa_minuti, ante_per_pressata: f.ante_per_pressata }) : ({ fase_id: f.fase_id, fattore_tempo: f.fattore }));
   if (nuova || JSON.stringify(d.comp) !== JSON.stringify(o.comp)) p.competenze = d.comp;
   return p;
 }
@@ -11243,7 +11243,7 @@ async function fmSalva(poi) {
   const d = FM.draft;
   if (!d.nome.trim()) { toast('Inserisci il nome della macchina.', 'err'); return; }
   if (d.ore !== null && (!(d.ore >= 0.5) || d.ore > 24)) { toast('Le ore devono stare tra 0,5 e 24.', 'err'); return; }
-  if (d.fasi.some(f => f.presa_attiva && !presaValida(f.presa_minuti, f.ordini_per_carico))) { toast(Etichette.presa.config.errore, 'err'); return; }
+  if (d.fasi.some(f => f.presa_attiva && !presaValida(f.presa_minuti, f.ante_per_pressata))) { toast(Etichette.presa.config.errore, 'err'); return; }
   const prima = d.id === null ? null : macchineList.find(x => x.id === d.id);
   const bloccavaPrima = prima ? new Set(fmFasiBloccate(prima)) : new Set();
   FM.salvando = true; fmAggiornaStato();
@@ -11344,7 +11344,7 @@ function fmRenderDettaglio() {
     const opzioni = (opz.includes(f.fattore) ? opz : [...opz, f.fattore].sort((a, b) => a - b)).map(v => `<option value="${v}" ${v === f.fattore ? 'selected' : ''}>${escapeHtml(fmtF(v))}</option>`).join('');
     return `<span class="fs-chip link fm-chipfase"><span>${fmFaseNum(f.fase_id)}. ${escapeHtml(fmFaseNome(f.fase_id))}</span>
       ${f.presa_attiva ? '' : `<select class="fm-fatt" aria-label="Tempo macchina per ${escapeHtml(fmFaseNome(f.fase_id))}" onchange="fmSetFattore(${f.fase_id}, this.value)">${opzioni}</select>`}
-      <span class="presa-box" style="flex:1 1 100%">${presaBloccoHtml(f.presa_attiva, f.presa_minuti, f.ordini_per_carico, 'fmSetPresa', 'fmPresaCampo', f.fase_id)}</span>
+      <span class="presa-box" style="flex:1 1 100%">${presaBloccoHtml(f.presa_attiva, f.presa_minuti, f.ante_per_pressata, 'fmSetPresa', 'fmPresaCampo', f.fase_id)}</span>
       ${alt.length ? `<span class="alt">anche ${escapeHtml(alt.map(x => x.nome + (Number(x.fattori?.[f.fase_id] ?? 1) !== 1 ? ' (' + fmtF(Number(x.fattori[f.fase_id])) + ')' : '')).join(', '))}</span>` : '<span class="unica" title="Nessun\'altra macchina fa questa fase">unica</span>'}
       <button class="fs-chip-x" aria-label="Togli ${escapeHtml(fmFaseNome(f.fase_id))}" onclick="fmTogliFase(${f.fase_id})">×</button></span>`;
   };

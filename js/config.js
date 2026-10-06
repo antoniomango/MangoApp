@@ -67,7 +67,7 @@ async function leggiConfigPubblica(client) {
 // Versione del client — da incrementare SEMPRE insieme a CACHE in sw.js (stesso valore,
 // stesso commit). Letta da responsabile.html per la guardia di versione sulle operazioni
 // distruttive (esportazione/archiviazione) — vedi Checklist-Sicurezza.md nel vault.
-const APP_VERSION = 'mango-v63';
+const APP_VERSION = 'mango-v64';
 
 // Guardia di versione per operatore.html e ufficio.html: se la versione minima richiesta dal server (config_pubblica) è
 // maggiore di questa, un client rimasto in cache non resta in uso. Prima prova da solo ad aggiornarsi (cancella cache e
