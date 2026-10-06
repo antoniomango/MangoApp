@@ -68,7 +68,7 @@ const Etichette = (() => {
     if (o.risposta_cliente_consegna === 'con_pedana') return 'Il cliente vuole la pedana';
     if (o.risposta_cliente_consegna === 'senza_pedana') return 'Il cliente ritira senza pedana';
     if (o.avvisato_il) return 'Avvisato il ' + _dataOra(o.avvisato_il) + (avvisatoDaNome ? ' da ' + avvisatoDaNome : '') + ', aspetta risposta';
-    return 'Da avvisare';
+    return 'Non ancora avvisato';
   }
   // App operatore: solo la modalità, mai date né tempi
   function consegnaOperatore(o) {
@@ -92,6 +92,22 @@ const Etichette = (() => {
     errori: { consegne_diverse: 'Gli ordini di una spedizione unica devono avere la stessa consegna (e la stessa risposta del cliente): allinea prima la consegna.',
               modalita_consegna_non_valida: 'Consegna non valida.', ordine_gia_spedito: "L'ordine è già spedito." },
   };
+  // Fasi con tempo di presa (incollaggio in pressa / strettoio): il pezzo resta sulla macchina senza l'operatore
+  const _oraBreve = iso => iso ? new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
+  const PRESA = {
+    pulsante: '✓ Messo in pressa', pulsanteSu: nome => '✓ Messo in pressa — ' + nome, completataSu: nome => '✓ Completata — ' + nome,
+    inPressa: 'In pressa', sceltaMacchina: 'Su quale macchina?', toast: 'Messo in pressa',
+    errori: { scegli_macchina_presa: 'Scegli la macchina su cui è stato messo in pressa.', macchina_non_valida: 'Macchina non valida per questa fase.' },
+    // responsabile
+    inPressaSu: (macchina, fino) => 'In pressa' + (macchina ? ' su ' + macchina : '') + (fino ? ' fino alle ' + _oraBreve(fino) : ''),
+    config: {
+      titolo: 'Tempo di presa', minuti: 'Minuti sotto pressa', ordini: 'Ordini per carico',
+      spiega: 'Il pezzo resta sulla macchina senza bisogno dell\'operatore. La macchina è occupata per i minuti di presa divisi per gli ordini per carico; la fase dopo parte solo quando la presa è finita.',
+      moltiplicatore: 'Con la presa il moltiplicatore di tempo non si usa.',
+      errore: 'Tempo di presa non valido: minuti da 1 a 1440 e ordini per carico da 1 a 50, sempre insieme.',
+      occupa: (presa, ordini) => 'Occupa la macchina ' + Math.round(presa / ordini) + ' min per ordine',
+    },
+  };
   // Spedizione unica nel piano e nell'app operatore
   const SPEDIZIONE_UNICA = {
     riga: (cliente, codici) => 'Spedizione unica ' + (cliente || '') + ' · ' + (codici || []).join(', '),
@@ -107,7 +123,7 @@ const Etichette = (() => {
     errori: { fasi_gia_iniziate: 'Le fasi interessate sono già iniziate: la risposta non si può più cambiare.', non_autorizzato: 'Non hai il permesso di registrare gli avvisi.',
               sessione_non_valida: 'Sessione scaduta: accedi di nuovo.', ordine_non_da_avvisare: "L'ordine non è più da avvisare.", risposta_gia_registrata: 'La risposta è già registrata.',
               ordine_non_trovato: 'Ordine non trovato.', ordine_non_modificabile: "L'ordine non è più modificabile." },
-    riga: x => (x.stato_avviso === 'avvisato') ? 'Avvisato il ' + _dataOra(x.avvisato_il) + (x.avvisato_da ? ' da ' + x.avvisato_da : '') : 'Da avvisare',
+    riga: x => (x.stato_avviso === 'avvisato') ? 'Avvisato il ' + _dataOra(x.avvisato_il) + (x.avvisato_da ? ' da ' + x.avvisato_da : '') : 'Non ancora avvisato',
   };
 
   let tipi = [];        // [{id, label, posizione}]
@@ -281,7 +297,7 @@ const Etichette = (() => {
     prioritaEtichetta, prioritaPeso, confrontaPriorita, colorePriorita, badgePriorita,
     statoOrdine: (s, o) => o ? statoOrdineConsegna(s, o) : (STATI_ORDINE[s] || vuoto(s)),
     modalitaConsegna, modalitaConsegnaElenco: () => MODALITA_CONSEGNA, quandoSiFa: () => QUANDO_SI_FA, quandoSiFaTesti: QUANDO_SI_FA_TESTI, ritiraOrdine, statoAvviso, consegnaOperatore,
-    azioneSpedito, suggerimentoConsegna: SUGGERIMENTO_CONSEGNA, consegnaTesti: CONSEGNA_TESTI, spedizioneUnica: SPEDIZIONE_UNICA, avvisi: AVVISI, dataOraBreve: _dataOra,
+    presa: PRESA, azioneSpedito, suggerimentoConsegna: SUGGERIMENTO_CONSEGNA, consegnaTesti: CONSEGNA_TESTI, spedizioneUnica: SPEDIZIONE_UNICA, avvisi: AVVISI, dataOraBreve: _dataOra,
     statoFase: s => STATI_FASE[s] || vuoto(s),
     statoRichiesta: s => STATI_RICHIESTA[s] || vuoto(s),
     azioneLog: a => AZIONI_LOG[a] || a,
