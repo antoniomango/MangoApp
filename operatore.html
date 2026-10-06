@@ -198,13 +198,12 @@ textarea:focus { border-color: var(--accent); }
 #foto-cam-btn-scatta:active { background:var(--media-press); }
 #foto-cam-progress { display:none; color:var(--media-ink); text-align:center; padding:6px; background:var(--media-bar); font-size:13px; flex:0 0 auto; }
 
-/* ── DIALOG SPEDIZIONE UNICA (completamento fase di gruppo) ── */
-#gruppo-fase-dialog { display:none; position:fixed; inset:0; z-index:9500; background:var(--overlay-soft); align-items:center; justify-content:center; padding:20px; }
-#gruppo-fase-dialog.open { display:flex; }
-#gruppo-fase-dialog .box { background:var(--surface); border-radius:var(--radius-card); padding:20px; max-width:380px; width:100%; }
-#gruppo-fase-dialog .box h4 { margin:0 0 10px; font-size:16px; }
-#gruppo-fase-dialog .box p { font-size:14px; color:var(--muted); margin:0 0 16px; }
-#gruppo-fase-dialog .box .btn { margin-bottom:8px; }
+/* ── SPEDIZIONE UNICA (voce di gruppo) e consegna ── */
+.ov-spedizione { font-size:13px; color:var(--accent); font-weight:600; margin-top:3px; }
+.ov-avviso-chiusura { font-size:12px; color:var(--muted); margin:6px 0 0; }
+.ov-consegna { display:inline-block; font-size:11px; font-weight:700; padding:2px 7px; border-radius:var(--radius-pill, 999px); background:var(--info-soft); color:var(--info-ink); margin-top:4px; }
+.badge-in_attesa_cliente { background: var(--warn-soft); color: var(--warn-ink); }
+.fase-row.in_attesa_cliente .fase-num-circle { background: var(--warn-soft); color: var(--warn-ink); }
 
 /* ── OGGI (piano del giorno) ── */
 .oggi-riepilogo { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 14px 16px; margin-bottom: 12px; }
@@ -534,17 +533,6 @@ textarea:focus { border-color: var(--accent); }
     <button type="button" id="foto-cam-btn-scatta" onclick="scattaFotoInterna()" aria-label="Scatta foto"></button>
   </div>
   <div id="foto-cam-progress"></div>
-</div>
-
-<!-- SPEDIZIONE UNICA — dialog completamento fase di gruppo -->
-<div id="gruppo-fase-dialog">
-  <div class="box">
-    <h4><i data-ic="pacco"></i> Spedizione unica</h4>
-    <p id="gruppo-fase-dialog-testo"></p>
-    <button type="button" class="btn btn-primary" id="gruppo-fase-dialog-tutti">Tutti gli ordini</button>
-    <button type="button" class="btn btn-secondary" id="gruppo-fase-dialog-solo">Solo questo ordine</button>
-    <button type="button" class="btn btn-secondary" style="opacity:.75" id="gruppo-fase-dialog-annulla">Annulla</button>
-  </div>
 </div>
 
 <!-- TOAST -->
@@ -1461,7 +1449,8 @@ async function renderOrdineDetail(ordineId) {
     <div class="meta-item"><label>Tipo</label><span>${tipoProdLabel(ordine.tipo_prodotto)}</span></div>
     ${ordine.tipo === 'extra' ? '' : metaLatiLavorazioniHtml(ordine) + Etichette.attributiOrdine(ordine).map(a => `<div class="meta-item"><label>${escapeHtml(a.etichetta)}</label><span>${escapeHtml(a.valore)}</span></div>`).join('')}
     <div class="meta-item"><label>Priorità</label>${Etichette.badgePriorita(ordine.priorita)}</div>
-    <div class="meta-item"><label>Stato</label><span class="badge badge-${ordine.stato}">${Etichette.statoOrdine(ordine.stato)}</span></div>
+    <div class="meta-item"><label>Stato</label><span class="badge badge-${ordine.stato}">${Etichette.statoOrdine(ordine.stato, ordine)}</span></div>
+    <div class="meta-item"><label>Consegna</label><span>${escapeHtml(Etichette.consegnaOperatore(ordine))}</span></div>
     <div class="meta-item"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}${ordine.scadenza ? ` · Settimana ${settimanaIsoDaData(ordine.scadenza)}` : ''}</span></div>
     ${fratelliGruppoDet.length ? `<div class="meta-item" style="grid-column:1/-1"><label><i data-ic="pacco"></i> Spedizione unica</label><span style="color:var(--accent);font-weight:600">Insieme a ${escapeHtml(fratelliGruppoDet.join(', '))}</span></div>` : ''}
     ${ordine.note_generali ? `<div class="meta-item" style="grid-column:1/-1"><label>Note</label><span class="nota-ordine-testo">${escapeHtml(ordine.note_generali)}</span></div>` : ''}
@@ -1479,7 +1468,7 @@ async function renderOrdineDetail(ordineId) {
   const btnSpeditoEl = document.getElementById('ord-det-btn-spedito');
   if (btnSpeditoEl) {
     if (ordine.stato === 'attesa_spedizione') {
-      btnSpeditoEl.innerHTML = `<button class="btn btn-ok" style="width:100%;margin-top:8px;padding:12px" onclick="segnaSpedito('${ordineId}')"><i data-ic="pacco"></i> Segna come spedito</button>`;
+      btnSpeditoEl.innerHTML = `<button class="btn btn-ok" style="width:100%;margin-top:8px;padding:12px" onclick="segnaSpedito('${ordineId}')"><i data-ic="pacco"></i> Segna come ${Etichette.ritiraOrdine(ordine) ? 'ritirato' : 'spedito'}</button>`;
     } else {
       btnSpeditoEl.innerHTML = '';
     }
@@ -1573,7 +1562,7 @@ async function renderOrdineDetail(ordineId) {
           const depOf = ordFasi.find(of => of.fase_id === depId);
           return depOf && _depNonSoddisfatta(depId, depOf);
         });
-      const icon = f.stato === 'completata' ? '✓' : (f.stato === 'in_attesa' && est) ? '<i data-ic="pausa"></i>' : isBloccata ? '<i data-ic="lucchetto"></i>' : isCustom ? '★' : f.fase_id;
+      const icon = f.stato === 'completata' ? '✓' : (f.stato === 'in_attesa' && est) ? '<i data-ic="pausa"></i>' : (isBloccata || f.stato === 'in_attesa_cliente') ? '<i data-ic="lucchetto"></i>' : isCustom ? '★' : f.fase_id;
       const extraBadges = [
         cnc ? '<span style="font-size:9px;font-weight:700;background:var(--violet);color:var(--on-violet);padding:1px 4px;border-radius:3px;margin-left:4px">CNC</span>' : '',
         est ? '<span style="font-size:9px;font-weight:700;background:var(--ext);color:var(--on-ext);padding:1px 4px;border-radius:3px;margin-left:4px">EXT</span>' : ''
@@ -1918,6 +1907,7 @@ async function renderFaseDetail(ordFaseId, ordineId) {
           <label>Le tue note (opzionale)</label>
           <textarea id="note-op" placeholder="Scrivi eventuali note sul lavoro svolto…">${escapeHtml(f.note_operatore || '')}</textarea>
         </div>
+        ${avvisoChiusuraSpedizione(codiciSpedizioneFase(ordine, f.fase_id))}
         <button class="btn btn-ok" id="btn-completa-fase" style="margin-top:14px" onclick="completaFase('${ordFaseId}', '${ordineId}')">✓ ${aPezzi ? 'Completata (tutti i pezzi)' : 'Completata'}</button>
       </div>`;
   } else if (f.stato === 'completata') {
@@ -1931,7 +1921,7 @@ async function renderFaseDetail(ordFaseId, ordineId) {
           <div class="azione-box" style="border-color:var(--ok)">
             <h4><i data-ic="pacco"></i> Pronto per la spedizione</h4>
             <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Tutte le fasi di produzione sono completate. Segna l'ordine come spedito.</p>
-            <button class="btn btn-ok" onclick="segnaSpedito('${ordineId}')">✓ Segna come spedito</button>
+            <button class="btn btn-ok" onclick="segnaSpedito('${ordineId}')">✓ Segna come ${Etichette.ritiraOrdine(ordine) ? 'ritirato' : 'spedito'}</button>
           </div>`;
       }
     }
@@ -1980,51 +1970,19 @@ async function pezziFase(ordFaseId, ordineId, azione) {
   await renderOrdineDetail(ordineId);
 }
 
-// "Spedizione unica": la scelta compare solo per le fasi con la proprietà fasi.gruppo_spedizione (configurabile dal responsabile).
-
-// Dialog "solo questo ordine / tutti gli ordini del gruppo" — risolve a 'solo', 'tutti' o
-// null (annullato, non completare nulla).
-function chiediModalitaCompletamentoGruppo(codiciFratelli) {
-  return new Promise(resolve => {
-    const dialog = document.getElementById('gruppo-fase-dialog');
-    const testo = document.getElementById('gruppo-fase-dialog-testo');
-    const btnTutti = document.getElementById('gruppo-fase-dialog-tutti');
-    const btnSolo = document.getElementById('gruppo-fase-dialog-solo');
-    const btnAnnulla = document.getElementById('gruppo-fase-dialog-annulla');
-    const n = codiciFratelli.length + 1;
-    testo.textContent = `Questo ordine fa parte di una spedizione unica con ${codiciFratelli.join(', ')}. Vuoi completare questa fase solo per questo ordine o per tutti e ${n}?`;
-    const chiudi = (esito) => {
-      dialog.classList.remove('open');
-      btnTutti.onclick = btnSolo.onclick = btnAnnulla.onclick = null;
-      resolve(esito);
-    };
-    btnTutti.onclick = () => chiudi('tutti');
-    btnSolo.onclick = () => chiudi('solo');
-    btnAnnulla.onclick = () => chiudi(null);
-    dialog.classList.add('open');
-  });
+// Spedizione unica: la chiusura vale sempre per tutti gli ordini del gruppo (lo garantisce il database).
+// Prima della conferma si mostra un avviso informativo con i codici (nessuna scelta da fare).
+function avvisoChiusuraSpedizione(codici) {
+  return (codici && codici.length > 1) ? `<div class="ov-avviso-chiusura"><i data-ic="pacco"></i> ${escapeHtml(Etichette.spedizioneUnica.chiusura(codici))}</div>` : '';
+}
+// Codici dell'intera spedizione di un ordine (compreso lui) per una fase con la proprietà "spedizione unica"
+function codiciSpedizioneFase(ordine, faseId) {
+  if (!ordine?.gruppo_spedizione_id || !faseGruppoSpedizione(faseId)) return [];
+  return ordiniCache.filter(o => o.gruppo_spedizione_id === ordine.gruppo_spedizione_id).map(o => o.codice || '—').sort();
 }
 
 async function completaFase(ordFaseId, ordineId) {
   const note = document.getElementById('note-op')?.value.trim() || null;
-
-  // Spedizione unica: se la fase ha la proprietà "gruppo_spedizione" e l'ordine è raggruppato, chiedi all'operatore
-  // se completare solo questo ordine o tutti quelli della stessa spedizione. Solo online: la
-  // scelta richiede di conoscere i fratelli del gruppo, già disponibili in ordiniCache.
-  let modalitaGruppo = false;
-  if (isOnline && _faseDetCorrente?.id === ordFaseId && faseGruppoSpedizione(_faseDetCorrente.fase_id)) {
-    const ordine = ordiniCache.find(o => o.id === ordineId);
-    if (ordine?.gruppo_spedizione_id) {
-      const codiciFratelli = ordiniCache
-        .filter(o => o.gruppo_spedizione_id === ordine.gruppo_spedizione_id && o.id !== ordineId)
-        .map(o => o.codice || '—');
-      if (codiciFratelli.length) {
-        const scelta = await chiediModalitaCompletamentoGruppo(codiciFratelli);
-        if (!scelta) return; // annullato: non completare nulla
-        modalitaGruppo = scelta === 'tutti';
-      }
-    }
-  }
 
   // Blocca il bottone subito per evitare doppi click
   const btnCompleta = document.getElementById('btn-completa-fase');
@@ -2033,16 +1991,14 @@ async function completaFase(ordFaseId, ordineId) {
   if (btnCompleta) btnCompleta.textContent = 'Completamento...';
 
   if (isOnline) {
-    const { data, error } = await sb.rpc('completa_fase_diretta', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_fase_id: ordFaseId, p_note_operatore: note, p_gruppo: modalitaGruppo });
+    const { data, error } = await sb.rpc('completa_fase_diretta', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_fase_id: ordFaseId, p_note_operatore: note });
     if (error || !data?.ok) {
       if (btnCompleta) { btnCompleta.disabled = false; btnCompleta.textContent = '✓ Completata'; }
       toast(erroreCompletamento(data, error), 'err');
       return;
     }
-    if (modalitaGruppo && data.risultati) {
-      const etichette = { completata: 'completata', gia_completata: 'già completata', saltata_non_trovata: 'saltata (fase non trovata)' };
-      const riepilogo = data.risultati.map(r => `${r.codice}: ${etichette[r.esito] || 'saltata'}`).join(' · ');
-      toast(riepilogo, data.risultati.every(r => r.esito === 'completata' || r.esito === 'gia_completata') ? 'ok' : 'err');
+    if ((data.chiusi_con || []).length) {
+      toast(Etichette.spedizioneUnica.chiusa([...(data.chiusi_con || []), ordiniCache.find(o => o.id === ordineId)?.codice || '—'].sort()), 'ok');
     } else {
       toast('Fase completata!', 'ok');
     }
@@ -2196,11 +2152,12 @@ async function inviaNotificaPush(destinatarioId, titolo, messaggio) {
 }
 
 async function segnaSpedito(ordineId) {
-  if (!confirm('Segnare questo ordine come spedito?')) return;
+  const ritira = Etichette.ritiraOrdine(ordiniCache.find(o => o.id === ordineId));
+  if (!confirm(ritira ? 'Segnare questo ordine come ritirato?' : 'Segnare questo ordine come spedito?')) return;
   if (isOnline) {
     const { data } = await sb.rpc('segna_spedito', { p_ordine_id: ordineId, p_utente_id: currentUser.id, p_session_token: sessionToken });
     if (!data?.ok) { toast(data?.errore || 'Errore', 'err'); return; }
-    toast('Ordine spedito!', 'ok');
+    toast(ritira ? 'Ordine ritirato!' : 'Ordine spedito!', 'ok');
     await loadOrdini();
     showScreen('home');
   } else {
@@ -2584,7 +2541,14 @@ function renderOggiElenco() {
 
 function oggiTitoloVoce(v) {
   const o = v.ordine || {};
+  if (v.spedizione_unica) return escapeHtml(v.fase_nome || '');      // voce di gruppo: titolo = nome della fase
   return `${escapeHtml(o.cliente || '')} — ${escapeHtml(o.codice || '')}`;
+}
+// Consegna sulle voci delle fasi che dipendono dalla consegna (fasi.solo_per_consegna): solo la modalità, mai date né tempi
+function oggiConsegnaChip(v) {
+  const f = fasi.find(x => x.id === v.fase_id);
+  if (!f || !f.solo_per_consegna || !v.ordine) return '';
+  return `<div><span class="ov-consegna">${escapeHtml(Etichette.consegnaOperatore(v.ordine))}</span></div>`;
 }
 
 function oggiApriGruppo(chiave) { oggiFaseAperta = chiave; oggiSelezione.clear(); oggiModoMultiplo = false; renderOggi(); window.scrollTo?.(0, 0); document.querySelector('.app-content')?.scrollTo?.(0, 0); }
@@ -2644,10 +2608,13 @@ function renderOggiVoce(v, solaLettura) {
       ${ordiniCache.some(x => x.id === v.ordine_id) ? `<button type="button" class="btn btn-secondary piccolo" style="width:auto;flex:0 0 auto" onclick="openOrdineDetail('${escapeJsAttr(v.ordine_id)}')" aria-label="Foto e dettaglio ordine"><i data-ic="fotocamera"></i> Foto</button>` : ''}
       ${v.pezzi && !v.fatta && oggiModoMultiplo ? `<span class="og-conta" style="font-family:var(--font-mono);font-size:12px;color:var(--muted)">${v.pezzi.fatti} di ${v.pezzi.totali}</span>` : ''}
     </div>
-    <div class="ov-sub">${o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo'}${bloccata ? ' · <strong>dopo: ' + escapeHtml(v.bloccata_da.join(', ')) + '</strong>' : ''}</div>
+    ${v.spedizione_unica ? `<div class="ov-spedizione"><i data-ic="pacco"></i> ${escapeHtml(Etichette.spedizioneUnica.riga(v.spedizione_unica.cliente, v.spedizione_unica.ordini.map(x => x.codice)))}</div>` : ''}
+    <div class="ov-sub">${v.spedizione_unica ? '' : (o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo')}${bloccata ? (v.spedizione_unica ? '' : ' · ') + '<strong>dopo: ' + escapeHtml(v.bloccata_da.join(', ')) + '</strong>' : ''}</div>
+    ${oggiConsegnaChip(v)}
     ${meta ? `<div class="order-meta" style="margin:8px 0 0">${meta}</div>` : ''}
     ${renderNotaOrdineBox(o)}
     ${azioni ? `<div class="ov-azioni">${azioni}</div>` : ''}
+    ${v.spedizione_unica && !v.fatta && !bloccata && !solaLettura ? avvisoChiusuraSpedizione(v.spedizione_unica.ordini.map(x => x.codice)) : ''}
   </div>`;
 }
 
@@ -2699,15 +2666,6 @@ async function oggiEsegui(fn, voceIds = []) {
 async function oggiCompleta(voceId) {
   const v = oggiTrovaVoce(voceId); if (!v) return;
   if (oggiOperazione) return;
-  let gruppo = false;
-  if (isOnline && v.ordine_fase_id && faseGruppoSpedizione(v.fase_id) && v.ordine?.gruppo_spedizione_id) {
-    const codiciFratelli = ordiniCache.filter(o => o.gruppo_spedizione_id === v.ordine.gruppo_spedizione_id && o.id !== v.ordine_id).map(o => o.codice || '—');
-    if (codiciFratelli.length) {
-      const scelta = await chiediModalitaCompletamentoGruppo(codiciFratelli);
-      if (!scelta) return;
-      gruppo = scelta === 'tutti';
-    }
-  }
   await oggiEsegui(async () => {
     if (!isOnline) {
       try {
@@ -2722,11 +2680,10 @@ async function oggiCompleta(voceId) {
       return () => { oggiSegnaFatta(v); cacheSet('oggi', oggiDati); };   // il server confermerà alla sincronizzazione
     }
     const { data, error } = await sb.rpc('completa_fase_diretta', { p_operatore_id: currentUser.id, p_session_token: sessionToken,
-      p_ordine_fase_id: v.ordine_fase_id || null, p_fase_extra_id: v.fase_extra_id || null, p_gruppo: gruppo });
+      p_ordine_fase_id: v.ordine_fase_id || null, p_fase_extra_id: v.fase_extra_id || null });
     if (error || !data?.ok) { toast(erroreCompletamento(data, error), 'err'); return; }
-    if (gruppo && data.risultati) {
-      const gia = data.risultati.filter(r => r.esito === 'gia_completata').length;
-      toast(gia === data.risultati.length ? 'Era già completata' : 'Completate per tutta la spedizione', 'ok');
+    if ((data.chiusi_con || []).length) {
+      toast(Etichette.spedizioneUnica.chiusa(v.spedizione_unica ? v.spedizione_unica.ordini.map(x => x.codice) : data.chiusi_con), 'ok');
     } else {
       toast(data.gia_completata ? 'Era già completata' : 'Completata!', 'ok');
     }

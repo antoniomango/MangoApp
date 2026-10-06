@@ -23,7 +23,7 @@ const Etichette = (() => {
 
   const STATI_ORDINE = { aperto: 'Aperto', sospeso: 'Sospeso', spedito: 'Spedito', attesa_spedizione: 'In attesa corriere' };
   const STATI_FASE = { disponibile: 'Disponibile', in_corso: 'In corso', in_attesa: 'In attesa', completata: 'Completata',
-                       non_applicabile: 'Non applicabile', bloccata: 'Bloccata', assente: 'Assente' };
+                       non_applicabile: 'Non applicabile', bloccata: 'Bloccata', assente: 'Assente', in_attesa_cliente: 'Attende il cliente' };
   // Piano del giorno: motivi per cui una voce esce dal piano e origine delle voci (enumerazioni chiuse del database)
   const MOTIVI_USCITA_PIANO = { responsabile: 'Tolta da te', non_piu_applicabile: 'Non più applicabile', ordine_non_attivo: 'Ordine non più attivo',
                                 macchina_non_disponibile: 'Macchina non disponibile', dipendenza_non_soddisfatta: 'In attesa di una fase precedente' };
@@ -37,8 +37,8 @@ const Etichette = (() => {
   // Macchine: stati (valori del database) e tempo macchina per fase (quanto la macchina resta occupata rispetto al tempo di riferimento).
   // I valori offerti sono qui; un valore salvato diverso si mostra comunque (`fattoreTempoEtichetta`).
   const STATI_MACCHINA = [['attiva', 'Attiva'], ['manutenzione', 'In manutenzione'], ['fuori_uso', 'Fuori uso']];
-  const FATTORI_TEMPO_MACCHINA = [[1, 'tempo normale'], [1.5, 'pressa ×1,5'], [2, 'pressa ×2'], [3, 'pressa ×3']];
-  const fattoreTempoEtichetta = f => (FATTORI_TEMPO_MACCHINA.find(x => x[0] === Number(f)) || [0, '×' + String(Number(f)).replace('.', ',')])[1];
+  const FATTORI_TEMPO_MACCHINA = [[1, 'tempo normale'], [1.5, 'tempo ×1,5'], [2, 'tempo ×2'], [3, 'tempo ×3']];
+  const fattoreTempoEtichetta = f => (FATTORI_TEMPO_MACCHINA.find(x => x[0] === Number(f)) || [0, 'tempo ×' + String(Number(f)).replace('.', ',')])[1];
   const STATI_RICHIESTA = { in_attesa: 'In attesa', approvata: 'Approvata', rifiutata: 'Non approvata', annullata: 'Annullata' };
   const AZIONI_LOG = {
     ordine_creato: 'Ordine creato', ordine_modificato: 'Ordine modificato', ordine_sospeso: 'Ordine sospeso',
@@ -47,6 +47,67 @@ const Etichette = (() => {
     fase_messa_in_attesa: 'Fase messa in attesa', fase_ripresa: 'Fase ripresa', fase_confermata_ricezione: 'Ricezione confermata',
     fase_annullata: 'Fase annullata', fase_riaperta: 'Fase riaperta', fase_eliminata: 'Fase eliminata',
     fase_pausa_automatica: 'Pausa automatica a fine turno', nc_segnalata: 'Non conformità segnalata', nc_chiusa: 'Non conformità chiusa',
+  };
+
+  // ── Consegna dell'ordine (da spedire / ritira / da avvisare) e "quando si fa" una fase ──
+  const MODALITA_CONSEGNA = [['da_spedire', 'Da spedire'], ['ritira', 'Ritira il cliente'], ['da_avvisare', 'Da avvisare']];
+  const modalitaConsegna = m => (MODALITA_CONSEGNA.find(x => x[0] === m) || [m, vuotoTesto(m)])[1];
+  function vuotoTesto(v) { return (v === null || v === undefined || v === '') ? '—' : v; }
+  // Casi in cui si fa una fase (fasi.solo_per_consegna): nessuna scelta = sempre
+  const QUANDO_SI_FA = [['da_spedire', 'Da spedire'], ['ritira', 'Ritira il cliente'], ['avvisare_con_pedana', 'Da avvisare, se vuole la pedana']];
+  const QUANDO_SI_FA_TESTI = {
+    titolo: 'Quando si fa',
+    spiega: 'Togli la spunta dai casi in cui questa fase non serve. Con tutte le spunte la fase si fa sempre. Per gli ordini «Da avvisare» la fase aspetta la risposta del cliente: se vuole la pedana entra nel piano, se ritira senza pedana non si fa.',
+    almenoUno: 'Lascia almeno un caso.',
+  };
+  const ritiraOrdine = o => !!o && (o.modalita_consegna === 'ritira' || (o.modalita_consegna === 'da_avvisare' && o.risposta_cliente_consegna === 'senza_pedana'));
+  // Stato dell'avviso al cliente, per le schede e gli elenchi del responsabile (data e ora senza secondi)
+  const _dataOra = iso => { if (!iso) return ''; const d = new Date(iso); return d.getDate() + '/' + (d.getMonth() + 1) + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+  function statoAvviso(o, avvisatoDaNome) {
+    if (!o || o.modalita_consegna !== 'da_avvisare') return '';
+    if (o.risposta_cliente_consegna === 'con_pedana') return 'Il cliente vuole la pedana';
+    if (o.risposta_cliente_consegna === 'senza_pedana') return 'Il cliente ritira senza pedana';
+    if (o.avvisato_il) return 'Avvisato il ' + _dataOra(o.avvisato_il) + (avvisatoDaNome ? ' da ' + avvisatoDaNome : '') + ', aspetta risposta';
+    return 'Da avvisare';
+  }
+  // App operatore: solo la modalità, mai date né tempi
+  function consegnaOperatore(o) {
+    if (!o) return '';
+    if (o.modalita_consegna === 'ritira') return 'Ritira il cliente';
+    if (o.modalita_consegna === 'da_avvisare') return o.risposta_cliente_consegna === 'con_pedana' ? 'Pedana richiesta dal cliente' : o.risposta_cliente_consegna === 'senza_pedana' ? 'Ritira il cliente (senza pedana)' : 'Cliente da avvisare';
+    return 'Da spedire';
+  }
+  // Pronto per il ritiro / Ritirato: stesso stato del database, cambia solo il testo
+  function statoOrdineConsegna(stato, o) {
+    if (ritiraOrdine(o) && stato === 'attesa_spedizione') return 'Pronto per il ritiro';
+    if (ritiraOrdine(o) && stato === 'spedito') return 'Ritirato';
+    return STATI_ORDINE[stato] || vuoto(stato);
+  }
+  const azioneSpedito = o => ritiraOrdine(o) ? 'Ritirato' : 'Spedito';
+  const SUGGERIMENTO_CONSEGNA = (cliente, s) => !s || !s.modalita ? '' : cliente + ' di solito: ' + modalitaConsegna(s.modalita) + ' (' + s.conteggio + ' degli ultimi ' + s.su + ' ordini)';
+  const CONSEGNA_TESTI = {
+    etichetta: 'Consegna', obbligatoria: 'Scegli la consegna.',
+    gruppoCambio: codici => 'La consegna vale per tutta la spedizione unica: cambia anche ' + codici.join(', ') + '.',
+    fasiLasciate: l => 'Alcune fasi già iniziate o completate restano come sono: ' + l.map(x => x.codice + ' — ' + x.fase).join('; ') + '.',
+    errori: { consegne_diverse: 'Gli ordini di una spedizione unica devono avere la stessa consegna (e la stessa risposta del cliente): allinea prima la consegna.',
+              modalita_consegna_non_valida: 'Consegna non valida.', ordine_gia_spedito: "L'ordine è già spedito." },
+  };
+  // Spedizione unica nel piano e nell'app operatore
+  const SPEDIZIONE_UNICA = {
+    riga: (cliente, codici) => 'Spedizione unica ' + (cliente || '') + ' · ' + (codici || []).join(', '),
+    chiusura: codici => 'Si chiude per tutta la spedizione: ' + (codici || []).join(', '),
+    chiusa: codici => 'Completata per tutta la spedizione: ' + (codici || []).join(', '),
+  };
+  // Clienti da avvisare (responsabile e segreteria)
+  const AVVISI = {
+    titolo: 'Clienti da avvisare', vuoto: 'Nessun cliente da avvisare adesso.', risposteTitolo: 'Risposte registrate (correggibili)',
+    azioni: { con_pedana: 'Vuole la pedana', senza_pedana: 'Ritira senza pedana', avvisato: 'Avvisato, aspetta risposta' },
+    ok: { con_pedana: 'Registrato: il cliente vuole la pedana', senza_pedana: 'Registrato: il cliente ritira senza pedana', avvisato: 'Registrato: cliente avvisato' },
+    permesso: 'Può registrare gli avvisi ai clienti',
+    errori: { fasi_gia_iniziate: 'Le fasi interessate sono già iniziate: la risposta non si può più cambiare.', non_autorizzato: 'Non hai il permesso di registrare gli avvisi.',
+              sessione_non_valida: 'Sessione scaduta: accedi di nuovo.', ordine_non_da_avvisare: "L'ordine non è più da avvisare.", risposta_gia_registrata: 'La risposta è già registrata.',
+              ordine_non_trovato: 'Ordine non trovato.', ordine_non_modificabile: "L'ordine non è più modificabile." },
+    riga: x => (x.stato_avviso === 'avvisato') ? 'Avvisato il ' + _dataOra(x.avvisato_il) + (x.avvisato_da ? ' da ' + x.avvisato_da : '') : 'Da avvisare',
   };
 
   let tipi = [];        // [{id, label, posizione}]
@@ -218,7 +279,9 @@ const Etichette = (() => {
     tipoProdotto, attributo, opzione, struttura, materiale, attributiCustom, attributiLato, latoEtichetta, latiAttivi, valoriLatoOrdine, riepilogoLato, lavorazioniCncOrdine, valoreAttributoCustom, attributiOrdine,
     priorita: () => priorita, lati: () => lati, tipi: () => tipi, attributi: () => attributi,
     prioritaEtichetta, prioritaPeso, confrontaPriorita, colorePriorita, badgePriorita,
-    statoOrdine: s => STATI_ORDINE[s] || vuoto(s),
+    statoOrdine: (s, o) => o ? statoOrdineConsegna(s, o) : (STATI_ORDINE[s] || vuoto(s)),
+    modalitaConsegna, modalitaConsegnaElenco: () => MODALITA_CONSEGNA, quandoSiFa: () => QUANDO_SI_FA, quandoSiFaTesti: QUANDO_SI_FA_TESTI, ritiraOrdine, statoAvviso, consegnaOperatore,
+    azioneSpedito, suggerimentoConsegna: SUGGERIMENTO_CONSEGNA, consegnaTesti: CONSEGNA_TESTI, spedizioneUnica: SPEDIZIONE_UNICA, avvisi: AVVISI, dataOraBreve: _dataOra,
     statoFase: s => STATI_FASE[s] || vuoto(s),
     statoRichiesta: s => STATI_RICHIESTA[s] || vuoto(s),
     azioneLog: a => AZIONI_LOG[a] || a,

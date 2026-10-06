@@ -564,6 +564,12 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
 
 /* ── Sezione Fasi (mango-v53): elenco compatto + dettaglio di una fase, vista Flusso. Solo token di css/tema.css ── */
 #sec-fasi-config [hidden] { display: none !important; }
+.consegna-scelta { display: flex; gap: 8px; flex-wrap: wrap; }
+.consegna-scelta button { flex: 1 1 130px; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-btn, 10px); background: var(--surface); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+.consegna-scelta button.attivo { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.consegna-sugg { font-size: 12px; color: var(--muted); margin-top: 6px; min-height: 16px; }
+.consegna-avviso { font-size: 12px; margin-top: 4px; color: var(--accent); font-weight: 600; }
+.avviso-r-azioni { display: flex; gap: 6px; flex-wrap: wrap; }
 .fs-hdr-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .fs-seg { display: inline-flex; background: var(--fill); border-radius: var(--radius-ctl, 10px); padding: 3px; gap: 2px; }
 .fs-seg button { border: none; background: none; padding: 6px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 500; color: var(--muted); cursor: pointer; }
@@ -1935,6 +1941,10 @@ svg.fs-archi path.dim { opacity: .25; }
           <input type="text" id="ord-codice" placeholder="es. L 115 B">
         </div>
       </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Consegna *</label>
+        <div id="ord-consegna-box"></div>
+      </div>
       <div id="suggerimento-gruppo-spedizione" style="display:none;margin:-4px 0 14px;padding:10px 12px;background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:8px;font-size:13px">
         <div id="suggerimento-gruppo-spedizione-testo" style="margin-bottom:6px"></div>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500">
@@ -2043,6 +2053,11 @@ svg.fs-archi path.dim { opacity: .25; }
           <label>N° Ordine *</label>
           <input type="text" id="mod-codice">
         </div>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Consegna</label>
+        <div id="mod-consegna-box"></div>
+        <div id="mod-consegna-gruppo" class="consegna-avviso"></div>
       </div>
       <div class="form-row" id="mod-row-tipo-struttura">
         <div class="form-group">
@@ -2268,6 +2283,13 @@ svg.fs-archi path.dim { opacity: .25; }
         Escludi dalla pianificazione automatica
       </label>
       <div style="font-size:11px;color:var(--muted);margin-top:3px;padding-left:24px">Se attivo, l'operatore non viene mai proposto dal motore ma può prendere in carico manualmente</div>
+      <div id="op-avvisi-row" style="display:none;margin-top:12px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="op-avvisi" onchange="_opAvvisi = this.checked">
+          Può registrare gli avvisi ai clienti
+        </label>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px;padding-left:24px">Vede l'elenco «Clienti da avvisare» e può registrare l'avviso e la risposta del cliente: è l'unica scrittura che ha, non può fare altro.</div>
+      </div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-operatore')">Annulla</button>
@@ -2874,7 +2896,7 @@ async function loadOrdini() {
 
 async function loadOperatori() {
   const { data } = await sb.from('users')
-    .select('id, nome, cognome, ruolo, attivo, ore_default, escluso_pianificazione, pin_da_cambiare, pin_da_reimpostare, pin_scelta_scadenza')
+    .select('id, nome, cognome, ruolo, attivo, ore_default, escluso_pianificazione, pin_da_cambiare, pin_da_reimpostare, pin_scelta_scadenza, puo_registrare_avvisi')
     .in('ruolo', ['operatore', 'sola_lettura'])
     .neq('eliminato', true)
     .order('cognome');
@@ -3104,6 +3126,44 @@ async function loadOggiResp() {
   oggiR = data;
   renderOggiResp();
   loadRicezioniResp();
+  loadAvvisiResp();
+}
+// riquadro "Clienti da avvisare": ordini con consegna «Da avvisare» pronti (una riga per spedizione unica) e risposte ancora correggibili
+let avvisiR = null, _avvisiInCorso = false;
+async function loadAvvisiResp() {
+  const { data, error } = await sb.rpc('clienti_da_avvisare', { p_utente_id: currentUserRow.id, p_session_token: null });
+  avvisiR = (!error && data?.ok) ? data : null;
+  renderOggiResp();
+}
+function riquadroAvvisi() {
+  if (!avvisiR) return '';
+  const A = Etichette.avvisi, da = avvisiR.da_avvisare || [], ris = avvisiR.risposte || [];
+  if (!da.length && !ris.length) return '';
+  const bottone = (id, esito, primario) => `<button class="btn ${primario ? 'btn-primary' : 'btn-secondary'}" style="padding:4px 10px;font-size:12px" ${_avvisiInCorso ? 'disabled' : ''} onclick="registraAvvisoResp('${escapeJsAttr(id)}','${esito}')">${escapeHtml(A.azioni[esito])}</button>`;
+  const codici = x => (x.ordini || []).map(o => escapeHtml(o.codice || '—')).join(', ');
+  const rigaDa = x => `<tr><td><div style="font-weight:600">${escapeHtml(x.cliente)}</div><div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${codici(x)}</div></td>
+    <td style="white-space:nowrap">${x.scadenza ? formatDate(x.scadenza) : '—'}</td>
+    <td>${escapeHtml(A.riga(x))}</td>
+    <td><div class="avviso-r-azioni">${bottone(x.ordine_id, 'con_pedana', true)}${bottone(x.ordine_id, 'senza_pedana', false)}${x.stato_avviso === 'avvisato' ? '' : bottone(x.ordine_id, 'avvisato', false)}</div></td></tr>`;
+  const rigaRis = x => `<tr><td><div style="font-weight:600">${escapeHtml(x.cliente)}</div><div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${codici(x)}</div></td>
+    <td style="white-space:nowrap">${x.scadenza ? formatDate(x.scadenza) : '—'}</td>
+    <td>${escapeHtml(A.azioni[x.risposta] || '')}${x.avvisato_da ? ' · ' + escapeHtml(x.avvisato_da) : ''}</td>
+    <td><div class="avviso-r-azioni">${x.risposta === 'con_pedana' ? bottone(x.ordine_id, 'senza_pedana', false) : bottone(x.ordine_id, 'con_pedana', false)}</div></td></tr>`;
+  return `<div class="card"><div class="card-hdr"><h3>${escapeHtml(A.titolo)}</h3><span style="font-size:12px;color:var(--muted)">${da.length} ${da.length === 1 ? 'cliente' : 'clienti'}</span></div>
+    ${da.length ? `<div style="overflow-x:auto"><table><thead><tr><th>Cliente</th><th>Spedizione</th><th>Stato</th><th></th></tr></thead><tbody>${da.map(rigaDa).join('')}</tbody></table></div>` : `<div style="color:var(--muted);font-size:13px">${escapeHtml(A.vuoto)}</div>`}
+    ${ris.length ? `<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600;font-size:13px">${escapeHtml(A.risposteTitolo)} (${ris.length})</summary><div style="overflow-x:auto;margin-top:8px"><table><thead><tr><th>Cliente</th><th>Spedizione</th><th>Risposta</th><th></th></tr></thead><tbody>${ris.map(rigaRis).join('')}</tbody></table></div></details>` : ''}</div>`;
+}
+async function registraAvvisoResp(ordineId, esito) {
+  if (_avvisiInCorso) return;
+  _avvisiInCorso = true; renderOggiResp();
+  try {
+    const { data, error } = await sb.rpc('registra_avviso_cliente', { p_ordine_id: ordineId, p_esito: esito, p_operatore_id: currentUserRow.id, p_session_token: null });
+    if (error || !data?.ok) toast(Etichette.avvisi.errori[data?.errore] || ('Non registrato: ' + (data?.errore || error?.message || '')), 'err');
+    else toast(Etichette.avvisi.ok[esito] + ' (' + (data.ordini || []).join(', ') + ')', 'ok');
+  } catch (e) { toast('Operazione non riuscita: controlla la connessione e riprova.', 'err'); }
+  finally { _avvisiInCorso = false; }
+  await Promise.all([loadAvvisiResp(), loadOrdini().then(() => { try { renderOrdiniTable(); } catch (e) {} })]);
+  loadOggiResp();
 }
 async function loadRicezioniResp() {
   const { data, error } = await sb.rpc('ricezioni_in_attesa', { p_operatore_id: currentUserRow.id, p_session_token: null });
@@ -3177,7 +3237,7 @@ function renderOggiResp() {
   if (!d.piano_presente) {
     const a0 = document.getElementById('oggi-r-aggiornato'); if (a0) a0.textContent = '';
     riep.innerHTML = '';
-    corpo.innerHTML = riquadroFornitori() + `<div class="empty-state"><div class="icon"><i data-ic="calendario"></i></div>
+    corpo.innerHTML = riquadroAvvisi() + riquadroFornitori() + `<div class="empty-state"><div class="icon"><i data-ic="calendario"></i></div>
       <p>${d.lavorativo ? 'Il piano di oggi non è ancora stato generato: nasce all\'inizio del turno. Puoi crearlo subito con "Rigenera piano di oggi".' : 'Oggi non è un giorno lavorativo: nessun piano.'}</p></div>`;
     return;
   }
@@ -3207,7 +3267,7 @@ function renderOggiResp() {
     const o = v.ordine || {};
     const bl = v.bloccata_da && v.bloccata_da.length ? `<div style="font-size:11px;color:var(--violet)">dopo: ${escapeHtml(v.bloccata_da.join(', '))}</div>` : '';
     return `<tr style="${v.fatta ? 'background:var(--ok-bg)' : ''}">
-      <td><div style="font-weight:600">${escapeHtml(o.cliente || '')} — ${escapeHtml(o.codice || '')}${v.urgente && !v.fatta ? ` <span class="badge" style="background:var(--urgente-bg);color:var(--urgente-ink)" title="${escapeHtml(Etichette.rischioTesto(v.rischio, o.scadenza))}">${Etichette.attesaEsterna.urgente}</span>` : ''}</div>${v.urgente && !v.fatta && v.rischio ? `<div style="font-size:11px;color:var(--urgente-ink)">${escapeHtml(Etichette.rischioTesto(v.rischio, o.scadenza))}</div>` : ''}<div style="font-size:11px;color:var(--muted)">${o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo'}${v.macchina ? ' · ' + escapeHtml(v.macchina) + (v.minuti_macchina != null && Math.round(v.minuti_macchina) !== Math.round(v.minuti_stimati) ? ' (occupa ' + _fmtMin(v.minuti_macchina) + ')' : '') : ''}</div>${bl}</td>
+      <td><div style="font-weight:600">${v.spedizione_unica ? '<i data-ic="pacco"></i> ' + escapeHtml(Etichette.spedizioneUnica.riga(v.spedizione_unica.cliente, v.spedizione_unica.ordini.map(x => x.codice))) : escapeHtml(o.cliente || '') + ' — ' + escapeHtml(o.codice || '')}${v.urgente && !v.fatta ? ` <span class="badge" style="background:var(--urgente-bg);color:var(--urgente-ink)" title="${escapeHtml(Etichette.rischioTesto(v.rischio, o.scadenza))}">${Etichette.attesaEsterna.urgente}</span>` : ''}</div>${v.urgente && !v.fatta && v.rischio ? `<div style="font-size:11px;color:var(--urgente-ink)">${escapeHtml(Etichette.rischioTesto(v.rischio, o.scadenza))}</div>` : ''}<div style="font-size:11px;color:var(--muted)">${v.spedizione_unica ? 'un solo passaggio per ' + v.spedizione_unica.ordini.length + ' ordini' : (o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo')}${v.macchina ? ' · ' + escapeHtml(v.macchina) + (v.minuti_macchina != null && Math.round(v.minuti_macchina) !== Math.round(v.minuti_stimati) ? ' (occupa ' + _fmtMin(v.minuti_macchina) + ')' : '') : ''}</div>${bl}</td>
       <td style="white-space:nowrap">${v.esterna ? '—' : _fmtMin(v.minuti_stimati)}</td>
       <td style="white-space:nowrap">${v.pezzi ? `${v.pezzi.fatti} di ${v.pezzi.totali}` : ''}</td>
       <td>${v.fatta ? '<span class="badge" style="background:var(--ok-soft);color:var(--ok-ink)">✓ fatta</span>' : '<span style="color:var(--muted)">da fare</span>'} ${tag(v)}</td>
@@ -3223,7 +3283,7 @@ function renderOggiResp() {
     if (ok.length) principali.push({ ...g, voci: ok, fatte: ok.filter(v => v.fatta).length, totali: ok.length });
     if (bl.length) inArrivo.push({ ...g, voci: bl, fatte: 0, totali: bl.length });
   });
-  let html = riquadroFornitori() + principali.map(g => `<div class="card"><div class="card-hdr"><h3>${escapeHtml(g.fase_nome)}${g.voci.some(v => v.urgente && !v.fatta) ? ` <span class="badge" style="background:var(--urgente-bg);color:var(--urgente-ink);font-size:10px">${Etichette.attesaEsterna.urgente}</span>` : ''}</h3><span style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${g.fatte} di ${g.totali}</span></div>${tabella(g.voci)}</div>`).join('');
+  let html = riquadroAvvisi() + riquadroFornitori() + principali.map(g => `<div class="card"><div class="card-hdr"><h3>${escapeHtml(g.fase_nome)}${g.voci.some(v => v.urgente && !v.fatta) ? ` <span class="badge" style="background:var(--urgente-bg);color:var(--urgente-ink);font-size:10px">${Etichette.attesaEsterna.urgente}</span>` : ''}</h3><span style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${g.fatte} di ${g.totali}</span></div>${tabella(g.voci)}</div>`).join('');
   if (!principali.length) html += '<div class="empty-state"><p>Nessuna attività eseguibile adesso.</p></div>';
   if (inArrivo.length) {
     const minArrivo = inArrivo.reduce((t, g) => t + g.voci.reduce((u, v) => u + (Number(v.minuti_stimati) || 0), 0), 0);
@@ -4533,21 +4593,22 @@ function ordineRow(o, mini = false) {
       ? `<input type="checkbox" ${selezioneSpedizioneMultipla.has(o.id) ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer;flex-shrink:0;margin-top:2px" onclick="event.stopPropagation()" onchange="toggleSelezioneSpedizioneMultipla('${o.id}')">`
       : '';
   const fratelli = !mini ? codiciFratelliGruppo(o) : [];
-  const badgeGruppo = fratelli.length
+  const badgeGruppoSolo = fratelli.length
     ? `<div style="margin-top:4px;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="event.stopPropagation();apriPannelloGruppoSpedizione('${o.gruppo_spedizione_id}')"><i data-ic="pacco"></i> Spedizione unica con ${escapeHtml(fratelli.join(', '))}</div>`
     : '';
+  const badgeGruppo = badgeGruppoSolo + badgeConsegnaHtml(o);
   return `<tr class="clickable ${isSosp ? '' : scadenzaClass(o.scadenza)}" data-scad="${isSosp ? '' : scadenzaClass(o.scadenza)}" ${rowClass} onclick="${rowOnclick}">
     <td class="c-cliente"><div style="display:flex;align-items:flex-start;gap:8px">${checkbox}<div><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div>${badgeGruppo}</div></div></td>
     <td class="c-tipo">${o.tipo === 'extra' ? '<span style="font-weight:600;color:var(--accent)">Ordine Extra</span>' : `${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}`}</td>
     <td class="c-prio">${Etichette.badgePriorita(o.priorita)}</td>
     <td class="c-qta" style="text-align:center;font-weight:600">${o.quantita || 1}</td>
     <td class="c-scad"><div style="color:${isLate ? 'var(--alert-strong)' : 'inherit'};font-weight:${isLate ? '700' : 'normal'}">${scad}${isLate ? ' <i data-ic="avviso"></i>' : ''}</div><div id="scad-stima-${o.id}" style="font-size:10px;margin-top:2px"></div></td>
-    <td class="c-stato"><span class="badge badge-${o.stato}">${statoLabel(o.stato)}</span></td>
+    <td class="c-stato"><span class="badge badge-${o.stato}">${statoLabel(o.stato, o)}</span></td>
     <td class="c-avanz" id="prog-${o.id}" style="min-width:120px">—</td>
     <td class="c-azioni">${nascondiAzioni ? '' : (o.stato === 'aperto'
         ? `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();sospendi('${o.id}')">Sospendi</button>`
         : o.stato === 'attesa_spedizione'
-          ? `<button class="btn btn-ok" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();segnaSpedito('${o.id}')"><i data-ic="pacco"></i> Spedisci</button>`
+          ? `<button class="btn btn-ok" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();segnaSpedito('${o.id}')"><i data-ic="pacco"></i> ${Etichette.ritiraOrdine(o) ? 'Ritirato' : 'Spedisci'}</button>`
           : `<button class="btn btn-ok" style="padding:4px 10px;font-size:12px" onclick="event.stopPropagation();riattiva('${o.id}')">Riattiva</button>`)}</td>
   </tr>`;
 }
@@ -4776,7 +4837,8 @@ async function renderDettaglioOrdine(id) {
     ${ordine.tipo === 'extra' ? '' : Etichette.attributiOrdine(ordine).map(a => `<div class="detail-field"><label>${escapeHtml(a.etichetta)}</label><span>${escapeHtml(a.valore)}</span></div>`).join('')}
     ${latiLavorazioniDettaglioHtml(ordine)}`}
     <div class="detail-field"><label>Priorità</label>${Etichette.badgePriorita(ordine.priorita)}</div>
-    <div class="detail-field"><label>Stato</label><span class="badge badge-${ordine.stato}">${statoLabel(ordine.stato)}</span></div>
+    <div class="detail-field"><label>Stato</label><span class="badge badge-${ordine.stato}">${statoLabel(ordine.stato, ordine)}</span></div>
+    <div class="detail-field"><label>Consegna</label><span>${escapeHtml(Etichette.modalitaConsegna(ordine.modalita_consegna || 'da_spedire'))}${ordine.modalita_consegna === 'da_avvisare' ? `<div class="consegna-avviso">${escapeHtml(Etichette.statoAvviso(ordine, nomeUtenteOperatore(ordine.avvisato_da)))}</div>` : ''}</span></div>
     <div class="detail-field"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}${ordine.scadenza ? ` · Settimana ${settimanaIsoDaData(ordine.scadenza)}` : ''}${isLate ? ' <i data-ic="avviso"></i> In ritardo' : ''}</span></div>
     <div class="detail-field"><label>Consegna stimata</label><span id="det-stima-consegna" style="color:var(--muted)">Calcolo…</span></div>
     <div class="detail-field"><label>Quantità</label><span>${ordine.quantita || 1}</span></div>
@@ -4809,12 +4871,12 @@ async function renderDettaglioOrdine(id) {
   if (ordine.stato === 'aperto') {
     actEl.innerHTML = `
       <button class="btn btn-secondary" onclick="sospendi('${id}')"><i data-ic="pausa"></i> Sospendi</button>
-      <button class="btn btn-ok" onclick="segnaSpedito('${id}')">✓ Segna Spedito</button>
+      <button class="btn btn-ok" onclick="segnaSpedito('${id}')">✓ Segna ${Etichette.ritiraOrdine(ordine) ? 'Ritirato' : 'Spedito'}</button>
     `;
   } else if (ordine.stato === 'sospeso') {
     actEl.innerHTML = `<button class="btn btn-ok" onclick="riattiva('${id}')"><i data-ic="play"></i> Riattiva</button>`;
   } else {
-    actEl.innerHTML = `<span class="badge badge-spedito">Spedito ${ordine.spedito_il ? formatDate(ordine.spedito_il) : ''}</span>`;
+    actEl.innerHTML = `<span class="badge badge-spedito">${Etichette.azioneSpedito(ordine)} ${ordine.spedito_il ? formatDate(ordine.spedito_il) : ''}</span>`;
   }
   // Pulsante modifica e elimina: solo su ordini non ancora spediti
   if (ordine.stato !== 'spedito') {
@@ -5298,7 +5360,47 @@ async function caricaClienti() {
 let _suggerimentoGruppoOrdiniIds = [];
 let _suggerimentoGruppoId = null;
 
+// ── Consegna dell'ordine (da spedire / ritira / da avvisare): lo stato sta in memoria, mai letto dal DOM al click ──
+const _consegna = { ord: null, mod: null, ordManuale: false };
+function consegnaDisegna(prefisso) {
+  const box = document.getElementById(prefisso + '-consegna-box'); if (!box) return;
+  box.innerHTML = `<div class="consegna-scelta" role="group" aria-label="Consegna">${Etichette.modalitaConsegnaElenco().map(([v, t]) =>
+    `<button type="button" class="${_consegna[prefisso] === v ? 'attivo' : ''}" aria-pressed="${_consegna[prefisso] === v}" onclick="consegnaScegli('${prefisso}','${v}')">${escapeHtml(t)}</button>`).join('')}</div>`
+    + (prefisso === 'ord' ? '<div class="consegna-sugg" id="ord-consegna-sugg" aria-live="polite"></div>' : '');
+}
+function consegnaScegli(prefisso, v) {
+  _consegna[prefisso] = v;
+  if (prefisso === 'ord') _consegna.ordManuale = true;
+  consegnaDisegna(prefisso);
+  if (prefisso === 'ord') consegnaMostraSuggerimento();
+}
+let _consegnaSuggerita = null;
+function consegnaMostraSuggerimento() {
+  const el = document.getElementById('ord-consegna-sugg'); if (!el) return;
+  const cliente = document.getElementById('ord-cliente')?.value.trim() || '';
+  el.textContent = _consegnaSuggerita ? Etichette.suggerimentoConsegna(cliente.toUpperCase(), _consegnaSuggerita) : '';
+}
+// Suggerimento dagli ultimi ordini del cliente (numero di ordini guardati letto dalla configurazione sul server)
+async function consegnaSuggerisci() {
+  _consegnaSuggerita = null;
+  const cliente = document.getElementById('ord-cliente')?.value.trim();
+  if (!cliente) { consegnaMostraSuggerimento(); return; }
+  const { data } = await sb.rpc('consegna_suggerita', { p_cliente: cliente, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (data?.ok && data.modalita) {
+    _consegnaSuggerita = data;
+    if (!_consegna.ordManuale) { _consegna.ord = data.modalita; consegnaDisegna('ord'); }   // preselezione: sempre modificabile
+  }
+  consegnaMostraSuggerimento();
+}
+// Spedizione unica: le consegne dei suggeriti (ordini aperti dello stesso cliente) devono coincidere con quella del nuovo ordine
+function consegnaGruppoSuggeriti() {
+  const ordini = ordiniCache.filter(o => _suggerimentoGruppoOrdiniIds.includes(o.id));
+  const chiavi = new Set(ordini.map(o => (o.modalita_consegna || 'da_spedire') + '|' + (o.risposta_cliente_consegna || '')));
+  return { ordini, unica: chiavi.size <= 1, modalita: ordini[0]?.modalita_consegna || 'da_spedire', conRisposta: ordini.some(o => o.risposta_cliente_consegna) };
+}
+
 async function checkClientiApertiSuggerimento() {
+  consegnaSuggerisci().catch(e => console.warn('suggerimento consegna', e));
   const banner = document.getElementById('suggerimento-gruppo-spedizione');
   const testo = document.getElementById('suggerimento-gruppo-spedizione-testo');
   const check = document.getElementById('suggerimento-gruppo-spedizione-check');
@@ -5342,6 +5444,7 @@ function openModalNuovoOrdine() {
   document.getElementById('suggerimento-gruppo-spedizione-check').checked = false;
   _suggerimentoGruppoOrdiniIds = [];
   _suggerimentoGruppoId = null;
+  _consegna.ord = null; _consegna.ordManuale = false; _consegnaSuggerita = null; consegnaDisegna('ord');
   const struEl = document.getElementById('ord-struttura');
   const tipoPEl = document.getElementById('ord-tipo-prodotto');
   if (struEl && struEl.options.length) struEl.selectedIndex = 0;
@@ -5363,6 +5466,18 @@ async function creaOrdine() {
   const codice = document.getElementById('ord-codice').value.trim();
   if (!codice) { toast('Inserisci il numero ordine', 'err'); return; }
   const tipo = document.getElementById('modal-tipo').value;
+  if (!_consegna.ord) { toast(Etichette.consegnaTesti.obbligatoria, 'err'); return; }
+  let modalitaOrdine = _consegna.ord;
+  const vuoleGruppo = !!document.getElementById('suggerimento-gruppo-spedizione-check')?.checked && _suggerimentoGruppoOrdiniIds.length;
+  if (vuoleGruppo) {
+    const g = consegnaGruppoSuggeriti();
+    if (!g.unica) { toast(Etichette.consegnaTesti.errori.consegne_diverse, 'err'); return; }
+    if (g.conRisposta) { toast('Questa spedizione ha già una risposta del cliente sulla consegna: non si può aggiungere un ordine nuovo.', 'err'); return; }
+    if (g.modalita !== modalitaOrdine) {
+      if (!confirm('La spedizione unica ha consegna «' + Etichette.modalitaConsegna(g.modalita) + '»: la applico anche a questo ordine?')) return;
+      modalitaOrdine = g.modalita;
+    }
+  }
 
   // Valida fasi extra
   let fasiExtra = [];
@@ -5415,6 +5530,7 @@ async function creaOrdine() {
     scadenza: document.getElementById('ord-scadenza').value || null,
     quantita: parseInt(document.getElementById('ord-quantita').value) || 1,
     note_generali: document.getElementById('ord-note').value.trim() || null,
+    modalita_consegna: modalitaOrdine,
   };
   if (tipo === 'standard') {
     dati.struttura = document.getElementById('ord-struttura').value;
@@ -5428,7 +5544,7 @@ async function creaOrdine() {
   }
   const { data: esito, error } = await sb.rpc('crea_ordine', { p_dati: dati, p_responsabile_id: currentUserRow.id, p_session_token: null });
   if (error || !esito?.ok) {
-    const msg = { codice_duplicato: 'Esiste già un ordine con questo numero', priorita_non_valida: 'Priorità non valida' }[esito?.errore] || messaggioAttributo(esito?.errore);
+    const msg = { codice_duplicato: 'Esiste già un ordine con questo numero', priorita_non_valida: 'Priorità non valida', modalita_consegna_non_valida: Etichette.consegnaTesti.errori.modalita_consegna_non_valida }[esito?.errore] || messaggioAttributo(esito?.errore);
     toast('Errore: ' + (msg || esito?.errore || error?.message || ''), 'err'); return;
   }
   const newOrdine = { id: esito.ordine_id };
@@ -5456,7 +5572,7 @@ async function creaOrdine() {
       p_ordine_ids: [newOrdine.id, ..._suggerimentoGruppoOrdiniIds],
       p_gruppo_id: _suggerimentoGruppoId
     });
-    if (!gData?.ok) toast('Ordine creato, ma non è stato possibile aggiungerlo alla spedizione unica: ' + (gData?.errore || ''), 'err');
+    if (!gData?.ok) toast('Ordine creato, ma non è stato possibile aggiungerlo alla spedizione unica: ' + (Etichette.consegnaTesti.errori[gData?.errore] || gData?.errore || ''), 'err');
   }
 
   closeModal('modal-ordine');
@@ -5492,10 +5608,11 @@ async function riattiva(id) {
 }
 
 async function segnaSpedito(id) {
-  if (!confirm('Segnare questo ordine come spedito? L\'azione è irreversibile.')) return;
+  const ritira = Etichette.ritiraOrdine([...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === id));
+  if (!confirm(ritira ? 'Segnare questo ordine come ritirato? L\'azione è irreversibile.' : 'Segnare questo ordine come spedito? L\'azione è irreversibile.')) return;
   const { data } = await sb.rpc('segna_spedito', { p_ordine_id: id, p_utente_id: currentUserRow.id });
   if (data?.ok) {
-    toast('Ordine segnato come spedito', 'ok');
+    toast(ritira ? 'Ordine segnato come ritirato' : 'Ordine segnato come spedito', 'ok');
     await loadOrdini();
     renderDashboard();
     showSection('dashboard');
@@ -5586,7 +5703,7 @@ function renderOperatori() {
     ? produzione.map(op => _cardOperatore(op, true, _etichetteOperatore(op))).join('')
     : '<div class="empty-state"><div class="icon"><i data-ic="persone"></i></div><p>Nessun operatore di produzione</p></div>';
   if (gridUff) gridUff.innerHTML = ufficio.length
-    ? ufficio.map(op => _cardOperatore(op, false, '')).join('')
+    ? ufficio.map(op => _cardOperatore(op, false, op.puo_registrare_avvisi ? '<div class="op-etichette"><span class="op-etichetta">Registra gli avvisi ai clienti</span></div>' : '')).join('')
     : '<div class="empty-state"><div class="icon"><i data-ic="persone"></i></div><p>Nessun profilo ufficio</p></div>';
 }
 
@@ -5601,6 +5718,14 @@ async function forzaLogout(id, nome) {
   toast(`${nome} verrà disconnesso alla prossima apertura dell'app`, 'ok');
 }
 
+let _opAvvisi = false;
+function opAvvisiRiga(visibile, valore, modifica) {
+  _opAvvisi = !!valore;
+  const riga = document.getElementById('op-avvisi-row'), c = document.getElementById('op-avvisi');
+  if (!riga || !c) return;
+  riga.style.display = visibile ? '' : 'none';
+  c.checked = _opAvvisi; c.disabled = !modifica;
+}
 function openModalNuovoOperatore(ruolo) {
   document.getElementById('op-edit-id').value = '';
   document.getElementById('op-nome').value = '';
@@ -5616,6 +5741,7 @@ function openModalNuovoOperatore(ruolo) {
   document.getElementById('op-scelta-pin-nota').style.display = 'none';
   document.getElementById('op-escluso-pianificazione').checked = false;
   document.getElementById('op-ore-default').value = '';
+  opAvvisiRiga(false, false, false);   // il permesso si dà dopo la creazione, dalla scheda del profilo
   const existingComp2 = document.getElementById('op-competenze-section');
   if (existingComp2) existingComp2.remove();
   const existingFerie2 = document.getElementById('op-ferie-section');
@@ -5643,6 +5769,7 @@ function openModalModificaOperatore(id) {
   _nota.style.display = '';
   document.getElementById('op-escluso-pianificazione').checked = !!op.escluso_pianificazione;
   document.getElementById('op-ore-default').value = op.ore_default ?? '';
+  opAvvisiRiga(op.ruolo === 'sola_lettura', op.puo_registrare_avvisi, true);
 
   // Sezione competenze in sola lettura
   const fasiConOp = fasi.filter(f => (f.competenze || []).includes(id)).map(f => {
@@ -5738,6 +5865,10 @@ async function salvaOperatore() {
       p_session_token: null,
     });
     if (error || !data?.ok) { toast(messaggioErroreOperatore(data?.errore || error?.message), 'err'); return; }
+    if (ruolo === 'sola_lettura' && opAttuale && opAttuale.ruolo === 'sola_lettura' && !!opAttuale.puo_registrare_avvisi !== _opAvvisi) {
+      const { data: pa } = await sb.rpc('imposta_permesso_avvisi', { p_utente_id: editId, p_valore: _opAvvisi, p_responsabile_id: currentUserRow.id, p_session_token: null });
+      if (!pa?.ok) { toast('Permesso non salvato: ' + messaggioErroreOperatore(pa?.errore), 'err'); }
+    }
     closeModal('modal-operatore');
     toast('Operatore aggiornato', 'ok');
   } else {
@@ -8253,6 +8384,7 @@ function fsModello(f) {
     tipo_gestione: f.tipo_gestione || 'standard', e_attesa_esterna: !!f.e_attesa_esterna, avvio_automatico: !!f.avvio_automatico,
     e_cnc: !!f.e_cnc, opzionale: !!f.opzionale, gruppo_spedizione: !!f.gruppo_spedizione, ambito_tempo: f.ambito_tempo || 'anta',
     tempo_da_lavorazioni_cnc: !!f.tempo_da_lavorazioni_cnc, materiale_ricezione: f.materiale_ricezione || '',
+    solo_per_consegna: f.solo_per_consegna ? [...f.solo_per_consegna].sort() : null,   // null = sempre
     dipendenze: [...(f.dipendenze || [])].sort((a, b) => a - b),
     macchine: macchineList.filter(x => (x.fase_ids || []).includes(f.id)).map(x => ({ id: x.id, fattore: Number((x.fattori || {})[f.id] ?? 1) })).sort((a, b) => a.id < b.id ? -1 : 1),
     competenze: [...(f.competenze || [])],
@@ -8422,6 +8554,30 @@ function fsSet(campo, valore, rerender = true) {
   if (campo === 'tempo_da_lavorazioni_cnc' && valore) FS.draft.ambito_tempo = 'anta';
   fsAggiornaStato(); if (rerender) fsRenderDettaglio();
 }
+// "Quando si fa": tre caselle; tutte spuntate = sempre (null). Almeno un caso resta sempre spuntato.
+function quandoSiFaInsieme(arr) { return new Set(arr && arr.length ? arr : Etichette.quandoSiFa().map(x => x[0])); }
+function quandoSiFaAgg(arr, caso, on) {
+  const ins = quandoSiFaInsieme(arr);
+  if (on) ins.add(caso); else ins.delete(caso);
+  if (!ins.size) return { arr, errore: true };
+  return { arr: ins.size === Etichette.quandoSiFa().length ? null : [...ins].sort(), errore: false };
+}
+function fsSetQuando(caso, on) {
+  const r = quandoSiFaAgg(FS.draft.solo_per_consegna, caso, on);
+  if (r.errore) { toast(Etichette.quandoSiFaTesti.almenoUno, 'err'); fsRenderDettaglio(); return; }
+  fsSet('solo_per_consegna', r.arr);
+}
+function nfSetQuando(caso, on) {
+  const r = quandoSiFaAgg(nuovaFase.solo_per_consegna, caso, on);
+  if (r.errore) { toast(Etichette.quandoSiFaTesti.almenoUno, 'err'); renderNuovaFase(); return; }
+  nfSet('solo_per_consegna', r.arr);
+}
+function quandoSiFaHtml(arr, fnNome) {
+  const ins = quandoSiFaInsieme(arr), T = Etichette.quandoSiFaTesti;
+  return `<div class="fs-row"><div class="fs-crit-t">${escapeHtml(T.titolo)}</div><div class="fs-desc">${escapeHtml(T.spiega)}</div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">${Etichette.quandoSiFa().map(([v, t]) =>
+      `<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px"><input type="checkbox" ${ins.has(v) ? 'checked' : ''} onchange="${fnNome}('${v}', this.checked)"> ${escapeHtml(t)}</label>`).join('')}</div></div>`;
+}
 function fsSetTesto(campo, valore) {
   FS.draft[campo] = valore; fsAggiornaStato();
   if (campo === 'nome') { const h = document.querySelector('.fs-det-title h2'); if (h) h.textContent = valore || 'Senza nome'; }
@@ -8473,7 +8629,7 @@ function fsTempoModificabile(id) {
 }
 function fsPayload() {
   const d = FS.draft, o = FS.mod[d.id], p = {};
-  ['nome', 'descrizione', 'macro_fase_id', 'tipo_gestione', 'e_attesa_esterna', 'avvio_automatico', 'e_cnc', 'opzionale', 'gruppo_spedizione', 'ambito_tempo', 'tempo_da_lavorazioni_cnc', 'materiale_ricezione'].forEach(k => {
+  ['nome', 'descrizione', 'macro_fase_id', 'tipo_gestione', 'e_attesa_esterna', 'avvio_automatico', 'e_cnc', 'opzionale', 'gruppo_spedizione', 'ambito_tempo', 'tempo_da_lavorazioni_cnc', 'materiale_ricezione', 'solo_per_consegna'].forEach(k => {
     if (JSON.stringify(d[k]) !== JSON.stringify(o[k])) p[k] = k === 'nome' ? d.nome.trim() : k === 'materiale_ricezione' ? String(d[k] || '').trim() : d[k];
   });
   const crit = {};
@@ -8695,7 +8851,8 @@ function fsRenderDettaglio() {
         <div class="fs-row inline"><div><div class="fs-crit-t">Parte da sola alla creazione dell'ordine</div><div class="fs-desc">Utile per le attese di materiale da fuori.</div></div>${fsSwitch('fs-o-auto', m.avvio_automatico, "fsSet('avvio_automatico',this.checked,false)")}</div>
         <div class="fs-row inline"><div><div class="fs-crit-t">Fase CNC</div><div class="fs-desc">Mostra il badge CNC sull'ordine e nell'app.</div></div>${fsSwitch('fs-o-cnc', m.e_cnc, "fsSet('e_cnc',this.checked)")}</div>
         <div class="fs-row inline"><div><div class="fs-crit-t">Opzionale</div><div class="fs-desc">Non si crea da sola: la abiliti tu dall'ordine.</div></div>${fsSwitch('fs-o-opz', m.opzionale, "fsSet('opzionale',this.checked)")}</div>
-        <div class="fs-row inline"><div><div class="fs-crit-t">Chiusura per spedizione unica</div><div class="fs-desc">Chi la completa può chiuderla per tutti gli ordini della stessa spedizione.</div></div>${fsSwitch('fs-o-gs', m.gruppo_spedizione, "fsSet('gruppo_spedizione',this.checked,false)")}</div>
+        <div class="fs-row inline"><div><div class="fs-crit-t">Spedizione unica</div><div class="fs-desc">Per gli ordini della stessa spedizione la fase è una sola: compare una volta nel piano (con il tempo di un ordine) e, quando la si completa, si chiude per tutti.</div></div>${fsSwitch('fs-o-gs', m.gruppo_spedizione, "fsSet('gruppo_spedizione',this.checked,false)")}</div>
+        ${quandoSiFaHtml(m.solo_per_consegna, 'fsSetQuando')}
       </div>
     </div>
 
@@ -8822,7 +8979,7 @@ function aggiungiNuovaFase() {
   const lista = fasiAttive();
   nuovaFase = {
     nome: '', descrizione: '', dopo: lista.length ? String(lista[lista.length - 1].id) : 'top',
-    macro_fase_id: '', tipo_gestione: 'standard', e_attesa_esterna: false, avvio_automatico: false, opzionale: false, e_cnc: false, gruppo_spedizione: false,
+    macro_fase_id: '', tipo_gestione: 'standard', e_attesa_esterna: false, avvio_automatico: false, opzionale: false, e_cnc: false, gruppo_spedizione: false, solo_per_consegna: null,
     tipi: [], materiali: [], strutture: [], modo_tipi: 'solo', modo_materiali: 'solo', modo_strutture: 'solo', dipendenze: [], dipendenti: [],
   };
   fasiCriteriDef().forEach(d => { nuovaFase[d.campo] ||= []; nuovaFase[d.modo] ||= 'solo'; });
@@ -8895,6 +9052,7 @@ function renderNuovaFase() {
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" ${nf.e_cnc ? 'checked' : ''} onchange="nfSet('e_cnc', this.checked, false)"> CNC (badge CNC sulla fase)</label>
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" ${nf.gruppo_spedizione ? 'checked' : ''} onchange="nfSet('gruppo_spedizione', this.checked, false)"> Gruppo spedizione (completamento per spedizione unica)</label>
     </div>
+    ${quandoSiFaHtml(nf.solo_per_consegna, 'nfSetQuando')}
     <div style="font-size:13px;font-weight:700;margin:6px 0 8px">Criteri di applicabilità</div>
     ${criteri}
     <div style="font-size:13px;font-weight:700;margin:12px 0 6px">Fasi da completare prima (dipendenze)</div>
@@ -8920,7 +9078,7 @@ async function confermaNuovaFase() {
     nome: nf.nome.trim(), descrizione: nf.descrizione.trim(), dopo_fase_id: nf.dopo === 'top' ? null : parseInt(nf.dopo),
     macro_fase_id: nf.macro_fase_id === '' ? null : parseInt(nf.macro_fase_id),
     tipo_gestione: nf.tipo_gestione, e_attesa_esterna: nf.e_attesa_esterna, avvio_automatico: nf.avvio_automatico, opzionale: nf.opzionale,
-    e_cnc: nf.e_cnc, gruppo_spedizione: nf.gruppo_spedizione,
+    e_cnc: nf.e_cnc, gruppo_spedizione: nf.gruppo_spedizione, solo_per_consegna: nf.solo_per_consegna,
     tipi: nf.tipi, materiali: nf.materiali, strutture: nf.strutture,
     modo_tipi: nf.modo_tipi, modo_materiali: nf.modo_materiali, modo_strutture: nf.modo_strutture,
     dipendenze: nf.dipendenze, dipendenti: nf.dipendenti,
@@ -9868,7 +10026,14 @@ function formatDateTime(d) {
 
 // Etichette e colori da configurazione / stati di sistema: tutte in js/etichette.js
 const prioLabel = (p) => Etichette.prioritaEtichetta(p);
-const statoLabel = (s) => Etichette.statoOrdine(s);
+const statoLabel = (s, o) => Etichette.statoOrdine(s, o);
+const nomeUtenteOperatore = id => { const u = operatoriCache.find(x => x.id === id); return u ? [u.nome, u.cognome].filter(Boolean).join(' ') : ''; };
+// Consegna e avviso al cliente, in forma breve per elenchi e schede (solo per chi non è "da spedire")
+function badgeConsegnaHtml(o) {
+  if (!o || !o.modalita_consegna || o.modalita_consegna === 'da_spedire') return '';
+  const avv = Etichette.statoAvviso(o);
+  return `<div style="margin-top:4px;font-size:11px;color:var(--info-ink)"><i data-ic="camion"></i> ${escapeHtml(Etichette.modalitaConsegna(o.modalita_consegna))}${avv ? ' · ' + escapeHtml(avv) : ''}</div>`;
+}
 const statoFaseLabel = (s) => Etichette.statoFase(s);
 
 function logIcon(a) {
@@ -10612,6 +10777,8 @@ async function openModificaOrdine(id) {
   document.getElementById('mod-quantita').value = ordine.quantita || 1;
   document.getElementById('mod-scadenza').value = ordine.scadenza || '';
   document.getElementById('mod-note').value = ordine.note_generali || '';
+  _consegna.mod = ordine.modalita_consegna || 'da_spedire'; consegnaDisegna('mod');
+  { const fr = codiciFratelliGruppo(ordine); document.getElementById('mod-consegna-gruppo').textContent = fr.length ? Etichette.consegnaTesti.gruppoCambio(fr) : ''; }
   document.getElementById('modal-modifica').dataset.ordineId = id;
   document.getElementById('modal-modifica').dataset.isExtra = isExtra ? 'true' : 'false';
   // Sezione fasi extra — visibile su tutti gli ordini
@@ -10643,6 +10810,12 @@ async function salvaModificaOrdine() {
     scadenza: document.getElementById('mod-scadenza').value || null,
     note_generali: document.getElementById('mod-note').value.trim() || null,
   };
+  { const ord0 = [...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === id);
+    if (_consegna.mod && ord0 && _consegna.mod !== (ord0.modalita_consegna || 'da_spedire')) {
+      const fr = codiciFratelliGruppo(ord0);
+      if (fr.length && !confirm(Etichette.consegnaTesti.gruppoCambio(fr) + '\n\nProcedere?')) return;
+      payload.modalita_consegna = _consegna.mod;
+    } }
   if (!isExtra) {
     payload.tipo_prodotto = nuovoTipo;
     payload.struttura = nuovaStruttura;
@@ -10656,6 +10829,7 @@ async function salvaModificaOrdine() {
     const msg = { codice_duplicato: 'Esiste già un ordine con questo numero' }[esMod?.errore] || messaggioAttributo(esMod?.errore);
     toast('Errore: ' + (msg || esMod?.errore || error?.message || ''), 'err'); return;
   }
+  if ((esMod.consegna?.fasi_lasciate || []).length) toast(Etichette.consegnaTesti.fasiLasciate(esMod.consegna.fasi_lasciate), 'ok');
 
   // Se tipo prodotto, struttura o materiale cambiano, il database ricalcola da solo le fasi (trigger sull'ordine)
 
@@ -10970,7 +11144,7 @@ function fmRenderLista() {
     const meta = [`${(m.fase_ids || []).length} ${(m.fase_ids || []).length === 1 ? 'fase' : 'fasi'}`];
     if ((FM.extra[m.id] || []).length) meta.push(`${FM.extra[m.id].length} extra`);
     meta.push(m.ore_default == null ? `${fmFmtOre(fmOreOrario())} h (orario)` : `${fmFmtOre(m.ore_default)} h/giorno`);
-    if (Object.values(m.fattori || {}).some(f => f !== 1)) meta.push('pressa più lenta per alcune fasi');
+    if (Object.values(m.fattori || {}).some(f => f !== 1)) meta.push('tempo più lungo per alcune fasi');
     const sporca = FM.draft && FM.draft.id === m.id && fmSporca();
     return `<button class="fs-riga ${m.id === FM.sel && FM.draft && FM.draft.id === m.id ? 'on' : ''}" onclick="fmSeleziona('${escapeJsAttr(m.id)}')" style="grid-template-columns:14px minmax(0,1fr) auto">
       <span style="padding-top:5px"><span class="fm-dot ${fmDotClass(m)}"></span></span>
@@ -11183,7 +11357,7 @@ function fmRenderDettaglio() {
         <div><span class="fs-lbl">Ore al giorno</span>
           <div class="fs-seg"><button class="${d.ore === null ? 'on' : ''}" onclick="fmSetOreModo('orario')">Come l'orario</button><button class="${d.ore !== null ? 'on' : ''}" onclick="fmSetOreModo('fisse')">Ore fisse</button></div>
           ${d.ore !== null ? `<div class="fs-add" style="margin-top:10px"><input class="fs-inp num" id="fm-g-ore" type="number" min="0.5" max="24" step="0.5" value="${d.ore}" oninput="fmSetOre(this.value)" aria-label="Ore al giorno"><span class="fs-desc" style="margin:0">ore</span></div>` : ''}
-          <div class="fs-desc">${d.ore === null ? `Segue l'orario di lavoro: oggi ${fmFmtOre(fmOreOrario())} h.` : 'Utile se la macchina lavora meno del turno (es. pressa che deve scaldare).'}</div></div>
+          <div class="fs-desc">${d.ore === null ? `Segue l'orario di lavoro: oggi ${fmFmtOre(fmOreOrario())} h.` : 'Utile se la macchina lavora meno del turno (es. una macchina che deve scaldare).'}</div></div>
         <div><span class="fs-lbl">In lista oggi</span>
           ${nuova ? '<div class="fs-desc" style="margin:0">Dopo il salvataggio.</div>' : ok ? `<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px"><span>${pm ? fmFmtMin(pm) : 'Niente'}</span><span class="fs-desc" style="margin:0">su ${fmFmtOre(fmOreOggi(m))} h</span></div>
           <span class="fm-barra grande"><span style="width:${Math.min(100, pm / cap * 100)}%"></span></span>
@@ -11196,7 +11370,7 @@ function fmRenderDettaglio() {
       <div class="fs-card"><div class="fs-row">
         <div class="fs-chips">${d.fasi.length ? d.fasi.map(chipFase).join('') : '<span class="fs-desc" style="margin:0">Nessuna fase.</span>'}</div>
         <div class="fs-add" style="margin-top:10px"><select class="fs-inp" id="fm-add-fase" onchange="fmAggiungiFase(this.value)"><option value="">+ Aggiungi fase…</option>${aggiungibili.map(f => `<option value="${f.id}">${fmFaseNum(f.id)}. ${escapeHtml(f.nome)}</option>`).join('')}</select></div>
-        <div class="fs-desc">Il tempo macchina dice quanto questa macchina resta occupata rispetto al tempo di riferimento della fase (es. una pressa più lenta ×2); la squadra conta sempre il tempo di riferimento. Il piano sceglie prima la macchina dove la fase è più veloce e passa all'altra solo se la prima è piena o ferma. «Unica» vuol dire che nessun'altra macchina fa quella fase: se questa si ferma, la fase si blocca. È lo stesso dato del blocco Macchine nella sezione Fasi.</div>
+        <div class="fs-desc">Il tempo macchina dice quanto questa macchina resta occupata rispetto al tempo di riferimento della fase (es. una macchina più lenta: tempo ×2); la squadra conta sempre il tempo di riferimento. Il piano sceglie prima la macchina dove la fase è più veloce e passa all'altra solo se la prima è piena o ferma. «Unica» vuol dire che nessun'altra macchina fa quella fase: se questa si ferma, la fase si blocca. È lo stesso dato del blocco Macchine nella sezione Fasi.</div>
       </div>
       ${extra.length ? `<div class="fs-row"><span class="fs-lbl">Fasi extra</span><div class="fs-chips">${extra.map(x => `<span class="fs-chip">${escapeHtml(x)}</span>`).join('')}</div><div class="fs-desc">Si cambiano nella sezione Fasi extra.</div></div>` : ''}
       </div>
