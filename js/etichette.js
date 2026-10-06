@@ -28,6 +28,8 @@ const Etichette = (() => {
   const MOTIVI_USCITA_PIANO = { responsabile: 'Tolta da te', non_piu_applicabile: 'Non più applicabile', ordine_non_attivo: 'Ordine non più attivo',
                                 macchina_non_disponibile: 'Macchina non disponibile', dipendenza_non_soddisfatta: 'In attesa di una fase precedente' };
   const ORIGINI_VOCE_PIANO = { riempimento: 'riempimento', ricalcolo: 'aggiunta in giornata', responsabile: 'aggiunta a mano' };
+  // Motivo per cui una voce è entrata nel piano oltre la capacità (valori del database: piano_giorno_voci.motivo_ingresso)
+  const MOTIVI_INGRESSO_PIANO = { stessa_fase: 'Aggiunta perché si sta già facendo la stessa fase' };
   // Tipo di fase (valori del database: standard / conferma_ricezione / spedizione_esterna): [valore, etichetta, spiegazione]
   const TIPI_GESTIONE_FASE = [
     ['standard', 'Interna', 'Lavorata in officina. Usa tempo e macchine.'],
@@ -308,6 +310,7 @@ const Etichette = (() => {
     fattoreTempoEtichetta,
     motivoUscitaPiano: m => MOTIVI_USCITA_PIANO[m] || vuoto(m),
     origineVocePiano: o => ORIGINI_VOCE_PIANO[o] || '',
+    motivoIngressoPiano: m => MOTIVI_INGRESSO_PIANO[m] || '',
     STATI_RICHIESTA,
   };
 })();
