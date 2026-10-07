@@ -905,7 +905,7 @@ svg.fs-archi path.dim { opacity: .25; }
         </div>
         <div id="raggruppa-toolbar" style="display:none;align-items:center;gap:12px;margin-bottom:14px;padding:10px 14px;background:var(--phase-bg);border:1px solid var(--border);border-radius:8px">
           <strong id="raggruppa-count" style="font-size:13px">0 ordini selezionati</strong>
-          <span style="font-size:12px;color:var(--muted)">Seleziona 2+ ordini dello stesso cliente</span>
+          <span id="raggruppa-testo" style="font-size:12px;color:var(--muted)"></span>
           <div style="margin-left:auto;display:flex;gap:8px">
             <button class="btn btn-primary" style="width:auto;padding:8px 16px" onclick="eseguiRaggruppamentoSpedizione()"><i data-ic="pacco"></i> Raggruppa per spedizione</button>
             <button class="btn btn-secondary" style="width:auto;padding:8px 16px" onclick="toggleModalitaRaggruppamento()">Annulla</button>
@@ -2031,7 +2031,7 @@ svg.fs-archi path.dim { opacity: .25; }
 
 <!-- Mini-pannello membri di una spedizione unica -->
 <div class="modal-overlay" id="modal-gruppo-spedizione">
-  <div class="modal" style="max-width:420px">
+  <div class="modal" style="max-width:520px">
     <div class="modal-hdr">
       <h3><i data-ic="pacco"></i> Spedizione unica</h3>
       <button class="modal-close" onclick="closeModal('modal-gruppo-spedizione')" aria-label="Chiudi">✕</button>
@@ -2517,6 +2517,7 @@ function _identitaCorrente() {
 let fasi = []; // [{id, nome, descrizione, posizione, trigger_tipo_prodotto}]
 let tipiProdotto = []; // [{id, label, posizione}]
 let ordiniCache = [];
+let gruppiSpedizioneCache = {};   // id gruppo → { id, nome, clienti, consegna } (RPC gruppi_spedizione_elenco)
 let ordiniSpeditiCache = [];
 let lavoroStatsCache = {}; // ordine_id → {minuti_lavoro, minuti_attesa_esterna, n_operatori}
 let _spediti30Count = 0; // contatore spediti 30gg inclusi archiviati
@@ -2881,6 +2882,11 @@ async function loadOrdini() {
     if (b.scadenza) return 1;
     return new Date(b.creato_il) - new Date(a.creato_il);
   });
+
+  if (ordiniCache.some(o => o.gruppo_spedizione_id)) {
+    const { data: gj } = await sb.rpc('gruppi_spedizione_elenco', { p_responsabile_id: currentUserRow.id, p_session_token: null });
+    gruppiSpedizioneCache = Object.fromEntries((gj?.gruppi || []).map(g => [g.id, g]));
+  } else gruppiSpedizioneCache = {};
 
   const trenta30 = new Date(); trenta30.setDate(trenta30.getDate() - 30);
   const [{ data: spediti }, { count: cnt30 }] = await Promise.all([
@@ -3271,7 +3277,7 @@ function renderOggiResp() {
     const o = v.ordine || {};
     const bl = v.bloccata_da && v.bloccata_da.length ? `<div style="font-size:11px;color:var(--violet)">dopo: ${escapeHtml(v.bloccata_da.join(', '))}</div>` : '';
     return `<tr style="${v.fatta ? 'background:var(--ok-bg)' : ''}">
-      <td><div style="font-weight:600">${v.spedizione_unica ? '<i data-ic="pacco"></i> ' + escapeHtml(Etichette.spedizioneUnica.riga(v.spedizione_unica.cliente, v.spedizione_unica.ordini.map(x => x.codice))) : escapeHtml(o.cliente || '') + ' — ' + escapeHtml(o.codice || '')}${v.urgente && !v.fatta ? ` <span class="badge" style="background:var(--urgente-bg);color:var(--urgente-ink)" title="${escapeHtml(Etichette.rischioTesto(v.rischio, o.scadenza))}">${Etichette.attesaEsterna.urgente}</span>` : ''}</div>${v.urgente && !v.fatta && v.rischio ? `<div style="font-size:11px;color:var(--urgente-ink)">${escapeHtml(Etichette.rischioTesto(v.rischio, o.scadenza))}</div>` : ''}<div style="font-size:11px;color:var(--muted)">${v.spedizione_unica ? 'un solo passaggio per ' + v.spedizione_unica.ordini.length + ' ordini' : (o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo')}${v.macchina ? ' · ' + escapeHtml(v.macchina) + (v.minuti_macchina != null && Math.round(v.minuti_macchina) !== Math.round(v.minuti_stimati) ? ' (occupa ' + _fmtMin(v.minuti_macchina) + ')' : '') : ''}</div>${bl}</td>
+      <td><div style="font-weight:600">${v.spedizione_unica ? '<i data-ic="pacco"></i> ' + escapeHtml(Etichette.spedizioneUnica.riga(v.spedizione_unica, v.spedizione_unica.ordini.map(x => x.codice))) : escapeHtml(o.cliente || '') + ' — ' + escapeHtml(o.codice || '')}${v.urgente && !v.fatta ? ` <span class="badge" style="background:var(--urgente-bg);color:var(--urgente-ink)" title="${escapeHtml(Etichette.rischioTesto(v.rischio, o.scadenza))}">${Etichette.attesaEsterna.urgente}</span>` : ''}</div>${v.urgente && !v.fatta && v.rischio ? `<div style="font-size:11px;color:var(--urgente-ink)">${escapeHtml(Etichette.rischioTesto(v.rischio, o.scadenza))}</div>` : ''}<div style="font-size:11px;color:var(--muted)">${v.spedizione_unica ? 'un solo passaggio per ' + v.spedizione_unica.ordini.length + ' ordini' : (o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo')}${v.macchina ? ' · ' + escapeHtml(v.macchina) + (v.minuti_macchina != null && Math.round(v.minuti_macchina) !== Math.round(v.minuti_stimati) ? ' (occupa ' + _fmtMin(v.minuti_macchina) + ')' : '') : ''}</div>${bl}</td>
       <td style="white-space:nowrap">${v.esterna ? '—' : _fmtMin(v.minuti_stimati)}</td>
       <td style="white-space:nowrap">${v.pezzi ? `${v.pezzi.fatti} di ${v.pezzi.totali}` : ''}</td>
       <td>${v.fatta ? '<span class="badge" style="background:var(--ok-soft);color:var(--ok-ink)">✓ fatta</span>' : '<span style="color:var(--muted)">da fare</span>'} ${tag(v)}${v.stessa_fase ? `<div style="font-size:11px;color:var(--info-ink);margin-top:3px">${escapeHtml(Etichette.motivoIngressoPiano('stessa_fase'))}</div>` : ''}${v.presa ? `<div style="font-size:11px;color:var(--info-ink);margin-top:3px">${escapeHtml(Etichette.presa.inPressaSu(v.presa.macchina, v.presa.fino))}</div>` : ''}</td>
@@ -4383,7 +4389,7 @@ function renderDashboard() {
 }
 
 // ═══════════════════════════════════════════════
-// SPEDIZIONE UNICA — raggruppamento ordini stesso cliente
+// SPEDIZIONE UNICA — raggruppamento ordini (clienti diversi solo se tutti da spedire)
 // ═══════════════════════════════════════════════
 let modalitaRaggruppamento = false;
 let selezioneRaggruppamento = new Set();
@@ -4425,6 +4431,7 @@ function aggiornaContatoreRaggruppamento() {
   if (!el) return;
   const n = selezioneRaggruppamento.size;
   el.textContent = `${n} ${n === 1 ? 'ordine selezionato' : 'ordini selezionati'}`;
+  const t = document.getElementById('raggruppa-testo'); if (t) t.textContent = Etichette.spedizioneUnica.selezione;
 }
 
 // Codici degli altri ordini nello stesso gruppo — ricavati dalla lista ordini già in cache,
@@ -4434,6 +4441,12 @@ function codiciFratelliGruppo(o) {
   return ordiniCache
     .filter(x => x.gruppo_spedizione_id === o.gruppo_spedizione_id && x.id !== o.id)
     .map(x => x.codice || '—');
+}
+
+// Gruppo per l'etichetta (Etichette.spedizioneUnica): nome dalla cache, clienti dagli ordini aperti in cache
+function gruppoSpedizioneInfo(gruppoId) {
+  const membri = ordiniCache.filter(o => o.gruppo_spedizione_id === gruppoId);
+  return { id: gruppoId, nome: gruppiSpedizioneCache[gruppoId]?.nome || null, ordini: membri.map(o => ({ id: o.id, codice: o.codice, cliente: o.cliente })) };
 }
 
 async function eseguiRaggruppamentoSpedizione() {
@@ -4457,10 +4470,7 @@ async function eseguiRaggruppamentoSpedizione() {
     p_gruppo_id: gruppiEsistenti[0] || null
   });
   if (error || !data?.ok) {
-    const msg = data?.errore === 'clienti_diversi'
-      ? 'Puoi raggruppare solo ordini dello stesso cliente'
-      : ('Errore: ' + (data?.errore || error?.message || 'sconosciuto'));
-    toast(msg, 'err');
+    toast(Etichette.spedizioneUnica.errori[data?.errore] || ('Errore: ' + (data?.errore || error?.message || 'sconosciuto')), 'err');
     return;
   }
   toast(`Spedizione unica aggiornata: ${data.ordini.map(x => x.codice).join(', ')}`, 'ok');
@@ -4553,14 +4563,55 @@ function apriPannelloGruppoSpedizione(gruppoId) {
   const membri = ordiniCache.filter(o => o.gruppo_spedizione_id === gruppoId);
   const body = document.getElementById('modal-gruppo-spedizione-body');
   if (!body) return;
-  body.innerHTML = membri.length
+  const g = gruppoSpedizioneInfo(gruppoId);
+  const cons = membri[0]?.modalita_consegna;
+  const candidati = cons === 'da_spedire'
+    ? ordiniCache.filter(o => !o.gruppo_spedizione_id && o.modalita_consegna === 'da_spedire' && !o.risposta_cliente_consegna)
+        .sort((a, b) => String(a.cliente || '').localeCompare(String(b.cliente || ''), 'it') || String(a.codice || '').localeCompare(String(b.codice || ''), 'it'))
+    : [];
+  const T = Etichette.spedizioneUnica;
+  const intestazione = membri.length ? `
+    <div style="font-weight:600;margin-bottom:4px">${escapeHtml(T.etichetta(g))}</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${T.clientiDelGruppo}: ${escapeHtml(T.clienti(g).join(', '))}</div>
+    <label style="font-size:12px;color:var(--muted)">${T.nomeEtichetta}</label>
+    <div style="display:flex;gap:8px;margin:4px 0 12px">
+      <input type="text" id="gs-nome" maxlength="60" value="${escapeHtml(g.nome || '')}" placeholder="${escapeHtml(T.nomeSegnaposto)}">
+      <button class="btn btn-secondary" style="width:auto;padding:6px 12px;font-size:12px" onclick="salvaNomeGruppoSpedizione('${gruppoId}')">Salva</button>
+    </div>` : '';
+  const aggiungi = membri.length && cons === 'da_spedire' ? (candidati.length ? `
+    <div style="margin-top:14px"><label style="font-size:12px;color:var(--muted)">${T.aggiungi}</label>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <select id="gs-aggiungi"><option value="">${T.aggiungiScegli}</option>${candidati.map(o => `<option value="${o.id}">${escapeHtml(o.cliente || '')} — ${escapeHtml(o.codice || '—')}</option>`).join('')}</select>
+        <button class="btn btn-primary" style="width:auto;padding:6px 12px;font-size:12px" onclick="aggiungiAlGruppoSpedizione('${gruppoId}')">${T.aggiungiBottone}</button>
+      </div></div>` : `<p style="color:var(--muted);font-size:12px;margin-top:14px">${T.nessunoDaAggiungere}</p>`) : '';
+  body.innerHTML = intestazione + (membri.length
     ? membri.map(o => `
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
         <div><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:var(--font-mono);font-size:12px;color:var(--muted)">${escapeHtml(o.codice || '—')}</div></div>
         <button class="btn btn-alert" style="width:auto;padding:6px 12px;font-size:12px" onclick="rimuoviDalGruppoSpedizione('${o.id}','${escapeJsAttr(o.codice || '')}')">Rimuovi dal gruppo</button>
       </div>`).join('')
-    : '<p style="color:var(--muted)">Nessun ordine in questo gruppo.</p>';
+    : '<p style="color:var(--muted)">Nessun ordine in questo gruppo.</p>') + aggiungi;
   document.getElementById('modal-gruppo-spedizione').classList.add('open');
+}
+
+async function salvaNomeGruppoSpedizione(gruppoId) {
+  const nome = document.getElementById('gs-nome')?.value ?? '';
+  const { data, error } = await sb.rpc('imposta_nome_gruppo_spedizione', { p_gruppo_id: gruppoId, p_nome: nome, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast(Etichette.spedizioneUnica.errori[data?.errore] || ('Errore: ' + (data?.errore || error?.message || 'sconosciuto')), 'err'); return; }
+  toast(Etichette.spedizioneUnica.nomeSalvato, 'ok');
+  await loadOrdini();
+  apriPannelloGruppoSpedizione(gruppoId);
+  renderOrdiniTable();
+}
+
+async function aggiungiAlGruppoSpedizione(gruppoId) {
+  const ordineId = document.getElementById('gs-aggiungi')?.value;
+  if (!ordineId) { toast(Etichette.spedizioneUnica.aggiungiScegli, 'err'); return; }
+  const { data, error } = await sb.rpc('crea_o_aggiorna_gruppo_spedizione', { p_responsabile_id: currentUserRow.id, p_session_token: null, p_ordine_ids: [ordineId], p_gruppo_id: gruppoId });
+  if (error || !data?.ok) { toast(Etichette.spedizioneUnica.errori[data?.errore] || ('Errore: ' + (data?.errore || error?.message || 'sconosciuto')), 'err'); return; }
+  await loadOrdini();
+  apriPannelloGruppoSpedizione(gruppoId);
+  renderOrdiniTable();
 }
 
 async function rimuoviDalGruppoSpedizione(ordineId, codice) {
@@ -4597,8 +4648,12 @@ function ordineRow(o, mini = false) {
       ? `<input type="checkbox" ${selezioneSpedizioneMultipla.has(o.id) ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer;flex-shrink:0;margin-top:2px" onclick="event.stopPropagation()" onchange="toggleSelezioneSpedizioneMultipla('${o.id}')">`
       : '';
   const fratelli = !mini ? codiciFratelliGruppo(o) : [];
+  const gInfo = fratelli.length ? gruppoSpedizioneInfo(o.gruppo_spedizione_id) : null;
+  const testoGruppo = !gInfo ? '' : Etichette.spedizioneUnica.distintiva(gInfo)
+    ? Etichette.spedizioneUnica.riga(gInfo, gInfo.ordini.map(x => x.codice || '—'))
+    : 'Spedizione unica con ' + fratelli.join(', ');
   const badgeGruppoSolo = fratelli.length
-    ? `<div style="margin-top:4px;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="event.stopPropagation();apriPannelloGruppoSpedizione('${o.gruppo_spedizione_id}')"><i data-ic="pacco"></i> Spedizione unica con ${escapeHtml(fratelli.join(', '))}</div>`
+    ? `<div style="margin-top:4px;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="event.stopPropagation();apriPannelloGruppoSpedizione('${o.gruppo_spedizione_id}')"><i data-ic="pacco"></i> ${escapeHtml(testoGruppo)}</div>`
     : '';
   const badgeGruppo = badgeGruppoSolo + badgeConsegnaHtml(o);
   return `<tr class="clickable ${isSosp ? '' : scadenzaClass(o.scadenza)}" data-scad="${isSosp ? '' : scadenzaClass(o.scadenza)}" ${rowClass} onclick="${rowOnclick}">
@@ -5580,7 +5635,7 @@ async function creaOrdine() {
       p_ordine_ids: [newOrdine.id, ..._suggerimentoGruppoOrdiniIds],
       p_gruppo_id: _suggerimentoGruppoId
     });
-    if (!gData?.ok) toast('Ordine creato, ma non è stato possibile aggiungerlo alla spedizione unica: ' + (Etichette.consegnaTesti.errori[gData?.errore] || gData?.errore || ''), 'err');
+    if (!gData?.ok) toast('Ordine creato, ma non è stato possibile aggiungerlo alla spedizione unica: ' + (Etichette.spedizioneUnica.errori[gData?.errore] || Etichette.consegnaTesti.errori[gData?.errore] || gData?.errore || ''), 'err');
   }
 
   closeModal('modal-ordine');
@@ -10850,7 +10905,7 @@ async function salvaModificaOrdine() {
 
   const { data: esMod, error } = await sb.rpc('modifica_ordine', { p_ordine_id: id, p_dati: payload, p_responsabile_id: currentUserRow.id, p_session_token: null });
   if (error || !esMod?.ok) {
-    const msg = { codice_duplicato: 'Esiste già un ordine con questo numero' }[esMod?.errore] || messaggioAttributo(esMod?.errore);
+    const msg = { codice_duplicato: 'Esiste già un ordine con questo numero' }[esMod?.errore] || Etichette.consegnaTesti.errori[esMod?.errore] || messaggioAttributo(esMod?.errore);
     toast('Errore: ' + (msg || esMod?.errore || error?.message || ''), 'err'); return;
   }
   if ((esMod.consegna?.fasi_lasciate || []).length) toast(Etichette.consegnaTesti.fasiLasciate(esMod.consegna.fasi_lasciate), 'ok');

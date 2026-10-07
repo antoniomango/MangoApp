@@ -92,6 +92,7 @@ const Etichette = (() => {
     gruppoCambio: codici => 'La consegna vale per tutta la spedizione unica: cambia anche ' + codici.join(', ') + '.',
     fasiLasciate: l => 'Alcune fasi già iniziate o completate restano come sono: ' + l.map(x => x.codice + ' — ' + x.fase).join('; ') + '.',
     errori: { consegne_diverse: 'Gli ordini di una spedizione unica devono avere la stessa consegna (e la stessa risposta del cliente): allinea prima la consegna.',
+              spedizione_piu_clienti: "Questa spedizione ha più clienti: togli prima l'ordine dalla spedizione unica",
               modalita_consegna_non_valida: 'Consegna non valida.', ordine_gia_spedito: "L'ordine è già spedito." },
   };
   // Fasi con tempo di presa (incollaggio in pressa / strettoio): il pezzo resta sulla macchina senza l'operatore
@@ -112,8 +113,30 @@ const Etichette = (() => {
   };
   // Spedizione unica nel piano e nell'app operatore
   const SPEDIZIONE_UNICA = {
-    riga: (cliente, codici) => 'Spedizione unica ' + (cliente || '') + ' · ' + (codici || []).join(', '),
-    chiusura: codici => 'Si chiude per tutta la spedizione: ' + (codici || []).join(', '),
+    // clienti distinti del gruppo in ordine alfabetico: g.clienti (elenco) oppure g.ordini[].cliente
+    clienti: g => {
+      const visti = new Map();
+      ((g && g.clienti) || ((g && g.ordini) || []).map(x => x.cliente)).forEach(c => { const t = String(c || '').trim(); if (t && !visti.has(t.toUpperCase())) visti.set(t.toUpperCase(), t); });
+      return [...visti.values()].sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }));
+    },
+    // etichetta unica del gruppo: il nome se c'è, altrimenti i clienti uniti da " + "
+    etichetta: g => (g && g.nome && String(g.nome).trim()) || SPEDIZIONE_UNICA.clienti(g).join(' + '),
+    riga: (g, codici) => 'Spedizione unica ' + SPEDIZIONE_UNICA.etichetta(g) + ' · ' + (codici || []).join(', '),
+    soloDaSpedire: 'Più clienti nella stessa spedizione solo per ordini da spedire',
+    selezione: 'Seleziona 2 o più ordini da spedire insieme',
+    nomeEtichetta: 'Nome della spedizione (facoltativo)', nomeSegnaposto: 'Es. Camion di giovedì', nomeSalvato: 'Nome della spedizione salvato',
+    clientiDelGruppo: 'Clienti',
+    aggiungi: 'Aggiungi un ordine da spedire', aggiungiScegli: 'Scegli un ordine…', aggiungiBottone: 'Aggiungi', nessunoDaAggiungere: 'Nessun altro ordine da spedire disponibile.',
+    errori: {
+      clienti_diversi: 'Più clienti nella stessa spedizione solo per ordini da spedire',
+      consegne_diverse: 'Gli ordini di una spedizione unica devono avere la stessa consegna (e la stessa risposta del cliente): allinea prima la consegna.',
+      spedizione_piu_clienti: "Questa spedizione ha più clienti: togli prima l'ordine dalla spedizione unica",
+      nome_troppo_lungo: 'Il nome può avere al massimo 60 caratteri.', gruppo_non_trovato: 'Spedizione non trovata.', ordine_non_trovato: 'Ordine non trovato.', nessun_ordine: 'Seleziona almeno un ordine.',
+      non_autorizzato: 'Non hai il permesso per questa operazione.', sessione_non_valida: 'Sessione scaduta: accedi di nuovo.',
+    },
+    // l'etichetta compare solo se distingue la spedizione: ha un nome o più clienti
+    distintiva: g => !!(g && ((g.nome && String(g.nome).trim()) || SPEDIZIONE_UNICA.clienti(g).length > 1)),
+    chiusura: (codici, g) => 'Si chiude per tutta la spedizione' + (SPEDIZIONE_UNICA.distintiva(g) ? ' (' + SPEDIZIONE_UNICA.etichetta(g) + ')' : '') + ': ' + (codici || []).join(', '),
     chiusa: codici => 'Completata per tutta la spedizione: ' + (codici || []).join(', '),
   };
   // Clienti da avvisare (responsabile e segreteria)

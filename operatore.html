@@ -1987,8 +1987,8 @@ function bottoniCompleta(f, ordFaseId, ordineId, aPezzi) {
 
 // Spedizione unica: la chiusura vale sempre per tutti gli ordini del gruppo (lo garantisce il database).
 // Prima della conferma si mostra un avviso informativo con i codici (nessuna scelta da fare).
-function avvisoChiusuraSpedizione(codici) {
-  return (codici && codici.length > 1) ? `<div class="ov-avviso-chiusura"><i data-ic="pacco"></i> ${escapeHtml(Etichette.spedizioneUnica.chiusura(codici))}</div>` : '';
+function avvisoChiusuraSpedizione(codici, gruppo) {
+  return (codici && codici.length > 1) ? `<div class="ov-avviso-chiusura"><i data-ic="pacco"></i> ${escapeHtml(Etichette.spedizioneUnica.chiusura(codici, gruppo))}</div>` : '';
 }
 // Codici dell'intera spedizione di un ordine (compreso lui) per una fase con la proprietà "spedizione unica"
 function codiciSpedizioneFase(ordine, faseId) {
@@ -2626,13 +2626,13 @@ function renderOggiVoce(v, solaLettura) {
       ${ordiniCache.some(x => x.id === v.ordine_id) ? `<button type="button" class="btn btn-secondary piccolo" style="width:auto;flex:0 0 auto" onclick="openOrdineDetail('${escapeJsAttr(v.ordine_id)}')" aria-label="Foto e dettaglio ordine"><i data-ic="fotocamera"></i> Foto</button>` : ''}
       ${v.pezzi && !v.fatta && oggiModoMultiplo ? `<span class="og-conta" style="font-family:var(--font-mono);font-size:12px;color:var(--muted)">${v.pezzi.fatti} di ${v.pezzi.totali}</span>` : ''}
     </div>
-    ${v.spedizione_unica ? `<div class="ov-spedizione"><i data-ic="pacco"></i> ${escapeHtml(Etichette.spedizioneUnica.riga(v.spedizione_unica.cliente, v.spedizione_unica.ordini.map(x => x.codice)))}</div>` : ''}
+    ${v.spedizione_unica ? `<div class="ov-spedizione"><i data-ic="pacco"></i> ${escapeHtml(Etichette.spedizioneUnica.riga(v.spedizione_unica, v.spedizione_unica.ordini.map(x => x.codice)))}</div>` : ''}
     <div class="ov-sub">${v.spedizione_unica ? '' : (o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo')}${bloccata ? (v.spedizione_unica ? '' : ' · ') + '<strong>dopo: ' + escapeHtml(v.bloccata_da.join(', ')) + '</strong>' : ''}</div>
     ${oggiConsegnaChip(v)}
     ${meta ? `<div class="order-meta" style="margin:8px 0 0">${meta}</div>` : ''}
     ${renderNotaOrdineBox(o)}
     ${azioni ? `<div class="ov-azioni">${azioni}</div>` : ''}
-    ${v.spedizione_unica && !v.fatta && !bloccata && !solaLettura ? avvisoChiusuraSpedizione(v.spedizione_unica.ordini.map(x => x.codice)) : ''}
+    ${v.spedizione_unica && !v.fatta && !bloccata && !solaLettura ? avvisoChiusuraSpedizione(v.spedizione_unica.ordini.map(x => x.codice), v.spedizione_unica) : ''}
   </div>`;
 }
 
