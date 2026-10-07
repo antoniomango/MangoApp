@@ -3799,8 +3799,7 @@ function cfeMostraMateriale() {
   const mr = document.getElementById('cfe-macchine-form-row'); if (mr) mr.style.display = esterna ? 'none' : '';
   const conMacchine = CFE_FORM.macchine.size > 0, spunta = document.getElementById('cfe-piu-pressate').checked;
   const pr = document.getElementById('cfe-pressate-row'); if (pr) pr.style.display = !esterna && spunta && conMacchine ? '' : 'none';
-  const pw = document.getElementById('cfe-piu-pressate-w'); if (pw) { pw.textContent = spunta && !conMacchine ? '
-' + Etichette.pressate.config.serveMacchina : ''; pw.style.display = spunta && !conMacchine ? 'block' : 'none'; }
+  const pw = document.getElementById('cfe-piu-pressate-w'); if (pw) { pw.textContent = spunta && !conMacchine ? Etichette.pressate.config.serveMacchina : ''; pw.style.display = spunta && !conMacchine ? 'block' : 'none'; }
   const lp = document.getElementById('cfe-tempo-pp'); if (lp) lp.textContent = document.getElementById('cfe-piu-pressate').checked ? '(' + Etichette.pressate.config.tempoPerPressata + ')' : '';
   // la domanda "È l'ultima pressata?" non ha senso per le fasi di ricezione / spedizione esterna
   const pp = document.getElementById('cfe-piu-pressate-row'); if (pp) pp.style.display = esterna || !(conMacchine || spunta) ? 'none' : '';
