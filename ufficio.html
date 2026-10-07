@@ -93,7 +93,8 @@ header {
 .ord-card:hover { box-shadow: var(--shadow); border-color: var(--accent-2); }
 .ord-card.attesa { border-color: var(--ok); background: var(--ok-bg); }
 .ord-card.ritardo { border-left: 4px solid var(--alert); }
-.ord-hdr { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+.ord-hdr { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 4px 10px; margin-bottom: 12px; }
+.ord-hdr > :first-child, .stor-hdr > :first-child { max-width: 100%; overflow-wrap: break-word; }
 .ord-cliente { font-size: 16px; font-weight: 600; }
 .ord-codice { font-family: var(--font-mono); font-size: 13px; font-weight: 500; color: var(--ink); margin-top: 3px; }
 .ord-pct { font-size: 26px; font-weight: 700; font-family: var(--font-mono); color: var(--muted); flex-shrink: 0; }
@@ -138,15 +139,15 @@ header {
   transition: box-shadow 0.15s, border-color 0.15s;
 }
 .stor-card:hover { box-shadow: var(--shadow); border-color: var(--accent-2); }
-.stor-hdr { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; gap: 12px; }
+.stor-hdr { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; gap: 4px 12px; }
 .stor-data { font-family: var(--font-mono); font-size: 12px; color: var(--muted); text-align: right; flex-shrink: 0; white-space: nowrap; }
 .badge-spedito { background: var(--ok-soft); color: var(--ok-ink); }
 
 /* ── CLIENTI DA AVVISARE ── */
 #avvisi-view { display: none; max-width: 720px; margin: 0 auto; padding: 20px 16px 40px; }
 .avviso-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 16px 20px; margin-bottom: 12px; }
-.avviso-cliente { font-weight: 700; font-size: 16px; }
-.avviso-codici { font-family: var(--font-mono); font-size: 13px; color: var(--muted); margin-top: 2px; }
+.avviso-cliente { font-weight: 700; font-size: 16px; overflow-wrap: break-word; }
+.avviso-codici { font-family: var(--font-mono); font-size: 13px; color: var(--muted); margin-top: 2px; overflow-wrap: break-word; }
 .avviso-stato { font-size: 13px; margin-top: 8px; color: var(--ink-2); }
 .avviso-stato.avvisato { color: var(--accent); font-weight: 600; }
 .avviso-azioni { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
@@ -167,7 +168,7 @@ header {
 }
 .detail-back:hover { opacity: 0.75; }
 .detail-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 24px; margin-bottom: 16px; }
-.detail-cliente { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+.detail-cliente { font-size: 20px; font-weight: 600; margin-bottom: 4px; overflow-wrap: break-word; }
 .detail-codice  { font-family: var(--font-mono); font-size: 15px; font-weight: 500; color: var(--ink); margin-bottom: 16px; }
 .detail-meta    { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-bottom: 16px; }
 .detail-meta-item { display: flex; flex-direction: column; gap: 2px; }
@@ -176,9 +177,9 @@ header {
 .detail-section-title { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 12px; }
 
 /* Badges stato fase nel dettaglio */
-.fase-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.fase-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; padding: 9px 0; border-bottom: 1px solid var(--border); }
 .fase-row:last-child { border-bottom: none; }
-.fase-nome { font-size: 13px; font-weight: 500; }
+.fase-nome { font-size: 13px; font-weight: 500; max-width: 100%; overflow-wrap: break-word; }
 .badge-fase-completata  { background: var(--ok-soft); color: var(--ok-ink); }
 .badge-fase-in_corso    { background: var(--info-soft); color: var(--info-ink); }
 .badge-fase-disponibile { background: var(--phase-bg); color: var(--muted); }

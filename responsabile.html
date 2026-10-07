@@ -235,7 +235,7 @@ tr:hover td { background: var(--phase-bg); }
 .ass-giorno.oltre .ass-conta { background: var(--alert-soft); border-radius: 99px; padding: 1px 8px; }
 .ass-voce { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; width: 100%; background: none; border: none; border-bottom: 1px solid var(--border); color: var(--ink); font: inherit; font-size: 14px; text-align: left; padding: 8px 18px; cursor: pointer; }
 .ass-voce:hover { background: var(--phase-bg); }
-.ass-voce .ass-dett { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+.ass-voce .ass-dett { color: var(--muted); font-size: 13px; overflow-wrap: break-word; }
 .ass-fonte { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; border-radius: 6px; padding: 1px 6px; background: var(--fill); color: var(--muted); }
 .ass-fonte.mano { background: var(--warn-soft); color: var(--warn-ink); }
 .ass-chiusura { padding: 8px 18px; font-size: 13px; color: var(--muted); font-style: italic; border-bottom: 1px solid var(--border); }
@@ -246,7 +246,7 @@ tr.ric-evidenza td { background: var(--info-soft); }
 .ric-card-testa { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
 .ric-nome { font-weight: 700; font-size: 15px; }
 .ric-meta { color: var(--ink-2); font-size: 13px; margin-top: 2px; }
-.ric-nota-op { font-size: 13px; background: var(--phase-bg); border-radius: 8px; padding: 8px 10px; margin-top: 10px; overflow-wrap: anywhere; }
+.ric-nota-op { font-size: 13px; background: var(--phase-bg); border-radius: 8px; padding: 8px 10px; margin-top: 10px; overflow-wrap: break-word; }
 .impatto { border: 1px solid var(--border); border-radius: 10px; margin-top: 12px; overflow: hidden; }
 .impatto-titolo { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; padding: 8px 12px; background: var(--phase-bg); }
 .impatto-giorno { padding: 8px 12px; border-top: 1px solid var(--border); font-size: 13px; display: grid; grid-template-columns: 150px 1fr; gap: 10px; }
@@ -542,7 +542,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
   .tabella-ordini .c-scad::before { content: "Spedizione entro "; color: var(--muted); }
   .tabella-ordini .c-azioni { grid-column: 2; align-self: end; text-align: right; }
   .tabella-ordini .c-azioni:empty { display: none; }
-  .prog-fase { margin-top: 4px; font-size: 12px; color: var(--ink-2); overflow-wrap: anywhere; }
+  .prog-fase { margin-top: 4px; font-size: 12px; color: var(--ink-2); overflow-wrap: break-word; }
 
   /* ── modali a tutto schermo, chiusura sempre raggiungibile ── */
   .modal-overlay { padding: 0; align-items: stretch; top: var(--banda-ambiente, 0px); }
@@ -559,7 +559,7 @@ tr.riga-in-corso-warning { border-left-width: 4px !important; border-left-style:
   .btn { justify-content: center; }
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), select, textarea { font-size: 16px !important; font-family: var(--font-sans); }
   .notif-item { min-height: 44px; }
-  .notif-text { min-width: 0; overflow-wrap: anywhere; }
+  .notif-text { min-width: 0; overflow-wrap: break-word; }
 }
 
 /* ── Sezione Fasi (mango-v53): elenco compatto + dettaglio di una fase, vista Flusso. Solo token di css/tema.css ── */
@@ -1564,7 +1564,7 @@ svg.fs-archi path.dim { opacity: .25; }
               <button id="fs-v-elenco" class="on" onclick="fsVista('elenco')">Elenco</button>
               <button id="fs-v-flusso" onclick="fsVista('flusso')">Flusso</button>
             </div>
-            <button class="btn btn-secondary" onclick="aggiungiNuovaFase()">+ Nuova fase</button>
+            <button class="btn btn-secondary" onclick="fsNuova()">+ Nuova fase</button>
           </div>
         </div>
         <div id="fs-vista-elenco" class="fs-grid">
@@ -1719,7 +1719,7 @@ svg.fs-archi path.dim { opacity: .25; }
             </div>
             <div class="form-group" id="cfe-piu-pressate-row">
               <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0">
-                <input type="checkbox" id="cfe-piu-pressate" style="margin-top:3px">
+                <input type="checkbox" id="cfe-piu-pressate" style="margin-top:3px" onchange="cfeMostraMateriale()">
                 <span><strong id="cfe-piu-pressate-t"></strong><br><span id="cfe-piu-pressate-s" style="font-size:12px;color:var(--muted);font-weight:400"></span></span>
               </label>
             </div>
@@ -1731,6 +1731,23 @@ svg.fs-archi path.dim { opacity: .25; }
               <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
                 <input type="checkbox" id="cfe-attiva" checked> Attiva
               </label>
+            </div>
+          </div>
+          <div class="form-row" style="margin-bottom:10px">
+            <div class="form-group" id="cfe-pressate-row" style="display:none">
+              <label id="cfe-pressate-t"></label>
+              <input type="number" id="cfe-pressate-previste" min="1" max="20" step="1" inputmode="numeric" value="1" style="width:90px">
+              <div id="cfe-pressate-s" style="font-size:12px;color:var(--muted);margin-top:4px"></div>
+            </div>
+            <div class="form-group" id="cfe-tempo-row">
+              <label>Tempo per pezzo (minuti) <span id="cfe-tempo-pp" style="text-transform:none;letter-spacing:0;font-weight:400"></span></label>
+              <input type="number" id="cfe-tempo" min="0" max="1440" step="any" inputmode="decimal" style="width:120px" placeholder="es. 20">
+              <div style="font-size:12px;color:var(--muted);margin-top:4px">Moltiplicato per la quantità dell'ordine. Per toglierlo usa la pagina Tempi di riferimento.</div>
+            </div>
+            <div class="form-group" id="cfe-macchine-form-row">
+              <label>Macchine idonee</label>
+              <div id="cfe-macchine-form" style="display:flex;flex-direction:column;gap:4px"></div>
+              <div style="font-size:12px;color:var(--muted);margin-top:4px">Nessuna spuntata = nessun vincolo macchina.</div>
             </div>
           </div>
           <div style="display:flex;gap:8px;margin-top:4px">
@@ -2145,8 +2162,9 @@ svg.fs-archi path.dim { opacity: .25; }
           </div>
           <div class="form-group" id="nef-piu-pressate-row" style="margin-bottom:10px">
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;text-transform:none;letter-spacing:0">
-              <input type="checkbox" id="nef-piu-pressate"> <span id="nef-piu-pressate-t"></span>
+              <input type="checkbox" id="nef-piu-pressate" onchange="document.getElementById('nef-pp-num').style.display = this.checked ? 'inline-flex' : 'none'"> <span id="nef-piu-pressate-t"></span>
             </label>
+            <div id="nef-pp-num-box" style="margin-top:6px"></div>
           </div>
           <div class="form-group" style="margin-bottom:10px">
             <label style="font-size:12px">Note (opzionale)</label>
@@ -2334,21 +2352,6 @@ svg.fs-archi path.dim { opacity: .25; }
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('modal-completa-fase')">Annulla</button>
       <button class="btn btn-ok" onclick="confermaConclusioneFase()">✓ Conferma completata</button>
-    </div>
-  </div>
-</div>
-
-<!-- MODALE NUOVA FASE -->
-<div class="modal-overlay" id="modal-nuova-fase">
-  <div class="modal" style="max-width:480px">
-    <div class="modal-hdr">
-      <h3>Nuova Fase</h3>
-      <button class="modal-close" onclick="closeModal('modal-nuova-fase')" aria-label="Chiudi">✕</button>
-    </div>
-    <div class="modal-body" id="nf-body"></div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="closeModal('modal-nuova-fase')">Annulla</button>
-      <button class="btn btn-primary" onclick="confermaNuovaFase()">Crea fase</button>
     </div>
   </div>
 </div>
@@ -3767,7 +3770,7 @@ function renderCatalogoFasiExtraSection() {
           <div style="font-weight:600;font-size:14px">${escapeHtml(c.nome)}
             ${!c.attiva ? '<span style="font-size:10px;background:var(--neutral-soft);padding:1px 6px;border-radius:4px;margin-left:6px;color:var(--neutral)">INATTIVA</span>' : ''}
           </div>
-          <div style="font-size:12px;color:var(--muted);margin-top:2px">${tipoLabel}${c.e_attesa_esterna ? ' · Attesa esterna' : ''}${macNomi ? ' · <i data-ic="chiave"></i> ' + escapeHtml(macNomi) : ''}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${tipoLabel}${c.e_attesa_esterna ? ' · Attesa esterna' : ''}${c.piu_pressate ? ' · ' + Etichette.pressate.config.previste.toLowerCase() + ': ' + c.pressate_previste : ''}${macNomi ? ' · <i data-ic="chiave"></i> ' + escapeHtml(macNomi) : ''}</div>
           ${c.descrizione ? `<div style="font-size:12px;color:var(--muted);margin-top:1px">${escapeHtml(c.descrizione)}</div>` : ''}
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
@@ -3780,16 +3783,32 @@ function renderCatalogoFasiExtraSection() {
   </div>`;
 }
 
+// stato del form del catalogo tenuto in memoria (mai letto dal DOM al clic)
+const CFE_FORM = { macchine: new Set() };
+function cfeRenderMacchineForm() {
+  const el = document.getElementById('cfe-macchine-form'); if (!el) return;
+  el.innerHTML = (macchineList || []).length
+    ? macchineList.map(m => `<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0"><input type="checkbox" ${CFE_FORM.macchine.has(m.id) ? 'checked' : ''} onchange="cfeToggleMacchina('${escapeJsAttr(m.id)}', this.checked)"> ${escapeHtml(m.nome)}</label>`).join('')
+    : '<span style="font-size:12px;color:var(--muted)">Nessuna macchina configurata.</span>';
+}
+function cfeToggleMacchina(id, on) { if (on) CFE_FORM.macchine.add(id); else CFE_FORM.macchine.delete(id); }
+
 // il campo "Cosa si riceve" compare solo per le voci esterne
 function cfeMostraMateriale() {
   const esterna = document.getElementById('cfe-tipo-gestione').value !== 'standard';
   const riga = document.getElementById('cfe-materiale-row'); if (riga) riga.style.display = esterna ? '' : 'none';
+  // tempo, macchine e pressate previste valgono solo per le voci standard
+  const tr = document.getElementById('cfe-tempo-row'); if (tr) tr.style.display = esterna ? 'none' : '';
+  const mr = document.getElementById('cfe-macchine-form-row'); if (mr) mr.style.display = esterna ? 'none' : '';
+  const pr = document.getElementById('cfe-pressate-row'); if (pr) pr.style.display = !esterna && document.getElementById('cfe-piu-pressate').checked ? '' : 'none';
+  const lp = document.getElementById('cfe-tempo-pp'); if (lp) lp.textContent = document.getElementById('cfe-piu-pressate').checked ? '(' + Etichette.pressate.config.tempoPerPressata + ')' : '';
   // la domanda "È l'ultima pressata?" non ha senso per le fasi di ricezione / spedizione esterna
   const pp = document.getElementById('cfe-piu-pressate-row'); if (pp) pp.style.display = esterna ? 'none' : '';
   if (esterna) document.getElementById('cfe-piu-pressate').checked = false;
 }
 
-function apriFormCatalogoFaseExtra(id) {
+async function apriFormCatalogoFaseExtra(id) {
+  if (!(macchineList || []).length) { try { await loadMacchine(); } catch (e) { /* si apre comunque, senza elenco macchine */ } }
   const form = document.getElementById('form-catalogo-fase-extra');
   const c = id ? catalogoFasiExtra.find(x => x.id === id) : null;
   document.getElementById('cfe-id').value = c?.id || '';
@@ -3802,6 +3821,12 @@ function apriFormCatalogoFaseExtra(id) {
   document.getElementById('cfe-piu-pressate-t').textContent = Etichette.pressate.config.casella;
   document.getElementById('cfe-piu-pressate-s').textContent = Etichette.pressate.config.spiega;
   document.getElementById('cfe-piu-pressate').checked = !!c?.piu_pressate;
+  document.getElementById('cfe-pressate-t').textContent = Etichette.pressate.config.previste;
+  document.getElementById('cfe-pressate-s').textContent = Etichette.pressate.config.previsteSpiega;
+  document.getElementById('cfe-pressate-previste').value = c?.pressate_previste ?? 1;
+  document.getElementById('cfe-tempo').value = c?.tempo_per_pezzo_minuti ?? '';
+  CFE_FORM.macchine = new Set(c?.macchine_ids || []);
+  cfeRenderMacchineForm();
   cfeMostraMateriale();
   form.style.display = '';
   document.getElementById('cfe-nome').focus();
@@ -3816,6 +3841,13 @@ async function salvaCatalogoFaseExtra() {
   const eAttesaEsterna = document.getElementById('cfe-attesa-esterna').checked;
   const attiva = document.getElementById('cfe-attiva').checked;
   if (!nome) { toast('Il nome è obbligatorio', 'err'); return; }
+  const standard = tipoGestione === 'standard' && !eAttesaEsterna;
+  const piu = standard && document.getElementById('cfe-piu-pressate').checked;
+  const previste = piu ? pressateNumeroValido(document.getElementById('cfe-pressate-previste').value) : null;
+  if (piu && previste == null) { toast(Etichette.pressate.config.errori.pressate_previste_non_valide, 'err'); return; }
+  const tempoTxt = document.getElementById('cfe-tempo').value.trim();
+  const tempo = standard && tempoTxt !== '' ? Number(tempoTxt) : null;
+  if (tempo !== null && !(tempo > 0 && tempo <= 1440)) { toast(Etichette.pressate.config.errori.minuti_non_validi, 'err'); return; }
   const { data, error } = await sb.rpc('imposta_catalogo_fase_extra', {
     p_responsabile_id: currentUserRow.id,
     p_session_token: null,
@@ -3826,7 +3858,10 @@ async function salvaCatalogoFaseExtra() {
     p_e_attesa_esterna: eAttesaEsterna,
     p_attiva: attiva,
     p_materiale_ricezione: tipoGestione !== 'standard' ? document.getElementById('cfe-materiale').value.trim() : '',
-    p_piu_pressate: tipoGestione === 'standard' && !eAttesaEsterna && document.getElementById('cfe-piu-pressate').checked
+    p_piu_pressate: piu,
+    ...(piu ? { p_pressate_previste: previste } : {}),
+    ...(tempo !== null ? { p_tempo_per_pezzo: tempo } : {}),
+    ...(standard ? { p_macchine_ids: [...CFE_FORM.macchine] } : {})
   });
   if (error || !data?.ok) { toast('Errore: ' + (Etichette.pressate.config.errori[data?.errore] || error?.message || data?.errore || ''), 'err'); return; }
   toast(id ? 'Voce aggiornata' : 'Voce aggiunta', 'ok');
@@ -4985,7 +5020,7 @@ async function renderDettaglioOrdine(id) {
         <div class="fase-num">${f.numero}. ${f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '<i data-ic="play"></i>' : '○'}</div>
         <div class="fase-nome">${escapeHtml(f.nome)}</div>
         <div class="fase-op">${opNome || (f.stato === 'disponibile' ? 'Disponibile' : '')}</div>
-        ${f.piu_pressate ? `<div class="fase-op" style="margin-top:4px">${escapeHtml(Etichette.pressate.fatteResp(f.pressate_fatte || 0))}</div>` : ''}
+        ${f.piu_pressate ? `<div class="fase-op" style="margin-top:4px">${escapeHtml(Etichette.pressate.fatteResp(f.pressate_fatte || 0, f.pressate_previste))}</div>` : ''}
         ${f.completata_il ? `<div class="fase-op" style="margin-top:4px;font-size:10px">${formatDateTime(f.completata_il)}</div>` : ''}
       </div>`;
     }).join('');
@@ -5016,7 +5051,7 @@ async function renderDettaglioOrdine(id) {
         <div class="fase-num">${numLabel}. ${icon}</div>
         <div class="fase-nome">${nomeFase}${cnc ? '<span class="badge-cnc">CNC</span>' : ''}${est ? '<span class="badge-esterna">EXT</span>' : ''}${isCustom ? '<span class="badge-cnc" style="background:var(--violet)">EXTRA</span>' : ''}</div>
         <div class="fase-op">${opNome || (f.stato === 'disponibile' ? 'Disponibile' : '')}</div>
-        ${!isCustom && fasePiuPressate(f.fase_id) ? `<div class="fase-op" style="margin-top:4px">${escapeHtml(Etichette.pressate.fatteResp(f.pressate_fatte || 0))}</div>` : ''}
+        ${!isCustom && fasePiuPressate(f.fase_id) ? `<div class="fase-op" style="margin-top:4px">${escapeHtml(Etichette.pressate.fatteResp(f.pressate_fatte || 0, fasePressatePreviste(f.fase_id)))}</div>` : ''}
         ${presePerFase.has(f.id) ? `<div class="fase-op" style="margin-top:4px;color:var(--info-ink);font-weight:600">${escapeHtml(Etichette.presa.inPressaSu(presePerFase.get(f.id).macchine?.nome, presePerFase.get(f.id).finisce_il))}</div>` : ''}
         ${f.completata_il ? `<div class="fase-op" style="margin-top:4px;font-size:10px">${formatDateTime(f.completata_il)}</div>` : ''}
       </div>`;
@@ -5411,8 +5446,9 @@ async function addFaseExtra() {
     <div class="extra-fase-macchina-box" style="display:none;padding-left:26px"></div>
     <div class="extra-fase-pp-row" style="padding-left:26px" title="${escapeHtml(Etichette.pressate.config.spiega)}">
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-        <input type="checkbox" class="extra-fase-piu-pressate"> ${escapeHtml(Etichette.pressate.config.casella)}
+        <input type="checkbox" class="extra-fase-piu-pressate" onchange="this.closest('.extra-fase-pp-row').querySelector('.pp-num').style.display = this.checked ? 'inline-flex' : 'none'"> ${escapeHtml(Etichette.pressate.config.casella)}
       </label>
+      ${pressateNumeroHtml('extra-fase-pressate', 1, false)}
     </div>
     <div class="extra-fase-salva-row" style="padding-left:26px">
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--indigo-ink)">
@@ -5589,11 +5625,13 @@ async function creaOrdine() {
         tipo_gestione: catEntry ? catEntry.tipo_gestione : (eEsterna ? 'spedizione_esterna' : 'standard'),
         catalogo_fase_extra_id: catId || null,
         piu_pressate: !catId && !eEsterna && (row.querySelector('.extra-fase-piu-pressate')?.checked ?? false),
+        pressate_previste: !catId && !eEsterna && (row.querySelector('.extra-fase-piu-pressate')?.checked ?? false) ? pressateNumeroValido(row.querySelector('.extra-fase-pressate')?.value) : null,
         macchina_id: row.querySelector('.extra-fase-macchina')?.value || null,
         _salva_catalogo: !catId && (row.querySelector('.extra-fase-salva-cat')?.checked ?? false)
       };
     });
     if (fasiExtra.some(f => !f.nome)) { toast('Inserisci il nome di tutte le fasi', 'err'); return; }
+    if (fasiExtra.some(f => f.piu_pressate && f.pressate_previste == null)) { toast(Etichette.pressate.config.errori.pressate_previste_non_valide, 'err'); return; }
     if (!fasiExtra.length) { toast('Aggiungi almeno una fase', 'err'); return; }
     // Crea le voci catalogo per le fasi con "salva nel catalogo" spuntato
     for (const f of fasiExtra) {
@@ -5607,7 +5645,8 @@ async function creaOrdine() {
           p_tipo_gestione: f.tipo_gestione,
           p_e_attesa_esterna: f.e_attesa_esterna || false,
           p_attiva: true,
-          p_piu_pressate: !!f.piu_pressate
+          p_piu_pressate: !!f.piu_pressate,
+          ...(f.piu_pressate ? { p_pressate_previste: f.pressate_previste } : {})
         });
         if (nuovaCfe?.ok) {
           f.catalogo_fase_extra_id = nuovaCfe.id || null;
@@ -8438,7 +8477,7 @@ async function riaprieFaseExtraResp(faseExtraId, ordineId) {
 // Un solo Salva per fase, atomico (RPC salva_fase: campi, criteri, dipendenze, macchine, tempo, competenze).
 // Nessun valore di configurazione nel codice: fasi, macro fasi, macchine, tempi, criteri e operatori vengono dal database.
 const FASI_CAMPO_ORIG = { tipi: 'criteri_tipi', materiali: 'criteri_materiali', strutture: 'criteri_strutture' };
-const FS = { vista: 'elenco', sel: null, draft: null, mod: {}, cerca: '', filtro: 'tutte', guard: null, depErr: '', flussoSel: null,
+const FS = { nuova: false, mod0: null, vista: 'elenco', sel: null, draft: null, mod: {}, cerca: '', filtro: 'tutte', guard: null, depErr: '', flussoSel: null,
              tempi: [], soglia: null, mobileDettaglio: false, critAperto: {}, compAperto: false, salvando: false };
 
 // Criteri di applicabilità: tipo prodotto + attributi a opzioni (materiale, struttura, ...), tutti da configurazione.
@@ -8478,7 +8517,7 @@ function fsModello(f) {
   const m = {
     id: f.id, nome: f.nome || '', descrizione: f.descrizione || '', macro_fase_id: f.macro_fase_id ?? null,
     tipo_gestione: f.tipo_gestione || 'standard', e_attesa_esterna: !!f.e_attesa_esterna, avvio_automatico: !!f.avvio_automatico,
-    e_cnc: !!f.e_cnc, opzionale: !!f.opzionale, gruppo_spedizione: !!f.gruppo_spedizione, piu_pressate: !!f.piu_pressate, ambito_tempo: f.ambito_tempo || 'anta',
+    e_cnc: !!f.e_cnc, opzionale: !!f.opzionale, gruppo_spedizione: !!f.gruppo_spedizione, piu_pressate: !!f.piu_pressate, pressate_previste: f.pressate_previste ?? null, ambito_tempo: f.ambito_tempo || 'anta',
     tempo_da_lavorazioni_cnc: !!f.tempo_da_lavorazioni_cnc, materiale_ricezione: f.materiale_ricezione || '',
     solo_per_consegna: f.solo_per_consegna ? [...f.solo_per_consegna].sort() : null,   // null = sempre
     dipendenze: [...(f.dipendenze || [])].sort((a, b) => a - b),
@@ -8495,10 +8534,33 @@ function fsModello(f) {
 function fsRicostruisciModelli() {
   FS.mod = {};
   fasiAttive().forEach(f => { FS.mod[f.id] = fsModello(f); });
+  if (FS.nuova && FS.mod0) FS.mod[0] = FS.mod0;   // la scheda "nuova" ha id 0 e come stato salvato un modello vuoto
   if (FS.draft && !FS.mod[FS.draft.id]) FS.draft = null;
 }
 const fsMod = id => (FS.draft && FS.draft.id === id) ? FS.draft : FS.mod[id];
 const fsLista = () => fasiAttive();
+// Fase nuova: stessa scheda della modifica, con id 0 e un modello salvato vuoto (la bozza si confronta con quello: parte "pulita")
+function fsModelloVuoto() {
+  const lista = fasiAttive();
+  const m = { id: 0, nome: '', descrizione: '', macro_fase_id: null, tipo_gestione: 'standard', e_attesa_esterna: false, avvio_automatico: false, e_cnc: false, opzionale: false,
+    gruppo_spedizione: false, piu_pressate: false, pressate_previste: null, ambito_tempo: 'anta', tempo_da_lavorazioni_cnc: false, materiale_ricezione: '', solo_per_consegna: null,
+    dipendenze: [], dipendenti: [], dopo: lista.length ? String(lista[lista.length - 1].id) : 'top', macchine: [], competenze: [], tempo: { tipico: '', massimo: '' } };
+  fasiCriteriDef().forEach(def => { m[def.campo] = []; m[def.modo] = 'solo'; });
+  return m;
+}
+function fsNuova() {
+  if (fsSporca()) { FS.guard = { tipo: 'nuova' }; fsRenderDettaglio(); fsVaiInAlto(); return; }
+  fsAvviaNuova();
+}
+function fsAvviaNuova() {
+  FS.mod0 = fsModelloVuoto(); FS.mod[0] = FS.mod0; FS.nuova = true; FS.draft = fsClone(FS.mod0); FS.sel = 0;
+  FS.guard = null; FS.depErr = ''; FS.critAperto = {}; FS.vista = 'elenco'; FS.mobileDettaglio = true;
+  fsRender(); fsVaiInAlto(); document.getElementById('fs-g-nome')?.focus();
+}
+function fsRigaNuova() {
+  if (!FS.nuova || !FS.draft) return '';
+  return `<button class="fs-riga on" onclick="fsVaiInAlto()"><span class="num">+</span><span style="min-width:0"><span class="nome">${escapeHtml(FS.draft.nome || 'Nuova fase')}<span class="fs-mod-dot" title="Non ancora salvata"></span></span><span class="meta">Non ancora salvata</span></span><span></span></button>`;
+}
 const fsIdx = id => fsLista().findIndex(f => f.id === id);
 const fsSporca = () => !!FS.draft && !!FS.mod[FS.draft.id] && JSON.stringify(FS.draft) !== JSON.stringify(FS.mod[FS.draft.id]);
 const fsMacro = id => macroFasiCache.find(x => x.id === id) || null;
@@ -8555,6 +8617,7 @@ async function fsCaricaDati() {
   else if (FS.draft && !fsSporca()) FS.draft = FS.mod[FS.draft.id] ? fsClone(FS.mod[FS.draft.id]) : null;
 }
 async function fsApriSezione() {
+  FS.nuova = false; if (FS.draft && FS.draft.id === 0) FS.draft = null;
   await fsCaricaDati();
   fsRender();
 }
@@ -8565,8 +8628,8 @@ function renderFasiConfig() {   // usata da altre pagine dopo modifiche a tipi p
 
 function fsRender() {
   const lista = fsLista();
-  if (!lista.length) { document.getElementById('fs-righe').innerHTML = ''; document.getElementById('fs-dettaglio').innerHTML = '<div class="empty-state"><p>Nessuna fase configurata.</p></div>'; fsRenderDisattivate(); return; }
-  if (!FS.sel || !FS.mod[FS.sel]) FS.sel = lista[0].id;
+  if (!lista.length && !FS.nuova) { document.getElementById('fs-righe').innerHTML = ''; document.getElementById('fs-dettaglio').innerHTML = '<div class="empty-state"><p>Nessuna fase configurata.</p></div>'; fsRenderDisattivate(); return; }
+  if (!FS.nuova && (!FS.sel || !FS.mod[FS.sel])) FS.sel = lista[0].id;
   if (!FS.draft || FS.draft.id !== FS.sel) FS.draft = fsClone(FS.mod[FS.sel]);
   document.getElementById('fs-v-elenco').classList.toggle('on', FS.vista === 'elenco');
   document.getElementById('fs-v-flusso').classList.toggle('on', FS.vista === 'flusso');
@@ -8592,7 +8655,7 @@ function fsRenderLista() {
   const fn = FS_FILTRI.find(x => x[0] === FS.filtro)[2];
   const righe = lista.map((f, i) => [fsMod(f.id), i]).filter(([m]) => fn(m) &&
     (!q || m.nome.toLowerCase().includes(q) || m.macchine.some(x => (fsMacchina(x.id)?.nome || '').toLowerCase().includes(q))));
-  document.getElementById('fs-righe').innerHTML = righe.length ? righe.map(([m, i]) => {
+  document.getElementById('fs-righe').innerHTML = fsRigaNuova() + (righe.length ? righe.map(([m, i]) => {
     const lv = fsLivello(m), mac = fsMacro(m.macro_fase_id);
     const meta = [];
     if (fsEster(m)) meta.push(fsTagEsterna(m));
@@ -8610,7 +8673,7 @@ function fsRenderLista() {
       </span>
       ${ico ? `<span class="fs-avv ${lv}" title="${escapeHtml(fsAvvisi(m).map(a => a[1]).join(' '))}">${ico}</span>` : '<span></span>'}
     </button>`;
-  }).join('') : '<div style="padding:20px;color:var(--muted);font-size:13px">Nessuna fase trovata.</div>';
+  }).join('') : (FS.nuova ? '' : '<div style="padding:20px;color:var(--muted);font-size:13px">Nessuna fase trovata.</div>'));
 }
 
 function fsSeleziona(id) {
@@ -8620,6 +8683,7 @@ function fsSeleziona(id) {
 }
 function fsApri(id) {
   if (!FS.mod[id]) return;
+  FS.nuova = false; FS.mod0 = null; delete FS.mod[0];
   FS.sel = id; FS.draft = fsClone(FS.mod[id]); FS.guard = null; FS.depErr = ''; FS.critAperto = {};
   if (window.innerWidth <= 760) FS.mobileDettaglio = true;
   if (FS.vista !== 'elenco') FS.vista = 'elenco';
@@ -8640,14 +8704,16 @@ function fsAggiornaStato() {
   const d = fsSporca();
   const el = document.getElementById('fs-stato-mod'); if (el) el.hidden = !d;
   document.querySelectorAll('[data-fs-salva]').forEach(b => { b.disabled = !d || FS.salvando; });
+  document.querySelectorAll('[data-fs-annulla]').forEach(b => { b.disabled = FS.nuova ? false : !d; });
   fsRenderLista();
 }
 function fsSet(campo, valore, rerender = true) {
   FS.draft[campo] = valore;
   if (campo === 'tipo_gestione') {
     FS.draft.e_attesa_esterna = valore !== 'standard';   // impostata dal tipo di fase
-    if (valore !== 'standard') FS.draft.piu_pressate = false;   // la domanda sulle pressate non vale per le fasi esterne
+    if (valore !== 'standard') { FS.draft.piu_pressate = false; FS.draft.pressate_previste = null; }   // la domanda sulle pressate non vale per le fasi esterne
   }
+  if (campo === 'piu_pressate') FS.draft.pressate_previste = valore ? (FS.draft.pressate_previste ?? 1) : null;
   if (campo === 'tempo_da_lavorazioni_cnc' && valore) FS.draft.ambito_tempo = 'anta';
   fsAggiornaStato(); if (rerender) fsRenderDettaglio();
 }
@@ -8664,11 +8730,6 @@ function fsSetQuando(caso, on) {
   if (r.errore) { toast(Etichette.quandoSiFaTesti.almenoUno, 'err'); fsRenderDettaglio(); return; }
   fsSet('solo_per_consegna', r.arr);
 }
-function nfSetQuando(caso, on) {
-  const r = quandoSiFaAgg(nuovaFase.solo_per_consegna, caso, on);
-  if (r.errore) { toast(Etichette.quandoSiFaTesti.almenoUno, 'err'); renderNuovaFase(); return; }
-  nfSet('solo_per_consegna', r.arr);
-}
 function quandoSiFaHtml(arr, fnNome) {
   const ins = quandoSiFaInsieme(arr), T = Etichette.quandoSiFaTesti;
   return `<div class="fs-row"><div class="fs-crit-t">${escapeHtml(T.titolo)}</div><div class="fs-desc">${escapeHtml(T.spiega)}</div>
@@ -8680,6 +8741,9 @@ function fsSetTesto(campo, valore) {
   if (campo === 'nome') { const h = document.querySelector('.fs-det-title h2'); if (h) h.textContent = valore || 'Senza nome'; }
 }
 function fsSetTempo(campo, valore) { FS.draft.tempo[campo] = valore; fsAggiornaStato(); }
+function fsSetPrevisteNum(v) { FS.draft.pressate_previste = v === '' ? null : Number(v); fsAggiornaStato(); }
+function fsAggiungiDipendente(v) { const id = Number(v); if (!id || FS.draft.dipendenti.includes(id)) return; FS.draft.dipendenti.push(id); FS.draft.dipendenti.sort((a, b) => a - b); fsAggiornaStato(); fsRenderDettaglio(); }
+function fsTogliDipendente(id) { FS.draft.dipendenti = FS.draft.dipendenti.filter(x => x !== id); fsAggiornaStato(); fsRenderDettaglio(); }
 function fsSetModo(def, modo) {
   const campo = def.campo;
   if (modo === 'tutti') { FS.draft[campo] = []; FS.draft[def.modo] = 'solo'; delete FS.critAperto[campo]; }
@@ -8708,7 +8772,10 @@ function fsSetFattoreMacchina(id, v) { const x = FS.draft.macchine.find(y => y.i
 function fsCompSposta(i, dir) { const a = FS.draft.competenze; [a[i], a[i + dir]] = [a[i + dir], a[i]]; fsAggiornaStato(); fsRenderDettaglio(); }
 function fsCompTogli(i) { FS.draft.competenze.splice(i, 1); fsAggiornaStato(); fsRenderDettaglio(); }
 function fsCompAggiungi(id) { if (!id || FS.draft.competenze.includes(id)) return; FS.draft.competenze.push(id); fsAggiornaStato(); fsRenderDettaglio(); }
-function fsAnnulla() { FS.draft = fsClone(FS.mod[FS.sel]); FS.depErr = ''; FS.critAperto = {}; fsRender(); }
+function fsAnnulla() {
+  if (FS.nuova) { FS.nuova = false; FS.mod0 = null; delete FS.mod[0]; FS.draft = null; FS.sel = fsLista()[0]?.id ?? null; FS.depErr = ''; FS.critAperto = {}; fsRender(); return; }
+  FS.draft = fsClone(FS.mod[FS.sel]); FS.depErr = ''; FS.critAperto = {}; fsRender();
+}
 
 // riordino: salvataggio immediato come prima (riordina_fasi); la bozza della fase aperta resta
 async function fsSposta(dir) {
@@ -8728,7 +8795,7 @@ function fsTempoModificabile(id) {
 }
 function fsPayload() {
   const d = FS.draft, o = FS.mod[d.id], p = {};
-  ['nome', 'descrizione', 'macro_fase_id', 'tipo_gestione', 'e_attesa_esterna', 'avvio_automatico', 'e_cnc', 'opzionale', 'gruppo_spedizione', 'piu_pressate', 'ambito_tempo', 'tempo_da_lavorazioni_cnc', 'materiale_ricezione', 'solo_per_consegna'].forEach(k => {
+  ['nome', 'descrizione', 'macro_fase_id', 'tipo_gestione', 'e_attesa_esterna', 'avvio_automatico', 'e_cnc', 'opzionale', 'gruppo_spedizione', 'piu_pressate', 'pressate_previste', 'ambito_tempo', 'tempo_da_lavorazioni_cnc', 'materiale_ricezione', 'solo_per_consegna'].forEach(k => {
     if (JSON.stringify(d[k]) !== JSON.stringify(o[k])) p[k] = k === 'nome' ? d.nome.trim() : k === 'materiale_ricezione' ? String(d[k] || '').trim() : d[k];
   });
   const crit = {};
@@ -8741,11 +8808,16 @@ function fsPayload() {
     const riga = fsRigaBase(d.id);
     p.tempo = { minuti_tipici: Number(d.tempo.tipico), minuti_max: Number(d.tempo.massimo), da_confermare: !!riga?.da_confermare, note: riga?.note || '' };
   }
+  if (FS.nuova) {   // solo in creazione: posizione nell'elenco e fasi che dovranno aspettare questa
+    p.dopo_fase_id = d.dopo === 'top' ? null : Number(d.dopo);
+    if (d.dipendenti.length) p.dipendenti = d.dipendenti;
+  }
   return p;
 }
 function fsValida() {
   const d = FS.draft;
   if (!d.nome.trim()) return 'Inserisci il nome della fase.';
+  if (d.piu_pressate && !fsEster(d) && pressateNumeroValido(d.pressate_previste) == null) return Etichette.pressate.config.errori.pressate_previste_non_valide;
   if (fsTempoModificabile(d.id)) {
     const t = d.tempo, a = Number(t.tipico), b = Number(t.massimo), haOrig = FS.mod[d.id].tempo.tipico !== '';
     if (t.tipico === '' && t.massimo === '') { if (haOrig) return 'Il tempo di riferimento non si può togliere: modifica i minuti.'; }
@@ -8765,6 +8837,7 @@ async function fsSalva(poi) {
   const err = fsValida(); if (err) { toast(err, 'err'); return; }
   const payload = fsPayload();
   if (!Object.keys(payload).length) { toast('Nessuna modifica da salvare', 'ok'); return; }
+  if (FS.nuova) { await fsSalvaNuova(payload, poi); return; }
   FS.salvando = true; fsAggiornaStato();
   const faseId = FS.draft.id;
   const { data, error } = await sb.rpc('salva_fase', { p_fase_id: faseId, p_dati: payload, p_solo_anteprima: true, p_responsabile_id: currentUserRow.id, p_session_token: null });
@@ -8772,6 +8845,28 @@ async function fsSalva(poi) {
   if (error || !data?.ok) { toast('Errore: ' + (FS_ERRORI[data?.errore] || data?.errore || error?.message || ''), 'err'); return; }
   if (data.n_cambi) { mostraAnteprimaFasi('Questa modifica', data, () => fsConferma(faseId, payload, poi)); return; }
   await fsConferma(faseId, payload, poi);
+}
+// Creazione: la stessa scheda, un'unica operazione atomica sul server (crea_fase), con anteprima degli effetti sugli ordini aperti
+async function fsSalvaNuova(payload, poi) {
+  if (!FS.draft.dipendenze.length &&
+      !confirm('Questa fase non ha dipendenze: potrà essere avviata subito, senza attendere nessuna altra fase.\n\nProcedere comunque?')) return;
+  FS.salvando = true; fsAggiornaStato();
+  const { data: ant, error: errAnt } = await sb.rpc('crea_fase', { p_dati: { ...payload, _anteprima: true }, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  FS.salvando = false; fsAggiornaStato();
+  if (errAnt || !ant?.ok) { toast('Errore: ' + (FS_ERRORI[ant?.errore] || ant?.errore || errAnt?.message || ''), 'err'); return; }
+  if (ant.n_cambi) { mostraAnteprimaFasi('Questa nuova fase', ant, () => fsConfermaNuova(payload, poi)); return; }
+  await fsConfermaNuova(payload, poi);
+}
+async function fsConfermaNuova(payload, poi) {
+  FS.salvando = true; fsAggiornaStato();
+  const { data, error } = await sb.rpc('crea_fase', { p_dati: payload, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  FS.salvando = false;
+  closeModal('modal-anteprima-fasi');
+  if (error || !data?.ok) { fsAggiornaStato(); toast('Creazione NON riuscita: ' + (FS_ERRORI[data?.errore] || data?.errore || error?.message || 'errore sconosciuto'), 'err'); return; }
+  FS.nuova = false; FS.mod0 = null; delete FS.mod[0]; FS.draft = null;
+  await fsCaricaDati();
+  toast(`Fase creata e applicata a ${data.ordini_popolati || 0} ordini aperti`, 'ok');
+  if (poi) poi(); else fsApri(data.fase_id);
 }
 async function fsConferma(faseId, payload, poi) {
   FS.salvando = true; fsAggiornaStato();
@@ -8794,6 +8889,7 @@ function fsGuardResta() { FS.guard = null; fsRenderDettaglio(); }
 function fsVaiA(g) {
   FS.guard = null;
   if (g.tipo === 'fase') fsApri(g.id);
+  else if (g.tipo === 'nuova') fsAvviaNuova();
   else if (g.tipo === 'sezione') { FS.draft = FS.mod[FS.sel] ? fsClone(FS.mod[FS.sel]) : null; showSection(g.nome); }
 }
 // uscita dalla sezione con modifiche aperte: la barra compare nell'intestazione del dettaglio
@@ -8822,8 +8918,8 @@ function fsRenderDettaglio() {
   const lista = fsLista(); const i = fsIdx(m.id); const mac = fsMacro(m.macro_fase_id);
   const succ = fsSuccessori(m.id), d = fsSporca(), est = fsEster(m);
   const g = FS.guard;
-  const nomeDest = g ? (g.tipo === 'fase' ? `«${escapeHtml(FS.mod[g.id]?.nome || '')}»` : 'un\'altra sezione') : '';
-  const guard = g ? `<div class="fs-guard" role="alert"><span>Hai modifiche non salvate su «${escapeHtml(m.nome)}». Cosa vuoi fare prima di aprire ${nomeDest}?</span>
+  const nomeDest = g ? (g.tipo === 'fase' ? `«${escapeHtml(FS.mod[g.id]?.nome || '')}»` : g.tipo === 'nuova' ? 'una nuova fase' : 'un\'altra sezione') : '';
+  const guard = g ? `<div class="fs-guard" role="alert"><span>Hai modifiche non salvate su «${escapeHtml(m.nome || 'la nuova fase')}». Cosa vuoi fare prima di aprire ${nomeDest}?</span>
       <button class="btn btn-primary" onclick="fsGuardSalva()">Salva e apri</button>
       <button class="btn btn-secondary" onclick="fsGuardScarta()">Scarta</button>
       <button class="fs-btn-ghost" onclick="fsGuardResta()">Resta qui</button></div>` : '';
@@ -8846,7 +8942,7 @@ function fsRenderDettaglio() {
   } else {
     const modificabile = fsTempoModificabile(m.id);
     tempo = (modificabile ? `<div class="fs-row fs-two">
-         <div><span class="fs-lbl">Minuti per pezzo</span>
+         <div><span class="fs-lbl">Minuti per pezzo${m.piu_pressate ? ' · ' + Etichette.pressate.config.tempoPerPressata : ''}</span>
            <div class="fs-add"><input class="fs-inp num" id="fs-t-min" type="number" min="0" step="any" value="${escapeHtml(m.tempo.tipico)}" oninput="fsSetTempo('tipico',this.value)" aria-label="Minuti tipici"> <span class="fs-desc" style="margin:0">tipico</span>
            <input class="fs-inp num" id="fs-t-max" type="number" min="0" step="any" value="${escapeHtml(m.tempo.massimo)}" oninput="fsSetTempo('massimo',this.value)" aria-label="Minuti massimi"> <span class="fs-desc" style="margin:0">massimo</span></div>
            <div class="fs-desc">Stesso valore della pagina Tempi di riferimento: cambiarlo qui lo cambia anche lì.</div></div>
@@ -8868,15 +8964,22 @@ function fsRenderDettaglio() {
   const nomeOp = id => { const o = operatoriCache.find(x => x.id === id); return o ? `${o.nome} ${o.cognome}` : ''; };
   const defs = fasiCriteriDef();
   const mobHdr = `<button class="fs-btn-ghost fs-back" onclick="fsTornaElenco()">← Fasi</button>`;
+  // Solo in creazione: quali fasi dovranno aspettare questa, e dove sta nell'elenco
+  const poiNuovaHtml = FS.nuova ? `<div class="fs-chips">${(m.dipendenti || []).length ? m.dipendenti.map(id => `<span class="fs-chip"><span>${fsIdx(id) + 1}. ${escapeHtml(fsMod(id)?.nome || '')}</span><button class="fs-chip-x" title="Togli" aria-label="Togli ${escapeHtml(fsMod(id)?.nome || '')}" onclick="fsTogliDipendente(${id})">×</button></span>`).join('') : '<span class="fs-desc" style="margin:0">Nessuna.</span>'}</div>
+      <div class="fs-add"><select class="fs-inp" id="fs-add-dipendente" onchange="fsAggiungiDipendente(this.value)" style="min-width:0;width:100%"><option value="">+ Aggiungi fase…</option>${lista.filter(x => !(m.dipendenti || []).includes(x.id)).map(x => `<option value="${x.id}">${fsIdx(x.id) + 1}. ${escapeHtml(x.nome)}</option>`).join('')}</select></div>
+      <div class="fs-desc" style="margin:0">Le fasi che devono aspettare questa. Se una è già completata su un ordine, la nuova fase viene saltata su quell'ordine.</div>` : '';
+  const posNuovaHtml = FS.nuova ? `<div><label class="fs-lbl" for="fs-g-dopo">Inserisci dopo la fase</label>
+      <select class="fs-inp" id="fs-g-dopo" onchange="fsSet('dopo', this.value, false)"><option value="top" ${m.dopo === 'top' ? 'selected' : ''}>— In cima alla lista</option>${lista.map((x, k) => `<option value="${x.id}" ${String(x.id) === String(m.dopo) ? 'selected' : ''}>${k + 1}. ${escapeHtml(x.nome)}</option>`).join('')}</select>
+      <div class="fs-desc">Decide l'ordine di lettura. Cosa parte prima lo decide la Sequenza.</div></div>` : '';
 
   document.getElementById('fs-dettaglio').innerHTML = `
     <div class="fs-det-hdr">
       <div class="fs-det-hdr-row">
-        <div class="fs-det-title">${mobHdr}<span class="n">${i + 1} / ${lista.length}</span><h2>${escapeHtml(m.nome || 'Senza nome')}</h2></div>
+        <div class="fs-det-title">${mobHdr}<span class="n">${FS.nuova ? 'Nuova' : (i + 1) + ' / ' + lista.length}</span><h2>${escapeHtml(m.nome || (FS.nuova ? 'Nuova fase' : 'Senza nome'))}</h2></div>
         <div class="fs-hdr-actions">
           <span class="fs-stato-mod" id="fs-stato-mod" ${d ? '' : 'hidden'}>Modifiche non salvate</span>
-          <button class="btn btn-secondary" data-fs-salva onclick="fsAnnulla()" ${d ? '' : 'disabled'}>Annulla</button>
-          <button class="btn btn-primary" data-fs-salva onclick="fsSalva()" ${d && !FS.salvando ? '' : 'disabled'}>Salva</button>
+          <button class="btn btn-secondary" data-fs-annulla onclick="fsAnnulla()" ${d || FS.nuova ? '' : 'disabled'}>Annulla</button>
+          <button class="btn btn-primary" data-fs-salva onclick="fsSalva()" ${d && !FS.salvando ? '' : 'disabled'}>${FS.nuova ? 'Crea fase' : 'Salva'}</button>
         </div>
       </div>
       <div class="fs-det-sub">
@@ -8902,8 +9005,8 @@ function fsRenderDettaglio() {
           <div class="fs-seq-mid"><span class="fs-freccia">→</span><div class="fs-qui">${escapeHtml(m.nome)}</div><span class="fs-freccia">→</span></div>
           <div class="fs-seq-col">
             <span class="fs-lbl">Poi si sbloccano</span>
-            <div class="fs-chips">${succ.length ? succ.map(id => `<button class="fs-chip link" onclick="fsSeleziona(${id})">${fsIdx(id) + 1}. ${escapeHtml(fsMod(id)?.nome || '')}</button>`).join('') : `<span class="fs-desc" style="margin:0">${fsFineFlusso(m) ? 'Nessuna: è l\'ultima fase dell\'ordine.' : 'Nessuna fase aspetta questa.'}</span>`}</div>
-            <div class="fs-desc" style="margin:0">Per cambiarle apri quella fase e modifica «Parte dopo».</div>
+            ${poiNuovaHtml}<div class="fs-chips" ${FS.nuova ? 'hidden' : ''}>${succ.length ? succ.map(id => `<button class="fs-chip link" onclick="fsSeleziona(${id})">${fsIdx(id) + 1}. ${escapeHtml(fsMod(id)?.nome || '')}</button>`).join('') : `<span class="fs-desc" style="margin:0">${fsFineFlusso(m) ? 'Nessuna: è l\'ultima fase dell\'ordine.' : 'Nessuna fase aspetta questa.'}</span>`}</div>
+            <div class="fs-desc" style="margin:0" ${FS.nuova ? 'hidden' : ''}>Per cambiarle apri quella fase e modifica «Parte dopo».</div>
           </div>
         </div>
         <div class="fs-seq-note">La fase entra nel piano di oggi solo quando tutte quelle a sinistra sono completate.${escapeHtml(soglia)}</div>
@@ -8953,7 +9056,8 @@ function fsRenderDettaglio() {
         <div class="fs-row inline"><div><div class="fs-crit-t">Fase CNC</div><div class="fs-desc">Mostra il badge CNC sull'ordine e nell'app.</div></div>${fsSwitch('fs-o-cnc', m.e_cnc, "fsSet('e_cnc',this.checked)")}</div>
         <div class="fs-row inline"><div><div class="fs-crit-t">Opzionale</div><div class="fs-desc">Non si crea da sola: la abiliti tu dall'ordine.</div></div>${fsSwitch('fs-o-opz', m.opzionale, "fsSet('opzionale',this.checked)")}</div>
         <div class="fs-row inline"><div><div class="fs-crit-t">Spedizione unica</div><div class="fs-desc">Per gli ordini della stessa spedizione la fase è una sola: compare una volta nel piano (con il tempo di un ordine) e, quando la si completa, si chiude per tutti.</div></div>${fsSwitch('fs-o-gs', m.gruppo_spedizione, "fsSet('gruppo_spedizione',this.checked,false)")}</div>
-        ${fsEster(m) ? '' : `<div class="fs-row inline"><div><div class="fs-crit-t">${escapeHtml(Etichette.pressate.config.casella)}</div><div class="fs-desc">${escapeHtml(Etichette.pressate.config.spiega)}</div></div>${fsSwitch('fs-o-pp', m.piu_pressate, "fsSet('piu_pressate',this.checked,false)")}</div>`}
+        ${fsEster(m) ? '' : `<div class="fs-row inline"><div><div class="fs-crit-t">${escapeHtml(Etichette.pressate.config.casella)}</div><div class="fs-desc">${escapeHtml(Etichette.pressate.config.spiega)}</div></div>${fsSwitch('fs-o-pp', m.piu_pressate, "fsSet('piu_pressate',this.checked)")}</div>`}
+        ${!fsEster(m) && m.piu_pressate ? `<div class="fs-row"><label class="fs-lbl" for="fs-g-pv">${escapeHtml(Etichette.pressate.config.previste)}</label><input class="fs-inp num" id="fs-g-pv" type="number" min="1" max="20" step="1" inputmode="numeric" value="${m.pressate_previste ?? ''}" oninput="fsSetPrevisteNum(this.value)" style="width:100px"><div class="fs-desc">${escapeHtml(Etichette.pressate.config.previsteSpiega)}</div></div>` : ''}
         ${quandoSiFaHtml(m.solo_per_consegna, 'fsSetQuando')}
       </div>
     </div>
@@ -8966,7 +9070,7 @@ function fsRenderDettaglio() {
         <div class="fs-row fs-two">
           <div><label class="fs-lbl" for="fs-g-macro">Macro fase</label>
             <select class="fs-inp" id="fs-g-macro" onchange="fsSet('macro_fase_id', this.value ? Number(this.value) : null)"><option value="">Nessuna</option>${macroFasiCache.map(x => `<option value="${x.id}" ${x.id === m.macro_fase_id ? 'selected' : ''}>${escapeHtml(x.nome)}</option>`).join('')}</select></div>
-          <div><span class="fs-lbl">Posizione nell'elenco</span>
+          ${posNuovaHtml}<div ${FS.nuova ? 'hidden' : ''}><span class="fs-lbl">Posizione nell'elenco</span>
             <div class="fs-add"><button class="btn btn-secondary" onclick="fsSposta(-1)" ${i === 0 ? 'disabled' : ''} aria-label="Sposta su">▲ Su</button><button class="btn btn-secondary" onclick="fsSposta(1)" ${i === lista.length - 1 ? 'disabled' : ''} aria-label="Sposta giù">▼ Giù</button><span class="fs-desc" style="margin:0">Fase ${i + 1} di ${lista.length}</span></div>
             <div class="fs-desc">Decide l'ordine di lettura. Cosa parte prima lo decide la Sequenza.</div></div>
         </div>
@@ -8985,7 +9089,7 @@ function fsRenderDettaglio() {
       </details>
     </div>
 
-    <div class="fs-blocco" style="display:flex;justify-content:flex-end"><button class="fs-btn-danger-ghost" onclick="eliminaFase(${m.id})">Disattiva fase</button></div>`;
+    ${FS.nuova ? '' : `<div class="fs-blocco" style="display:flex;justify-content:flex-end"><button class="fs-btn-danger-ghost" onclick="eliminaFase(${m.id})">Disattiva fase</button></div>`}`;
 }
 
 // ── flusso ───────────────────────────────────────────────────────────────────────────────────────────────
@@ -9072,136 +9176,6 @@ function fsRenderDisattivate() {
         <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="riattivaFase(${f.id})">Riattiva</button>
       </div>`).join('')}
     </details>` : '';
-}
-
-// ─── NUOVA FASE: un'unica scheda (nome, posizione, macro-fase, gestione, criteri, dipendenze) ───
-let nuovaFase = null;
-
-function aggiungiNuovaFase() {
-  const lista = fasiAttive();
-  nuovaFase = {
-    nome: '', descrizione: '', dopo: lista.length ? String(lista[lista.length - 1].id) : 'top',
-    macro_fase_id: '', tipo_gestione: 'standard', e_attesa_esterna: false, avvio_automatico: false, opzionale: false, e_cnc: false, gruppo_spedizione: false, solo_per_consegna: null,
-    tipi: [], materiali: [], strutture: [], modo_tipi: 'solo', modo_materiali: 'solo', modo_strutture: 'solo', dipendenze: [], dipendenti: [],
-  };
-  fasiCriteriDef().forEach(d => { nuovaFase[d.campo] ||= []; nuovaFase[d.modo] ||= 'solo'; });
-  renderNuovaFase();
-  document.getElementById('modal-nuova-fase').classList.add('open');
-}
-
-function nfSet(campo, valore, rerender = true) {
-  if (!nuovaFase) return;
-  nuovaFase[campo] = valore;
-  if (campo === 'tipo_gestione' && (valore === 'conferma_ricezione' || valore === 'spedizione_esterna')) nuovaFase.e_attesa_esterna = true;
-  if (rerender) renderNuovaFase();
-}
-
-function nfToggle(campo, valore, on) {
-  const cur = nuovaFase[campo];
-  const i = cur.indexOf(valore);
-  if (on && i < 0) cur.push(valore);
-  if (!on && i >= 0) cur.splice(i, 1);
-  renderNuovaFase();
-}
-
-function renderNuovaFase() {
-  const el = document.getElementById('nf-body');
-  if (!el || !nuovaFase) return;
-  const nf = nuovaFase;
-  const lista = fasiAttive();
-  const vincolato = nf.tipo_gestione === 'conferma_ricezione' || nf.tipo_gestione === 'spedizione_esterna';
-  const criteri = fasiCriteriDef().map(def => `
-    <div style="margin-bottom:10px">
-      <div style="font-size:12px;font-weight:600;margin-bottom:4px">${escapeHtml(def.titolo)} <em style="font-weight:400;color:var(--muted)">(nessuno = tutti)</em></div>
-      <select onchange="nfSet('${def.modo}', this.value)" style="font-size:12px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);margin-bottom:4px">
-        <option value="solo" ${nf[def.modo] === 'solo' ? 'selected' : ''}>Solo questi</option>
-        <option value="tutti_tranne" ${nf[def.modo] === 'tutti_tranne' ? 'selected' : ''}>Tutti tranne questi</option>
-      </select>
-      <div style="display:flex;flex-wrap:wrap;gap:10px">
-        ${def.opzioni.filter(o => o.attivo !== false).map(o => `<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
-          <input type="checkbox" ${nf[def.campo].includes(o.valore) ? 'checked' : ''} onchange="nfToggle('${def.campo}','${escapeJsAttr(o.valore)}',this.checked)"> ${escapeHtml(o.etichetta)}</label>`).join('')}
-      </div>
-    </div>`).join('');
-  el.innerHTML = `
-    <div class="form-group"><label>Nome fase *</label>
-      <input type="text" id="nf-nome" value="${escapeHtml(nf.nome)}" oninput="nfSet('nome', this.value, false)" placeholder="es. Preparazione ferramenta"></div>
-    <div class="form-group"><label>Descrizione <span style="color:var(--muted);font-weight:400">(opzionale)</span></label>
-      <input type="text" id="nf-desc" value="${escapeHtml(nf.descrizione)}" oninput="nfSet('descrizione', this.value, false)" placeholder="Descrizione breve"></div>
-    <div class="form-row">
-      <div class="form-group"><label>Inserisci dopo la fase</label>
-        <select id="nf-posizione" onchange="nfSet('dopo', this.value, false)">
-          <option value="top" ${nf.dopo === 'top' ? 'selected' : ''}>— In cima alla lista</option>
-          ${lista.map((f, i) => `<option value="${f.id}" ${String(f.id) === nf.dopo ? 'selected' : ''}>${i + 1}. ${escapeHtml(f.nome)}</option>`).join('')}
-        </select></div>
-      <div class="form-group"><label>Macro-fase</label>
-        <select id="nf-macro" onchange="nfSet('macro_fase_id', this.value, false)">
-          <option value="">— nessuna</option>
-          ${macroFasiCache.map(m => `<option value="${m.id}" ${String(m.id) === String(nf.macro_fase_id) ? 'selected' : ''}>${escapeHtml(m.nome)}</option>`).join('')}
-        </select></div>
-    </div>
-    <div class="form-row">
-      <div class="form-group"><label>Tipo di gestione</label>
-        <select id="nf-tg" onchange="nfSet('tipo_gestione', this.value)">
-          <option value="standard" ${nf.tipo_gestione === 'standard' ? 'selected' : ''}>Standard</option>
-          <option value="conferma_ricezione" ${nf.tipo_gestione === 'conferma_ricezione' ? 'selected' : ''}>Conferma ricezione</option>
-          <option value="spedizione_esterna" ${nf.tipo_gestione === 'spedizione_esterna' ? 'selected' : ''}>Spedizione esterna</option>
-        </select></div>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;font-size:13px">
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;${vincolato ? 'opacity:.65' : ''}"><input type="checkbox" ${nf.e_attesa_esterna ? 'checked' : ''} ${vincolato ? 'disabled' : ''} onchange="nfSet('e_attesa_esterna', this.checked, false)"> Attesa esterna (escludi da stime ore interne)</label>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" ${nf.avvio_automatico ? 'checked' : ''} onchange="nfSet('avvio_automatico', this.checked, false)"> Avvio automatico alla creazione ordine</label>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" ${nf.opzionale ? 'checked' : ''} onchange="nfSet('opzionale', this.checked, false)"> Opzionale (si attiva solo manualmente dall'ordine)</label>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" ${nf.e_cnc ? 'checked' : ''} onchange="nfSet('e_cnc', this.checked, false)"> CNC (badge CNC sulla fase)</label>
-      <label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" ${nf.gruppo_spedizione ? 'checked' : ''} onchange="nfSet('gruppo_spedizione', this.checked, false)"> Gruppo spedizione (completamento per spedizione unica)</label>
-    </div>
-    ${quandoSiFaHtml(nf.solo_per_consegna, 'nfSetQuando')}
-    <div style="font-size:13px;font-weight:700;margin:6px 0 8px">Criteri di applicabilità</div>
-    ${criteri}
-    <div style="font-size:13px;font-weight:700;margin:12px 0 6px">Fasi da completare prima (dipendenze)</div>
-    <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto">
-      ${lista.map(f => `<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-        <input type="checkbox" ${nf.dipendenze.includes(f.id) ? 'checked' : ''} onchange="nfToggle('dipendenze', ${f.id}, this.checked)"> ${escapeHtml(f.nome)}</label>`).join('')}
-    </div>
-    <div style="font-size:13px;font-weight:700;margin:12px 0 2px">Fasi che devono aspettare questa fase</div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:6px">Servono anche a non far comparire la fase negli ordini già oltre quel punto: se una di queste è già completata su un ordine, la nuova fase viene saltata.</div>
-    <div style="display:flex;flex-direction:column;gap:4px;max-height:160px;overflow:auto">
-      ${lista.map(f => `<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-        <input type="checkbox" ${nf.dipendenti.includes(f.id) ? 'checked' : ''} onchange="nfToggle('dipendenti', ${f.id}, this.checked)"> ${escapeHtml(f.nome)}</label>`).join('')}
-    </div>`;
-}
-
-async function confermaNuovaFase() {
-  const nf = nuovaFase;
-  if (!nf) return;
-  if (!nf.nome.trim()) { toast('Inserisci il nome della fase', 'err'); return; }
-  if (!nf.dipendenze.length &&
-      !confirm('Questa fase non ha dipendenze: potrà essere avviata subito, senza attendere nessuna altra fase.\n\nProcedere comunque?')) return;
-  const dati = {
-    nome: nf.nome.trim(), descrizione: nf.descrizione.trim(), dopo_fase_id: nf.dopo === 'top' ? null : parseInt(nf.dopo),
-    macro_fase_id: nf.macro_fase_id === '' ? null : parseInt(nf.macro_fase_id),
-    tipo_gestione: nf.tipo_gestione, e_attesa_esterna: nf.e_attesa_esterna, avvio_automatico: nf.avvio_automatico, opzionale: nf.opzionale,
-    e_cnc: nf.e_cnc, gruppo_spedizione: nf.gruppo_spedizione, solo_per_consegna: nf.solo_per_consegna,
-    tipi: nf.tipi, materiali: nf.materiali, strutture: nf.strutture,
-    modo_tipi: nf.modo_tipi, modo_materiali: nf.modo_materiali, modo_strutture: nf.modo_strutture,
-    dipendenze: nf.dipendenze, dipendenti: nf.dipendenti,
-    ..._raccogliAttributiBozza(Object.fromEntries(Object.entries(nf).filter(([k]) => k.startsWith('attr_') || k.startsWith('modo_attr_')))),
-  };
-  // anteprima: stesso calcolo del server, nessuna scrittura. Se la fase cambia degli ordini aperti, si chiede conferma.
-  const { data: ant, error: errAnt } = await sb.rpc('crea_fase', { p_dati: { ...dati, _anteprima: true }, p_responsabile_id: currentUserRow.id, p_session_token: null });
-  if (errAnt || !ant?.ok) { toast('Errore: ' + (ant?.errore || errAnt?.message || ''), 'err'); return; }
-  if (ant.n_cambi) { mostraAnteprimaFasi('Questa nuova fase', ant, () => creaFaseConferma(dati)); return; }
-  await creaFaseConferma(dati);
-}
-
-async function creaFaseConferma(dati) {
-  const { data, error } = await sb.rpc('crea_fase', { p_dati: dati, p_responsabile_id: currentUserRow.id, p_session_token: null });
-  closeModal('modal-anteprima-fasi');
-  if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
-  closeModal('modal-nuova-fase');
-  nuovaFase = null;
-  await fsCaricaDati();
-  fsApri(data.fase_id);
-  toast(`Fase creata e applicata a ${data.ordini_popolati || 0} ordini aperti`, 'ok');
 }
 
 async function eliminaFase(id) {
@@ -10194,6 +10168,11 @@ function getFaseNome(faseId) {
 const isCNC = (id) => fasi.find(f => f.id === id)?.e_cnc === true;
 const isEsterna = (id) => fasi.find(f => f.id === id)?.e_attesa_esterna === true;
 const fasePiuPressate = (id) => fasi.find(f => f.id === id)?.piu_pressate === true;
+const fasePressatePreviste = (id) => fasi.find(f => f.id === id)?.pressate_previste ?? null;
+// numero di pressate previste accanto alla casella "più pressate": compare solo con la casella spuntata
+const pressateNumeroHtml = (cls, valore, visibile, extra = '', idLabel = '') => `<label ${idLabel ? `id="${idLabel}" ` : ''}class="pp-num" style="display:${visibile ? 'inline-flex' : 'none'};align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap" title="${escapeHtml(Etichette.pressate.config.previsteSpiega)}">${escapeHtml(Etichette.pressate.config.previste)}
+  <input type="number" class="${cls}" min="1" max="20" step="1" inputmode="numeric" value="${valore ?? 1}" style="width:60px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--ink);font-size:13px" ${extra}></label>`;
+const pressateNumeroValido = (v) => { const n = Number(v); return Number.isInteger(n) && n >= 1 && n <= 20 ? n : null; };
 
 async function eliminaOrdine(id) {
   const ordine = [...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === id);
@@ -10958,7 +10937,7 @@ async function salvaModificaOrdine() {
 
 async function caricaFasiExtraModal(ordineId) {
   const { data } = await sb.from('fasi_ordine_extra')
-    .select('id, numero, nome, stato, tipo_gestione, piu_pressate, pressate_fatte')
+    .select('id, numero, nome, stato, tipo_gestione, piu_pressate, pressate_previste, pressate_fatte')
     .eq('ordine_id', ordineId)
     .order('numero');
   const el = document.getElementById('mod-fasi-extra-list');
@@ -10972,8 +10951,8 @@ async function caricaFasiExtraModal(ordineId) {
            onclick="eliminaFaseExtra('${f.id}','${escapeJsAttr(f.nome)}','${ordineId}')">✕ Elimina</button>`
       : `<span style="font-size:11px;color:var(--muted);margin-left:auto;flex-shrink:0">completata</span>`;
     const pp = f.tipo_gestione === 'standard' && f.stato !== 'completata'
-      ? `<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);cursor:pointer;white-space:nowrap" title="${escapeHtml(Etichette.pressate.config.spiega)}"><input type="checkbox" ${f.piu_pressate ? 'checked' : ''} onchange="impostaPiuPressateFaseExtra('${f.id}', this.checked, '${ordineId}')"> ${escapeHtml(Etichette.pressate.config.casella)}</label>` : '';
-    const fatte = f.piu_pressate ? `<span style="font-size:11px;color:var(--muted);white-space:nowrap">${escapeHtml(Etichette.pressate.fatteResp(f.pressate_fatte || 0))}</span>` : '';
+      ? `<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);cursor:pointer;white-space:nowrap" title="${escapeHtml(Etichette.pressate.config.spiega)}"><input type="checkbox" ${f.piu_pressate ? 'checked' : ''} onchange="impostaPiuPressateFaseExtra('${f.id}', this.checked, '${ordineId}')"> ${escapeHtml(Etichette.pressate.config.casella)}</label>${f.piu_pressate ? pressateNumeroHtml('pp-num-extra', f.pressate_previste, true, `onchange="impostaPiuPressateFaseExtra('${f.id}', true, '${ordineId}', this.value)"`) : ''}` : '';
+    const fatte = f.piu_pressate ? `<span style="font-size:11px;color:var(--muted);white-space:nowrap">${escapeHtml(Etichette.pressate.fatteResp(f.pressate_fatte || 0, f.pressate_previste))}</span>` : '';
     return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
       <span style="background:${badge};padding:2px 8px;border-radius:10px;font-size:11px;white-space:nowrap">${f.stato}</span>
       <span style="font-size:13px;flex:1;min-width:120px">${escapeHtml(f.nome)}${tgLabel}</span>
@@ -10983,8 +10962,10 @@ async function caricaFasiExtraModal(ordineId) {
   }).join('');
 }
 
-async function impostaPiuPressateFaseExtra(faseExtraId, valore, ordineId) {
-  const { data, error } = await sb.rpc('imposta_piu_pressate_fase_extra', { p_fase_extra_id: faseExtraId, p_valore: !!valore, p_responsabile_id: currentUserRow.id, p_session_token: null });
+async function impostaPiuPressateFaseExtra(faseExtraId, valore, ordineId, previste) {
+  const prev = previste === undefined ? undefined : pressateNumeroValido(previste);
+  if (previste !== undefined && prev == null) { toast('Errore: ' + Etichette.pressate.config.errori.pressate_previste_non_valide, 'err'); await caricaFasiExtraModal(ordineId); return; }
+  const { data, error } = await sb.rpc('imposta_piu_pressate_fase_extra', { p_fase_extra_id: faseExtraId, p_valore: !!valore, p_responsabile_id: currentUserRow.id, p_session_token: null, ...(prev ? { p_previste: prev } : {}) });
   if (error || !data?.ok) toast('Errore: ' + (Etichette.pressate.config.errori[data?.errore] || error?.message || data?.errore || ''), 'err');
   await caricaFasiExtraModal(ordineId);
 }
@@ -11080,6 +11061,7 @@ async function apriAggiungiExtraFase() {
   document.getElementById('nef-tipo-gestione').value = 'standard';
   document.getElementById('nef-note').value = '';
   document.getElementById('nef-piu-pressate').checked = false;
+  document.getElementById('nef-pp-num-box').innerHTML = pressateNumeroHtml('', 1, false, 'id="nef-pressate-previste"', 'nef-pp-num');
   document.getElementById('nef-piu-pressate-t').textContent = Etichette.pressate.config.casella;
   document.getElementById('nef-piu-pressate-t').title = Etichette.pressate.config.spiega;
   document.getElementById('nef-piu-pressate-row').style.display = '';
@@ -11106,6 +11088,7 @@ async function aggiungiExtraFase() {
   const nome = document.getElementById('nef-nome').value.trim();
   const tipoGestione = document.getElementById('nef-tipo-gestione').value;
   const salvaNelCatalogo = document.getElementById('nef-salva-catalogo')?.checked || false;
+  if (tipoGestione === 'standard' && document.getElementById('nef-piu-pressate').checked && pressateNumeroValido(document.getElementById('nef-pressate-previste').value) == null) { toast(Etichette.pressate.config.errori.pressate_previste_non_valide, 'err'); return; }
   const note = document.getElementById('nef-note').value.trim() || null;
   if (!nome) { toast('Inserisci il nome della fase', 'err'); return; }
   // Determina prossimo numero
@@ -11124,7 +11107,8 @@ async function aggiungiExtraFase() {
       p_tipo_gestione: tipoGestione,
       p_e_attesa_esterna: false,
       p_attiva: true,
-      p_piu_pressate: tipoGestione === 'standard' && document.getElementById('nef-piu-pressate').checked
+      p_piu_pressate: tipoGestione === 'standard' && document.getElementById('nef-piu-pressate').checked,
+      ...(tipoGestione === 'standard' && document.getElementById('nef-piu-pressate').checked ? { p_pressate_previste: pressateNumeroValido(document.getElementById('nef-pressate-previste').value) } : {})
     });
     if (errCfe || !nuovaCfe?.ok) {
       toast('Errore salvataggio catalogo: ' + (errCfe?.message || nuovaCfe?.errore || ''), 'err');
@@ -11136,7 +11120,7 @@ async function aggiungiExtraFase() {
 
   const { data, error } = await sb.rpc('crea_fasi_extra', {
     p_ordine_id: ordineId,
-    p_fasi: [{ numero: prossimoNumero, nome, note_responsabile: note, tipo_gestione: tipoGestione, catalogo_fase_extra_id: catalogoId || '', piu_pressate: !catalogoId && tipoGestione === 'standard' && document.getElementById('nef-piu-pressate').checked, macchina_id: document.querySelector('#nef-macchina-box select')?.value || null }],
+    p_fasi: [{ numero: prossimoNumero, nome, note_responsabile: note, tipo_gestione: tipoGestione, catalogo_fase_extra_id: catalogoId || '', piu_pressate: !catalogoId && tipoGestione === 'standard' && document.getElementById('nef-piu-pressate').checked, pressate_previste: !catalogoId && tipoGestione === 'standard' && document.getElementById('nef-piu-pressate').checked ? pressateNumeroValido(document.getElementById('nef-pressate-previste').value) : null, macchina_id: document.querySelector('#nef-macchina-box select')?.value || null }],
     p_responsabile_id: currentUserRow.id
   });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || messaggioFasiExtra(data?.errore)), 'err'); return; }

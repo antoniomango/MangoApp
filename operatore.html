@@ -102,8 +102,11 @@ body { font-family: var(--font-sans); background: var(--bg); color: var(--ink); 
 .card-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; }
 .card-row:last-child { border-bottom: none; }
 .card-row:active { background: var(--phase-bg); }
-.card-row .row-main { flex: 1; }
-.card-row .row-title { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+.card-row .row-main { flex: 1; min-width: 0; }
+/* intestazione di riga (titolo + distintivo): a capo tra le parole, il distintivo scende sotto se non c'è posto */
+.card-row .row-testa { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 2px 8px; }
+.card-row .row-testa > span { margin-left: 0 !important; }
+.card-row .row-title { font-size: 14px; font-weight: 600; margin-bottom: 3px; max-width: 100%; overflow-wrap: break-word; }
 .card-row .row-sub { font-size: 12px; color: var(--muted); }
 .card-row .row-right { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .arrow { color: var(--muted); font-size: 16px; margin-left: 8px; }
@@ -131,7 +134,7 @@ body { font-family: var(--font-sans); background: var(--bg); color: var(--ink); 
 .fase-row.in_attesa .fase-num-circle { background: var(--attesa-bg); color: var(--attesa-ink); }
 .fase-row.completata .fase-num-circle { background: var(--ok-soft); color: var(--ok-ink); }
 .fase-num-circle { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 12px; font-weight: 500; flex-shrink: 0; }
-.fase-info { flex: 1; }
+.fase-info { flex: 1; max-width: 100%; overflow-wrap: break-word; }
 .fase-info .fn { font-size: 14px; font-weight: 600; }
 .fase-info .fo { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
@@ -220,7 +223,7 @@ textarea:focus { border-color: var(--accent); }
 .oggi-gruppo { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); cursor: pointer; min-height: 56px; }
 .oggi-gruppo:last-child { border-bottom: none; }
 .oggi-gruppo:active { background: var(--phase-bg); }
-.oggi-gruppo .og-nome { flex: 1; font-size: 15px; font-weight: 600; }
+.oggi-gruppo .og-nome { flex: 1; max-width: 100%; font-size: 15px; font-weight: 600; overflow-wrap: break-word; }
 .oggi-gruppo .og-conta { font-family: var(--font-mono); font-size: 13px; color: var(--muted); white-space: nowrap; }
 .oggi-gruppo.finito .og-nome { color: var(--muted); }
 .oggi-gruppo.finito .og-conta { color: var(--ok-ink); }
@@ -228,8 +231,10 @@ textarea:focus { border-color: var(--accent); }
 .oggi-voce:last-child { border-bottom: none; }
 .oggi-voce.fatta { background: var(--ok-bg); }
 .oggi-voce.bloccata { opacity: .62; }
-.oggi-voce .ov-testa { display: flex; align-items: center; gap: 10px; }
-.oggi-voce .ov-titolo { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+/* Titolo (cliente — codice) su una riga sua a tutta larghezza; casella, distintivi e Foto vanno sotto, con a capo. Si va a capo tra le parole: una parola si spezza solo se da sola supera tutta la riga. */
+.oggi-voce .ov-testa { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.oggi-voce .ov-titolo { flex: 1 1 100%; order: -1; min-width: 0; font-size: 14px; font-weight: 600; overflow-wrap: break-word; word-break: normal; }
+.oggi-voce .ov-testa > .btn { margin-left: auto; }
 .oggi-voce .ov-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .oggi-voce .ov-azioni { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .oggi-voce .ov-azioni .btn { width: auto; flex: 1; min-width: 96px; padding: 10px 12px; font-size: 14px; }
@@ -264,8 +269,8 @@ textarea:focus { border-color: var(--accent); }
 .progress-bar-fill { height: 100%; border-radius: 4px; background: var(--accent); transition: width 0.3s; }
 .progress-bar-fill.done { background: var(--ok); }
 .av-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 14px 16px; margin-bottom: 10px; }
-.av-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
-.av-title { font-size: 14px; font-weight: 600; }
+.av-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; margin-bottom: 4px; }
+.av-title { font-size: 14px; font-weight: 600; max-width: 100%; overflow-wrap: break-word; }
 .av-meta { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
 .av-fasi-mini { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 8px; }
 @keyframes blink-warn   { 0%,100% { border-left-color: var(--warn-strong); } 50% { border-left-color: transparent; } }
@@ -313,10 +318,11 @@ textarea:focus { border-color: var(--accent); }
 .prof-ok { color: var(--ok-ink); font-size: 13px; }
 .ric-item { padding: 12px 14px; border-bottom: 1px solid var(--border); }
 .ric-item:last-child { border-bottom: none; }
-.ric-testa { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.ric-testa { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 4px 8px; }
+.ric-testa > div:first-child { flex: 1 1 140px; max-width: 100%; overflow-wrap: break-word; }
 .ric-tipo { font-weight: 600; font-size: 14px; }
 .ric-periodo { font-size: 13px; color: var(--ink-2); margin-top: 2px; }
-.ric-nota { font-size: 12px; color: var(--muted); margin-top: 6px; overflow-wrap: anywhere; }
+.ric-nota { font-size: 12px; color: var(--muted); margin-top: 6px; overflow-wrap: break-word; }
 .badge-in_attesa { background: var(--warn-soft); color: var(--warn-ink); }
 .badge-approvata { background: var(--ok-soft); color: var(--ok-ink); }
 .badge-rifiutata { background: var(--alert-soft); color: var(--alert-ink); }
@@ -387,7 +393,7 @@ textarea:focus { border-color: var(--accent); }
     <!-- HOME -->
     <div class="screen active" id="screen-home">
       <div style="padding:16px">
-        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px">
+        <div style="display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:0 8px">
           <div class="page-title">Ciao, <span id="home-name"></span> 👋</div>
           <div id="home-date" style="font-size:14px;font-weight:600;color:var(--muted);white-space:nowrap"></div>
         </div>
@@ -450,7 +456,7 @@ textarea:focus { border-color: var(--accent); }
     <!-- NOTIFICHE -->
     <div class="screen" id="screen-notifiche">
       <div style="padding:16px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:16px">
           <div class="page-title" style="margin-bottom:0">Notifiche</div>
           <button class="btn btn-secondary" style="padding:6px 12px;font-size:12px" onclick="segnaNotificheLetteOp()">Segna tutte lette</button>
         </div>
@@ -1374,7 +1380,7 @@ function filtraOrdini() {
       const azioneSelMultipla = meseDato === '0000-00'
         ? `<span onclick="event.stopPropagation();toggleModalitaSpedizioneMultiplaOp()" style="cursor:pointer;text-decoration:underline;text-underline-offset:2px;color:var(--accent-2);text-transform:none;letter-spacing:normal;font-weight:600">${modalitaSpedizioneMultiplaOp ? '✕ Annulla' : '☑ Seleziona più ordini'}</span>`
         : '';
-      sep = `<div style="padding:5px 4px 3px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:6px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px">
+      sep = `<div style="padding:5px 4px 3px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:6px;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:2px 8px">
         <span><i data-ic="calendario"></i> ${label}</span>${azioneSelMultipla}
       </div>`;
     }
@@ -1411,7 +1417,7 @@ function filtraOrdini() {
     return sep + `
     <div class="card card-row ${isSosp ? '' : (isAttesa ? '' : scadenzaClass(o.scadenza))}" style="${extraStyle}" onclick="${cardOnclick}">
       <div class="row-main" style="width:100%">
-        <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="row-testa">
           <div class="row-title">${escapeHtml(o.cliente)} — ${escapeHtml(o.codice || '')}</div>
           <span style="margin-left:8px">${Etichette.badgePriorita(o.priorita)}</span>
         </div>
@@ -2620,8 +2626,8 @@ function renderOggiGruppo(g, solaLettura) {
          <button class="btn btn-secondary" onclick="oggiAnnullaSelezione()">Annulla</button>
          <button class="btn btn-ok" onclick="oggiCompletaSelezione()">✓ Completa ${oggiSelezione.size}</button></div>` : '';
   return `<button class="back-btn" onclick="oggiTornaElenco()">← Tutte le fasi</button>
-    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:8px">
-      <div class="page-title" style="margin-bottom:0">${escapeHtml(g.fase_nome)}</div>
+    <div style="display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:2px 8px;margin-bottom:8px">
+      <div class="page-title" style="margin-bottom:0;max-width:100%;overflow-wrap:break-word">${escapeHtml(g.fase_nome)}</div>
       <div class="og-conta" style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${oggiConta(g.fatte, g.totali)}</div>
     </div>
     ${puoMultiplo ? `<div style="margin-bottom:8px"><span onclick="oggiToggleMultiplo()" style="cursor:pointer;text-decoration:underline;text-underline-offset:2px;color:var(--accent-2);font-size:13px;font-weight:600">${oggiModoMultiplo ? '✕ Esci dalla selezione' : '☑ Seleziona più ordini'}</span></div>` : ''}

@@ -121,7 +121,10 @@ const Etichette = (() => {
     config: {
       casella: 'Può richiedere più pressate',
       spiega: "Quando l'operatore completa la fase, l'app chiede se è l'ultima pressata. Se risponde no, la fase resta da fare e si conta una pressata.",
-      errori: { piu_pressate_non_valido: 'Il valore di "Può richiedere più pressate" non è valido.', piu_pressate_non_ammesso_fase_esterna: 'Le fasi di ricezione o spedizione esterna non possono richiedere più pressate.', fase_completata: 'La fase è già completata.' },
+      previste: 'Pressate previste',
+      previsteSpiega: 'Il tempo di questa fase vale per una pressata. Il piano conta le pressate ancora da fare: previste meno quelle già fatte, almeno una finché la fase non è chiusa.',
+      tempoPerPressata: 'per pressata',
+      errori: { pressate_previste_non_valide: 'Le pressate previste devono essere un numero intero da 1 a 20.', pressate_previste_senza_piu_pressate: 'Le pressate previste servono solo se la fase può richiedere più pressate.', minuti_non_validi: 'Il tempo per pezzo deve essere maggiore di 0 e al massimo 1440 minuti.', macchina_non_trovata: 'Una macchina scelta non esiste più.', tempo_non_ammesso_fase_esterna: 'Il tempo per pezzo non vale per le fasi di ricezione o spedizione esterna.', piu_pressate_non_valido: 'Il valore di "Può richiedere più pressate" non è valido.', piu_pressate_non_ammesso_fase_esterna: 'Le fasi di ricezione o spedizione esterna non possono richiedere più pressate.', fase_completata: 'La fase è già completata.' },
     },
   };
   // Spedizione unica nel piano e nell'app operatore
