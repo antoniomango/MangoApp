@@ -104,10 +104,10 @@ const Etichette = (() => {
     inPressaSu: (macchina, fino) => 'In pressa' + (macchina ? ' su ' + macchina : '') + (fino ? ' fino alle ' + _oraBreve(fino) : ''),
     config: {
       titolo: 'Tempo di presa', minuti: 'Minuti sotto pressa', ordini: 'Ante per pressata',
-      spiega: 'Il pezzo resta sulla macchina senza bisogno dell\'operatore. Quante ante stanno al massimo in una pressata su questa macchina. La pressa resta occupata tutta la durata della presa per ogni pressata, anche se non piena. La fase dopo parte solo quando la presa è finita.',
+      spiega: 'Il pezzo resta sulla macchina senza bisogno dell\'operatore. Quante ante stanno in una pressata su questa macchina. Ogni anta occupa la macchina per i minuti di presa divisi per questo numero: più ordini nella stessa pressata si dividono le 2 ore. La fase successiva di ogni ordine parte comunque solo a presa finita.',
       moltiplicatore: 'Con la presa il moltiplicatore di tempo non si usa.',
       errore: 'Tempo di presa non valido: minuti da 1 a 1440 e ante per pressata da 1 a 50, sempre insieme.',
-      occupa: (presa) => 'Occupa la macchina ' + presa + ' min per ogni pressata',
+      occupa: (presa, ante) => 'Occupa la macchina ' + (Math.round(presa / ante * 10) / 10) + ' min per anta',
     },
   };
   // Spedizione unica nel piano e nell'app operatore
