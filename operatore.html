@@ -662,6 +662,9 @@ async function idbEsegui(store, modo, fn, timeoutMs = IDB_TIMEOUT_MS) {
 }
 
 // La coda offline è l'unica che può rifiutare: se l'azione non è stata salvata l'operatore deve saperlo.
+// Un errore tecnico (database, rete) non si mostra mai all'operatore: dettaglio in console, testo comprensibile a schermo (js/etichette.js)
+const msgErr = err => { try { console.error('Errore RPC:', err); } catch (_) {} return Etichette.erroreSalvataggio; };
+
 async function queueAction(action) {
   await idbEsegui('queue', 'readwrite', (s) => s.add({ ...action, ts: Date.now(), tentativiFalliti: 0 }), IDB_TIMEOUT_CODA_MS);
 }
@@ -1304,7 +1307,7 @@ async function eseguiSpedizioneMultiplaOp() {
     const codice = ordiniCache.find(o => o.id === id)?.codice || id;
     const { data, error } = await sb.rpc('segna_spedito', { p_ordine_id: id, p_utente_id: currentUser.id, p_session_token: sessionToken });
     if (error || !data?.ok) {
-      errori.push(`${codice}: ${data?.errore || error?.message || 'errore sconosciuto'}`);
+      errori.push(`${codice}: ${data?.errore || (error ? msgErr(error) : 'errore sconosciuto')}`);
     } else {
       successi++;
     }
@@ -1722,7 +1725,7 @@ async function riapriFaseOp(ordFaseId, ordineId) {
   if (!confirm('Hai altro lavoro da fare su questa fase? Riaprila.')) return;
   if (!confirm(`Sei sicuro di voler riaprire la fase "${nomeFase}"?`)) return;
   const { data, error } = await sb.rpc('riapri_fase_operatore', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
+  if (error || !data?.ok) { toast(error ? msgErr(error) : 'Errore: ' + (data?.errore || ''), 'err'); return; }
   toast('Fase riaperta', 'ok');
   await renderFaseDetail(ordFaseId, ordineId);
   renderHome();
@@ -1733,7 +1736,7 @@ async function riapriFaseExtraOp(faseExtraId, ordineId) {
   if (!confirm('Hai altro lavoro da fare su questa fase? Riaprila.')) return;
   if (!confirm(`Sei sicuro di voler riaprire la fase "${nomeFase}"?`)) return;
   const { data, error } = await sb.rpc('annulla_presa_in_carico_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
+  if (error || !data?.ok) { toast(error ? msgErr(error) : 'Errore: ' + (data?.errore || ''), 'err'); return; }
   toast('Fase riaperta', 'ok');
   await renderFaseExtraDetail(faseExtraId, ordineId);
   renderHome();
@@ -1747,7 +1750,7 @@ async function confermaRicezioneFase(ordFaseId, ordineId) {
   // protezione UX in più contro un tap accidentale su una fase che magari non stavi seguendo tu.
   if (!confirm('Confermi di aver ricevuto davvero il materiale per questo pezzo?')) return;
   const { data, error } = await sb.rpc('conferma_ricezione_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
+  if (error || !data?.ok) { toast(error ? msgErr(error) : 'Errore: ' + (data?.errore || ''), 'err'); return; }
   toast('Ricezione confermata!', 'ok');
   await renderFaseDetail(ordFaseId, ordineId);
   renderHome();
@@ -1760,7 +1763,7 @@ async function segnaSpedizioneFase(ordFaseId, ordineId) {
   // gemello in confermaRicezioneFase(). Solo UX, nessuna modifica alla RPC.
   if (!confirm('Confermi di aver spedito questo pezzo?')) return;
   const { data, error } = await sb.rpc('segna_spedizione_fase', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
+  if (error || !data?.ok) { toast(error ? msgErr(error) : 'Errore: ' + (data?.errore || ''), 'err'); return; }
   toast('Spedizione registrata!', 'ok');
   await renderFaseDetail(ordFaseId, ordineId);
   renderHome();
@@ -1769,7 +1772,7 @@ async function segnaSpedizioneFase(ordFaseId, ordineId) {
 async function segnaSpedizioneExtra(faseExtraId, ordineId) {
   if (!confirm('Confermi la spedizione al fornitore? Verrà registrata la data di uscita.')) return;
   const { data, error } = await sb.rpc('segna_spedizione_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
+  if (error || !data?.ok) { toast(error ? msgErr(error) : 'Errore: ' + (data?.errore || ''), 'err'); return; }
   toast('Spedizione registrata!', 'ok');
   await renderFaseExtraDetail(faseExtraId, ordineId);
   renderHome();
@@ -1778,7 +1781,7 @@ async function segnaSpedizioneExtra(faseExtraId, ordineId) {
 async function confermaRicezioneExtra(faseExtraId, ordineId) {
   if (!confirm('Il pezzo è tornato dal fornitore? Confermi la ricezione?')) return;
   const { data, error } = await sb.rpc('conferma_ricezione_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
+  if (error || !data?.ok) { toast(error ? msgErr(error) : 'Errore: ' + (data?.errore || ''), 'err'); return; }
   toast('Ricezione confermata!', 'ok');
   await renderFaseExtraDetail(faseExtraId, ordineId);
   renderHome();
@@ -1990,7 +1993,7 @@ const ERRORI_COMPLETAMENTO = {
   scegli_macchina_presa: Etichette.presa.errori.scegli_macchina_presa,
   macchina_non_valida: Etichette.presa.errori.macchina_non_valida,
 };
-const erroreCompletamento = (data, error) => ERRORI_COMPLETAMENTO[data?.errore] || data?.errore || error?.message || 'Operazione non riuscita';
+const erroreCompletamento = (data, error) => ERRORI_COMPLETAMENTO[data?.errore] || data?.errore || (error ? msgErr(error) : 'Operazione non riuscita');
 
 // "+1 pezzo" / "−" dal dettaglio fase (per le fasi in cui UN pezzo richiede abbastanza tempo)
 async function pezziFase(ordFaseId, ordineId, azione) {
@@ -2717,7 +2720,7 @@ async function oggiEsegui(fn, voceIds = []) {
   _oggiRender();
   let aggiorna = null;
   try { aggiorna = await fn(); }
-  catch (e) { console.warn('azione Oggi', e); toast('Operazione non riuscita: ' + (e?.message || 'errore'), 'err'); }
+  catch (e) { console.warn('azione Oggi', e); toast(msgErr(e), 'err'); }
   finally { oggiOperazione = false; oggiVociInCorso = new Set(); }
   try { if (typeof aggiorna === 'function') aggiorna(); } catch (e) { console.warn('aggiornamento locale', e); }
   _oggiRender();                                  // prima si ridisegna…
@@ -2830,7 +2833,7 @@ async function oggiEsterna(voceId, tipo) {
     const r = extra
       ? await sb.rpc('segna_spedizione_extra', { p_fase_extra_id: v.fase_extra_id, p_operatore_id: currentUser.id, p_session_token: sessionToken })
       : await sb.rpc('segna_spedizione_fase', { p_ordine_fase_id: v.ordine_fase_id, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-    if (r.error || !r.data?.ok) { toast('Errore: ' + (r.error?.message || r.data?.messaggio || r.data?.errore || ''), 'err'); return; }
+    if (r.error || !r.data?.ok) { toast(r.error ? msgErr(r.error) : 'Errore: ' + (r.data?.messaggio || r.data?.errore || ''), 'err'); return; }
     toast('Spedizione registrata!', 'ok');
     return null;
   }, [voceId]);
@@ -2887,7 +2890,7 @@ async function riceviConferma(chiave) {
         ? await sb.rpc('conferma_ricezione_extra', { p_fase_extra_id: r.fase_extra_id, p_operatore_id: currentUser.id, p_session_token: sessionToken })
         : await sb.rpc('conferma_ricezione_fase', { p_ordine_fase_id: r.ordine_fase_id, p_operatore_id: currentUser.id, p_session_token: sessionToken });
       const giaFatta = x.data?.errore === 'stato_non_in_attesa';
-      if (x.error || (!x.data?.ok && !giaFatta)) { toast('Errore: ' + (x.error?.message || x.data?.messaggio || x.data?.errore || ''), 'err'); return; }
+      if (x.error || (!x.data?.ok && !giaFatta)) { toast(x.error ? msgErr(x.error) : 'Errore: ' + (x.data?.messaggio || x.data?.errore || ''), 'err'); return; }
       toast(giaFatta ? (x.data?.messaggio || 'Ricezione già confermata') : Etichette.ricezione.toast(r), giaFatta ? 'err' : 'ok');
       // la voce sparisce subito dal pannello; poi ci si riallinea al server (Oggi si ricarica: le fasi sbloccate possono essere entrate nel piano)
       return () => {

@@ -111,6 +111,8 @@ const Etichette = (() => {
       occupa: (presa, ante) => 'Occupa la macchina ' + (Math.round(presa / ante * 10) / 10) + ' min per anta',
     },
   };
+  // Errore tecnico (database, rete) durante un'azione: all'operatore non si mostra mai il messaggio di sistema
+  const ERRORE_SALVATAGGIO = 'Non sono riuscito a salvare, riprova.';
   // Fasi che possono richiedere più pressate: alla chiusura l'operatore risponde a "È l'ultima pressata?"
   const PRESSATE = {
     domanda: "È l'ultima pressata?", si: 'Sì, ho finito', no: "No, ne serve un'altra", annulla: 'Annulla',
@@ -120,6 +122,7 @@ const Etichette = (() => {
     unaAllaVolta: 'Le fasi con più pressate si completano una alla volta.',
     config: {
       casella: 'Può richiedere più pressate',
+      serveMacchina: 'Per richiedere più pressate serve almeno una macchina associata: aggiungi una macchina oppure togli la spunta.',
       spiega: "Quando l'operatore completa la fase, l'app chiede se è l'ultima pressata. Se risponde no, la fase resta da fare e si conta una pressata.",
       previste: 'Pressate previste',
       previsteSpiega: 'Il tempo di questa fase vale per una pressata. Il piano conta le pressate ancora da fare: previste meno quelle già fatte, almeno una finché la fase non è chiusa.',
@@ -338,7 +341,7 @@ const Etichette = (() => {
     prioritaEtichetta, prioritaPeso, confrontaPriorita, colorePriorita, badgePriorita,
     statoOrdine: (s, o) => o ? statoOrdineConsegna(s, o) : (STATI_ORDINE[s] || vuoto(s)),
     modalitaConsegna, modalitaConsegnaElenco: () => MODALITA_CONSEGNA, quandoSiFa: () => QUANDO_SI_FA, quandoSiFaTesti: QUANDO_SI_FA_TESTI, ritiraOrdine, statoAvviso, consegnaOperatore,
-    presa: PRESA, pressate: PRESSATE, azioneSpedito, suggerimentoConsegna: SUGGERIMENTO_CONSEGNA, consegnaTesti: CONSEGNA_TESTI, spedizioneUnica: SPEDIZIONE_UNICA, avvisi: AVVISI, dataOraBreve: _dataOra,
+    erroreSalvataggio: ERRORE_SALVATAGGIO, presa: PRESA, pressate: PRESSATE, azioneSpedito, suggerimentoConsegna: SUGGERIMENTO_CONSEGNA, consegnaTesti: CONSEGNA_TESTI, spedizioneUnica: SPEDIZIONE_UNICA, avvisi: AVVISI, dataOraBreve: _dataOra,
     statoFase: s => STATI_FASE[s] || vuoto(s),
     statoRichiesta: s => STATI_RICHIESTA[s] || vuoto(s),
     azioneLog: a => AZIONI_LOG[a] || a,

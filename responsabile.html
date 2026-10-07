@@ -1720,14 +1720,11 @@ svg.fs-archi path.dim { opacity: .25; }
             <div class="form-group" id="cfe-piu-pressate-row">
               <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0">
                 <input type="checkbox" id="cfe-piu-pressate" style="margin-top:3px" onchange="cfeMostraMateriale()">
-                <span><strong id="cfe-piu-pressate-t"></strong><br><span id="cfe-piu-pressate-s" style="font-size:12px;color:var(--muted);font-weight:400"></span></span>
+                <span><strong id="cfe-piu-pressate-t"></strong><br><span id="cfe-piu-pressate-s" style="font-size:12px;color:var(--muted);font-weight:400"></span><span id="cfe-piu-pressate-w" style="display:none;font-size:12px;color:var(--alert-ink);font-weight:400"></span></span>
               </label>
             </div>
             <div class="form-group" id="cfe-materiale-row" style="display:none"><label>Cosa si riceve</label><input type="text" id="cfe-materiale" maxlength="40" placeholder="es. Pezzi bordati (se vuoto: nome della fase)"></div>
             <div class="form-group" style="display:flex;align-items:center;gap:10px;padding-top:22px">
-              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
-                <input type="checkbox" id="cfe-attesa-esterna"> Attesa esterna
-              </label>
               <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
                 <input type="checkbox" id="cfe-attiva" checked> Attiva
               </label>
@@ -3791,7 +3788,7 @@ function cfeRenderMacchineForm() {
     ? macchineList.map(m => `<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0"><input type="checkbox" ${CFE_FORM.macchine.has(m.id) ? 'checked' : ''} onchange="cfeToggleMacchina('${escapeJsAttr(m.id)}', this.checked)"> ${escapeHtml(m.nome)}</label>`).join('')
     : '<span style="font-size:12px;color:var(--muted)">Nessuna macchina configurata.</span>';
 }
-function cfeToggleMacchina(id, on) { if (on) CFE_FORM.macchine.add(id); else CFE_FORM.macchine.delete(id); }
+function cfeToggleMacchina(id, on) { if (on) CFE_FORM.macchine.add(id); else CFE_FORM.macchine.delete(id); cfeMostraMateriale(); }
 
 // il campo "Cosa si riceve" compare solo per le voci esterne
 function cfeMostraMateriale() {
@@ -3800,10 +3797,13 @@ function cfeMostraMateriale() {
   // tempo, macchine e pressate previste valgono solo per le voci standard
   const tr = document.getElementById('cfe-tempo-row'); if (tr) tr.style.display = esterna ? 'none' : '';
   const mr = document.getElementById('cfe-macchine-form-row'); if (mr) mr.style.display = esterna ? 'none' : '';
-  const pr = document.getElementById('cfe-pressate-row'); if (pr) pr.style.display = !esterna && document.getElementById('cfe-piu-pressate').checked ? '' : 'none';
+  const conMacchine = CFE_FORM.macchine.size > 0, spunta = document.getElementById('cfe-piu-pressate').checked;
+  const pr = document.getElementById('cfe-pressate-row'); if (pr) pr.style.display = !esterna && spunta && conMacchine ? '' : 'none';
+  const pw = document.getElementById('cfe-piu-pressate-w'); if (pw) { pw.textContent = spunta && !conMacchine ? '
+' + Etichette.pressate.config.serveMacchina : ''; pw.style.display = spunta && !conMacchine ? 'block' : 'none'; }
   const lp = document.getElementById('cfe-tempo-pp'); if (lp) lp.textContent = document.getElementById('cfe-piu-pressate').checked ? '(' + Etichette.pressate.config.tempoPerPressata + ')' : '';
   // la domanda "È l'ultima pressata?" non ha senso per le fasi di ricezione / spedizione esterna
-  const pp = document.getElementById('cfe-piu-pressate-row'); if (pp) pp.style.display = esterna ? 'none' : '';
+  const pp = document.getElementById('cfe-piu-pressate-row'); if (pp) pp.style.display = esterna || !(conMacchine || spunta) ? 'none' : '';
   if (esterna) document.getElementById('cfe-piu-pressate').checked = false;
 }
 
@@ -3815,7 +3815,6 @@ async function apriFormCatalogoFaseExtra(id) {
   document.getElementById('cfe-nome').value = c?.nome || '';
   document.getElementById('cfe-descrizione').value = c?.descrizione || '';
   document.getElementById('cfe-tipo-gestione').value = c?.tipo_gestione || 'standard';
-  document.getElementById('cfe-attesa-esterna').checked = c?.e_attesa_esterna || false;
   document.getElementById('cfe-attiva').checked = c?.attiva !== false;
   document.getElementById('cfe-materiale').value = c?.materiale_ricezione || '';
   document.getElementById('cfe-piu-pressate-t').textContent = Etichette.pressate.config.casella;
@@ -3838,11 +3837,12 @@ async function salvaCatalogoFaseExtra() {
   const nome = document.getElementById('cfe-nome').value.trim();
   const descrizione = document.getElementById('cfe-descrizione').value.trim() || null;
   const tipoGestione = document.getElementById('cfe-tipo-gestione').value;
-  const eAttesaEsterna = document.getElementById('cfe-attesa-esterna').checked;
+  const eAttesaEsterna = tipoGestione !== 'standard';   // derivata dal tipo, mai scelta a parte
   const attiva = document.getElementById('cfe-attiva').checked;
   if (!nome) { toast('Il nome è obbligatorio', 'err'); return; }
   const standard = tipoGestione === 'standard' && !eAttesaEsterna;
   const piu = standard && document.getElementById('cfe-piu-pressate').checked;
+  if (piu && !CFE_FORM.macchine.size) { toast(Etichette.pressate.config.serveMacchina, 'err'); return; }
   const previste = piu ? pressateNumeroValido(document.getElementById('cfe-pressate-previste').value) : null;
   if (piu && previste == null) { toast(Etichette.pressate.config.errori.pressate_previste_non_valide, 'err'); return; }
   const tempoTxt = document.getElementById('cfe-tempo').value.trim();
@@ -4016,7 +4016,7 @@ function prefillDaCatalogo(catalogoId) {
   mostraMacchinaExtra(document.getElementById('nef-macchina-box'), catalogoId || null, 'nef-macchina');
   const row = document.getElementById('nef-salva-catalogo-row');
   const pp = document.getElementById('nef-piu-pressate-row');
-  if (pp) pp.style.display = catalogoId ? 'none' : '';   // con una voce di catalogo la casella la decide il catalogo
+  if (pp) pp.style.display = 'none';   // l'inserimento libero non ha una macchina; con una voce di catalogo la decide il catalogo
   if (!catalogoId) {
     // Fase libera: mostra opzione salva nel catalogo
     if (row) row.style.display = '';
@@ -5444,12 +5444,6 @@ async function addFaseExtra() {
         style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-family:var(--font-sans);font-size:13px;background:var(--bg);color:var(--ink);outline:none">
     </div>
     <div class="extra-fase-macchina-box" style="display:none;padding-left:26px"></div>
-    <div class="extra-fase-pp-row" style="padding-left:26px" title="${escapeHtml(Etichette.pressate.config.spiega)}">
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-        <input type="checkbox" class="extra-fase-piu-pressate" onchange="this.closest('.extra-fase-pp-row').querySelector('.pp-num').style.display = this.checked ? 'inline-flex' : 'none'"> ${escapeHtml(Etichette.pressate.config.casella)}
-      </label>
-      ${pressateNumeroHtml('extra-fase-pressate', 1, false)}
-    </div>
     <div class="extra-fase-salva-row" style="padding-left:26px">
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--indigo-ink)">
         <input type="checkbox" class="extra-fase-salva-cat" style="accent-color:var(--indigo)">
@@ -5624,8 +5618,8 @@ async function creaOrdine() {
         e_attesa_esterna: eEsterna,
         tipo_gestione: catEntry ? catEntry.tipo_gestione : (eEsterna ? 'spedizione_esterna' : 'standard'),
         catalogo_fase_extra_id: catId || null,
-        piu_pressate: !catId && !eEsterna && (row.querySelector('.extra-fase-piu-pressate')?.checked ?? false),
-        pressate_previste: !catId && !eEsterna && (row.querySelector('.extra-fase-piu-pressate')?.checked ?? false) ? pressateNumeroValido(row.querySelector('.extra-fase-pressate')?.value) : null,
+        piu_pressate: false,   // la casella esiste solo per le fasi con una macchina (voci di catalogo): la decide il catalogo
+        pressate_previste: null,
         macchina_id: row.querySelector('.extra-fase-macchina')?.value || null,
         _salva_catalogo: !catId && (row.querySelector('.extra-fase-salva-cat')?.checked ?? false)
       };
@@ -8817,6 +8811,7 @@ function fsPayload() {
 function fsValida() {
   const d = FS.draft;
   if (!d.nome.trim()) return 'Inserisci il nome della fase.';
+  if (d.piu_pressate && !fsEster(d) && !d.macchine.length) return Etichette.pressate.config.serveMacchina;
   if (d.piu_pressate && !fsEster(d) && pressateNumeroValido(d.pressate_previste) == null) return Etichette.pressate.config.errori.pressate_previste_non_valide;
   if (fsTempoModificabile(d.id)) {
     const t = d.tempo, a = Number(t.tipico), b = Number(t.massimo), haOrig = FS.mod[d.id].tempo.tipico !== '';
@@ -9056,8 +9051,8 @@ function fsRenderDettaglio() {
         <div class="fs-row inline"><div><div class="fs-crit-t">Fase CNC</div><div class="fs-desc">Mostra il badge CNC sull'ordine e nell'app.</div></div>${fsSwitch('fs-o-cnc', m.e_cnc, "fsSet('e_cnc',this.checked)")}</div>
         <div class="fs-row inline"><div><div class="fs-crit-t">Opzionale</div><div class="fs-desc">Non si crea da sola: la abiliti tu dall'ordine.</div></div>${fsSwitch('fs-o-opz', m.opzionale, "fsSet('opzionale',this.checked)")}</div>
         <div class="fs-row inline"><div><div class="fs-crit-t">Spedizione unica</div><div class="fs-desc">Per gli ordini della stessa spedizione la fase è una sola: compare una volta nel piano (con il tempo di un ordine) e, quando la si completa, si chiude per tutti.</div></div>${fsSwitch('fs-o-gs', m.gruppo_spedizione, "fsSet('gruppo_spedizione',this.checked,false)")}</div>
-        ${fsEster(m) ? '' : `<div class="fs-row inline"><div><div class="fs-crit-t">${escapeHtml(Etichette.pressate.config.casella)}</div><div class="fs-desc">${escapeHtml(Etichette.pressate.config.spiega)}</div></div>${fsSwitch('fs-o-pp', m.piu_pressate, "fsSet('piu_pressate',this.checked)")}</div>`}
-        ${!fsEster(m) && m.piu_pressate ? `<div class="fs-row"><label class="fs-lbl" for="fs-g-pv">${escapeHtml(Etichette.pressate.config.previste)}</label><input class="fs-inp num" id="fs-g-pv" type="number" min="1" max="20" step="1" inputmode="numeric" value="${m.pressate_previste ?? ''}" oninput="fsSetPrevisteNum(this.value)" style="width:100px"><div class="fs-desc">${escapeHtml(Etichette.pressate.config.previsteSpiega)}</div></div>` : ''}
+        ${fsEster(m) || !(m.macchine.length || m.piu_pressate) ? '' : `<div class="fs-row inline"><div><div class="fs-crit-t">${escapeHtml(Etichette.pressate.config.casella)}</div><div class="fs-desc">${escapeHtml(Etichette.pressate.config.spiega)}</div>${m.macchine.length ? '' : `<div class="fs-desc" style="color:var(--alert-ink)">${escapeHtml(Etichette.pressate.config.serveMacchina)}</div>`}</div>${fsSwitch('fs-o-pp', m.piu_pressate, "fsSet('piu_pressate',this.checked)")}</div>`}
+        ${!fsEster(m) && m.piu_pressate && m.macchine.length ? `<div class="fs-row"><label class="fs-lbl" for="fs-g-pv">${escapeHtml(Etichette.pressate.config.previste)}</label><input class="fs-inp num" id="fs-g-pv" type="number" min="1" max="20" step="1" inputmode="numeric" value="${m.pressate_previste ?? ''}" oninput="fsSetPrevisteNum(this.value)" style="width:100px"><div class="fs-desc">${escapeHtml(Etichette.pressate.config.previsteSpiega)}</div></div>` : ''}
         ${quandoSiFaHtml(m.solo_per_consegna, 'fsSetQuando')}
       </div>
     </div>
@@ -10936,8 +10931,9 @@ async function salvaModificaOrdine() {
 }
 
 async function caricaFasiExtraModal(ordineId) {
+  if (!catalogoFasiExtra.length) { try { await loadCatalogoFasiExtra(); } catch (e) { /* senza catalogo la casella compare solo per le fasi con macchina propria */ } }
   const { data } = await sb.from('fasi_ordine_extra')
-    .select('id, numero, nome, stato, tipo_gestione, piu_pressate, pressate_previste, pressate_fatte')
+    .select('id, numero, nome, stato, tipo_gestione, piu_pressate, pressate_previste, pressate_fatte, macchina_id, catalogo_fase_extra_id')
     .eq('ordine_id', ordineId)
     .order('numero');
   const el = document.getElementById('mod-fasi-extra-list');
@@ -10950,7 +10946,8 @@ async function caricaFasiExtraModal(ordineId) {
       ? `<button class="btn btn-alert" style="padding:2px 8px;font-size:11px;margin-left:auto;flex-shrink:0"
            onclick="eliminaFaseExtra('${f.id}','${escapeJsAttr(f.nome)}','${ordineId}')">✕ Elimina</button>`
       : `<span style="font-size:11px;color:var(--muted);margin-left:auto;flex-shrink:0">completata</span>`;
-    const pp = f.tipo_gestione === 'standard' && f.stato !== 'completata'
+    const conMacchina = !!f.macchina_id || ((catalogoFasiExtra.find(c => c.id === f.catalogo_fase_extra_id)?.macchine_ids) || []).length > 0;
+    const pp = f.tipo_gestione === 'standard' && f.stato !== 'completata' && (conMacchina || f.piu_pressate)
       ? `<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);cursor:pointer;white-space:nowrap" title="${escapeHtml(Etichette.pressate.config.spiega)}"><input type="checkbox" ${f.piu_pressate ? 'checked' : ''} onchange="impostaPiuPressateFaseExtra('${f.id}', this.checked, '${ordineId}')"> ${escapeHtml(Etichette.pressate.config.casella)}</label>${f.piu_pressate ? pressateNumeroHtml('pp-num-extra', f.pressate_previste, true, `onchange="impostaPiuPressateFaseExtra('${f.id}', true, '${ordineId}', this.value)"`) : ''}` : '';
     const fatte = f.piu_pressate ? `<span style="font-size:11px;color:var(--muted);white-space:nowrap">${escapeHtml(Etichette.pressate.fatteResp(f.pressate_fatte || 0, f.pressate_previste))}</span>` : '';
     return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
@@ -11064,7 +11061,7 @@ async function apriAggiungiExtraFase() {
   document.getElementById('nef-pp-num-box').innerHTML = pressateNumeroHtml('', 1, false, 'id="nef-pressate-previste"', 'nef-pp-num');
   document.getElementById('nef-piu-pressate-t').textContent = Etichette.pressate.config.casella;
   document.getElementById('nef-piu-pressate-t').title = Etichette.pressate.config.spiega;
-  document.getElementById('nef-piu-pressate-row').style.display = '';
+  document.getElementById('nef-piu-pressate-row').style.display = 'none';   // nessuna macchina nell'inserimento libero
   const salvaCatRow = document.getElementById('nef-salva-catalogo-row');
   const salvaCatChk = document.getElementById('nef-salva-catalogo');
   if (salvaCatRow) salvaCatRow.style.display = '';
