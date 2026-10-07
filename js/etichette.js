@@ -48,7 +48,7 @@ const Etichette = (() => {
     fase_iniziata: 'Fase iniziata', fase_completata: 'Fase completata', fase_riassegnata: 'Fase riassegnata',
     fase_messa_in_attesa: 'Fase messa in attesa', fase_ripresa: 'Fase ripresa', fase_confermata_ricezione: 'Ricezione confermata',
     fase_annullata: 'Fase annullata', fase_riaperta: 'Fase riaperta', fase_eliminata: 'Fase eliminata',
-    fase_pausa_automatica: 'Pausa automatica a fine turno', nc_segnalata: 'Non conformità segnalata', nc_chiusa: 'Non conformità chiusa',
+    fase_pausa_automatica: 'Pausa automatica a fine turno', pressata_registrata: 'Pressata registrata', nc_segnalata: 'Non conformità segnalata', nc_chiusa: 'Non conformità chiusa',
   };
 
   // ── Consegna dell'ordine (da spedire / ritira / da avvisare) e "quando si fa" una fase ──
@@ -109,6 +109,19 @@ const Etichette = (() => {
       moltiplicatore: 'Con la presa il moltiplicatore di tempo non si usa.',
       errore: 'Tempo di presa non valido: minuti da 1 a 1440 e ante per pressata da 1 a 50, sempre insieme.',
       occupa: (presa, ante) => 'Occupa la macchina ' + (Math.round(presa / ante * 10) / 10) + ' min per anta',
+    },
+  };
+  // Fasi che possono richiedere più pressate: alla chiusura l'operatore risponde a "È l'ultima pressata?"
+  const PRESSATE = {
+    domanda: "È l'ultima pressata?", si: 'Sì, ho finito', no: "No, ne serve un'altra", annulla: 'Annulla',
+    toastNo: 'Pressata registrata: la fase resta da fare',
+    fatte: n => n === 1 ? '1 pressata già fatta' : n + ' pressate già fatte',
+    fatteResp: n => 'Pressate fatte: ' + n,
+    unaAllaVolta: 'Le fasi con più pressate si completano una alla volta.',
+    config: {
+      casella: 'Può richiedere più pressate',
+      spiega: "Quando l'operatore completa la fase, l'app chiede se è l'ultima pressata. Se risponde no, la fase resta da fare e si conta una pressata.",
+      errori: { piu_pressate_non_valido: 'Il valore di "Può richiedere più pressate" non è valido.', piu_pressate_non_ammesso_fase_esterna: 'Le fasi di ricezione o spedizione esterna non possono richiedere più pressate.', fase_completata: 'La fase è già completata.' },
     },
   };
   // Spedizione unica nel piano e nell'app operatore
@@ -322,7 +335,7 @@ const Etichette = (() => {
     prioritaEtichetta, prioritaPeso, confrontaPriorita, colorePriorita, badgePriorita,
     statoOrdine: (s, o) => o ? statoOrdineConsegna(s, o) : (STATI_ORDINE[s] || vuoto(s)),
     modalitaConsegna, modalitaConsegnaElenco: () => MODALITA_CONSEGNA, quandoSiFa: () => QUANDO_SI_FA, quandoSiFaTesti: QUANDO_SI_FA_TESTI, ritiraOrdine, statoAvviso, consegnaOperatore,
-    presa: PRESA, azioneSpedito, suggerimentoConsegna: SUGGERIMENTO_CONSEGNA, consegnaTesti: CONSEGNA_TESTI, spedizioneUnica: SPEDIZIONE_UNICA, avvisi: AVVISI, dataOraBreve: _dataOra,
+    presa: PRESA, pressate: PRESSATE, azioneSpedito, suggerimentoConsegna: SUGGERIMENTO_CONSEGNA, consegnaTesti: CONSEGNA_TESTI, spedizioneUnica: SPEDIZIONE_UNICA, avvisi: AVVISI, dataOraBreve: _dataOra,
     statoFase: s => STATI_FASE[s] || vuoto(s),
     statoRichiesta: s => STATI_RICHIESTA[s] || vuoto(s),
     azioneLog: a => AZIONI_LOG[a] || a,

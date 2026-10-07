@@ -1717,6 +1717,12 @@ svg.fs-archi path.dim { opacity: .25; }
                 <option value="spedizione_esterna">Spedizione esterna (spedisci → ricevi)</option>
               </select>
             </div>
+            <div class="form-group" id="cfe-piu-pressate-row">
+              <label style="display:flex;align-items:flex-start;gap:8px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0">
+                <input type="checkbox" id="cfe-piu-pressate" style="margin-top:3px">
+                <span><strong id="cfe-piu-pressate-t"></strong><br><span id="cfe-piu-pressate-s" style="font-size:12px;color:var(--muted);font-weight:400"></span></span>
+              </label>
+            </div>
             <div class="form-group" id="cfe-materiale-row" style="display:none"><label>Cosa si riceve</label><input type="text" id="cfe-materiale" maxlength="40" placeholder="es. Pezzi bordati (se vuoto: nome della fase)"></div>
             <div class="form-group" style="display:flex;align-items:center;gap:10px;padding-top:22px">
               <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
@@ -2136,6 +2142,11 @@ svg.fs-archi path.dim { opacity: .25; }
               <option value="standard">Standard (prendi in carico → completa)</option>
               <option value="spedizione_esterna">Spedizione esterna (spedisci → ricevi)</option>
             </select>
+          </div>
+          <div class="form-group" id="nef-piu-pressate-row" style="margin-bottom:10px">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;text-transform:none;letter-spacing:0">
+              <input type="checkbox" id="nef-piu-pressate"> <span id="nef-piu-pressate-t"></span>
+            </label>
           </div>
           <div class="form-group" style="margin-bottom:10px">
             <label style="font-size:12px">Note (opzionale)</label>
@@ -3280,7 +3291,7 @@ function renderOggiResp() {
       <td><div style="font-weight:600">${v.spedizione_unica ? '<i data-ic="pacco"></i> ' + escapeHtml(Etichette.spedizioneUnica.riga(v.spedizione_unica, v.spedizione_unica.ordini.map(x => x.codice))) : escapeHtml(o.cliente || '') + ' — ' + escapeHtml(o.codice || '')}${v.urgente && !v.fatta ? ` <span class="badge" style="background:var(--urgente-bg);color:var(--urgente-ink)" title="${escapeHtml(Etichette.rischioTesto(v.rischio, o.scadenza))}">${Etichette.attesaEsterna.urgente}</span>` : ''}</div>${v.urgente && !v.fatta && v.rischio ? `<div style="font-size:11px;color:var(--urgente-ink)">${escapeHtml(Etichette.rischioTesto(v.rischio, o.scadenza))}</div>` : ''}<div style="font-size:11px;color:var(--muted)">${v.spedizione_unica ? 'un solo passaggio per ' + v.spedizione_unica.ordini.length + ' ordini' : (o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo')}${v.macchina ? ' · ' + escapeHtml(v.macchina) + (v.minuti_macchina != null && Math.round(v.minuti_macchina) !== Math.round(v.minuti_stimati) ? ' (occupa ' + _fmtMin(v.minuti_macchina) + ')' : '') : ''}</div>${bl}</td>
       <td style="white-space:nowrap">${v.esterna ? '—' : _fmtMin(v.minuti_stimati)}</td>
       <td style="white-space:nowrap">${v.pezzi ? `${v.pezzi.fatti} di ${v.pezzi.totali}` : ''}</td>
-      <td>${v.fatta ? '<span class="badge" style="background:var(--ok-soft);color:var(--ok-ink)">✓ fatta</span>' : '<span style="color:var(--muted)">da fare</span>'} ${tag(v)}${v.stessa_fase ? `<div style="font-size:11px;color:var(--info-ink);margin-top:3px">${escapeHtml(Etichette.motivoIngressoPiano('stessa_fase'))}</div>` : ''}${v.presa ? `<div style="font-size:11px;color:var(--info-ink);margin-top:3px">${escapeHtml(Etichette.presa.inPressaSu(v.presa.macchina, v.presa.fino))}</div>` : ''}</td>
+      <td>${v.fatta ? '<span class="badge" style="background:var(--ok-soft);color:var(--ok-ink)">✓ fatta</span>' : '<span style="color:var(--muted)">da fare</span>'} ${tag(v)}${v.stessa_fase ? `<div style="font-size:11px;color:var(--info-ink);margin-top:3px">${escapeHtml(Etichette.motivoIngressoPiano('stessa_fase'))}</div>` : ''}${v.presa ? `<div style="font-size:11px;color:var(--info-ink);margin-top:3px">${escapeHtml(Etichette.presa.inPressaSu(v.presa.macchina, v.presa.fino))}</div>` : ''}${v.piu_pressate ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">${escapeHtml(Etichette.pressate.fatteResp(v.pressate_fatte || 0))}</div>` : ''}</td>
       <td style="text-align:right">${v.fatta ? '' : `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="togliDalPiano('${escapeJsAttr(v.voce_id)}')">Togli dal piano</button>`}</td>
     </tr>`;
   };
@@ -3771,7 +3782,11 @@ function renderCatalogoFasiExtraSection() {
 
 // il campo "Cosa si riceve" compare solo per le voci esterne
 function cfeMostraMateriale() {
-  const riga = document.getElementById('cfe-materiale-row'); if (riga) riga.style.display = document.getElementById('cfe-tipo-gestione').value !== 'standard' ? '' : 'none';
+  const esterna = document.getElementById('cfe-tipo-gestione').value !== 'standard';
+  const riga = document.getElementById('cfe-materiale-row'); if (riga) riga.style.display = esterna ? '' : 'none';
+  // la domanda "È l'ultima pressata?" non ha senso per le fasi di ricezione / spedizione esterna
+  const pp = document.getElementById('cfe-piu-pressate-row'); if (pp) pp.style.display = esterna ? 'none' : '';
+  if (esterna) document.getElementById('cfe-piu-pressate').checked = false;
 }
 
 function apriFormCatalogoFaseExtra(id) {
@@ -3784,6 +3799,9 @@ function apriFormCatalogoFaseExtra(id) {
   document.getElementById('cfe-attesa-esterna').checked = c?.e_attesa_esterna || false;
   document.getElementById('cfe-attiva').checked = c?.attiva !== false;
   document.getElementById('cfe-materiale').value = c?.materiale_ricezione || '';
+  document.getElementById('cfe-piu-pressate-t').textContent = Etichette.pressate.config.casella;
+  document.getElementById('cfe-piu-pressate-s').textContent = Etichette.pressate.config.spiega;
+  document.getElementById('cfe-piu-pressate').checked = !!c?.piu_pressate;
   cfeMostraMateriale();
   form.style.display = '';
   document.getElementById('cfe-nome').focus();
@@ -3807,9 +3825,10 @@ async function salvaCatalogoFaseExtra() {
     p_tipo_gestione: tipoGestione,
     p_e_attesa_esterna: eAttesaEsterna,
     p_attiva: attiva,
-    p_materiale_ricezione: tipoGestione !== 'standard' ? document.getElementById('cfe-materiale').value.trim() : ''
+    p_materiale_ricezione: tipoGestione !== 'standard' ? document.getElementById('cfe-materiale').value.trim() : '',
+    p_piu_pressate: tipoGestione === 'standard' && !eAttesaEsterna && document.getElementById('cfe-piu-pressate').checked
   });
-  if (error || !data?.ok) { toast('Errore: ' + (error?.message || data?.errore || ''), 'err'); return; }
+  if (error || !data?.ok) { toast('Errore: ' + (Etichette.pressate.config.errori[data?.errore] || error?.message || data?.errore || ''), 'err'); return; }
   toast(id ? 'Voce aggiornata' : 'Voce aggiunta', 'ok');
   document.getElementById('form-catalogo-fase-extra').style.display = 'none';
   await loadCatalogoFasiExtra();
@@ -3961,6 +3980,8 @@ async function salvaMacchineCFE() {
 function prefillDaCatalogo(catalogoId) {
   mostraMacchinaExtra(document.getElementById('nef-macchina-box'), catalogoId || null, 'nef-macchina');
   const row = document.getElementById('nef-salva-catalogo-row');
+  const pp = document.getElementById('nef-piu-pressate-row');
+  if (pp) pp.style.display = catalogoId ? 'none' : '';   // con una voce di catalogo la casella la decide il catalogo
   if (!catalogoId) {
     // Fase libera: mostra opzione salva nel catalogo
     if (row) row.style.display = '';
@@ -4964,6 +4985,7 @@ async function renderDettaglioOrdine(id) {
         <div class="fase-num">${f.numero}. ${f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '<i data-ic="play"></i>' : '○'}</div>
         <div class="fase-nome">${escapeHtml(f.nome)}</div>
         <div class="fase-op">${opNome || (f.stato === 'disponibile' ? 'Disponibile' : '')}</div>
+        ${f.piu_pressate ? `<div class="fase-op" style="margin-top:4px">${escapeHtml(Etichette.pressate.fatteResp(f.pressate_fatte || 0))}</div>` : ''}
         ${f.completata_il ? `<div class="fase-op" style="margin-top:4px;font-size:10px">${formatDateTime(f.completata_il)}</div>` : ''}
       </div>`;
     }).join('');
@@ -4994,6 +5016,7 @@ async function renderDettaglioOrdine(id) {
         <div class="fase-num">${numLabel}. ${icon}</div>
         <div class="fase-nome">${nomeFase}${cnc ? '<span class="badge-cnc">CNC</span>' : ''}${est ? '<span class="badge-esterna">EXT</span>' : ''}${isCustom ? '<span class="badge-cnc" style="background:var(--violet)">EXTRA</span>' : ''}</div>
         <div class="fase-op">${opNome || (f.stato === 'disponibile' ? 'Disponibile' : '')}</div>
+        ${!isCustom && fasePiuPressate(f.fase_id) ? `<div class="fase-op" style="margin-top:4px">${escapeHtml(Etichette.pressate.fatteResp(f.pressate_fatte || 0))}</div>` : ''}
         ${presePerFase.has(f.id) ? `<div class="fase-op" style="margin-top:4px;color:var(--info-ink);font-weight:600">${escapeHtml(Etichette.presa.inPressaSu(presePerFase.get(f.id).macchine?.nome, presePerFase.get(f.id).finisce_il))}</div>` : ''}
         ${f.completata_il ? `<div class="fase-op" style="margin-top:4px;font-size:10px">${formatDateTime(f.completata_il)}</div>` : ''}
       </div>`;
@@ -5312,7 +5335,8 @@ const MSG_FASI_EXTRA = {
   numero_gia_usato: "Esiste già una fase con questo numero nell'ordine.", numero_non_valido: 'Numero di fase non valido.', nome_obbligatorio: 'Inserisci il nome di tutte le fasi.',
   macchina_non_valida: 'Macchina non valida o non attiva.', macchina_non_del_catalogo: 'La macchina scelta non appartiene a questa fase del catalogo.',
   tipo_gestione_non_valido: 'Tipo di gestione non valido.', fasi_non_valide: 'Dati delle fasi non validi.',
-  sessione_non_valida: 'Sessione non valida: accedi di nuovo.', non_autorizzato: 'Operazione non consentita.'
+  sessione_non_valida: 'Sessione non valida: accedi di nuovo.', non_autorizzato: 'Operazione non consentita.',
+  ...Etichette.pressate.config.errori
 };
 function messaggioFasiExtra(errore) { return MSG_FASI_EXTRA[errore] || errore || ''; }
 
@@ -5340,6 +5364,8 @@ function onCatalogoFaseChange(sel) {
   const nomeInput = row.querySelector('.extra-fase-nome');
   const esternaChk = row.querySelector('.extra-fase-esterna');
   const salvaRow = row.querySelector('.extra-fase-salva-row');
+  const ppRow = row.querySelector('.extra-fase-pp-row');
+  if (ppRow) ppRow.style.display = catalogoId ? 'none' : '';   // con una voce di catalogo la casella la decide il catalogo
   if (catalogoId) {
     const c = catalogoFasiExtra.find(x => x.id === catalogoId);
     if (c) {
@@ -5383,6 +5409,11 @@ async function addFaseExtra() {
         style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-family:var(--font-sans);font-size:13px;background:var(--bg);color:var(--ink);outline:none">
     </div>
     <div class="extra-fase-macchina-box" style="display:none;padding-left:26px"></div>
+    <div class="extra-fase-pp-row" style="padding-left:26px" title="${escapeHtml(Etichette.pressate.config.spiega)}">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+        <input type="checkbox" class="extra-fase-piu-pressate"> ${escapeHtml(Etichette.pressate.config.casella)}
+      </label>
+    </div>
     <div class="extra-fase-salva-row" style="padding-left:26px">
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--indigo-ink)">
         <input type="checkbox" class="extra-fase-salva-cat" style="accent-color:var(--indigo)">
@@ -5557,6 +5588,7 @@ async function creaOrdine() {
         e_attesa_esterna: eEsterna,
         tipo_gestione: catEntry ? catEntry.tipo_gestione : (eEsterna ? 'spedizione_esterna' : 'standard'),
         catalogo_fase_extra_id: catId || null,
+        piu_pressate: !catId && !eEsterna && (row.querySelector('.extra-fase-piu-pressate')?.checked ?? false),
         macchina_id: row.querySelector('.extra-fase-macchina')?.value || null,
         _salva_catalogo: !catId && (row.querySelector('.extra-fase-salva-cat')?.checked ?? false)
       };
@@ -5574,7 +5606,8 @@ async function creaOrdine() {
           p_descrizione: null,
           p_tipo_gestione: f.tipo_gestione,
           p_e_attesa_esterna: f.e_attesa_esterna || false,
-          p_attiva: true
+          p_attiva: true,
+          p_piu_pressate: !!f.piu_pressate
         });
         if (nuovaCfe?.ok) {
           f.catalogo_fase_extra_id = nuovaCfe.id || null;
@@ -8445,7 +8478,7 @@ function fsModello(f) {
   const m = {
     id: f.id, nome: f.nome || '', descrizione: f.descrizione || '', macro_fase_id: f.macro_fase_id ?? null,
     tipo_gestione: f.tipo_gestione || 'standard', e_attesa_esterna: !!f.e_attesa_esterna, avvio_automatico: !!f.avvio_automatico,
-    e_cnc: !!f.e_cnc, opzionale: !!f.opzionale, gruppo_spedizione: !!f.gruppo_spedizione, ambito_tempo: f.ambito_tempo || 'anta',
+    e_cnc: !!f.e_cnc, opzionale: !!f.opzionale, gruppo_spedizione: !!f.gruppo_spedizione, piu_pressate: !!f.piu_pressate, ambito_tempo: f.ambito_tempo || 'anta',
     tempo_da_lavorazioni_cnc: !!f.tempo_da_lavorazioni_cnc, materiale_ricezione: f.materiale_ricezione || '',
     solo_per_consegna: f.solo_per_consegna ? [...f.solo_per_consegna].sort() : null,   // null = sempre
     dipendenze: [...(f.dipendenze || [])].sort((a, b) => a - b),
@@ -8613,6 +8646,7 @@ function fsSet(campo, valore, rerender = true) {
   FS.draft[campo] = valore;
   if (campo === 'tipo_gestione') {
     FS.draft.e_attesa_esterna = valore !== 'standard';   // impostata dal tipo di fase
+    if (valore !== 'standard') FS.draft.piu_pressate = false;   // la domanda sulle pressate non vale per le fasi esterne
   }
   if (campo === 'tempo_da_lavorazioni_cnc' && valore) FS.draft.ambito_tempo = 'anta';
   fsAggiornaStato(); if (rerender) fsRenderDettaglio();
@@ -8694,7 +8728,7 @@ function fsTempoModificabile(id) {
 }
 function fsPayload() {
   const d = FS.draft, o = FS.mod[d.id], p = {};
-  ['nome', 'descrizione', 'macro_fase_id', 'tipo_gestione', 'e_attesa_esterna', 'avvio_automatico', 'e_cnc', 'opzionale', 'gruppo_spedizione', 'ambito_tempo', 'tempo_da_lavorazioni_cnc', 'materiale_ricezione', 'solo_per_consegna'].forEach(k => {
+  ['nome', 'descrizione', 'macro_fase_id', 'tipo_gestione', 'e_attesa_esterna', 'avvio_automatico', 'e_cnc', 'opzionale', 'gruppo_spedizione', 'piu_pressate', 'ambito_tempo', 'tempo_da_lavorazioni_cnc', 'materiale_ricezione', 'solo_per_consegna'].forEach(k => {
     if (JSON.stringify(d[k]) !== JSON.stringify(o[k])) p[k] = k === 'nome' ? d.nome.trim() : k === 'materiale_ricezione' ? String(d[k] || '').trim() : d[k];
   });
   const crit = {};
@@ -8722,7 +8756,7 @@ function fsValida() {
   if (d.ambito_tempo === 'lato' && d.tempo_da_lavorazioni_cnc) return 'Il tempo vale «ogni lato» solo per le fasi che non sommano le lavorazioni CNC.';
   return null;
 }
-const FS_ERRORI = { presa_non_valida: Etichette.presa.config.errore, dipendenza_circolare: 'La sequenza crea un giro chiuso tra le fasi.', nome_obbligatorio: 'Il nome è obbligatorio.', minuti_non_validi: 'Minuti del tempo non validi.',
+const FS_ERRORI = { ...Etichette.pressate.config.errori, presa_non_valida: Etichette.presa.config.errore, dipendenza_circolare: 'La sequenza crea un giro chiuso tra le fasi.', nome_obbligatorio: 'Il nome è obbligatorio.', minuti_non_validi: 'Minuti del tempo non validi.',
   fase_tempo_da_lavorazioni_cnc: 'Il tempo di questa fase è la somma delle lavorazioni CNC: si imposta nel Catalogo lavorazioni CNC.', macchina_non_trovata: 'Una macchina scelta non esiste più.',
   operatore_non_trovato: 'Un operatore scelto non esiste più.', ambito_tempo_incompatibile: 'Il tempo «ogni lato» non vale per le fasi che sommano le lavorazioni CNC.' };
 
@@ -8919,6 +8953,7 @@ function fsRenderDettaglio() {
         <div class="fs-row inline"><div><div class="fs-crit-t">Fase CNC</div><div class="fs-desc">Mostra il badge CNC sull'ordine e nell'app.</div></div>${fsSwitch('fs-o-cnc', m.e_cnc, "fsSet('e_cnc',this.checked)")}</div>
         <div class="fs-row inline"><div><div class="fs-crit-t">Opzionale</div><div class="fs-desc">Non si crea da sola: la abiliti tu dall'ordine.</div></div>${fsSwitch('fs-o-opz', m.opzionale, "fsSet('opzionale',this.checked)")}</div>
         <div class="fs-row inline"><div><div class="fs-crit-t">Spedizione unica</div><div class="fs-desc">Per gli ordini della stessa spedizione la fase è una sola: compare una volta nel piano (con il tempo di un ordine) e, quando la si completa, si chiude per tutti.</div></div>${fsSwitch('fs-o-gs', m.gruppo_spedizione, "fsSet('gruppo_spedizione',this.checked,false)")}</div>
+        ${fsEster(m) ? '' : `<div class="fs-row inline"><div><div class="fs-crit-t">${escapeHtml(Etichette.pressate.config.casella)}</div><div class="fs-desc">${escapeHtml(Etichette.pressate.config.spiega)}</div></div>${fsSwitch('fs-o-pp', m.piu_pressate, "fsSet('piu_pressate',this.checked,false)")}</div>`}
         ${quandoSiFaHtml(m.solo_per_consegna, 'fsSetQuando')}
       </div>
     </div>
@@ -10158,6 +10193,7 @@ function getFaseNome(faseId) {
 // Proprietà di fase lette dalla configurazione (fasi.e_cnc, fasi.e_attesa_esterna, fasi.gruppo_spedizione)
 const isCNC = (id) => fasi.find(f => f.id === id)?.e_cnc === true;
 const isEsterna = (id) => fasi.find(f => f.id === id)?.e_attesa_esterna === true;
+const fasePiuPressate = (id) => fasi.find(f => f.id === id)?.piu_pressate === true;
 
 async function eliminaOrdine(id) {
   const ordine = [...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === id);
@@ -10922,7 +10958,7 @@ async function salvaModificaOrdine() {
 
 async function caricaFasiExtraModal(ordineId) {
   const { data } = await sb.from('fasi_ordine_extra')
-    .select('id, numero, nome, stato, tipo_gestione')
+    .select('id, numero, nome, stato, tipo_gestione, piu_pressate, pressate_fatte')
     .eq('ordine_id', ordineId)
     .order('numero');
   const el = document.getElementById('mod-fasi-extra-list');
@@ -10935,12 +10971,22 @@ async function caricaFasiExtraModal(ordineId) {
       ? `<button class="btn btn-alert" style="padding:2px 8px;font-size:11px;margin-left:auto;flex-shrink:0"
            onclick="eliminaFaseExtra('${f.id}','${escapeJsAttr(f.nome)}','${ordineId}')">✕ Elimina</button>`
       : `<span style="font-size:11px;color:var(--muted);margin-left:auto;flex-shrink:0">completata</span>`;
-    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
+    const pp = f.tipo_gestione === 'standard' && f.stato !== 'completata'
+      ? `<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);cursor:pointer;white-space:nowrap" title="${escapeHtml(Etichette.pressate.config.spiega)}"><input type="checkbox" ${f.piu_pressate ? 'checked' : ''} onchange="impostaPiuPressateFaseExtra('${f.id}', this.checked, '${ordineId}')"> ${escapeHtml(Etichette.pressate.config.casella)}</label>` : '';
+    const fatte = f.piu_pressate ? `<span style="font-size:11px;color:var(--muted);white-space:nowrap">${escapeHtml(Etichette.pressate.fatteResp(f.pressate_fatte || 0))}</span>` : '';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
       <span style="background:${badge};padding:2px 8px;border-radius:10px;font-size:11px;white-space:nowrap">${f.stato}</span>
-      <span style="font-size:13px;flex:1">${escapeHtml(f.nome)}${tgLabel}</span>
+      <span style="font-size:13px;flex:1;min-width:120px">${escapeHtml(f.nome)}${tgLabel}</span>
+      ${fatte}${pp}
       ${delBtn}
     </div>`;
   }).join('');
+}
+
+async function impostaPiuPressateFaseExtra(faseExtraId, valore, ordineId) {
+  const { data, error } = await sb.rpc('imposta_piu_pressate_fase_extra', { p_fase_extra_id: faseExtraId, p_valore: !!valore, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) toast('Errore: ' + (Etichette.pressate.config.errori[data?.errore] || error?.message || data?.errore || ''), 'err');
+  await caricaFasiExtraModal(ordineId);
 }
 
 async function eliminaFaseExtra(faseExtraId, nomeFase, ordineId) {
@@ -11033,6 +11079,10 @@ async function apriAggiungiExtraFase() {
   document.getElementById('nef-nome').value = '';
   document.getElementById('nef-tipo-gestione').value = 'standard';
   document.getElementById('nef-note').value = '';
+  document.getElementById('nef-piu-pressate').checked = false;
+  document.getElementById('nef-piu-pressate-t').textContent = Etichette.pressate.config.casella;
+  document.getElementById('nef-piu-pressate-t').title = Etichette.pressate.config.spiega;
+  document.getElementById('nef-piu-pressate-row').style.display = '';
   const salvaCatRow = document.getElementById('nef-salva-catalogo-row');
   const salvaCatChk = document.getElementById('nef-salva-catalogo');
   if (salvaCatRow) salvaCatRow.style.display = '';
@@ -11073,7 +11123,8 @@ async function aggiungiExtraFase() {
       p_descrizione: null,
       p_tipo_gestione: tipoGestione,
       p_e_attesa_esterna: false,
-      p_attiva: true
+      p_attiva: true,
+      p_piu_pressate: tipoGestione === 'standard' && document.getElementById('nef-piu-pressate').checked
     });
     if (errCfe || !nuovaCfe?.ok) {
       toast('Errore salvataggio catalogo: ' + (errCfe?.message || nuovaCfe?.errore || ''), 'err');
@@ -11085,7 +11136,7 @@ async function aggiungiExtraFase() {
 
   const { data, error } = await sb.rpc('crea_fasi_extra', {
     p_ordine_id: ordineId,
-    p_fasi: [{ numero: prossimoNumero, nome, note_responsabile: note, tipo_gestione: tipoGestione, catalogo_fase_extra_id: catalogoId || '', macchina_id: document.querySelector('#nef-macchina-box select')?.value || null }],
+    p_fasi: [{ numero: prossimoNumero, nome, note_responsabile: note, tipo_gestione: tipoGestione, catalogo_fase_extra_id: catalogoId || '', piu_pressate: !catalogoId && tipoGestione === 'standard' && document.getElementById('nef-piu-pressate').checked, macchina_id: document.querySelector('#nef-macchina-box select')?.value || null }],
     p_responsabile_id: currentUserRow.id
   });
   if (error || !data?.ok) { toast('Errore: ' + (error?.message || messaggioFasiExtra(data?.errore)), 'err'); return; }

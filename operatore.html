@@ -201,6 +201,11 @@ textarea:focus { border-color: var(--accent); }
 /* ── SPEDIZIONE UNICA (voce di gruppo) e consegna ── */
 .ov-spedizione { font-size:13px; color:var(--accent); font-weight:600; margin-top:3px; }
 .ov-avviso-chiusura { font-size:12px; color:var(--muted); margin:6px 0 0; }
+.pr-vela { position:fixed; inset:0; z-index:400; background:rgba(0,0,0,.5); display:flex; align-items:flex-end; justify-content:center; padding:16px; }
+.pr-box { background:var(--surface); color:var(--ink); border:1px solid var(--border); border-radius:var(--radius-card); padding:18px 16px 14px; width:100%; max-width:420px; box-shadow:var(--shadow-float); }
+.pr-box h3 { margin:0 0 12px; font-size:18px; }
+.pr-box .btn { width:100%; margin-top:8px; }
+.ov-pressate { font-size:12px; color:var(--muted); margin-top:3px; }
 .ov-scelta-macchina { font-size:13px; font-weight:600; margin:14px 0 0; color:var(--ink-2); }
 .ov-consegna { display:inline-block; font-size:11px; font-weight:700; padding:2px 7px; border-radius:var(--radius-pill, 999px); background:var(--info-soft); color:var(--info-ink); margin-top:4px; }
 .badge-in_attesa_cliente { background: var(--warn-soft); color: var(--warn-ink); }
@@ -813,7 +818,8 @@ async function syncQueue() {
         // completamento senza presa in carico (mango-v45); "già completata" conta come riuscita (coda riprodotta due volte)
         const { data } = await sb.rpc('completa_fase_diretta', { p_operatore_id: currentUser.id, p_session_token: sessionToken,
           p_ordine_fase_id: item.ordFaseId || null, p_fase_extra_id: item.faseExtraId || null, p_note_operatore: item.note || null, p_gruppo: !!item.gruppo,
-          p_macchina_id: item.macchinaId || null, p_eseguita_il: item.ts ? new Date(item.ts).toISOString() : null });
+          p_macchina_id: item.macchinaId || null, p_eseguita_il: item.ts ? new Date(item.ts).toISOString() : null,
+          p_ultima_pressata: typeof item.ultima === 'boolean' ? item.ultima : null });
         ok = data?.ok;
       } else if (item.type === 'prendi_fase' || item.type === 'prendi_fase_extra') {
         // azioni di una versione precedente rimaste in coda: la presa in carico non esiste più, si scartano
@@ -1696,9 +1702,10 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
   } else if (['disponibile', 'in_corso', 'in_attesa'].includes(f.stato)) {
     // nessuna presa in carico: la fase si segna direttamente come completata
     bodyHtml += `<div class="azione-box"><h4>Completa fase</h4>
+      ${f.piu_pressate && f.pressate_fatte > 0 ? `<p class="ov-pressate" style="margin:0 0 10px">${escapeHtml(Etichette.pressate.fatte(f.pressate_fatte))}</p>` : ''}
       <div class="form-group" style="margin-bottom:12px"><label>Le tue note (opzionale)</label>
         <textarea id="note-op-extra" placeholder="Scrivi eventuali note…">${escapeHtml(f.note_operatore || '')}</textarea></div>
-      <button class="btn btn-ok" onclick="completaFaseExtra('${faseExtraId}','${ordineId}')">✓ Completata</button></div>`;
+      <button class="btn btn-ok" onclick="completaFaseExtra('${faseExtraId}','${ordineId}'${f.piu_pressate ? ', true' : ''})">✓ Completata</button></div>`;
   }
 
   document.getElementById('fase-det-body').innerHTML = bodyHtml;
@@ -1771,15 +1778,29 @@ async function confermaRicezioneExtra(faseExtraId, ordineId) {
   renderHome();
 }
 
-async function completaFaseExtra(faseExtraId, ordineId) {
+async function completaFaseExtra(faseExtraId, ordineId, piuPressate) {
   const note = document.getElementById('note-op-extra')?.value.trim() || null;
+  let ultima = null;
+  if (piuPressate) { ultima = await chiediUltimaPressata(); if (ultima === null) return; }
   if (isOnline) {
-    const { data, error } = await sb.rpc('completa_fase_diretta', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_fase_extra_id: faseExtraId, p_note_operatore: note });
+    const { data, error } = await sb.rpc('completa_fase_diretta', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_fase_extra_id: faseExtraId, p_note_operatore: note, p_ultima_pressata: piuPressate ? ultima : null });
     if (error || !data?.ok) { toast(erroreCompletamento(data, error), 'err'); return; }
+    if (data.pressata_registrata) {
+      toast(Etichette.pressate.toastNo, 'ok');
+      oggiContaPressata(null, faseExtraId, data.pressate_fatte);
+      try { await renderFaseExtraDetail(faseExtraId, ordineId); } catch (e) { console.warn('renderFaseExtraDetail', e); }
+      return;
+    }
   } else {
-    try { await queueAction({ type: 'completa_diretta', faseExtraId, note }); }
+    try { await queueAction({ type: 'completa_diretta', faseExtraId, note, ultima: piuPressate ? ultima : null }); }
     catch (e) { console.warn('queueAction', e); toast('Azione NON salvata: la memoria del telefono non risponde. Riprova tra un momento.', 'err'); return; }
     try { await updateQueueBadge(); } catch (e) { console.warn(e); }
+    if (piuPressate && ultima === false) {
+      toast(Etichette.pressate.toastNo, 'ok');
+      oggiContaPressata(null, faseExtraId, null);
+      try { await renderFaseExtraDetail(faseExtraId, ordineId); } catch (e) { console.warn('renderFaseExtraDetail', e); }
+      return;
+    }
   }
   toast('Fase completata!', 'ok');
   oggiSegnaFataPerFase(null, faseExtraId);
@@ -1904,6 +1925,7 @@ async function renderFaseDetail(ordFaseId, ordineId) {
     bodyHtml += `
       <div class="azione-box">
         <h4>Completa fase</h4>
+        ${fasePiuPressate(f.fase_id) && f.pressate_fatte > 0 ? `<p class="ov-pressate" style="margin:0 0 10px">${escapeHtml(Etichette.pressate.fatte(f.pressate_fatte))}</p>` : ''}
         ${bloccoPezzi}
         <div class="form-group" style="margin-bottom:12px">
           <label>Le tue note (opzionale)</label>
@@ -1998,6 +2020,10 @@ function codiciSpedizioneFase(ordine, faseId) {
 
 async function completaFase(ordFaseId, ordineId, macchinaId) {
   const note = document.getElementById('note-op')?.value.trim() || null;
+  // fase con più pressate: prima della chiusura si chiede se è l'ultima (Annulla = non succede nulla)
+  const piu = _faseDetCorrente?.id === ordFaseId && fasePiuPressate(_faseDetCorrente?.fase_id);
+  let ultima = null;
+  if (piu) { ultima = await chiediUltimaPressata(); if (ultima === null) return; }
 
   // Blocca il bottone subito per evitare doppi click
   const bottoniFase = Array.from(document.querySelectorAll('.btn-completa-fase'));
@@ -2006,10 +2032,17 @@ async function completaFase(ordFaseId, ordineId, macchinaId) {
   bottoniFase.forEach(b => { b.disabled = true; b.textContent = 'Attendere...'; });
 
   if (isOnline) {
-    const { data, error } = await sb.rpc('completa_fase_diretta', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_fase_id: ordFaseId, p_note_operatore: note, p_macchina_id: macchinaId || null });
+    const { data, error } = await sb.rpc('completa_fase_diretta', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_fase_id: ordFaseId, p_note_operatore: note, p_macchina_id: macchinaId || null, p_ultima_pressata: piu ? ultima : null });
     if (error || !data?.ok) {
       ripristinaBottoni();
       toast(erroreCompletamento(data, error), 'err');
+      return;
+    }
+    if (data.pressata_registrata) {
+      // "No, ne serve un'altra": la fase resta da fare, si conta una pressata
+      toast(Etichette.pressate.toastNo, 'ok');
+      oggiContaPressata(ordFaseId, null, data.pressate_fatte);
+      try { await renderFaseDetail(ordFaseId, ordineId); } catch (e) { console.warn('renderFaseDetail', e); }
       return;
     }
     if ((data.chiusi_con || []).length) {
@@ -2020,7 +2053,7 @@ async function completaFase(ordFaseId, ordineId, macchinaId) {
       toast('Fase completata!', 'ok');
     }
   } else {
-    try { await queueAction({ type: 'completa_diretta', ordFaseId, note, gruppo: false, macchinaId: macchinaId || null }); }
+    try { await queueAction({ type: 'completa_diretta', ordFaseId, note, gruppo: false, macchinaId: macchinaId || null, ultima: piu ? ultima : null }); }
     catch (e) {
       console.warn('queueAction', e);
       ripristinaBottoni();
@@ -2029,6 +2062,11 @@ async function completaFase(ordFaseId, ordineId, macchinaId) {
     }
     try { await updateQueueBadge(); } catch (e) { console.warn(e); }
     toast('Salvato offline — sarà sincronizzato alla riconnessione', 'ok');
+    if (piu && ultima === false) {
+      oggiContaPressata(ordFaseId, null, null);
+      try { await renderFaseDetail(ordFaseId, ordineId); } catch (e) { console.warn('renderFaseDetail', e); }
+      return;
+    }
   }
   oggiSegnaFataPerFase(ordFaseId, null);
   try { await renderFaseDetail(ordFaseId, ordineId); } catch (e) { console.warn('renderFaseDetail', e); }
@@ -2572,7 +2610,7 @@ function oggiApriGruppo(chiave) { oggiFaseAperta = chiave; oggiSelezione.clear()
 function oggiTornaElenco() { oggiFaseAperta = null; oggiSelezione.clear(); oggiModoMultiplo = false; renderOggi(); }
 
 const oggiAzionabile = (v) => !v.fatta && !(v.bloccata_da && v.bloccata_da.length);
-const oggiSelezionabile = (v) => oggiAzionabile(v) && !v.esterna;     // le spedizioni si segnano una per una
+const oggiSelezionabile = (v) => oggiAzionabile(v) && !v.esterna && !v.piu_pressate;     // le spedizioni e le fasi con più pressate (domanda per ognuna) si segnano una per una
 
 function renderOggiGruppo(g, solaLettura) {
   const azionabili = g.voci.filter(oggiSelezionabile);
@@ -2627,6 +2665,7 @@ function renderOggiVoce(v, solaLettura) {
       ${v.pezzi && !v.fatta && oggiModoMultiplo ? `<span class="og-conta" style="font-family:var(--font-mono);font-size:12px;color:var(--muted)">${v.pezzi.fatti} di ${v.pezzi.totali}</span>` : ''}
     </div>
     ${v.spedizione_unica ? `<div class="ov-spedizione"><i data-ic="pacco"></i> ${escapeHtml(Etichette.spedizioneUnica.riga(v.spedizione_unica, v.spedizione_unica.ordini.map(x => x.codice)))}</div>` : ''}
+    ${v.pressate_fatte > 0 ? `<div class="ov-pressate">${escapeHtml(Etichette.pressate.fatte(v.pressate_fatte))}</div>` : ''}
     <div class="ov-sub">${v.spedizione_unica ? '' : (o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo')}${bloccata ? (v.spedizione_unica ? '' : ' · ') + '<strong>dopo: ' + escapeHtml(v.bloccata_da.join(', ')) + '</strong>' : ''}</div>
     ${oggiConsegnaChip(v)}
     ${meta ? `<div class="order-meta" style="margin:8px 0 0">${meta}</div>` : ''}
@@ -2681,13 +2720,25 @@ async function oggiEsegui(fn, voceIds = []) {
   try { if (currentOrdineId && document.getElementById('screen-ordine')?.classList.contains('active')) await renderOrdineDetail(currentOrdineId); } catch (e) { console.warn('renderOrdineDetail', e); }
 }
 
+// una pressata in più su una fase che resta da fare (risposta "No"): si aggiorna la voce in memoria
+function oggiContaPressata(ordFaseId, faseExtraId, totale) {
+  try {
+    const v = oggiVoci().find(x => (ordFaseId && x.ordine_fase_id === ordFaseId) || (faseExtraId && x.fase_extra_id === faseExtraId));
+    if (v) { v.pressate_fatte = typeof totale === 'number' ? totale : (v.pressate_fatte || 0) + 1; _oggiRender(); }
+    if (typeof totale === 'number') loadOggi().catch(() => {});
+  } catch (e) { console.warn('oggiContaPressata', e); }
+}
+
 async function oggiCompleta(voceId) {
   const v = oggiTrovaVoce(voceId); if (!v) return;
   if (oggiOperazione) return;
+  // fase con più pressate: prima della chiusura (o del "Messo in pressa") si chiede se è l'ultima; Annulla = non succede nulla
+  let ultima = null;
+  if (v.piu_pressate) { ultima = await chiediUltimaPressata(); if (ultima === null) return; }
   await oggiEsegui(async () => {
     if (!isOnline) {
       try {
-        await queueAction({ type: 'completa_diretta', ordFaseId: v.ordine_fase_id || null, faseExtraId: v.fase_extra_id || null, note: null, gruppo: false });
+        await queueAction({ type: 'completa_diretta', ordFaseId: v.ordine_fase_id || null, faseExtraId: v.fase_extra_id || null, note: null, gruppo: false, ultima: v.piu_pressate ? ultima : null });
       } catch (e) {
         console.warn('queueAction', e);
         toast('Azione NON salvata: la memoria del telefono non risponde. Riprova tra un momento.', 'err');
@@ -2695,11 +2746,16 @@ async function oggiCompleta(voceId) {
       }
       try { await updateQueueBadge(); } catch (e) { console.warn(e); }
       toast('Salvato offline — sarà sincronizzato alla riconnessione', 'ok');
+      if (v.piu_pressate && ultima === false) return () => { v.pressate_fatte = (v.pressate_fatte || 0) + 1; cacheSet('oggi', oggiDati); };   // la fase resta da fare
       return () => { oggiSegnaFatta(v); cacheSet('oggi', oggiDati); };   // il server confermerà alla sincronizzazione
     }
     const { data, error } = await sb.rpc('completa_fase_diretta', { p_operatore_id: currentUser.id, p_session_token: sessionToken,
-      p_ordine_fase_id: v.ordine_fase_id || null, p_fase_extra_id: v.fase_extra_id || null });
+      p_ordine_fase_id: v.ordine_fase_id || null, p_fase_extra_id: v.fase_extra_id || null, p_ultima_pressata: v.piu_pressate ? ultima : null });
     if (error || !data?.ok) { toast(erroreCompletamento(data, error), 'err'); return; }
+    if (data.pressata_registrata) {
+      toast(Etichette.pressate.toastNo, 'ok');
+      return () => { v.pressate_fatte = typeof data.pressate_fatte === 'number' ? data.pressate_fatte : (v.pressate_fatte || 0) + 1; };
+    }
     if ((data.chiusi_con || []).length) {
       toast(Etichette.spedizioneUnica.chiusa(v.spedizione_unica ? v.spedizione_unica.ordini.map(x => x.codice) : data.chiusi_con), 'ok');
     } else if (data.in_pressa) {
@@ -2742,6 +2798,7 @@ async function oggiCompletaSelezione() {
   const scelte = [...oggiSelezione].map(oggiTrovaVoce).filter(Boolean);
   if (!scelte.length) return;
   if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
+  if (scelte.some(v => v.piu_pressate)) { toast(Etichette.pressate.unaAllaVolta, 'err'); return; }
   await oggiEsegui(async () => {
     const { data, error } = await sb.rpc('completa_fasi_diretta_multi', { p_operatore_id: currentUser.id, p_session_token: sessionToken,
       p_ordine_fase_ids: scelte.filter(v => v.ordine_fase_id).map(v => v.ordine_fase_id), p_fase_extra_ids: scelte.filter(v => v.fase_extra_id).map(v => v.fase_extra_id) });
@@ -2896,6 +2953,29 @@ function getFaseNome(faseId) {
 const isCNC = (id) => fasi.find(f => f.id === id)?.e_cnc === true;
 const isEsterna = (id) => fasi.find(f => f.id === id)?.e_attesa_esterna === true;
 const faseGruppoSpedizione = (id) => fasi.find(f => f.id === id)?.gruppo_spedizione === true;
+const fasePiuPressate = (id) => fasi.find(f => f.id === id)?.piu_pressate === true;
+
+// "È l'ultima pressata?": risolve true (Sì), false (No) oppure null (Annulla). I testi stanno in js/etichette.js.
+function chiediUltimaPressata() {
+  return new Promise(resolve => {
+    const E = Etichette.pressate;
+    const vela = document.createElement('div');
+    vela.className = 'pr-vela'; vela.setAttribute('role', 'dialog'); vela.setAttribute('aria-modal', 'true'); vela.setAttribute('aria-label', E.domanda);
+    vela.innerHTML = `<div class="pr-box"><h3>${escapeHtml(E.domanda)}</h3>
+      <button type="button" class="btn btn-ok" data-r="si">${escapeHtml(E.si)}</button>
+      <button type="button" class="btn btn-primary" data-r="no">${escapeHtml(E.no)}</button>
+      <button type="button" class="btn btn-secondary" data-r="annulla">${escapeHtml(E.annulla)}</button></div>`;
+    const chiudi = (r) => { document.removeEventListener('keydown', onKey); vela.remove(); resolve(r); };
+    const onKey = (e) => { if (e.key === 'Escape') chiudi(null); };
+    vela.addEventListener('click', (e) => {
+      const r = e.target.closest('[data-r]')?.dataset.r;
+      if (r === 'si') chiudi(true); else if (r === 'no') chiudi(false); else if (r === 'annulla' || e.target === vela) chiudi(null);
+    });
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(vela);
+    vela.querySelector('[data-r="si"]')?.focus();
+  });
+}
 function scadenzaClass(scadenza) {
   if (!scadenza) return '';
   const oggi = new Date(); oggi.setHours(0,0,0,0);
