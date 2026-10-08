@@ -359,8 +359,30 @@ const Etichette = (() => {
     legenda: 'Legenda',
   };
 
+  // Sezione Sistema ▸ Link delle viste: testi e requisiti di accesso (verificati su operatore.html, ufficio.html, schermo.html, responsabile.html, index.html, js/accesso.js)
+  const LINK_VISTE = {
+    titolo: 'Link delle viste', sotto: 'Gli indirizzi da mandare alle persone. Copiali con un clic.',
+    // file = pagina nella cartella dell'app; vuoto = pagina iniziale (la cartella stessa)
+    viste: [
+      { file: 'operatore.html', nome: 'Operatore', per: 'Per gli operatori di reparto.', accesso: 'Serve un telefono (o PC) approvato dal responsabile e il proprio PIN a 6 cifre.' },
+      { file: 'ufficio.html', nome: 'Ufficio', per: 'Per l’ufficio, in sola lettura.', accesso: 'Serve un telefono o PC approvato dal responsabile e il PIN di un utente in sola lettura.' },
+      { file: 'schermo.html', nome: 'Schermo di reparto', per: 'Per lo schermo fisso in reparto (flusso di produzione, sola lettura).', accesso: 'Serve un PC approvato dal responsabile e il PIN di un utente in sola lettura dedicato.' },
+      { file: 'responsabile.html', nome: 'Responsabile', per: 'Per il responsabile.', accesso: 'Serve email e password; se è attiva la verifica a due fattori, anche il codice dell’app di autenticazione.' },
+      { file: 'guida_operatori.html', nome: 'Guida per gli operatori', per: 'Le istruzioni per usare l’app Operatore.', accesso: 'Pagina libera: non serve accedere.' },
+      { file: '', nome: 'Pagina iniziale', per: 'Porta alla scelta tra Responsabile, Operatore e Ufficio.', accesso: 'Pagina libera: non serve accedere (poi si entra nella vista scelta).' },
+    ],
+    copia: 'Copia', apri: 'Apri', condividi: 'Condividi', copiato: nome => 'Link copiato: ' + nome, nonCopiato: 'Non riesco a copiare: seleziona l’indirizzo e copialo a mano',
+    ariaCopia: nome => 'Copia il link dell’app ' + nome, ariaApri: nome => 'Apri la vista ' + nome + ' in una nuova scheda', ariaCondividi: nome => 'Condividi il link dell’app ' + nome, ariaIndirizzo: nome => 'Indirizzo della vista ' + nome,
+    avvisoLocale: 'Stai usando l’app da un indirizzo locale: questi link non funzionano per altre persone.',
+    avvisoTest: 'Ambiente di TEST: non mandare questi link.',
+    avvisoDedotto: 'L’indirizzo dell’app non è impostato nella configurazione: i link sono dedotti dall’indirizzo di questa pagina.',
+    installa: 'Per installare l’app su un telefono: apri il link sul telefono e scegli «Aggiungi a schermata Home» dal menu del browser.',
+    approva: 'Ogni telefono o PC nuovo deve essere approvato dal responsabile in Operatori ▸ Telefoni prima di poter entrare.',
+    nota: 'Questi link sono pagine pubbliche dell’app: la protezione è l’approvazione del dispositivo, il PIN e la sessione. Nei link non c’è nessun dato riservato.',
+  };
+
   return {
-    flusso: FLUSSO, attesaEsterna: ATTESA_ESTERNA, ricezione: RICEZIONE, limiteArrivoTesti, riepilogoSolleciti, rischioTesto, dataBreve, minutiTesto,
+    linkViste: LINK_VISTE, flusso: FLUSSO, attesaEsterna: ATTESA_ESTERNA, ricezione: RICEZIONE, limiteArrivoTesti, riepilogoSolleciti, rischioTesto, dataBreve, minutiTesto,
     PALETTE, imposta, esporta, carica,
     tipoProdotto, attributo, opzione, struttura, materiale, attributiCustom, attributiLato, latoEtichetta, latiAttivi, valoriLatoOrdine, riepilogoLato, lavorazioniCncOrdine, valoreAttributoCustom, attributiOrdine,
     priorita: () => priorita, lati: () => lati, tipi: () => tipi, attributi: () => attributi,
