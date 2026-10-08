@@ -333,8 +333,34 @@ const Etichette = (() => {
     return t;
   }
 
+  // Flusso di produzione a schermo (modalità schermo del responsabile e pagina schermo.html): testi e frasi
+  const FLUSSO = {
+    pulsante: 'Modalità schermo', pulsanteAiuto: 'Mostra a tutto schermo il flusso di produzione di tutti gli ordini aperti, per uno schermo in reparto',
+    apriPagina: 'Apri pagina schermo', paginaTitolo: 'Pagina per lo schermo di reparto',
+    paginaSpiega: 'Per uno schermo fisso in reparto usa questa pagina di sola lettura: si apre su un PC già approvato come telefono, con un utente «sola lettura» dedicato, e non richiede l’account del responsabile.',
+    paginaCopia: 'Copia indirizzo', paginaCopiato: 'Indirizzo copiato',
+    esci: 'Esci', uscitaAiuto: 'Esci dalla modalità schermo (Esc)',
+    titolo: 'Flusso di produzione', ordiniAperti: 'Ordini aperti', aRischio: 'In ritardo o a rischio', pronti: 'Pronti da spedire',
+    nota: 'Un ordine compare in tutte le fasi che ha aperte in parallelo: i numeri sulle singole fasi non si sommano al totale degli ordini.',
+    stati: { in_corso: 'In corso', disponibili: 'Pronte', bloccate: 'Aspettano fasi precedenti', in_attesa_cliente: 'Attesa risposta cliente', attesa_esterna: 'In attesa da fuori' },
+    esternaLegenda: 'Tratteggio: fase esterna o arrivo da fuori',
+    extra: 'Fasi extra', nessunaFase: 'Nessuna fase configurata.', nessunOrdine: 'Nessun ordine aperto',
+    esterna: (tipo, opzionale) => (tipo === 'conferma_ricezione' ? 'Arrivo da fuori' : 'Esterna') + (opzionale ? ' · opzionale' : ''),
+    altriCodici: n => '+' + n,
+    aggiornatoAlle: hhmm => 'Aggiornato alle ' + hhmm, inCaricamento: 'Caricamento…',
+    live: 'In diretta', ritardo: 'Aggiornamento in ritardo', scollegato: 'Scollegato',
+    datoVecchio: 'Dato non aggiornato', riproviamo: 'Riprovo tra poco…',
+    sessioneTitolo: 'Sessione scaduta', sessioneTesto: 'Per continuare serve accedere di nuovo.', accediDiNuovo: 'Accedi di nuovo',
+    schermoScollegatoTitolo: 'Schermo scollegato', schermoScollegatoTesto: 'Chiedi al responsabile di riapprovare questo dispositivo, oppure inserisci di nuovo il PIN.',
+    schermoNonAutorizzato: 'Questo utente non può usare lo schermo di reparto: serve un utente in sola lettura.',
+    wakeLockNo: 'Questo browser non può impedire lo spegnimento dello schermo: imposta il PC in modo che non vada in standby.',
+    wakeLockSi: 'Questo browser può impedire lo spegnimento dello schermo mentre il flusso è aperto.',
+    schermoIntero: 'Schermo intero',
+    legenda: 'Legenda',
+  };
+
   return {
-    attesaEsterna: ATTESA_ESTERNA, ricezione: RICEZIONE, limiteArrivoTesti, riepilogoSolleciti, rischioTesto, dataBreve, minutiTesto,
+    flusso: FLUSSO, attesaEsterna: ATTESA_ESTERNA, ricezione: RICEZIONE, limiteArrivoTesti, riepilogoSolleciti, rischioTesto, dataBreve, minutiTesto,
     PALETTE, imposta, esporta, carica,
     tipoProdotto, attributo, opzione, struttura, materiale, attributiCustom, attributiLato, latoEtichetta, latiAttivi, valoriLatoOrdine, riepilogoLato, lavorazioniCncOrdine, valoreAttributoCustom, attributiOrdine,
     priorita: () => priorita, lati: () => lati, tipi: () => tipi, attributi: () => attributi,

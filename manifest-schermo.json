@@ -1,0 +1,17 @@
+{
+  "id": "/MangoApp/schermo.html",
+  "name": "Mango Schermo di reparto",
+  "short_name": "Mango Schermo",
+  "description": "Flusso di produzione a schermo — sola lettura",
+  "start_url": "/MangoApp/schermo.html",
+  "scope": "/MangoApp/",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "landscape",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

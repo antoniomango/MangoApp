@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mango Schermo">
+<meta name="theme-color" content="#000000">
+<link rel="manifest" href="manifest-schermo.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>Mango — Schermo di reparto</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co; connect-src 'self' https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co wss://kpdlynvmsoctagwtzrxr.supabase.co wss://mtpzfxnyfkzikzlkomwz.supabase.co; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<script src="js/tema.js"></script>
+<script>document.documentElement.setAttribute('data-theme', 'dark');   // lo schermo di reparto è sempre scuro</script>
+<script src="js/pin-pad.js"></script>
+<script src="js/regole-pin.js"></script>
+<script src="js/accesso.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js" integrity="sha384-JBR+x8blGwjDRO63aHCGiZMD4VNiTR4ZUGA+N6ZKLf3zNt1fK8IBpcgPaMrxqWBp" crossorigin="anonymous"></script>
+<link rel="stylesheet" href="css/tema.css">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font-sans); background: var(--bg); color: var(--ink); min-height: 100vh; font-size: 14px; overflow: hidden; }
+#login-screen { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; background: var(--bg); padding: 16px; }
+.login-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+.logo-mark { background: var(--accent); clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); flex-shrink: 0; width: 36px; height: 36px; }
+.login-logo span { font-family: var(--font-mono); font-size: 17px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink); }
+.err { color: var(--alert); font-size: 12px; text-align: center; margin-top: 10px; min-height: 18px; }
+#schermo-radice { display: none; }
+</style>
+</head>
+<body>
+
+<!-- ─────────── ACCESSO (stessa schermata della vista ufficio: dispositivo approvato + PIN) ─────────── -->
+<div id="login-screen">
+  <div class="accesso">
+    <h1 class="sr-only">Schermo di reparto — accesso in sola lettura</h1>
+    <div class="login-logo">
+      <div class="logo-mark"></div>
+      <span>Mango</span>
+    </div>
+    <div class="accesso-sotto">Schermo di reparto · sola lettura</div>
+    <div id="login-dispositivo" class="accesso-dispositivo" aria-live="polite"></div>
+    <div class="accesso-nome">
+      <label for="login-user-select">Chi sei</label>
+      <select id="login-user-select" onchange="suCambioNomeLogin()"><option value="">— Seleziona —</option></select>
+    </div>
+    <div id="pinpad"></div>
+    <div class="err" id="login-err" aria-live="assertive"></div>
+  </div>
+</div>
+
+<!-- ─────────── FLUSSO A TUTTO SCHERMO ─────────── -->
+<div id="schermo-radice"></div>
+
+<script src="js/config.deploy.js"></script>
+<script src="js/config.js"></script>
+<script src="js/etichette.js"></script>
+<script src="js/flusso-schermo.js"></script>
+<script>
+// SUPABASE_URL / SUPABASE_ANON arrivano da js/config.js (ambiente produzione/test)
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+controllaVersioneMinima(sb);
+
+// Questa pagina chiama SOLO flusso_produzione_schermo (più le funzioni di accesso/dispositivo): nessuna scrittura, nessuna lettura di tabelle.
+const CHIAVE_UTENTE = 'schermo-user', CHIAVE_TOKEN = 'schermo-session-token';
+let currentUser = null, sessionToken = null, flusso = null;
+const T = Etichette.flusso;
+
+function leggiSessione() {
+  try { const u = localStorage.getItem(CHIAVE_UTENTE), t = localStorage.getItem(CHIAVE_TOKEN); if (u && t) return { utente: JSON.parse(u), token: t }; } catch (e) { /* storage non disponibile: si riparte dall'accesso */ }
+  return null;
+}
+function dimenticaSessione() { try { localStorage.removeItem(CHIAVE_UTENTE); localStorage.removeItem(CHIAVE_TOKEN); } catch (e) { /* storage non disponibile */ } }
+
+window.pinPad = MangoPinPad.monta({
+  contenitore: document.getElementById('pinpad'),
+  messaggio: document.getElementById('login-err'),
+  nomeSelezionato: () => !!document.getElementById('login-user-select').value,
+  mostraErrore: showErr,
+  visibile: () => getComputedStyle(document.getElementById('login-screen')).display !== 'none',
+  lunghezza: 6,
+  minimo: 4,
+  invia: doLogin,
+  suSblocco: () => showErr(''),
+});
+
+async function init() {
+  const s = leggiSessione();
+  if (s) { currentUser = s.utente; sessionToken = s.token; mostraFlusso(); return; }   // riprende da solo finché la sessione è valida
+  await preparaLoginDispositivo();
+}
+function preparaLoginDispositivo() {
+  document.getElementById('login-screen').style.display = 'flex';
+  return MangoAccesso.preparaLogin({
+    sb,
+    pannello: document.getElementById('login-dispositivo'),
+    nascondi: [document.querySelector('#login-screen .accesso-nome'), document.getElementById('pinpad')],
+    suApprovato: caricaElencoLogin,
+    suSceltaPin: (esito) => concludiLogin(esito.data),
+  });
+}
+async function caricaElencoLogin() {
+  const { data } = await sb.rpc('lista_operatori_login', { p_solo_sola_lettura: true, ...MangoAccesso.parametri() });
+  const sel = document.getElementById('login-user-select');
+  sel.textContent = '';
+  const o0 = document.createElement('option'); o0.value = ''; o0.textContent = '— Seleziona —'; sel.appendChild(o0);
+  (data || []).forEach(u => { const o = document.createElement('option'); o.value = u.id; o.textContent = `${u.cognome} ${u.nome}`; sel.appendChild(o); });
+}
+function suCambioNomeLogin() { showErr(''); if (window.pinPad) pinPad.azzera(); }
+async function doLogin(pin) {
+  const userId = document.getElementById('login-user-select').value;
+  if (!userId) { showErr('Seleziona il nome dell’utente dello schermo'); return { ok: false }; }
+  if (typeof pin !== 'string' || pin.length < 4 || pin.length > 6) { showErr('PIN incompleto'); return { ok: false }; }
+  showErr('');
+  const esito = await MangoAccesso.accedi(sb, userId, pin);
+  if (!esito.ok) {
+    if (['dispositivo_non_approvato', 'pin_da_reimpostare'].includes(esito.data?.errore)) preparaLoginDispositivo();
+    if (esito.data?.errore !== 'annullato') showErr(MangoAccesso.messaggio(esito.data));
+    return { ok: false, bloccatoFino: esito.data?.bloccato_fino || null };
+  }
+  await concludiLogin(esito.data);
+  return { ok: true };
+}
+async function concludiLogin(data) {
+  const { push_alias: _nonSalvato, ...utente } = data.user || {};
+  currentUser = utente; sessionToken = data.session_token || null;
+  try { localStorage.setItem(CHIAVE_UTENTE, JSON.stringify(currentUser)); if (sessionToken) localStorage.setItem(CHIAVE_TOKEN, sessionToken); } catch (e) { /* senza storage lo schermo chiederà il PIN a ogni riapertura */ }
+  mostraFlusso();
+}
+function showErr(msg) { document.getElementById('login-err').textContent = msg; }
+
+// ── flusso ──
+async function caricaFlusso() {
+  let r;
+  try { r = await sb.rpc('flusso_produzione_schermo', { p_utente_id: currentUser?.id, p_session_token: sessionToken }); } catch (e) { return { ok: false, errore: 'rete' }; }
+  const { data, error } = r;
+  if (data?.ok) return { ok: true, dati: data };
+  if (data?.errore === 'sessione_non_valida' || data?.errore === 'non_autorizzato') {
+    // dispositivo revocato / non più approvato oppure sessione scaduta: testo chiaro, mai un errore tecnico né l'ultimo dato come se fosse aggiornato
+    let testi = { titolo: T.sessioneTitolo, testo: T.sessioneTesto, pulsante: 'Inserisci il PIN' };
+    if (data.errore === 'non_autorizzato') testi = { titolo: T.schermoScollegatoTitolo, testo: T.schermoNonAutorizzato, pulsante: 'Inserisci il PIN' };
+    else { try { const info = await MangoAccesso.assicura(sb); if (info.stato !== 'approvato') testi = { titolo: T.schermoScollegatoTitolo, testo: T.schermoScollegatoTesto, pulsante: 'Controlla di nuovo' }; } catch (e) { /* resta il testo di sessione scaduta */ } }
+    flusso && (flusso.opzioni.testiSessione = testi);
+    return { ok: false, errore: 'sessione' };
+  }
+  return { ok: false, errore: 'rete', dettaglio: error ? 'rete' : '' };
+}
+function mostraFlusso() {
+  document.getElementById('login-screen').style.display = 'none';
+  if (window.pinPad) pinPad.fermaTastiera();
+  const radice = document.getElementById('schermo-radice'); radice.style.display = 'block';
+  const opzioni = {
+    carica: caricaFlusso,
+    testiSessione: { titolo: T.sessioneTitolo, testo: T.sessioneTesto, pulsante: 'Inserisci il PIN' },
+    accediDiNuovo: tornaAllAccesso,
+  };
+  flusso = { ctl: FlussoSchermo.avvia(radice, opzioni), opzioni };
+}
+function tornaAllAccesso() {
+  if (flusso) { flusso.ctl.ferma(); flusso = null; }
+  dimenticaSessione(); currentUser = null; sessionToken = null;
+  document.getElementById('schermo-radice').style.display = 'none';
+  if (window.pinPad) pinPad.azzera();
+  preparaLoginDispositivo();
+}
+// pieno schermo: doppio clic o tasto F (con il browser in modalità app/kiosk non serve)
+function pienoSchermo() {
+  const r = document.documentElement;
+  if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); } else if (r.requestFullscreen) { r.requestFullscreen().catch(() => {}); }
+}
+document.getElementById('schermo-radice').addEventListener('dblclick', pienoSchermo);
+document.addEventListener('keydown', e => { if ((e.key === 'f' || e.key === 'F') && document.getElementById('schermo-radice').style.display === 'block') pienoSchermo(); });
+
+init();
+</script>
+</body>
+</html>
