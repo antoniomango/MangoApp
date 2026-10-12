@@ -59,3 +59,8 @@ AVVIA SERVER.bat
 migrazione_*.sql
 deploy_data.js
 .claude/
+
+# Migrazioni, schema e note di sicurezza non vanno nel repository pubblico: stanno nel vault o in una cartella fuori dal repo
+docs/migrazioni*/
+docs/*.sql
+docs/*sicurezza*
