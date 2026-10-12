@@ -138,6 +138,7 @@ const Etichette = (() => {
     spiegaRegole: "Servono due fasi standard con almeno una macchina in comune (o nessuna macchina in entrambe). Non vale per le fasi a più passaggi, a spedizione unica, di ricezione o di spedizione esterna.",
     legame: nome => 'Si pianifica sempre insieme a «' + nome + '»',
     tagPiano: nome => 'abbinata a ' + nome,
+    aggiuntaInsieme: n => 'Aggiunte al piano ' + n + ' attività: la fase abbinata entra insieme.',
     nonCompatibile: 'Questa fase non può essere abbinata: è a più passaggi, a spedizione unica o di ricezione / spedizione esterna.',
     errori: {
       abbinata_non_valida: 'La fase abbinata non è valida.',

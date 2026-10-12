@@ -3519,7 +3519,7 @@ async function aggiungiAlPiano(ordineFaseId, faseExtraId) {
   if (error || !data?.ok) { toast('Non aggiunta: ' + (data?.errore || error?.message || ''), 'err'); return; }
   closeModal('modal-aggiungi-piano');
   await loadOggiResp();
-  toast('Attività aggiunta al piano', 'ok');
+  toast(data.voci_aggiunte > 1 ? Etichette.fasiAbbinate.aggiuntaInsieme(data.voci_aggiunte) : 'Attività aggiunta al piano', 'ok');
 }
 
 // ── pagina "Piano del giorno": parametri ──
