@@ -130,6 +130,29 @@ const Etichette = (() => {
       errori: { pressate_previste_non_valide: 'Le pressate previste devono essere un numero intero da 1 a 20.', pressate_previste_senza_piu_pressate: 'Le pressate previste servono solo se la fase può richiedere più pressate.', minuti_non_validi: 'Il tempo per pezzo deve essere maggiore di 0 e al massimo 1440 minuti.', macchina_non_trovata: 'Una macchina scelta non esiste più.', tempo_non_ammesso_fase_esterna: 'Il tempo per pezzo non vale per le fasi di ricezione o spedizione esterna.', piu_pressate_non_valido: 'Il valore di "Può richiedere più pressate" non è valido.', piu_pressate_non_ammesso_fase_esterna: 'Le fasi di ricezione o spedizione esterna non possono richiedere più pressate.', fase_completata: 'La fase è già completata.' },
     },
   };
+  // Fasi abbinate: due fasi dello stesso ordine che il piano mette sempre insieme (stesso giorno e stessa macchina). Restano due fasi: si completano da sole e in qualunque ordine.
+  const FASI_ABBINATE = {
+    titolo: 'Fase abbinata',
+    nessuna: 'Nessuna',
+    spiega: "Se l'ordine ha entrambe le fasi da fare, il piano le mette sempre insieme: stesso giorno, stessa macchina, una dopo l'altra. Restano due fasi distinte, che l'operatore completa da sole e in qualunque ordine. Se una delle due non c'è o non è ancora sbloccata, l'altra viene pianificata da sola.",
+    spiegaRegole: "Servono due fasi standard con almeno una macchina in comune (o nessuna macchina in entrambe). Non vale per le fasi a più passaggi, a spedizione unica, di ricezione o di spedizione esterna.",
+    legame: nome => 'Si pianifica sempre insieme a «' + nome + '»',
+    tagPiano: nome => 'abbinata a ' + nome,
+    aggiuntaInsieme: n => 'Aggiunte al piano ' + n + ' attività: la fase abbinata entra insieme.',
+    nonCompatibile: 'Questa fase non può essere abbinata: è a più passaggi, a spedizione unica o di ricezione / spedizione esterna.',
+    errori: {
+      abbinata_non_valida: 'La fase abbinata non è valida.',
+      abbinata_stessa_fase: 'Una fase non può essere abbinata a se stessa.',
+      abbinata_fase_inesistente: 'La fase abbinata non esiste più.',
+      abbinata_fase_non_attiva: 'La fase abbinata non è attiva.',
+      abbinata_catena: 'Una fase può avere una sola fase abbinata, e non può essere abbinata a una fase già in coppia: togli prima il legame esistente.',
+      abbinata_nessuna_macchina_comune: 'Le due fasi devono avere almeno una macchina in comune (oppure nessuna macchina in entrambe).',
+      abbinata_piu_passate: 'Una fase a più passaggi non può far parte di una coppia.',
+      abbinata_fase_esterna: 'Le fasi di ricezione o di spedizione esterna non possono far parte di una coppia.',
+      abbinata_spedizione_unica: 'Una fase a spedizione unica non può far parte di una coppia.',
+      abbinata_non_normalizzata: 'Coppia non valida.',
+    },
+  };
   // Spedizione unica nel piano e nell'app operatore
   const SPEDIZIONE_UNICA = {
     // clienti distinti del gruppo in ordine alfabetico: g.clienti (elenco) oppure g.ordini[].cliente
@@ -389,7 +412,7 @@ const Etichette = (() => {
     prioritaEtichetta, prioritaPeso, confrontaPriorita, colorePriorita, badgePriorita,
     statoOrdine: (s, o) => o ? statoOrdineConsegna(s, o) : (STATI_ORDINE[s] || vuoto(s)),
     modalitaConsegna, modalitaConsegnaElenco: () => MODALITA_CONSEGNA, quandoSiFa: () => QUANDO_SI_FA, quandoSiFaTesti: QUANDO_SI_FA_TESTI, ritiraOrdine, statoAvviso, consegnaOperatore,
-    erroreSalvataggio: ERRORE_SALVATAGGIO, presa: PRESA, pressate: PRESSATE, azioneSpedito, suggerimentoConsegna: SUGGERIMENTO_CONSEGNA, consegnaTesti: CONSEGNA_TESTI, spedizioneUnica: SPEDIZIONE_UNICA, avvisi: AVVISI, dataOraBreve: _dataOra,
+    erroreSalvataggio: ERRORE_SALVATAGGIO, presa: PRESA, pressate: PRESSATE, fasiAbbinate: FASI_ABBINATE, azioneSpedito, suggerimentoConsegna: SUGGERIMENTO_CONSEGNA, consegnaTesti: CONSEGNA_TESTI, spedizioneUnica: SPEDIZIONE_UNICA, avvisi: AVVISI, dataOraBreve: _dataOra,
     statoFase: s => STATI_FASE[s] || vuoto(s),
     statoRichiesta: s => STATI_RICHIESTA[s] || vuoto(s),
     azioneLog: a => AZIONI_LOG[a] || a,

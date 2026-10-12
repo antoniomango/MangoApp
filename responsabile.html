@@ -3438,6 +3438,9 @@ function renderOggiResp() {
     </div>`;
   const tag = (v) => v.origine === 'responsabile' ? `<span class="badge" style="background:var(--warn-soft);color:var(--warn-ink)">${Etichette.origineVocePiano(v.origine)}</span>`
     : Etichette.origineVocePiano(v.origine) ? `<span class="badge" style="background:var(--info-soft);color:var(--info-ink)">${Etichette.origineVocePiano(v.origine)}</span>` : '';
+  // fasi abbinate: le due voci dello stesso ordine sono un blocco (stesso giorno e stessa macchina)
+  const chiaviVoci = new Set((d.gruppi || []).flatMap(g => g.voci.map(v => v.ordine_id + '|' + v.fase_id)));
+  const tagAbbinata = (v) => { const pa = v.fase_id != null ? faseAbbinataId(v.fase_id) : null; const pf = pa != null && chiaviVoci.has(v.ordine_id + '|' + pa) ? fasi.find(x => x.id === pa) : null; return pf ? `<div style="font-size:11px;color:var(--info-ink);margin-top:3px"><i data-ic="strati"></i> ${escapeHtml(Etichette.fasiAbbinate.tagPiano(pf.nome))}</div>` : ''; };
   const riga = (v) => {
     const o = v.ordine || {};
     const bl = v.bloccata_da && v.bloccata_da.length ? `<div style="font-size:11px;color:var(--violet)">dopo: ${escapeHtml(v.bloccata_da.join(', '))}</div>` : '';
@@ -3445,7 +3448,7 @@ function renderOggiResp() {
       <td><div style="font-weight:600">${v.spedizione_unica ? '<i data-ic="pacco"></i> ' + escapeHtml(Etichette.spedizioneUnica.riga(v.spedizione_unica, v.spedizione_unica.ordini.map(x => x.codice))) : escapeHtml(o.cliente || '') + ' — ' + escapeHtml(o.codice || '')}${v.urgente && !v.fatta ? ` <span class="badge" style="background:var(--urgente-bg);color:var(--urgente-ink)" title="${escapeHtml(Etichette.rischioTesto(v.rischio, o.scadenza))}">${Etichette.attesaEsterna.urgente}</span>` : ''}</div>${v.urgente && !v.fatta && v.rischio ? `<div style="font-size:11px;color:var(--urgente-ink)">${escapeHtml(Etichette.rischioTesto(v.rischio, o.scadenza))}</div>` : ''}<div style="font-size:11px;color:var(--muted)">${v.spedizione_unica ? 'un solo passaggio per ' + v.spedizione_unica.ordini.length + ' ordini' : (o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo')}${v.macchina ? ' · ' + escapeHtml(v.macchina) + (v.minuti_macchina != null && Math.round(v.minuti_macchina) !== Math.round(v.minuti_stimati) ? ' (occupa ' + _fmtMin(v.minuti_macchina) + ')' : '') : ''}</div>${bl}</td>
       <td style="white-space:nowrap">${v.esterna ? '—' : _fmtMin(v.minuti_stimati)}</td>
       <td style="white-space:nowrap">${v.pezzi ? `${v.pezzi.fatti} di ${v.pezzi.totali}` : ''}</td>
-      <td>${v.fatta ? '<span class="badge" style="background:var(--ok-soft);color:var(--ok-ink)">✓ fatta</span>' : '<span style="color:var(--muted)">da fare</span>'} ${tag(v)}${v.stessa_fase ? `<div style="font-size:11px;color:var(--info-ink);margin-top:3px">${escapeHtml(Etichette.motivoIngressoPiano('stessa_fase'))}</div>` : ''}${v.presa ? `<div style="font-size:11px;color:var(--info-ink);margin-top:3px">${escapeHtml(Etichette.presa.inPressaSu(v.presa.macchina, v.presa.fino))}</div>` : ''}${v.piu_pressate ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">${escapeHtml(Etichette.pressate.fatteResp(v.pressate_fatte || 0))}</div>` : ''}</td>
+      <td>${v.fatta ? '<span class="badge" style="background:var(--ok-soft);color:var(--ok-ink)">✓ fatta</span>' : '<span style="color:var(--muted)">da fare</span>'} ${tag(v)}${tagAbbinata(v)}${v.stessa_fase ? `<div style="font-size:11px;color:var(--info-ink);margin-top:3px">${escapeHtml(Etichette.motivoIngressoPiano('stessa_fase'))}</div>` : ''}${v.presa ? `<div style="font-size:11px;color:var(--info-ink);margin-top:3px">${escapeHtml(Etichette.presa.inPressaSu(v.presa.macchina, v.presa.fino))}</div>` : ''}${v.piu_pressate ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">${escapeHtml(Etichette.pressate.fatteResp(v.pressate_fatte || 0))}</div>` : ''}</td>
       <td style="text-align:right">${v.fatta ? '' : `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="togliDalPiano('${escapeJsAttr(v.voce_id)}')">Togli dal piano</button>`}</td>
     </tr>`;
   };
@@ -3516,7 +3519,7 @@ async function aggiungiAlPiano(ordineFaseId, faseExtraId) {
   if (error || !data?.ok) { toast('Non aggiunta: ' + (data?.errore || error?.message || ''), 'err'); return; }
   closeModal('modal-aggiungi-piano');
   await loadOggiResp();
-  toast('Attività aggiunta al piano', 'ok');
+  toast(data.voci_aggiunte > 1 ? Etichette.fasiAbbinate.aggiuntaInsieme(data.voci_aggiunte) : 'Attività aggiunta al piano', 'ok');
 }
 
 // ── pagina "Piano del giorno": parametri ──
@@ -8711,6 +8714,26 @@ function fasiOrig(f, campo) {
 const fsClone = o => JSON.parse(JSON.stringify(o));
 const fsEster = m => (m.tipo_gestione || 'standard') !== 'standard' || !!m.e_attesa_esterna;
 const fsRigheTempo = faseId => FS.tempi.filter(t => t.fase_id === faseId);
+// Fase abbinata: il legame è salvato una volta sola (sulla fase con id maggiore), ma si legge e si imposta da entrambe le schede
+const faseAbbinataId = (id) => { const f = fasi.find(x => x.id === id); if (!f) return null; if (f.abbinata_a_fase_id != null) return f.abbinata_a_fase_id; return fasi.find(x => x.abbinata_a_fase_id === id)?.id ?? null; };
+function fsAbbinabili(m) {
+  const mie = new Set((m.macchine || []).map(x => x.id));
+  return fasiAttive().filter(f => f.id !== m.id && (f.tipo_gestione || 'standard') === 'standard' && !f.e_attesa_esterna && !f.piu_pressate && !f.gruppo_spedizione
+    && (faseAbbinataId(f.id) == null || faseAbbinataId(f.id) === m.id)
+    && (() => { const sue = macchineList.filter(x => (x.fase_ids || []).includes(f.id)).map(x => x.id); return (!mie.size && !sue.length) || sue.some(id => mie.has(id)); })());
+}
+function fsAbbinataHtml(m) {
+  const E = Etichette.fasiAbbinate;
+  if (m.piu_pressate || m.gruppo_spedizione || fsEster(m)) return m.abbinata_a_fase_id != null ? `<div class="fs-row"><div class="fs-lbl">${escapeHtml(E.titolo)}</div><div class="fs-desc" style="color:var(--alert-ink)">${escapeHtml(E.nonCompatibile)}</div></div>` : '';
+  const corrente = m.abbinata_a_fase_id != null ? fasi.find(x => x.id === m.abbinata_a_fase_id) : null;
+  const elenco = fsAbbinabili(m);
+  if (corrente && !elenco.some(f => f.id === corrente.id)) elenco.unshift(corrente);
+  return `<div class="fs-row"><label class="fs-lbl" for="fs-g-ab">${escapeHtml(E.titolo)}</label>
+    <select class="fs-inp" id="fs-g-ab" onchange="fsSetAbbinata(this.value)" style="max-width:340px"><option value="">${escapeHtml(E.nessuna)}</option>${elenco.map(f => `<option value="${Number(f.id)}"${corrente && corrente.id === f.id ? ' selected' : ''}>${escapeHtml(f.nome)}</option>`).join('')}</select>
+    <div class="fs-desc">${corrente ? escapeHtml(E.legame(corrente.nome)) + '. ' : ''}${escapeHtml(E.spiega)}</div><div class="fs-desc">${escapeHtml(E.spiegaRegole)}</div></div>`;
+}
+function fsSetAbbinata(v) { fsSet('abbinata_a_fase_id', v === '' ? null : Number(v)); }
+
 const fsRigaBase = faseId => fsRigheTempo(faseId).find(t => t.tipo_prodotto == null && t.lavorazione_cnc_id == null) || null;
 
 function fsModello(f) {
@@ -8718,7 +8741,7 @@ function fsModello(f) {
   const m = {
     id: f.id, nome: f.nome || '', descrizione: f.descrizione || '', macro_fase_id: f.macro_fase_id ?? null,
     tipo_gestione: f.tipo_gestione || 'standard', e_attesa_esterna: !!f.e_attesa_esterna, avvio_automatico: !!f.avvio_automatico,
-    e_cnc: !!f.e_cnc, opzionale: !!f.opzionale, gruppo_spedizione: !!f.gruppo_spedizione, piu_pressate: !!f.piu_pressate, pressate_previste: f.pressate_previste ?? null, ambito_tempo: f.ambito_tempo || 'anta',
+    e_cnc: !!f.e_cnc, opzionale: !!f.opzionale, gruppo_spedizione: !!f.gruppo_spedizione, piu_pressate: !!f.piu_pressate, pressate_previste: f.pressate_previste ?? null, abbinata_a_fase_id: faseAbbinataId(f.id), ambito_tempo: f.ambito_tempo || 'anta',
     tempo_da_lavorazioni_cnc: !!f.tempo_da_lavorazioni_cnc, materiale_ricezione: f.materiale_ricezione || '',
     solo_per_consegna: f.solo_per_consegna ? [...f.solo_per_consegna].sort() : null,   // null = sempre
     dipendenze: [...(f.dipendenze || [])].sort((a, b) => a - b),
@@ -8744,7 +8767,7 @@ const fsLista = () => fasiAttive();
 function fsModelloVuoto() {
   const lista = fasiAttive();
   const m = { id: 0, nome: '', descrizione: '', macro_fase_id: null, tipo_gestione: 'standard', e_attesa_esterna: false, avvio_automatico: false, e_cnc: false, opzionale: false,
-    gruppo_spedizione: false, piu_pressate: false, pressate_previste: null, ambito_tempo: 'anta', tempo_da_lavorazioni_cnc: false, materiale_ricezione: '', solo_per_consegna: null,
+    gruppo_spedizione: false, piu_pressate: false, pressate_previste: null, abbinata_a_fase_id: null, ambito_tempo: 'anta', tempo_da_lavorazioni_cnc: false, materiale_ricezione: '', solo_per_consegna: null,
     dipendenze: [], dipendenti: [], dopo: lista.length ? String(lista[lista.length - 1].id) : 'top', macchine: [], competenze: [], tempo: { tipico: '', massimo: '' } };
   fasiCriteriDef().forEach(def => { m[def.campo] = []; m[def.modo] = 'solo'; });
   return m;
@@ -8996,7 +9019,7 @@ function fsTempoModificabile(id) {
 }
 function fsPayload() {
   const d = FS.draft, o = FS.mod[d.id], p = {};
-  ['nome', 'descrizione', 'macro_fase_id', 'tipo_gestione', 'e_attesa_esterna', 'avvio_automatico', 'e_cnc', 'opzionale', 'gruppo_spedizione', 'piu_pressate', 'pressate_previste', 'ambito_tempo', 'tempo_da_lavorazioni_cnc', 'materiale_ricezione', 'solo_per_consegna'].forEach(k => {
+  ['nome', 'descrizione', 'macro_fase_id', 'tipo_gestione', 'e_attesa_esterna', 'avvio_automatico', 'e_cnc', 'opzionale', 'gruppo_spedizione', 'piu_pressate', 'pressate_previste', 'abbinata_a_fase_id', 'ambito_tempo', 'tempo_da_lavorazioni_cnc', 'materiale_ricezione', 'solo_per_consegna'].forEach(k => {
     if (JSON.stringify(d[k]) !== JSON.stringify(o[k])) p[k] = k === 'nome' ? d.nome.trim() : k === 'materiale_ricezione' ? String(d[k] || '').trim() : d[k];
   });
   const crit = {};
@@ -9028,9 +9051,10 @@ function fsValida() {
   }
   if (d.macchine.some(x => x.presa_attiva && !presaValida(x.presa_minuti, x.ante_per_pressata))) return Etichette.presa.config.errore;
   if (d.ambito_tempo === 'lato' && d.tempo_da_lavorazioni_cnc) return 'Il tempo vale «ogni lato» solo per le fasi che non sommano le lavorazioni CNC.';
+  if (d.abbinata_a_fase_id != null && (d.piu_pressate || d.gruppo_spedizione || fsEster(d))) return Etichette.fasiAbbinate.nonCompatibile;
   return null;
 }
-const FS_ERRORI = { ...Etichette.pressate.config.errori, presa_non_valida: Etichette.presa.config.errore, dipendenza_circolare: 'La sequenza crea un giro chiuso tra le fasi.', nome_obbligatorio: 'Il nome è obbligatorio.', minuti_non_validi: 'Minuti del tempo non validi.',
+const FS_ERRORI = { ...Etichette.pressate.config.errori, ...Etichette.fasiAbbinate.errori, presa_non_valida: Etichette.presa.config.errore, dipendenza_circolare: 'La sequenza crea un giro chiuso tra le fasi.', nome_obbligatorio: 'Il nome è obbligatorio.', minuti_non_validi: 'Minuti del tempo non validi.',
   fase_tempo_da_lavorazioni_cnc: 'Il tempo di questa fase è la somma delle lavorazioni CNC: si imposta nel Catalogo lavorazioni CNC.', macchina_non_trovata: 'Una macchina scelta non esiste più.',
   operatore_non_trovato: 'Un operatore scelto non esiste più.', ambito_tempo_incompatibile: 'Il tempo «ogni lato» non vale per le fasi che sommano le lavorazioni CNC.' };
 
@@ -9260,6 +9284,7 @@ function fsRenderDettaglio() {
         <div class="fs-row inline"><div><div class="fs-crit-t">Spedizione unica</div><div class="fs-desc">Per gli ordini della stessa spedizione la fase è una sola: compare una volta nel piano (con il tempo di un ordine) e, quando la si completa, si chiude per tutti.</div></div>${fsSwitch('fs-o-gs', m.gruppo_spedizione, "fsSet('gruppo_spedizione',this.checked,false)")}</div>
         ${fsEster(m) || !(m.macchine.length || m.piu_pressate) ? '' : `<div class="fs-row inline"><div><div class="fs-crit-t">${escapeHtml(Etichette.pressate.config.casella)}</div><div class="fs-desc">${escapeHtml(Etichette.pressate.config.spiega)}</div>${m.macchine.length ? '' : `<div class="fs-desc" style="color:var(--alert-ink)">${escapeHtml(Etichette.pressate.config.serveMacchina)}</div>`}</div>${fsSwitch('fs-o-pp', m.piu_pressate, "fsSet('piu_pressate',this.checked)")}</div>`}
         ${!fsEster(m) && m.piu_pressate && m.macchine.length ? `<div class="fs-row"><label class="fs-lbl" for="fs-g-pv">${escapeHtml(Etichette.pressate.config.previste)}</label><input class="fs-inp num" id="fs-g-pv" type="number" min="1" max="20" step="1" inputmode="numeric" value="${m.pressate_previste ?? ''}" oninput="fsSetPrevisteNum(this.value)" style="width:100px"><div class="fs-desc">${escapeHtml(Etichette.pressate.config.previsteSpiega)}</div></div>` : ''}
+        ${fsAbbinataHtml(m)}
         ${quandoSiFaHtml(m.solo_per_consegna, 'fsSetQuando')}
       </div>
     </div>
