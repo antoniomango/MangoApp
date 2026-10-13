@@ -362,6 +362,8 @@ const Etichette = (() => {
     titolo: 'Da chiudere oggi',
     spiega: 'Ordini con scadenza oggi o già passata, o che la simulazione prevede di finire oggi. Sono le stesse attività dei blocchi per fase, in ordine di priorità.',
     conteggio: n => n + ' attività',
+    // schermata Oggi dell'operatore: solo ordine e fasi, nessun motivo, data o tempo
+    operatore: { spiega: 'Ordini da finire oggi, in ordine di priorità. Tocca una fase per aprirla.', inArrivo: 'in arrivo' },
     fase: nome => 'Fase: ' + nome,
     motivo(dc, oggiIso) {
       if (!dc) return '';

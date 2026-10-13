@@ -231,6 +231,15 @@ textarea:focus { border-color: var(--accent); }
 .oggi-voce:last-child { border-bottom: none; }
 .oggi-voce.fatta { background: var(--ok-bg); }
 .oggi-voce.bloccata { opacity: .62; }
+.dc-ordine { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.dc-ordine:last-child { border-bottom: none; }
+.dc-ordine .dc-titolo { font-size: 14px; font-weight: 600; overflow-wrap: break-word; margin-bottom: 8px; }
+.dc-fasi { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+.dc-fase { font: inherit; font-size: 13px; min-height: 40px; padding: 8px 12px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; }
+.dc-fase:active { background: var(--phase-bg); }
+span.dc-fase { cursor: default; }
+.dc-fase.fatta { background: var(--ok-bg); color: var(--ok-ink); border-color: transparent; }
+.dc-fase.bloccata { opacity: .62; border-style: dashed; }
 /* Titolo (cliente — codice) su una riga sua a tutta larghezza; casella, distintivi e Foto vanno sotto, con a capo. Si va a capo tra le parole: una parola si spezza solo se da sola supera tutta la riga. */
 .oggi-voce .ov-testa { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .oggi-voce .ov-titolo { flex: 1 1 100%; order: -1; min-width: 0; font-size: 14px; font-weight: 600; overflow-wrap: break-word; word-break: normal; }
@@ -2577,9 +2586,43 @@ function oggiPartiziona() {
   return { principali, inArrivo };
 }
 
+// «Da chiudere oggi»: gli ordini da finire oggi. Il database manda solo l'elenco ordinato delle voci (voce_id); cliente, codice, fasi e stato si ricavano dalle voci già nel piano.
+// Una cache vecchia o la chiave assente non producono nulla; le fasi bloccate o già fatte non sono toccabili; l'ordine sparisce quando non ha più nulla da fare.
+function oggiDaChiudere(principali) {
+  try {
+    const lista = oggiDati && Array.isArray(oggiDati.da_chiudere) ? oggiDati.da_chiudere : [];
+    if (!lista.length) return '';
+    const perId = new Map();
+    (oggiDati.gruppi || []).forEach(g => (g.voci || []).forEach(v => { if (v && v.voce_id) perId.set(v.voce_id, { v, chiave: g.chiave }); }));
+    (oggiDati.esterne || []).forEach(v => { if (v && v.voce_id && !perId.has(v.voce_id)) perId.set(v.voce_id, { v, chiave: null }); });
+    const aperti = new Set(principali.map(g => g.chiave));
+    const ordini = new Map();
+    lista.forEach(x => {
+      const t = x && perId.get(x.voce_id); if (!t) return;
+      const k = t.v.spedizione_unica ? 'su:' + t.v.voce_id : 'o:' + t.v.ordine_id;
+      if (!ordini.has(k)) ordini.set(k, []);
+      ordini.get(k).push(t);
+    });
+    const righe = [];
+    ordini.forEach(voci => {
+      if (!voci.some(t => !t.v.fatta)) return;
+      const fasiHtml = voci.map(t => {
+        const nome = escapeHtml(t.v.fase_nome || '');
+        if (t.v.fatta) return `<span class="dc-fase fatta">✓ ${nome}</span>`;
+        if (oggiBloccata(t.v)) return `<span class="dc-fase bloccata" aria-disabled="true">${nome} · ${escapeHtml(Etichette.daChiudere.operatore.inArrivo)}</span>`;
+        if (t.chiave && aperti.has(t.chiave)) return `<button type="button" class="dc-fase" onclick="oggiApriGruppo('${escapeJsAttr(t.chiave)}')">${nome}</button>`;
+        return `<span class="dc-fase">${nome}</span>`;
+      }).join('');
+      righe.push(`<div class="dc-ordine"><div class="dc-titolo">${oggiTitoloVoce(voci[0].v)}</div><div class="dc-fasi">${fasiHtml}</div></div>`);
+    });
+    if (!righe.length) return '';
+    return `<div class="section-title">${escapeHtml(Etichette.daChiudere.titolo)}</div><div class="card"><div style="padding:10px 16px 0;font-size:12px;color:var(--muted)">${escapeHtml(Etichette.daChiudere.operatore.spiega)}</div>${righe.join('')}</div>`;
+  } catch (e) { return ''; }
+}
+
 function renderOggiElenco() {
   const { principali, inArrivo } = oggiPartiziona();
-  let html = '';
+  let html = oggiDaChiudere(principali);
   if (!principali.length) {
     html += '<div class="empty-state"><div class="icon"><i data-ic="spunta"></i></div><p>Nessuna attività eseguibile adesso</p></div>';
   } else {
