@@ -356,6 +356,22 @@ const Etichette = (() => {
     return t;
   }
 
+  // Riquadro «Da chiudere oggi» nel piano Oggi del responsabile: titolo, spiegazione e motivo di ogni voce.
+  // Il motivo di rischio (se l'ordine è a rischio) lo dà rischioTesto; qui solo il caso «non a rischio ma da finire».
+  const DA_CHIUDERE = {
+    titolo: 'Da chiudere oggi',
+    spiega: 'Ordini con scadenza oggi o già passata, o che la simulazione prevede di finire oggi. Sono le stesse attività dei blocchi per fase, in ordine di priorità.',
+    conteggio: n => n + ' attività',
+    fase: nome => 'Fase: ' + nome,
+    motivo(dc, oggiIso) {
+      if (!dc) return '';
+      const oggi = String(oggiIso || '').slice(0, 10), sc = dc.scadenza ? String(dc.scadenza).slice(0, 10) : '', fp = dc.fine_prevista ? String(dc.fine_prevista).slice(0, 10) : '';
+      if (dc.per_scadenza && sc) return sc < oggi ? 'Scadenza passata (' + dataBreve(sc) + ')' : sc === oggi ? 'Scade oggi' : 'Scade ' + dataBreve(sc);
+      if (dc.per_fine_prevista && fp) return fp < oggi ? 'Fine prevista già passata (' + dataBreve(fp) + ')' : fp === oggi ? 'Fine prevista oggi' : 'Fine prevista ' + dataBreve(fp);
+      return '';
+    },
+  };
+
   // Flusso di produzione a schermo (modalità schermo del responsabile e pagina schermo.html): testi e frasi
   const FLUSSO = {
     pulsante: 'Modalità schermo', pulsanteAiuto: 'Mostra a tutto schermo il flusso di produzione di tutti gli ordini aperti, per uno schermo in reparto',
@@ -405,7 +421,7 @@ const Etichette = (() => {
   };
 
   return {
-    linkViste: LINK_VISTE, flusso: FLUSSO, attesaEsterna: ATTESA_ESTERNA, ricezione: RICEZIONE, limiteArrivoTesti, riepilogoSolleciti, rischioTesto, dataBreve, minutiTesto,
+    linkViste: LINK_VISTE, daChiudere: DA_CHIUDERE, flusso: FLUSSO, attesaEsterna: ATTESA_ESTERNA, ricezione: RICEZIONE, limiteArrivoTesti, riepilogoSolleciti, rischioTesto, dataBreve, minutiTesto,
     PALETTE, imposta, esporta, carica,
     tipoProdotto, attributo, opzione, struttura, materiale, attributiCustom, attributiLato, latoEtichetta, latiAttivi, valoriLatoOrdine, riepilogoLato, lavorazioniCncOrdine, valoreAttributoCustom, attributiOrdine,
     priorita: () => priorita, lati: () => lati, tipi: () => tipi, attributi: () => attributi,
