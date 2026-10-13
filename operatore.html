@@ -232,7 +232,8 @@ textarea:focus { border-color: var(--accent); }
 .oggi-voce.fatta { background: var(--ok-bg); }
 .oggi-voce.bloccata { opacity: .62; }
 .oggi-gruppo .og-codici { font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 2px; overflow-wrap: break-word; }
-.ov-chiudere { display:inline-block; font-size:11px; font-weight:700; padding:2px 7px; border-radius:var(--radius-pill, 999px); background:var(--warn-soft); color:var(--warn-ink); margin-top:4px; }
+.og-parte { font-size: 12px; font-weight: 600; color: var(--muted); margin: -2px 0 8px; }
+.og-parte.dc { color: var(--warn-ink); }
 /* Titolo (cliente — codice) su una riga sua a tutta larghezza; casella, distintivi e Foto vanno sotto, con a capo. Si va a capo tra le parole: una parola si spezza solo se da sola supera tutta la riga. */
 .oggi-voce .ov-testa { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 .oggi-voce .ov-titolo { flex: 1 1 100%; order: -1; min-width: 0; font-size: 14px; font-weight: 600; overflow-wrap: break-word; word-break: normal; }
@@ -2567,46 +2568,72 @@ function renderOggi() {
   corpo.innerHTML = gruppo ? renderOggiGruppo(gruppo, solaLettura) : renderOggiElenco();
 }
 
-// voci eseguibili adesso (dipendenze soddisfatte) e voci ancora bloccate ("in arrivo"), raggruppate per fase
+// voci eseguibili adesso (dipendenze soddisfatte) e voci ancora bloccate ("in arrivo"), raggruppate per fase.
+// Una fase con voci «da chiudere oggi» e altre voci si divide in due sottogruppi: 'dc:<chiave>' (parte 'dc') e '<chiave>' (parte 'altre'); senza voci da chiudere resta un gruppo solo (parte null).
 const oggiBloccata = (v) => !v.fatta && v.bloccata_da && v.bloccata_da.length;
+// Memoria di sessione (non nel DOM, non nel server): voce_id visti in da_chiudere per la data del piano -> ultima posizione nell'elenco.
+// Il server toglie da da_chiudere una voce appena completata: qui resta, così nel sottogruppo il conteggio non cambia («1 di 3»). Si azzera al cambio di data.
+let oggiDcVisti = new Map(), oggiDcData = null;
+function oggiDcAggiorna() {
+  const data = oggiDati && oggiDati.data ? oggiDati.data : null;
+  if (data !== oggiDcData) { oggiDcData = data; oggiDcVisti = new Map(); }
+  oggiDaChiudereIds().forEach((pos, id) => oggiDcVisti.set(id, pos));
+}
 function oggiPartiziona() {
+  oggiDcAggiorna();
+  const correnti = oggiDaChiudereIds();
+  const dc = (v) => !v.esterna && (v.fatta ? oggiDcVisti.has(v.voce_id) : correnti.has(v.voce_id));
+  const nuovo = (g, voci, chiave, parte) => ({ ...g, chiave, parte, voci, fatte: voci.filter(v => v.fatta).length, totali: voci.length, urgente: voci.some(v => v.urgente && !v.fatta) });
   const principali = [], inArrivo = [];
   (oggiDati.gruppi || []).forEach(g => {
     const ok = g.voci.filter(v => !oggiBloccata(v)), bl = g.voci.filter(oggiBloccata);
-    if (ok.length) principali.push({ ...g, voci: ok, fatte: ok.filter(v => v.fatta).length, totali: ok.length, urgente: ok.some(v => v.urgente && !v.fatta) });
+    if (ok.length) {
+      const d = ok.filter(dc), r = ok.filter(v => !dc(v));
+      if (d.length && r.length) principali.push(nuovo(g, d, 'dc:' + g.chiave, 'dc'), nuovo(g, r, g.chiave, 'altre'));
+      else if (d.length) principali.push(nuovo(g, d, 'dc:' + g.chiave, 'dc'));
+      else principali.push(nuovo(g, ok, g.chiave, null));
+    }
     if (bl.length) inArrivo.push({ ...g, voci: bl, fatte: 0, totali: bl.length });
   });
   return { principali, inArrivo };
 }
 
-// Elenco "Fasi di oggi" in ordine di priorità. L'ordine lo calcola il database (fasi_priorita: chiavi dei gruppi già nel piano); l'app non usa nessun rango.
-// Senza elenco (funzione spenta, cache vecchia, offline) resta l'ordine di flusso. Le fasi tutte fatte vanno in fondo.
-function oggiFasiOrdinate(principali) {
+// Elenco in due sezioni. Le righe «da chiudere» seguono l'ordine dell'elenco da_chiudere (posizione minima delle loro voci, già in ordine di priorità dal server);
+// le altre l'ordine di fasi_priorita (chiavi di gruppo calcolate dal database). L'app non usa nessun rango. Senza fasi_priorita resta l'ordine di flusso.
+// In fondo alla propria sezione i sottogruppi tutti fatti.
+function oggiSezioni(principali) {
+  const finita = (g) => (g.totali > 0 && g.fatte === g.totali ? 1 : 0);
+  const posDc = (g) => g.voci.reduce((m, v) => Math.min(m, oggiDcVisti.has(v.voce_id) ? oggiDcVisti.get(v.voce_id) : 1e9), 1e9);
+  const dc = principali.map((g, i) => ({ g, i })).filter(x => x.g.parte === 'dc')
+    .sort((a, b) => (finita(a.g) - finita(b.g)) || (posDc(a.g) - posDc(b.g)) || (a.i - b.i)).map(x => x.g);
+  const altri = principali.filter(g => g.parte !== 'dc');
   const fp = oggiDati && Array.isArray(oggiDati.fasi_priorita) ? oggiDati.fasi_priorita : null;
-  if (!fp || !fp.length) return principali;
-  const pos = new Map(fp.map((c, i) => [c, i]));
-  const finita = (g) => g.totali > 0 && g.fatte === g.totali ? 1 : 0;
-  const posiz = (g) => (pos.has(g.chiave) ? pos.get(g.chiave) : 1e9);
-  return principali.map((g, i) => ({ g, i })).sort((a, b) => (finita(a.g) - finita(b.g)) || (posiz(a.g) - posiz(b.g)) || (a.i - b.i)).map(x => x.g);
+  let altre = altri;
+  if (fp && fp.length) {
+    const pos = new Map(fp.map((c, i) => [c, i]));
+    const posiz = (g) => (pos.has(g.chiaveBase || g.chiave) ? pos.get(g.chiaveBase || g.chiave) : 1e9);
+    altre = altri.map((g, i) => ({ g, i })).sort((a, b) => (finita(a.g) - finita(b.g)) || (posiz(a.g) - posiz(b.g)) || (a.i - b.i)).map(x => x.g);
+  }
+  return { dc, altre };
 }
-// Voci «da chiudere oggi»: il database manda solo i voce_id, già in ordine di priorità. voce_id -> posizione nell'elenco.
+// "voce_id" dell'elenco da_chiudere (solo identificativi, già in ordine di priorità dal database) -> posizione
 function oggiDaChiudereIds() {
   const lista = oggiDati && Array.isArray(oggiDati.da_chiudere) ? oggiDati.da_chiudere : [];
   const m = new Map();
   lista.forEach((x, i) => { if (x && x.voce_id && !m.has(x.voce_id)) m.set(x.voce_id, i); });
   return m;
 }
-const oggiVoceDaChiudere = (v, ids) => ids.has(v.voce_id) && !v.fatta && !v.esterna && !oggiBloccata(v);
 // codici degli ordini da chiudere in questa fase («ORMEA L 198 · ZANETTI L 200 B», al massimo 3, poi +N); per le spedizioni uniche nessun codice
-function oggiCodiciDaChiudere(g, ids) {
-  const voci = g.voci.filter(v => oggiVoceDaChiudere(v, ids) && !v.spedizione_unica && v.ordine).sort((a, b) => ids.get(a.voce_id) - ids.get(b.voce_id));
+function oggiCodiciDaChiudere(g) {
+  const voci = g.voci.filter(v => !v.fatta && !v.esterna && !v.spedizione_unica && v.ordine && oggiDcVisti.has(v.voce_id))
+    .sort((a, b) => oggiDcVisti.get(a.voce_id) - oggiDcVisti.get(b.voce_id));
   const visti = new Set(), codici = [];
   voci.forEach(v => { if (visti.has(v.ordine_id)) return; visti.add(v.ordine_id); codici.push([v.ordine.cliente, v.ordine.codice].filter(Boolean).join(' ')); });
   return codici.slice(0, 3).join(' · ') + (codici.length > 3 ? ' · +' + (codici.length - 3) : '');
 }
-function oggiRigaFase(g, ids, conCodici) {
+function oggiRigaFase(g, conCodici) {
   const finito = g.totali > 0 && g.fatte === g.totali;
-  const codici = conCodici ? oggiCodiciDaChiudere(g, ids) : '';
+  const codici = conCodici ? oggiCodiciDaChiudere(g) : '';
   return `<div class="oggi-gruppo ${finito ? 'finito' : ''}" role="button" tabindex="0" onclick="oggiApriGruppo('${escapeJsAttr(g.chiave)}')" onkeydown="if(event.key==='Enter')this.click()">
         <div class="og-nome">${escapeHtml(g.fase_nome)}${codici ? `<div class="og-codici">${escapeHtml(codici)}</div>` : ''}</div>
         ${g.urgente ? `<span class="oggi-urgente">${Etichette.attesaEsterna.urgente}</span>` : ''}
@@ -2617,10 +2644,8 @@ function oggiRigaFase(g, ids, conCodici) {
 
 function renderOggiElenco() {
   const { principali, inArrivo } = oggiPartiziona();
-  const ids = oggiDaChiudereIds();
-  const daChiudere = [], altre = [];
-  oggiFasiOrdinate(principali).forEach(g => (g.voci.some(v => oggiVoceDaChiudere(v, ids)) ? daChiudere : altre).push(g));
-  const sezione = (titolo, gruppi, conCodici) => `<div class="section-title">${escapeHtml(titolo)}</div><div class="card">${gruppi.map(g => oggiRigaFase(g, ids, conCodici)).join('')}</div>`;
+  const { dc: daChiudere, altre } = oggiSezioni(principali);
+  const sezione = (titolo, gruppi, conCodici) => `<div class="section-title">${escapeHtml(titolo)}</div><div class="card">${gruppi.map(g => oggiRigaFase(g, conCodici)).join('')}</div>`;
   let html = '';
   if (!principali.length) {
     html += '<div class="empty-state"><div class="icon"><i data-ic="spunta"></i></div><p>Nessuna attività eseguibile adesso</p></div>';
@@ -2668,6 +2693,7 @@ function renderOggiGruppo(g, solaLettura) {
       <div class="page-title" style="margin-bottom:0;max-width:100%;overflow-wrap:break-word">${escapeHtml(g.fase_nome)}</div>
       <div class="og-conta" style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${oggiConta(g.fatte, g.totali)}</div>
     </div>
+    ${g.parte ? `<div class="og-parte ${g.parte}">${escapeHtml(g.parte === 'dc' ? Etichette.daChiudere.titolo : Etichette.daChiudere.operatore.altreVoci)}</div>` : ''}
     ${puoMultiplo ? `<div style="margin-bottom:8px"><span onclick="oggiToggleMultiplo()" style="cursor:pointer;text-decoration:underline;text-underline-offset:2px;color:var(--accent-2);font-size:13px;font-weight:600">${oggiModoMultiplo ? '✕ Esci dalla selezione' : '☑ Seleziona più ordini'}</span></div>` : ''}
     <div class="card">${g.voci.map(v => renderOggiVoce(v, solaLettura)).join('')}</div>${barraSel}`;
 }
@@ -2712,7 +2738,6 @@ function renderOggiVoce(v, solaLettura) {
     ${v.pressate_fatte > 0 ? `<div class="ov-pressate">${escapeHtml(Etichette.pressate.fatte(v.pressate_fatte))}</div>` : ''}
     <div class="ov-sub">${v.spedizione_unica ? '' : (o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo')}${bloccata ? (v.spedizione_unica ? '' : ' · ') + '<strong>dopo: ' + escapeHtml(v.bloccata_da.join(', ')) + '</strong>' : ''}</div>
     ${oggiConsegnaChip(v)}
-    ${oggiVoceDaChiudere(v, oggiDaChiudereIds()) ? `<div><span class="ov-chiudere">${escapeHtml(Etichette.daChiudere.operatore.voce)}</span></div>` : ''}
     ${meta ? `<div class="order-meta" style="margin:8px 0 0">${meta}</div>` : ''}
     ${renderNotaOrdineBox(o)}
     ${azioni ? `<div class="ov-azioni">${azioni}</div>` : ''}
