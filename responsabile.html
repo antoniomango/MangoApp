@@ -2584,6 +2584,7 @@ function _identitaCorrente() {
 let fasi = []; // [{id, nome, descrizione, posizione, trigger_tipo_prodotto}]
 let tipiProdotto = []; // [{id, label, posizione}]
 let ordiniCache = [];
+let spedizioniNonProntePerGruppo = {};   // gruppo_id → [{ ordine_id, codice, fasi }]
 let gruppiSpedizioneCache = {};   // id gruppo → { id, nome, clienti, consegna } (RPC gruppi_spedizione_elenco)
 let ordiniSpeditiCache = [];
 let lavoroStatsCache = {}; // ordine_id → {minuti_lavoro, minuti_attesa_esterna, n_operatori}
@@ -2955,6 +2956,15 @@ async function loadOrdini() {
     const { data: gj } = await sb.rpc('gruppi_spedizione_elenco', { p_responsabile_id: currentUserRow.id, p_session_token: null });
     gruppiSpedizioneCache = Object.fromEntries((gj?.gruppi || []).map(g => [g.id, g]));
   } else gruppiSpedizioneCache = {};
+
+  // gruppi con le fasi di spedizione unica chiuse ma altri ordini ancora da finire (stesso momento del ricaricamento degli ordini)
+  spedizioniNonProntePerGruppo = {};
+  if (ordiniCache.some(o => o.gruppo_spedizione_id)) {
+    try {
+      const { data: np } = await sb.rpc('spedizioni_non_pronte', { p_responsabile_id: currentUserRow.id, p_session_token: null });
+      (np?.gruppi || []).forEach(g => { spedizioniNonProntePerGruppo[g.gruppo_id] = g.membri || []; });
+    } catch (e) { console.warn('spedizioni_non_pronte', e); }
+  }
 
   const trenta30 = new Date(); trenta30.setDate(trenta30.getDate() - 30);
   const [{ data: spediti }, { count: cnt30 }] = await Promise.all([
@@ -4918,7 +4928,9 @@ function ordineRow(o, mini = false) {
   const badgeGruppoSolo = fratelli.length
     ? `<div style="margin-top:4px;font-size:11px;color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:2px" onclick="event.stopPropagation();apriPannelloGruppoSpedizione('${o.gruppo_spedizione_id}')"><i data-ic="pacco"></i> ${escapeHtml(testoGruppo)}</div>`
     : '';
-  const badgeGruppo = badgeGruppoSolo + badgeConsegnaHtml(o);
+  const nonProntiGruppo = !mini && o.gruppo_spedizione_id ? (spedizioniNonProntePerGruppo[o.gruppo_spedizione_id] || []) : [];
+  const badgeNonPronta = nonProntiGruppo.map(m => `<div style="margin-top:4px;font-size:11px;font-weight:600;color:var(--warn)"><i data-ic="avviso"></i> ${escapeHtml(Etichette.spedizioneUnica.nonProntaRiga(m.codice || '—', m.fasi))}</div>`).join('');
+  const badgeGruppo = badgeGruppoSolo + badgeNonPronta + badgeConsegnaHtml(o);
   return `<tr class="clickable ${isSosp ? '' : scadenzaClass(o.scadenza)}" data-scad="${isSosp ? '' : scadenzaClass(o.scadenza)}" ${rowClass} onclick="${rowOnclick}">
     <td class="c-cliente"><div style="display:flex;align-items:flex-start;gap:8px">${checkbox}<div><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div>${badgeGruppo}</div></div></td>
     <td class="c-tipo">${o.tipo === 'extra' ? '<span style="font-weight:600;color:var(--accent)">Ordine Extra</span>' : `${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}`}</td>

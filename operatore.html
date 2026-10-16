@@ -263,6 +263,11 @@ textarea:focus { border-color: var(--accent); }
 .toast.show { opacity: 1; transform: translateY(0); }
 .toast.err { background: var(--alert); }
 .toast.ok { background: var(--ok); }
+.avviso-fisso { position: fixed; inset: 0; z-index: 310; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.avviso-fisso > div { background: var(--surface); border: 2px solid var(--warn); border-radius: 14px; padding: 18px; max-width: 420px; width: 100%; box-shadow: 0 8px 30px rgba(0,0,0,0.3); }
+.avviso-fisso h3 { margin: 0 0 8px; color: var(--warn); font-size: 17px; }
+.avviso-fisso p { margin: 6px 0; font-size: 15px; line-height: 1.4; }
+.avviso-fisso button { margin-top: 12px; width: 100%; padding: 12px; border: 0; border-radius: 10px; background: var(--warn); color: var(--on-warn); font-size: 16px; font-weight: 600; }
 .offline-banner { background: var(--warn); color: var(--on-warn); padding: 8px 16px; font-size: 13px; text-align: center; display: none; }
 .offline-banner.show { display: block; }
 
@@ -1992,6 +1997,19 @@ function bottoniCompleta(f, ordFaseId, ordineId, aPezzi) {
 function avvisoChiusuraSpedizione(codici, gruppo) {
   return (codici && codici.length > 1) ? `<div class="ov-avviso-chiusura"><i data-ic="pacco"></i> ${escapeHtml(Etichette.spedizioneUnica.chiusura(codici, gruppo))}</div>` : '';
 }
+// Avviso che resta a schermo finché l'operatore lo chiude: ordini del gruppo non ancora pronti dopo la chiusura (non_pronti = [{ codice, fasi }])
+function avvisoNonPronti(nonPronti) {
+  if (!Array.isArray(nonPronti) || !nonPronti.length) return;
+  try {
+    const E = Etichette.spedizioneUnica;
+    const box = document.createElement('div');
+    box.className = 'avviso-fisso';
+    box.setAttribute('role', 'alertdialog');
+    box.innerHTML = `<div><h3>${escapeHtml(E.nonProntiTitolo)}</h3>${E.nonProntiOperatore(nonPronti).map(t => `<p>${escapeHtml(t)}</p>`).join('')}<button type="button">${escapeHtml(E.nonProntiChiudi)}</button></div>`;
+    box.querySelector('button').onclick = () => box.remove();
+    document.body.appendChild(box);
+  } catch (e) { console.warn('avvisoNonPronti', e); }
+}
 // Codici dell'intera spedizione di un ordine (compreso lui) per una fase con la proprietà "spedizione unica"
 function codiciSpedizioneFase(ordine, faseId) {
   if (!ordine?.gruppo_spedizione_id || !faseGruppoSpedizione(faseId)) return [];
@@ -2030,6 +2048,7 @@ async function completaFase(ordFaseId, ordineId) {
     } else {
       toast('Fase completata!', 'ok');
     }
+    avvisoNonPronti(data.non_pronti);
   } else {
     try { await queueAction({ type: 'completa_diretta', ordFaseId, note, gruppo: false, ultima: piu ? ultima : null }); }
     catch (e) {
@@ -2789,6 +2808,7 @@ async function oggiCompleta(voceId) {
     } else {
       toast(data.gia_completata ? 'Era già completata' : 'Completata!', 'ok');
     }
+    avvisoNonPronti(data.non_pronti);
     return () => oggiSegnaFatta(v);
   }, [voceId]);
 }
@@ -2834,6 +2854,7 @@ async function oggiCompletaSelezione() {
     toast(errori.length ? `${data.completate} completate, ${errori.length} non completabili`
       : (data.completate === 0 && risultati.length ? (risultati.length === 1 ? 'Era già completata' : 'Erano già completate') : `${data.completate} completate!`), errori.length ? 'err' : 'ok');
     oggiSelezione.clear(); oggiModoMultiplo = false;
+    avvisoNonPronti(data.non_pronti);
     return () => risultati.forEach(r => { if (!r.ok) return; oggiSegnaFatta(oggiVoci().find(x => (r.ordine_fase_id && x.ordine_fase_id === r.ordine_fase_id) || (r.fase_extra_id && x.fase_extra_id === r.fase_extra_id))); });
   }, scelte.map(v => v.voce_id));
 }

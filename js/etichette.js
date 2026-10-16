@@ -177,6 +177,18 @@ const Etichette = (() => {
     distintiva: g => !!(g && ((g.nome && String(g.nome).trim()) || SPEDIZIONE_UNICA.clienti(g).length > 1)),
     chiusura: (codici, g) => 'Si chiude per tutta la spedizione' + (SPEDIZIONE_UNICA.distintiva(g) ? ' (' + SPEDIZIONE_UNICA.etichetta(g) + ')' : '') + ': ' + (codici || []).join(', '),
     chiusa: codici => 'Completata per tutta la spedizione: ' + (codici || []).join(', '),
+    // fasi ancora da fare di un ordine del gruppo: «manca X» / «mancano X, Y e altre N» (al massimo 3 nomi)
+    manca: fasi => {
+      const f = fasi || [];
+      const mostrate = f.slice(0, 3).join(', ');
+      return (f.length > 1 ? 'mancano ' : 'manca ') + mostrate + (f.length > 3 ? ' e altre ' + (f.length - 3) : '');
+    },
+    // operatore: avviso dopo la chiusura; nonPronti = [{ codice, fasi }]
+    nonProntiOperatore: nonPronti => (nonPronti || []).map(x => x.codice + ' non è ancora pronto: ' + SPEDIZIONE_UNICA.manca(x.fasi)),
+    nonProntiTitolo: 'Spedizione chiusa',
+    nonProntiChiudi: 'Ho capito',
+    // responsabile: riga d'avviso sulla card dell'ordine
+    nonProntaRiga: (codice, fasi) => 'Spedizione non pronta: ' + codice + ' — ' + SPEDIZIONE_UNICA.manca(fasi),
   };
   // Clienti da avvisare (responsabile e segreteria)
   const AVVISI = {
