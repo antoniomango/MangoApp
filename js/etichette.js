@@ -96,10 +96,7 @@ const Etichette = (() => {
               modalita_consegna_non_valida: 'Consegna non valida.', ordine_gia_spedito: "L'ordine è già spedito." },
   };
   // Fasi con tempo di presa (incollaggio in pressa / strettoio): il pezzo resta sulla macchina senza l'operatore
-  const _oraBreve = iso => iso ? new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
   const PRESA = {
-    // responsabile: prese già registrate
-    inPressaSu: (macchina, fino) => 'In pressa' + (macchina ? ' su ' + macchina : '') + (fino ? ' fino alle ' + _oraBreve(fino) : ''),
     config: {
       titolo: 'Tempo di presa', minuti: 'Minuti sotto pressa', ordini: 'Ante per pressata',
       spiega: 'Il pezzo resta sulla macchina senza bisogno dell\'operatore. Quante ante stanno in una pressata su questa macchina. Ogni anta occupa la macchina per i minuti di presa divisi per questo numero: più ordini nella stessa pressata si dividono le 2 ore. La fase successiva di ogni ordine parte comunque solo a presa finita.',

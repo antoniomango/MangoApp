@@ -3461,7 +3461,7 @@ function renderOggiResp() {
       <td><div style="font-weight:600">${v.spedizione_unica ? '<i data-ic="pacco"></i> ' + escapeHtml(Etichette.spedizioneUnica.riga(v.spedizione_unica, v.spedizione_unica.ordini.map(x => x.codice))) : escapeHtml(o.cliente || '') + ' — ' + escapeHtml(o.codice || '')}${v.urgente && !v.fatta ? ` <span class="badge" style="background:var(--urgente-bg);color:var(--urgente-ink)" title="${escapeHtml(Etichette.rischioTesto(v.rischio, o.scadenza))}">${Etichette.attesaEsterna.urgente}</span>` : ''}</div>${v.urgente && !v.fatta && v.rischio ? `<div style="font-size:11px;color:var(--urgente-ink)">${escapeHtml(Etichette.rischioTesto(v.rischio, o.scadenza))}</div>` : ''}<div style="font-size:11px;color:var(--muted)">${v.spedizione_unica ? 'un solo passaggio per ' + v.spedizione_unica.ordini.length + ' ordini' : (o.quantita > 1 ? o.quantita + ' pezzi' : '1 pezzo')}${v.macchina ? ' · ' + escapeHtml(v.macchina) + (v.minuti_macchina != null && Math.round(v.minuti_macchina) !== Math.round(v.minuti_stimati) ? ' (occupa ' + _fmtMin(v.minuti_macchina) + ')' : '') : ''}</div>${conFase ? rigaFase(v) : ''}${bl}</td>
       <td style="white-space:nowrap">${v.esterna ? '—' : _fmtMin(v.minuti_stimati)}</td>
       <td style="white-space:nowrap">${v.pezzi ? `${v.pezzi.fatti} di ${v.pezzi.totali}` : ''}</td>
-      <td>${v.fatta ? '<span class="badge" style="background:var(--ok-soft);color:var(--ok-ink)">✓ fatta</span>' : '<span style="color:var(--muted)">da fare</span>'} ${tag(v)}${tagAbbinata(v)}${v.stessa_fase ? `<div style="font-size:11px;color:var(--info-ink);margin-top:3px">${escapeHtml(Etichette.motivoIngressoPiano('stessa_fase'))}</div>` : ''}${v.presa ? `<div style="font-size:11px;color:var(--info-ink);margin-top:3px">${escapeHtml(Etichette.presa.inPressaSu(v.presa.macchina, v.presa.fino))}</div>` : ''}${v.piu_pressate ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">${escapeHtml(Etichette.pressate.fatteResp(v.pressate_fatte || 0))}</div>` : ''}</td>
+      <td>${v.fatta ? '<span class="badge" style="background:var(--ok-soft);color:var(--ok-ink)">✓ fatta</span>' : '<span style="color:var(--muted)">da fare</span>'} ${tag(v)}${tagAbbinata(v)}${v.stessa_fase ? `<div style="font-size:11px;color:var(--info-ink);margin-top:3px">${escapeHtml(Etichette.motivoIngressoPiano('stessa_fase'))}</div>` : ''}${v.piu_pressate ? `<div style="font-size:11px;color:var(--muted);margin-top:3px">${escapeHtml(Etichette.pressate.fatteResp(v.pressate_fatte || 0))}</div>` : ''}</td>
       <td style="text-align:right">${v.fatta ? '' : `<button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="togliDalPiano('${escapeJsAttr(v.voce_id)}')">Togli dal piano</button>`}</td>
     </tr>`;
   };
@@ -5253,9 +5253,6 @@ async function renderDettaglioOrdine(id) {
       const posB = b.fase_id ? (fasi.find(f => f.id === b.fase_id)?.posizione ?? 9999) : 99999;
       return posA - posB;
     });
-    // prese in corso (solo responsabile): macchina e ora di fine, per le fasi di questo ordine
-    const { data: preseRaw } = ordFasi.length ? await sb.from('fase_prese').select('ordine_fase_id, finisce_il, macchine(nome)').in('ordine_fase_id', ordFasi.map(f => f.id)) : { data: [] };
-    const presePerFase = new Map((preseRaw || []).filter(p => new Date(p.finisce_il) > new Date()).map(p => [p.ordine_fase_id, p]));
     fasiEl.innerHTML = (ordFasi || []).map(f => {
       const isCustom = !f.fase_id;
       const nomeFaseRaw = isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id, fasi);
@@ -5271,7 +5268,6 @@ async function renderDettaglioOrdine(id) {
         <div class="fase-nome">${nomeFase}${cnc ? '<span class="badge-cnc">CNC</span>' : ''}${est ? '<span class="badge-esterna">EXT</span>' : ''}${isCustom ? '<span class="badge-cnc" style="background:var(--violet)">EXTRA</span>' : ''}</div>
         <div class="fase-op">${opNome || (f.stato === 'disponibile' ? 'Disponibile' : '')}</div>
         ${!isCustom && fasePiuPressate(f.fase_id) ? `<div class="fase-op" style="margin-top:4px">${escapeHtml(Etichette.pressate.fatteResp(f.pressate_fatte || 0, fasePressatePreviste(f.fase_id)))}</div>` : ''}
-        ${presePerFase.has(f.id) ? `<div class="fase-op" style="margin-top:4px;color:var(--info-ink);font-weight:600">${escapeHtml(Etichette.presa.inPressaSu(presePerFase.get(f.id).macchine?.nome, presePerFase.get(f.id).finisce_il))}</div>` : ''}
         ${f.completata_il ? `<div class="fase-op" style="margin-top:4px;font-size:10px">${formatDateTime(f.completata_il)}</div>` : ''}
       </div>`;
     }).join('');
