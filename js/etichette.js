@@ -189,6 +189,16 @@ const Etichette = (() => {
     nonProntiChiudi: 'Ho capito',
     // responsabile: riga d'avviso sulla card dell'ordine
     nonProntaRiga: (codice, fasi) => 'Spedizione non pronta: ' + codice + ' — ' + SPEDIZIONE_UNICA.manca(fasi),
+    // «Spedito» / «Ritirato» su un ordine di una spedizione unica
+    spedisciTitolo: 'Spedizione unica',
+    spedisciIntro: ritira => 'Questo ordine fa parte di una spedizione unica. Vuoi segnare come ' + (ritira ? 'ritirati' : 'spediti') + ' tutti gli ordini pronti?',
+    spedisciTutti: ritira => ritira ? 'Ritira tutti' : 'Spedisci tutti',
+    spedisciSoloQuesto: 'Solo questo', spedisciAnnulla: 'Annulla',
+    membroPronto: codice => codice + ': pronto',
+    membroNonPronto: (codice, fasi) => codice + ': ' + SPEDIZIONE_UNICA.manca(fasi) + ' (non parte)',
+    riepilogoTutti: (codici, ritira) => (ritira ? 'Ritirati: ' : 'Spediti: ') + (codici || []).join(', '),
+    riepilogoSpediti: (codici, ritira) => (ritira ? 'Ritirati: ' : 'Spediti: ') + (codici || []).join(', '),
+    riepilogoNonSpedito: (codice, fasi, ritira) => codice + (ritira ? ' non ritirato: ' : ' non spedito: ') + SPEDIZIONE_UNICA.manca(fasi),
   };
   // Clienti da avvisare (responsabile e segreteria)
   const AVVISI = {

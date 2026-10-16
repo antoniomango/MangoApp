@@ -2198,16 +2198,19 @@ async function _salvaOnesignalId() {
 
 async function segnaSpedito(ordineId) {
   const ritira = Etichette.ritiraOrdine(ordiniCache.find(o => o.id === ordineId));
-  if (!confirm(ritira ? 'Segnare questo ordine come ritirato?' : 'Segnare questo ordine come spedito?')) return;
-  if (isOnline) {
-    const { data } = await sb.rpc('segna_spedito', { p_ordine_id: ordineId, p_utente_id: currentUser.id, p_session_token: sessionToken });
-    if (!data?.ok) { toast(data?.errore || 'Errore', 'err'); return; }
-    toast(ritira ? 'Ordine ritirato!' : 'Ordine spedito!', 'ok');
-    await loadOrdini();
-    showScreen('home');
-  } else {
-    toast('Non disponibile offline', 'err');
-  }
+  if (!isOnline) { toast('Non disponibile offline', 'err'); return; }
+  const esito = await segnaSpeditoConGruppo({
+    ordineId, ritira,
+    anteprima: async () => (await sb.rpc('anteprima_spedizione_gruppo', { p_ordine_id: ordineId, p_utente_id: currentUser.id, p_session_token: sessionToken })).data,
+    chiama: async tutti => (await sb.rpc('segna_spedito', { p_ordine_id: ordineId, p_utente_id: currentUser.id, p_session_token: sessionToken, ...(tutti ? { p_tutto_gruppo: true } : {}) })).data,
+    confermaSingolo: () => confirm(ritira ? 'Segnare questo ordine come ritirato?' : 'Segnare questo ordine come spedito?')
+  });
+  if (!esito) return;
+  const data = esito.data;
+  if (!data?.ok) { toast(data?.errore || 'Errore', 'err'); return; }
+  if (esito.tutti) riepilogoSpedizioneGruppo(data, ritira); else toast(ritira ? 'Ordine ritirato!' : 'Ordine spedito!', 'ok');
+  await loadOrdini();
+  showScreen('home');
 }
 
 // ═══════════════════════════════════════════════

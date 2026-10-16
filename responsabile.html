@@ -5957,10 +5957,16 @@ async function riattiva(id) {
 
 async function segnaSpedito(id) {
   const ritira = Etichette.ritiraOrdine([...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === id));
-  if (!confirm(ritira ? 'Segnare questo ordine come ritirato? L\'azione è irreversibile.' : 'Segnare questo ordine come spedito? L\'azione è irreversibile.')) return;
-  const { data } = await sb.rpc('segna_spedito', { p_ordine_id: id, p_utente_id: currentUserRow.id });
+  const esito = await segnaSpeditoConGruppo({
+    ordineId: id, ritira,
+    anteprima: async () => (await sb.rpc('anteprima_spedizione_gruppo', { p_ordine_id: id, p_utente_id: currentUserRow.id })).data,
+    chiama: async tutti => (await sb.rpc('segna_spedito', { p_ordine_id: id, p_utente_id: currentUserRow.id, ...(tutti ? { p_tutto_gruppo: true } : {}) })).data,
+    confermaSingolo: () => confirm(ritira ? 'Segnare questo ordine come ritirato? L\'azione è irreversibile.' : 'Segnare questo ordine come spedito? L\'azione è irreversibile.')
+  });
+  if (!esito) return;
+  const data = esito.data;
   if (data?.ok) {
-    toast(ritira ? 'Ordine segnato come ritirato' : 'Ordine segnato come spedito', 'ok');
+    if (esito.tutti) riepilogoSpedizioneGruppo(data, ritira); else toast(ritira ? 'Ordine segnato come ritirato' : 'Ordine segnato come spedito', 'ok');
     await loadOrdini();
     renderDashboard();
     showSection('dashboard');

@@ -77,3 +77,66 @@ function suCambioNomeLogin() {
   showErr('');
   if (window.pinPad) pinPad.azzera();
 }
+
+// Spedizione unica: finestra mostrata prima di segnare «Spedito» / «Ritirato» su un ordine che ha altri membri spedibili.
+// membri = [{ ordine_id, codice, pronto, fasi }] come restituito dal server; risolve 'tutti', 'solo' oppure null (annulla).
+function sceltaSpedizioneGruppo(membri, ritira, ordineId) {
+  return new Promise(resolve => {
+    const E = Etichette.spedizioneUnica;
+    const box = document.createElement('div');
+    box.setAttribute('role', 'dialog');
+    box.style.cssText = 'position:fixed;inset:0;z-index:320;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;padding:16px';
+    const righe = (membri || []).map(m => {
+      const testo = m.pronto ? E.membroPronto(m.codice) : E.membroNonPronto(m.codice, m.fasi);
+      return `<li style="margin:4px 0;${m.pronto ? '' : 'color:var(--warn);font-weight:600'}">${escapeHtml(testo)}${m.ordine_id === ordineId ? ' ←' : ''}</li>`;
+    }).join('');
+    box.innerHTML = `<div style="background:var(--surface);color:inherit;border:1px solid var(--border);border-radius:14px;padding:18px;max-width:440px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,0.3)">`
+      + `<h3 style="margin:0 0 8px;font-size:17px">${escapeHtml(E.spedisciTitolo)}</h3>`
+      + `<p style="margin:0 0 8px;font-size:14px">${escapeHtml(E.spedisciIntro(ritira))}</p>`
+      + `<ul style="margin:0 0 12px;padding-left:20px;font-size:14px">${righe}</ul>`
+      + `<div style="display:flex;flex-direction:column;gap:8px">`
+      + `<button type="button" class="btn btn-ok" data-sc="tutti" style="padding:12px;font-size:15px">${escapeHtml(E.spedisciTutti(ritira))}</button>`
+      + `<button type="button" class="btn btn-secondary" data-sc="solo" style="padding:12px;font-size:15px">${escapeHtml(E.spedisciSoloQuesto)}</button>`
+      + `<button type="button" class="btn btn-secondary" data-sc="annulla" style="padding:10px;font-size:14px">${escapeHtml(E.spedisciAnnulla)}</button>`
+      + `</div></div>`;
+    box.addEventListener('click', ev => {
+      const sc = ev.target.closest && ev.target.closest('[data-sc]')?.dataset.sc;
+      if (!sc) return;
+      box.remove();
+      resolve(sc === 'tutti' ? 'tutti' : sc === 'solo' ? 'solo' : null);
+    });
+    document.body.appendChild(box);
+  });
+}
+
+// Riepilogo dopo «Spedisci tutti»: se qualche ordine non è partito resta a schermo finché lo si chiude, altrimenti un messaggio breve.
+function riepilogoSpedizioneGruppo(data, ritira) {
+  const E = Etichette.spedizioneUnica;
+  const spediti = data?.spediti || [], non = data?.non_spediti || [];
+  if (!non.length) { toast(E.riepilogoTutti(spediti, ritira), 'ok'); return; }
+  const box = document.createElement('div');
+  box.setAttribute('role', 'alertdialog');
+  box.style.cssText = 'position:fixed;inset:0;z-index:320;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;padding:16px';
+  box.innerHTML = `<div style="background:var(--surface);color:inherit;border:2px solid var(--warn);border-radius:14px;padding:18px;max-width:440px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,0.3)">`
+    + `<h3 style="margin:0 0 8px;font-size:17px;color:var(--warn)">${escapeHtml(E.spedisciTitolo)}</h3>`
+    + (spediti.length ? `<p style="margin:6px 0;font-size:14px">${escapeHtml(E.riepilogoSpediti(spediti, ritira))}</p>` : '')
+    + non.map(x => `<p style="margin:6px 0;font-size:14px;font-weight:600">${escapeHtml(E.riepilogoNonSpedito(x.codice, x.fasi, ritira))}</p>`).join('')
+    + `<button type="button" class="btn btn-ok" style="margin-top:10px;width:100%;padding:12px;font-size:15px">${escapeHtml(E.nonProntiChiudi)}</button></div>`;
+  box.querySelector('button').onclick = () => box.remove();
+  document.body.appendChild(box);
+}
+
+// Flusso comune del pulsante «Spedito»: anteprima dal server, scelta tutti/solo questo, chiamata. `chiama(tuttoGruppo)` esegue segna_spedito e restituisce { data }.
+// Restituisce { ok, eseguito, data } oppure null se annullato. Se non c'è un gruppo con altri membri spedibili usa `confermaSingolo()` (conferma classica).
+async function segnaSpeditoConGruppo({ ordineId, ritira, anteprima, chiama, confermaSingolo }) {
+  let membri = [];
+  try { const r = await anteprima(); if (r?.ok && Array.isArray(r.membri)) membri = r.membri; } catch (e) { console.warn('anteprima spedizione', e); }
+  if (membri.length > 1) {
+    const scelta = await sceltaSpedizioneGruppo(membri, ritira, ordineId);
+    if (!scelta) return null;
+    const data = await chiama(scelta === 'tutti');
+    return { tutti: scelta === 'tutti', data };
+  }
+  if (!confermaSingolo()) return null;
+  return { tutti: false, data: await chiama(false) };
+}
