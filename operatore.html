@@ -22,7 +22,6 @@
 <script src="js/icone.js" defer></script>
 <script src="js/pin-pad.js"></script>
 <script src="js/regole-pin.js"></script>
-<script src="js/accesso.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js" integrity="sha384-JBR+x8blGwjDRO63aHCGiZMD4VNiTR4ZUGA+N6ZKLf3zNt1fK8IBpcgPaMrxqWBp" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="css/tema.css">
 <style>
@@ -555,6 +554,8 @@ textarea:focus { border-color: var(--accent); }
 
 <script src="js/config.deploy.js"></script>
 <script src="js/config.js"></script>
+<script src="js/comune.js"></script>
+<script src="js/accesso.js"></script>
 <script src="js/etichette.js"></script>
 <script src="js/calendario.js"></script>
 <script>
@@ -600,7 +601,7 @@ let orarioConfig = null;   // solo per l'orario di fine turno (timer di aggiorna
 // - QUEUE_STALE_MS: azioni offline non ancora confermate (lavoro reale dell'operatore) — mai
 //   scartate solo per l'età, solo se hanno ANCHE fallito almeno una sincronizzazione reale
 //   (fase non più disponibile, completata da altri, ecc. — lo stesso genere di guardia server-
-//   side già verificata in prendi_in_carico_fase/completa_fase). Senza questo, una voce che
+//   side già verificata in completa_fase). Senza questo, una voce che
 //   fallisce sempre allo stesso modo (es. fase già presa in carico da un collega mentre si era
 //   offline) restava in coda per sempre, ritentata ad ogni sync, senza che l'operatore lo sapesse.
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -887,8 +888,7 @@ async function loadLoginUsers() {
 }
 
 async function caricaElencoLogin() {
-  const { data } = await sb.rpc('lista_operatori_login', { p_solo_sola_lettura: false, ...MangoAccesso.parametri() });
-  const users = data || [];
+  const users = await MangoAccesso.elencoLogin(sb, false);
   await cacheSet('users-login', users);
   disegnaElencoLogin(users);
 }
@@ -898,9 +898,6 @@ function disegnaElencoLogin(users) {
   sel.innerHTML = '<option value="">— Scegli il tuo nome —</option>' + users.map(u => `<option value="${u.id}">${escapeHtml(u.cognome)} ${escapeHtml(u.nome)} (${u.ruolo === 'sola_lettura' ? 'Sola lettura' : 'Operatore'})</option>`).join('');
 }
 
-// Messaggio d'errore di verifica_pin in forma leggibile: usa il testo del server se c'è
-// (troppi tentativi), aggiunge l'orario di sblocco, altrimenti traduce il codice.
-function messaggioErrorePin(data) { return MangoAccesso.messaggio(data); }
 
 // Chiamata dal tastierino (js/pin-pad.js) alla quarta cifra. Restituisce l'esito al componente
 // (che azzera il PIN, scuote i pallini o blocca il tastierino fino a bloccato_fino).
@@ -913,11 +910,7 @@ async function doLoginPin(pin) {
   if (isOnline) {
     // accesso dal server: telefono approvato, PIN, eventuale cambio PIN obbligatorio (4 → 6 cifre)
     const esito = await MangoAccesso.accedi(sb, userId, pin);
-    if (!esito.ok) {
-      if (['dispositivo_non_approvato', 'pin_da_reimpostare'].includes(esito.data?.errore)) preparaLoginDispositivo();   // ricontrolla: può essere aperta la scelta del PIN
-      if (esito.data?.errore !== 'annullato') showErr(messaggioErrorePin(esito.data));
-      return { ok: false, bloccatoFino: esito.data?.bloccato_fino || null };
-    }
+    if (!esito.ok) return MangoAccesso.esitoNegativo(esito, showErr, preparaLoginDispositivo);
     await concludiLoginOnline(userId, esito.data, esito.pin);   // pin: il nuovo, se è stato appena cambiato o scelto
     return { ok: true };
   } else {
@@ -946,18 +939,12 @@ async function concludiLoginOnline(userId, data, pin) {
 function entraNellApp() {
   if (currentUser?.ruolo === 'sola_lettura') {
     // La vista ufficio non gestisce push: l'alias segreto non va salvato
-    const { push_alias: _nonSalvato, ...utenteUfficio } = currentUser;
+    const utenteUfficio = MangoAccesso.utenteSenzaAlias(currentUser);
     localStorage.setItem('ufficio-user', JSON.stringify(utenteUfficio));
     window.location.href = 'ufficio.html';
     return;
   }
   showApp();
-}
-
-// Cambio nome: PIN azzerato e messaggio pulito.
-function suCambioNomeLogin() {
-  showErr('');
-  if (window.pinPad) pinPad.azzera();
 }
 
 function toggleProfilo(forza) {
@@ -970,10 +957,6 @@ document.addEventListener('click', e => {
   const p = document.getElementById('pannello-profilo');
   if (p && !p.hidden && !p.contains(e.target) && !e.target.closest('#user-chip')) toggleProfilo(false);
 });
-
-function showErr(msg) {
-  document.getElementById('login-err').textContent = msg;
-}
 
 // ═══════════════════════════════════════════════
 // APP INIT
@@ -1244,13 +1227,6 @@ async function renderHome() {
 
 // Spedizione unica: codici degli altri ordini nello stesso gruppo, da ordiniCache già in cache
 // (nessuna query aggiuntiva) — stessa logica di responsabile.html.
-function codiciFratelliGruppo(o) {
-  if (!o.gruppo_spedizione_id) return [];
-  return ordiniCache
-    .filter(x => x.gruppo_spedizione_id === o.gruppo_spedizione_id && x.id !== o.id)
-    .map(x => x.codice || '—');
-}
-
 // ═══════════════════════════════════════════════
 // SPEDIZIONE MULTIPLA (Home) — seleziona più ordini "in attesa corriere" e spedisci in blocco
 // ═══════════════════════════════════════════════
@@ -1409,7 +1385,7 @@ function filtraOrdini() {
     if (!isAttesa && !isSosp && stima?.isInRitardo) {
       stimaBadge = `<span style="font-size:11px;font-weight:700;color:var(--alert-strong)"><i data-ic="punto"></i> IN RITARDO</span>`;
     }
-    const fratelliGruppo = codiciFratelliGruppo(o);
+    const fratelliGruppo = codiciFratelliGruppo(o, ordiniCache);
     const badgeGruppo = fratelliGruppo.length
       ? `<div style="margin-top:2px;font-size:11px;color:var(--accent);font-weight:600"><i data-ic="pacco"></i> Spedizione unica con ${escapeHtml(fratelliGruppo.join(', '))}</div>`
       : '';
@@ -1463,7 +1439,7 @@ async function renderOrdineDetail(ordineId) {
   document.getElementById('ord-det-title').textContent = `${ordine.cliente} — ${ordine.codice || ''}`;
   const oggi = Calendario.oggiIso();
   const isLate = ordine.scadenza && ordine.scadenza < oggi;
-  const fratelliGruppoDet = codiciFratelliGruppo(ordine);
+  const fratelliGruppoDet = codiciFratelliGruppo(ordine, ordiniCache);
   document.getElementById('ord-det-meta').innerHTML = `
     <div class="meta-item"><label>Struttura</label><span>${strutturaLabel(ordine.struttura)}</span></div>
     <div class="meta-item"><label>Tipo</label><span>${tipoProdLabel(ordine.tipo_prodotto)}</span></div>
@@ -1572,7 +1548,7 @@ async function renderOrdineDetail(ordineId) {
 
     el.innerHTML = ordFasi.map(f => {
       const isCustom = !f.fase_id;
-      const nomeFase = escapeHtml(isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id));
+      const nomeFase = escapeHtml(isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id, fasi));
       const est = !isCustom && isEsterna(f.fase_id);
       const cnc = !isCustom && isCNC(f.fase_id);
       // Calcola se fase è bloccata da dipendenze non soddisfatte (tiene conto della soglia quantità)
@@ -1850,7 +1826,7 @@ async function renderFaseDetail(ordFaseId, ordineId) {
   _faseDetCorrente = f; // usata da completaFase() per il dialog "spedizione unica"
   const ordine = ordiniCache.find(o => o.id === ordineId);
   const isCustom = !f.fase_id;
-  const nomeFase = isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id);
+  const nomeFase = isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id, fasi);
   const numLabel = isCustom ? '★' : f.fase_id;
 
   const banner = document.getElementById('fase-ordine-banner');
@@ -2209,13 +2185,6 @@ async function _salvaOnesignalId() {
       _debug('ERRORE: subscription ID mai disponibile');
     }
   } catch(e) { _debug('ECCEZIONE: ' + e.message); }
-}
-
-async function inviaNotificaPush(destinatarioId, titolo, messaggio) {
-  if (!isOnline) return;
-  try {
-    await sb.functions.invoke('send-push', { body: { destinatario_id: destinatarioId, messaggio } });
-  } catch(e) { console.warn('Push notification:', e); }
 }
 
 async function segnaSpedito(ordineId) {
@@ -2966,23 +2935,6 @@ async function riceviConferma(chiave) {
   _oggiRender();
 }
 
-// ═══════════════════════════════════════════════
-// UTILITIES
-// ═══════════════════════════════════════════════
-function escapeHtml(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-// Per valori di testo libero (nomi operatori, nomi fase) usati come argomento dentro
-// onclick="fn('${...}')": escapeHtml da solo non basta -- un apice singolo nel dato (es.
-// un cognome come "D'Angelo") termina prematuramente la stringa JS letterale nell'attributo,
-// un vettore di injection reale, non solo un problema di rendering. La decodifica HTML degli
-// attributi avviene PRIMA che il motore JS interpreti il codice dell'handler, quindi un
-// entity HTML (&#39;) non protegge: l'apice va neutralizzato a livello di stringa JS (\'),
-// non a livello di entity HTML. Scoperto nel giro sicurezza del 2026-09-09 (vedi vault).
-function escapeJsAttr(str) {
-  return escapeHtml(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-}
-
 // Note scritte in fase di inserimento ordine (ordini.note_generali), visibili in ogni fase
 // dell'ordine — l'operatore lavora dentro la fase, se la nota sta solo nella schermata
 // dell'ordine non la legge. Unica eccezione al principio dei tre stati espliciti: qui
@@ -3015,10 +2967,6 @@ const tipoProdLabel = (t) => Etichette.tipoProdotto(t);
 const prioLabel = (p) => Etichette.prioritaEtichetta(p);
 const statoFaseLabel = (s) => Etichette.statoFase(s);
 
-function getFaseNome(faseId) {
-  const f = fasi.find(x => x.id === faseId);
-  return f ? f.nome : `Fase ${faseId}`;
-}
 // Proprietà di fase lette dalla configurazione (fasi.e_cnc, fasi.e_attesa_esterna, fasi.gruppo_spedizione)
 const isCNC = (id) => fasi.find(f => f.id === id)?.e_cnc === true;
 const isEsterna = (id) => fasi.find(f => f.id === id)?.e_attesa_esterna === true;
@@ -3046,15 +2994,6 @@ function chiediUltimaPressata() {
     vela.querySelector('[data-r="si"]')?.focus();
   });
 }
-function scadenzaClass(scadenza) {
-  if (!scadenza) return '';
-  const oggi = new Date(); oggi.setHours(0,0,0,0);
-  const diff = Math.floor((new Date(scadenza) - oggi) / 86400000);
-  if (diff < 0) return 'scad-danger';
-  if (diff <= 3) return 'scad-warning';
-  if (diff <= 7) return 'scad-ok';
-  return '';
-}
 function scadenzaLabel(scadenza) {
   if (!scadenza) return '';
   const cls = scadenzaClass(scadenza);
@@ -3066,8 +3005,6 @@ function scadenzaLabel(scadenza) {
   const colore = cls === 'scad-danger' ? 'var(--alert-strong)' : 'var(--warn-strong)';
   return `<span style="font-size:11px;font-weight:600;color:${colore}">Scad. ${testo}${extra}</span>`;
 }
-function formatDate(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
-function formatDateTime(d) { if (!d) return '—'; return new Date(d).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
 
 function scheduleEndOfShiftRefreshOp() {
   if (!orarioConfig?.ora_fine) return;
@@ -3127,7 +3064,7 @@ function renderNotificheOp() {
       <div style="font-size:20px;flex-shrink:0">${icone[n.tipo] || '<i data-ic="campana"></i>'}</div>
       <div style="flex:1">
         <div style="font-size:13px;${n.letta ? 'color:var(--muted)' : 'font-weight:600'}">${escapeHtml(n.testo)}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:3px">${formatDateTime(n.creata_il)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">${formatDateTime(n.creata_il, false)}</div>
       </div>
     </div>`).join('');
 }
@@ -3146,13 +3083,6 @@ async function segnaNotificheLetteOp() {
   await loadNotificheOp();
   renderNotificheOp();
   toast('Tutte le notifiche segnate come lette', 'ok');
-}
-
-function toast(msg, type = '') {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = 'toast show' + (type ? ' ' + type : '');
-  setTimeout(() => { el.className = 'toast'; }, 3200);
 }
 
 // ═══════════════════════════════════════════════

@@ -22,7 +22,6 @@
 <script src="js/icone.js" defer></script>
 <script src="js/pin-pad.js"></script>
 <script src="js/regole-pin.js"></script>
-<script src="js/accesso.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js" integrity="sha384-JBR+x8blGwjDRO63aHCGiZMD4VNiTR4ZUGA+N6ZKLf3zNt1fK8IBpcgPaMrxqWBp" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="css/tema.css">
 <style>
@@ -273,6 +272,8 @@ header {
 
 <script src="js/config.deploy.js"></script>
 <script src="js/config.js"></script>
+<script src="js/comune.js"></script>
+<script src="js/accesso.js"></script>
 <script src="js/etichette.js"></script>
 <script src="js/calendario.js"></script>
 <script>
@@ -359,34 +360,22 @@ function preparaLoginDispositivo() {
 }
 
 async function caricaElencoLogin() {
-  const { data } = await sb.rpc('lista_operatori_login', { p_solo_sola_lettura: true, ...MangoAccesso.parametri() });
+  const data = await MangoAccesso.elencoLogin(sb, true);
   const sel = document.getElementById('login-user-select');
   sel.innerHTML = '<option value="">— Seleziona —</option>' +
-    (data || []).map(u => `<option value="${u.id}">${esc(u.cognome)} ${esc(u.nome)}</option>`).join('');
+    (data || []).map(u => `<option value="${u.id}">${escapeHtml(u.cognome)} ${escapeHtml(u.nome)}</option>`).join('');
 }
 
-// Messaggio d'errore di verifica_pin in forma leggibile (stesso criterio di operatore.html).
-function messaggioErrorePin(data) { return MangoAccesso.messaggio(data); }
-
-function suCambioNomeLogin() {
-  showErr('');
-  if (window.pinPad) pinPad.azzera();
-}
 
 // Chiamata dal tastierino (js/pin-pad.js) alla quarta cifra; restituisce l'esito al componente.
 async function doLogin(pin) {
-  const userId = document.getElementById('login-user-select').value;
-  if (!userId) { showErr('Seleziona il tuo nome'); return { ok: false }; }
-  if (typeof pin !== 'string' || pin.length < 4 || pin.length > 6) { showErr('PIN incompleto'); return { ok: false }; }
-  showErr('');
-
   // accesso dal server: dispositivo approvato, PIN, eventuale cambio PIN obbligatorio (4 → 6 cifre)
-  const esito = await MangoAccesso.accedi(sb, userId, pin);
-  if (!esito.ok) {
-    if (['dispositivo_non_approvato', 'pin_da_reimpostare'].includes(esito.data?.errore)) preparaLoginDispositivo();   // ricontrolla: può essere aperta la scelta del PIN
-    if (esito.data?.errore !== 'annullato') showErr(messaggioErrorePin(esito.data));
-    return { ok: false, bloccatoFino: esito.data?.bloccato_fino || null };
-  }
+  const esito = await MangoAccesso.tentaAccesso({
+    sb, userId: document.getElementById('login-user-select').value, pin,
+    testi: { nomeMancante: 'Seleziona il tuo nome', pinIncompleto: 'PIN incompleto' },
+    mostraErrore: showErr, ricontrolla: preparaLoginDispositivo,
+  });
+  if (!esito.ok) return esito;
   await concludiLogin(esito.data);
   return { ok: true };
 }
@@ -394,8 +383,7 @@ async function doLogin(pin) {
 async function concludiLogin(data) {
 
   // La vista ufficio non gestisce push: l'alias push segreto restituito da verifica_pin non si conserva
-  const { push_alias: _nonSalvato, ...utente } = data.user || {};
-  currentUser = utente;
+  currentUser = MangoAccesso.utenteSenzaAlias(data.user);
   sessionToken = data.session_token || null;
   localStorage.setItem('ufficio-user', JSON.stringify(currentUser));
   if (sessionToken) localStorage.setItem('ufficio-session-token', sessionToken);
@@ -415,7 +403,6 @@ function mostraApp() {
   }
 }
 
-function showErr(msg) { document.getElementById('login-err').textContent = msg; }
 
 function doLogout() {
   clearInterval(refreshTimer);
@@ -506,16 +493,16 @@ function tornaListaDaAvvisi() { nascondiViste(); document.getElementById('lista-
 async function mostraStoricoDaAvvisi() { nascondiViste(); await mostraStorico(); }
 function avvisoCardHtml(x, conAzioni) {
   const A = Etichette.avvisi;
-  const codici = (x.ordini || []).map(o => esc(o.codice || '—')).join(', ');
+  const codici = (x.ordini || []).map(o => escapeHtml(o.codice || '—')).join(', ');
   const stato = conAzioni
-    ? `<div class="avviso-stato ${x.stato_avviso === 'avvisato' ? 'avvisato' : ''}">${esc(A.riga(x))}</div>`
-    : `<div class="avviso-stato avvisato">${esc(A.azioni[x.risposta] || '')}${x.avvisato_da ? ' · registrato da ' + esc(x.avvisato_da) : ''}</div>`;
-  const bottone = (esito, primario) => `<button type="button" class="${primario ? 'primario' : ''}" ${avvisiInCorso ? 'disabled' : ''} onclick="registraAvviso('${esc(x.ordine_id)}','${esito}')">${esc(A.azioni[esito])}</button>`;
+    ? `<div class="avviso-stato ${x.stato_avviso === 'avvisato' ? 'avvisato' : ''}">${escapeHtml(A.riga(x))}</div>`
+    : `<div class="avviso-stato avvisato">${escapeHtml(A.azioni[x.risposta] || '')}${x.avvisato_da ? ' · registrato da ' + escapeHtml(x.avvisato_da) : ''}</div>`;
+  const bottone = (esito, primario) => `<button type="button" class="${primario ? 'primario' : ''}" ${avvisiInCorso ? 'disabled' : ''} onclick="registraAvviso('${escapeHtml(x.ordine_id)}','${esito}')">${escapeHtml(A.azioni[esito])}</button>`;
   const azioni = conAzioni
     ? bottone('con_pedana', true) + bottone('senza_pedana', false) + (x.stato_avviso === 'avvisato' ? '' : bottone('avvisato', false))
     : (x.risposta === 'con_pedana' ? bottone('senza_pedana', false) : bottone('con_pedana', false));
   return `<div class="avviso-card">
-    <div class="avviso-cliente">${esc(x.cliente)}</div>
+    <div class="avviso-cliente">${escapeHtml(x.cliente)}</div>
     <div class="avviso-codici">${codici}</div>
     <div class="avviso-codici">Spedizione prevista: ${x.scadenza ? formatData(x.scadenza) : '—'}</div>
     ${stato}
@@ -526,8 +513,8 @@ function renderAvvisi() {
   const A = Etichette.avvisi, el = document.getElementById('avvisi-content');
   if (!avvisiDati) { el.innerHTML = '<div class="empty">Non hai il permesso di vedere questa sezione.</div>'; return; }
   const da = avvisiDati.da_avvisare || [], ris = avvisiDati.risposte || [];
-  el.innerHTML = (da.length ? da.map(x => avvisoCardHtml(x, true)).join('') : `<div class="empty">${esc(A.vuoto)}</div>`)
-    + (ris.length ? `<div class="avviso-sezione">${esc(A.risposteTitolo)}</div>` + ris.map(x => avvisoCardHtml(x, false)).join('') : '');
+  el.innerHTML = (da.length ? da.map(x => avvisoCardHtml(x, true)).join('') : `<div class="empty">${escapeHtml(A.vuoto)}</div>`)
+    + (ris.length ? `<div class="avviso-sezione">${escapeHtml(A.risposteTitolo)}</div>` + ris.map(x => avvisoCardHtml(x, false)).join('') : '');
 }
 async function registraAvviso(ordineId, esito) {
   if (avvisiInCorso) return;
@@ -561,7 +548,7 @@ function renderLista() {
 
   if (!filtrati.length) {
     el.innerHTML = searchQuery
-      ? `<div class="empty">Nessun ordine trovato per "<strong>${esc(searchQuery)}</strong>"</div>`
+      ? `<div class="empty">Nessun ordine trovato per "<strong>${escapeHtml(searchQuery)}</strong>"</div>`
       : '<div class="empty">✓ Nessun ordine attivo in questo momento</div>';
     return;
   }
@@ -576,7 +563,7 @@ function renderLista() {
   const labelQ = filtrati.length !== 1
     ? (searchQuery ? 'ordini trovati' : 'ordini attivi')
     : (searchQuery ? 'ordine trovato' : 'ordine attivo');
-  const intestazione = `<div class="data-oggi"><i data-ic="calendario"></i> <strong>${esc(oggiLabel.charAt(0).toUpperCase()+oggiLabel.slice(1))}</strong> <span>— ${filtrati.length} ${labelQ}</span></div>`;
+  const intestazione = `<div class="data-oggi"><i data-ic="calendario"></i> <strong>${escapeHtml(oggiLabel.charAt(0).toUpperCase()+oggiLabel.slice(1))}</strong> <span>— ${filtrati.length} ${labelQ}</span></div>`;
 
   el.innerHTML = intestazione + filtrati.map(o => cardHtml(o, fasiMap, fasiExtraMap, oggi)).join('');
 }
@@ -608,10 +595,10 @@ function cardHtml(o, fasiMap, fasiExtraMap, oggi) {
       const mPct  = Math.round(mComp / mAppl.length * 100);
       return `<div class="macro-row">
         <div class="macro-lbl">
-          <span style="color:${esc(m.colore)}">${esc(m.nome)}</span>
+          <span style="color:${escapeHtml(m.colore)}">${escapeHtml(m.nome)}</span>
           <span class="macro-lbl-pct">${mComp}/${mAppl.length} — ${mPct}%</span>
         </div>
-        <div class="macro-track"><div class="macro-fill" style="width:${mPct}%;background:${esc(m.colore)}"></div></div>
+        <div class="macro-track"><div class="macro-fill" style="width:${mPct}%;background:${escapeHtml(m.colore)}"></div></div>
       </div>`;
     }).join('') : '';
   }
@@ -627,11 +614,11 @@ function cardHtml(o, fasiMap, fasiExtraMap, oggi) {
     ? `<span class="scad ${inRitardo ? 'late' : ''}">Consegna: <strong>${formatData(o.scadenza)}</strong>${inRitardo ? ' <i data-ic="avviso"></i> In ritardo' : ''}</span>`
     : `<span class="scad">Nessuna data di consegna</span>`;
 
-  return `<div class="ord-card ${isAttesa ? 'attesa' : inRitardo ? 'ritardo' : ''}" onclick="apriDettaglio('${esc(o.id)}')">
+  return `<div class="ord-card ${isAttesa ? 'attesa' : inRitardo ? 'ritardo' : ''}" onclick="apriDettaglio('${escapeHtml(o.id)}')">
     <div class="ord-hdr">
       <div>
-        <div class="ord-cliente">${esc(o.cliente)}</div>
-        <div class="ord-codice">${esc(o.codice || '—')}</div>
+        <div class="ord-cliente">${escapeHtml(o.cliente)}</div>
+        <div class="ord-codice">${escapeHtml(o.codice || '—')}</div>
       </div>
       <div class="ord-pct ${pct===100?'done':''}">${pct}%</div>
     </div>
@@ -694,12 +681,12 @@ function renderStorico() {
 
   if (!filtrati.length) {
     el.innerHTML = storicoQuery
-      ? `<div class="empty">Nessun ordine trovato per "<strong>${esc(storicoQuery)}</strong>"</div>`
+      ? `<div class="empty">Nessun ordine trovato per "<strong>${escapeHtml(storicoQuery)}</strong>"</div>`
       : `<div class="empty">Nessun ordine spedito nel ${anno}</div>`;
     return;
   }
 
-  const intestazione = `<div class="data-oggi"><i data-ic="pacco"></i> <strong>${filtrati.length} ${filtrati.length !== 1 ? 'ordini' : 'ordine'} spediti nel ${anno}</strong>${storicoQuery ? ` <span>— filtro: "${esc(storicoQuery)}"</span>` : ''}</div>`;
+  const intestazione = `<div class="data-oggi"><i data-ic="pacco"></i> <strong>${filtrati.length} ${filtrati.length !== 1 ? 'ordini' : 'ordine'} spediti nel ${anno}</strong>${storicoQuery ? ` <span>— filtro: "${escapeHtml(storicoQuery)}"</span>` : ''}</div>`;
   el.innerHTML = intestazione + filtrati.map(o => storCardHtml(o)).join('');
 }
 
@@ -708,18 +695,18 @@ function storCardHtml(o) {
   const isExtra = o.tipo === 'extra';
   const dettagli = [o.tipo_prodotto ? Etichette.tipoProdotto(o.tipo_prodotto) : null, o.struttura ? Etichette.struttura(o.struttura) : null, Etichette.attributiLato().length ? Etichette.attributiLato().map(a => Etichette.riepilogoLato(o, a.chiave)).filter(x => x && x !== '—').join(' · ') || null : null]
     .filter(Boolean).join(' · ');
-  return `<div class="stor-card" onclick="apriDettaglioStorico('${esc(o.id)}')">
+  return `<div class="stor-card" onclick="apriDettaglioStorico('${escapeHtml(o.id)}')">
     <div class="stor-hdr">
       <div>
-        <div class="ord-cliente">${esc(o.cliente)}</div>
-        <div class="ord-codice">${esc(o.codice || '—')}</div>
+        <div class="ord-cliente">${escapeHtml(o.cliente)}</div>
+        <div class="ord-codice">${escapeHtml(o.codice || '—')}</div>
       </div>
       <div class="stor-data">${formatDataCompleta(dataSpedizione)}</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <span class="badge badge-spedito">✓ ${Etichette.azioneSpedito(o)}</span>
       ${isExtra ? '<span class="badge badge-extra">Extra</span>' : ''}
-      ${dettagli ? `<span style="font-size:11px;color:var(--muted)">${esc(dettagli)}</span>` : ''}
+      ${dettagli ? `<span style="font-size:11px;color:var(--muted)">${escapeHtml(dettagli)}</span>` : ''}
     </div>
   </div>`;
 }
@@ -803,8 +790,8 @@ function renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine, stats) {
 
   const metaHtml = metaItems.map(([lbl, val]) => `
     <div class="detail-meta-item">
-      <span class="detail-meta-label">${esc(lbl)}</span>
-      <span class="detail-meta-value">${esc(val)}</span>
+      <span class="detail-meta-label">${escapeHtml(lbl)}</span>
+      <span class="detail-meta-value">${escapeHtml(val)}</span>
     </div>`).join('');
 
   let fasiHtml = '';
@@ -826,9 +813,9 @@ function renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine, stats) {
         const comp = appl.filter(f => f.stato === 'completata').length;
         const mPct = appl.length ? Math.round(comp / appl.length * 100) : 0;
         return `<div class="detail-card">
-          <div class="detail-section-title" style="color:${esc(m.colore)}">${esc(m.nome)} — ${comp}/${appl.length} (${mPct}%)</div>
+          <div class="detail-section-title" style="color:${escapeHtml(m.colore)}">${escapeHtml(m.nome)} — ${comp}/${appl.length} (${mPct}%)</div>
           <div class="macro-row" style="margin-bottom:14px">
-            <div class="macro-track"><div class="macro-fill" style="width:${mPct}%;background:${esc(m.colore)}"></div></div>
+            <div class="macro-track"><div class="macro-fill" style="width:${mPct}%;background:${escapeHtml(m.colore)}"></div></div>
           </div>
           ${mFasi.map(f => faseRowHtml(f)).join('')}
         </div>`;
@@ -854,8 +841,8 @@ function renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine, stats) {
 
   document.getElementById('detail-content').innerHTML = `
     <div class="detail-card">
-      <div class="detail-cliente">${esc(o.cliente)}</div>
-      <div class="detail-codice">${esc(o.codice || '—')}</div>
+      <div class="detail-cliente">${escapeHtml(o.cliente)}</div>
+      <div class="detail-codice">${escapeHtml(o.codice || '—')}</div>
       <div class="ord-info" style="margin-bottom:16px">${statoBadge}${extraBadge}</div>
       <div class="detail-meta">${metaHtml}</div>
     </div>
@@ -874,7 +861,7 @@ function faseRowHtml(f) {
   const badgeClass = `badge badge-fase-${f.stato}`;
   const statoLabel = Etichette.statoFase(f.stato);
   return `<div class="fase-row">
-    <span class="fase-nome">${esc(nome)}</span>
+    <span class="fase-nome">${escapeHtml(nome)}</span>
     <span class="${badgeClass}">${statoLabel}</span>
   </div>`;
 }
@@ -883,7 +870,7 @@ function fasextraRowHtml(f) {
   const badgeClass = `badge badge-fase-${f.stato}`;
   const statoLabel = Etichette.statoFase(f.stato);
   return `<div class="fase-row">
-    <span class="fase-nome">${esc(f.nome || `Fase ${f.numero}`)}</span>
+    <span class="fase-nome">${escapeHtml(f.nome || `Fase ${f.numero}`)}</span>
     <span class="${badgeClass}">${statoLabel}</span>
   </div>`;
 }
@@ -908,20 +895,6 @@ function formatDataCompleta(ts) {
   if (!ts) return '';
   return new Date(ts).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
 }
-function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-// Alias per coerenza con operatore.html/responsabile.html (pentest ChatGPT, 2026-09-15): quei
-// due file definiscono escapeHtml() con lo stesso identico escaping di esc() qui sopra --
-// nessuna doppia implementazione, solo due nomi storicamente diversi per la stessa cosa.
-// Nessun caso concretamente sfruttabile trovato nei punti che usano innerHTML in questo file
-// (esc() già copre tutti), ma il file crescerà -- meglio avere qui la stessa rete di sicurezza.
-function escapeHtml(str) { return esc(str); }
-// Per testo libero (nomi operatore/cliente) usato come argomento dentro onclick="fn('${...}')":
-// escapeHtml/esc da solo non basta, un apice singolo nel dato termina prematuramente la
-// stringa JS letterale nell'attributo -- vedi il commento gemello in operatore.html.
-function escapeJsAttr(str) { return escapeHtml(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'"); }
 
 init();
 </script>

@@ -1,4 +1,4 @@
-// js/accesso.js — telefono autorizzato, scelta del PIN e cambio PIN obbligatorio (operatore.html, ufficio.html).
+// js/accesso.js — telefono autorizzato, scelta del PIN e cambio PIN obbligatorio (operatore.html, ufficio.html, schermo.html).
 //
 // Script classico, nessuna libreria; DOM costruito solo con createElement + textContent.
 // Ogni telefono (o PC) ha un segreto casuale salvato in localStorage; il server ne conserva solo l'impronta.
@@ -228,5 +228,37 @@
     return { ok: false, data: data || { errore: 'pin_errato' } };
   }
 
-  window.MangoAccesso = { parametri: parametri, assicura: assicura, preparaLogin: preparaLogin, accedi: accedi, messaggio: messaggio };
+  // Esito negativo di accedi(): ricontrolla il dispositivo se serve, mostra il messaggio, restituisce l'esito al tastierino
+  function esitoNegativo(esito, mostraErrore, ricontrolla) {
+    var errore = esito.data && esito.data.errore;
+    if (errore === 'dispositivo_non_approvato' || errore === 'pin_da_reimpostare') ricontrolla();   // può essere aperta la scelta del PIN
+    if (errore !== 'annullato') mostraErrore(messaggio(esito.data));
+    return { ok: false, bloccatoFino: (esito.data && esito.data.bloccato_fino) || null };
+  }
+
+  // Tentativo dal tastierino per le viste a sola lettura: controlli su nome e PIN, accesso, esito.
+  // o: { sb, userId, pin, testi: { nomeMancante, pinIncompleto }, mostraErrore, ricontrolla } → { ok: true, data } | { ok: false, bloccatoFino }
+  async function tentaAccesso(o) {
+    if (!o.userId) { o.mostraErrore(o.testi.nomeMancante); return { ok: false }; }
+    if (typeof o.pin !== 'string' || o.pin.length < 4 || o.pin.length > 6) { o.mostraErrore(o.testi.pinIncompleto); return { ok: false }; }
+    o.mostraErrore('');
+    var esito = await accedi(o.sb, o.userId, o.pin);
+    if (!esito.ok) return esitoNegativo(esito, o.mostraErrore, o.ricontrolla);
+    return { ok: true, data: esito.data };
+  }
+
+  // Elenco dei nomi per la schermata di accesso (solo dispositivi approvati)
+  async function elencoLogin(sb, soloSolaLettura) {
+    var r = await sb.rpc('lista_operatori_login', Object.assign({ p_solo_sola_lettura: !!soloSolaLettura }, parametri()));
+    return r.data || [];
+  }
+
+  // Copia dell'utente senza l'alias push: le viste che non gestiscono le notifiche non lo conservano
+  function utenteSenzaAlias(utente) {
+    var copia = Object.assign({}, utente || {});
+    delete copia.push_alias;
+    return copia;
+  }
+
+  window.MangoAccesso = { parametri: parametri, assicura: assicura, preparaLogin: preparaLogin, accedi: accedi, messaggio: messaggio, esitoNegativo: esitoNegativo, tentaAccesso: tentaAccesso, elencoLogin: elencoLogin, utenteSenzaAlias: utenteSenzaAlias };
 })();

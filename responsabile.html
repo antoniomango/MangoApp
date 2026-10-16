@@ -2557,6 +2557,7 @@ svg.fs-archi path.dim { opacity: .25; }
 
 <script src="js/config.deploy.js"></script>
 <script src="js/config.js"></script>
+<script src="js/comune.js"></script>
 <script src="js/regole-pin.js"></script>
 <script src="js/etichette.js"></script>
 <script src="js/calendario.js"></script>
@@ -4705,13 +4706,6 @@ function aggiornaContatoreRaggruppamento() {
 
 // Codici degli altri ordini nello stesso gruppo — ricavati dalla lista ordini già in cache,
 // nessuna query aggiuntiva (ordiniCache copre già aperto/sospeso/attesa_spedizione).
-function codiciFratelliGruppo(o) {
-  if (!o.gruppo_spedizione_id) return [];
-  return ordiniCache
-    .filter(x => x.gruppo_spedizione_id === o.gruppo_spedizione_id && x.id !== o.id)
-    .map(x => x.codice || '—');
-}
-
 // Gruppo per l'etichetta (Etichette.spedizioneUnica): nome dalla cache, clienti dagli ordini aperti in cache
 function gruppoSpedizioneInfo(gruppoId) {
   const membri = ordiniCache.filter(o => o.gruppo_spedizione_id === gruppoId);
@@ -4916,7 +4910,7 @@ function ordineRow(o, mini = false) {
     : inSelModeSpedRiga
       ? `<input type="checkbox" ${selezioneSpedizioneMultipla.has(o.id) ? 'checked' : ''} style="width:16px;height:16px;cursor:pointer;flex-shrink:0;margin-top:2px" onclick="event.stopPropagation()" onchange="toggleSelezioneSpedizioneMultipla('${o.id}')">`
       : '';
-  const fratelli = !mini ? codiciFratelliGruppo(o) : [];
+  const fratelli = !mini ? codiciFratelliGruppo(o, ordiniCache) : [];
   const gInfo = fratelli.length ? gruppoSpedizioneInfo(o.gruppo_spedizione_id) : null;
   const testoGruppo = !gInfo ? '' : Etichette.spedizioneUnica.distintiva(gInfo)
     ? Etichette.spedizioneUnica.riga(gInfo, gInfo.ordini.map(x => x.codice || '—'))
@@ -5252,7 +5246,7 @@ async function renderDettaglioOrdine(id) {
     const presePerFase = new Map((preseRaw || []).filter(p => new Date(p.finisce_il) > new Date()).map(p => [p.ordine_fase_id, p]));
     fasiEl.innerHTML = (ordFasi || []).map(f => {
       const isCustom = !f.fase_id;
-      const nomeFaseRaw = isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id);
+      const nomeFaseRaw = isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id, fasi);
       mappaNomiFasi.set(f.id, nomeFaseRaw);
       const nomeFase = escapeHtml(nomeFaseRaw);
       const opNome = f['users'] ? `${escapeHtml(f['users'].nome)} ${escapeHtml(f['users'].cognome)}` : '';
@@ -5377,7 +5371,7 @@ async function openFaseDetail(ordFaseId, ordineId, readonly) {
   if (f.stato === 'non_applicabile') return; // N/A — non aprire modal
   const ordine = [...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === ordineId);
   const isCustom = !f.fase_id;
-  const nomeFase = isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id);
+  const nomeFase = isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id, fasi);
   const numLabel = isCustom ? '★' : f.fase_id;
 
   document.getElementById('modal-fase-title').textContent = `${numLabel}. ${nomeFase}`;
@@ -9869,21 +9863,6 @@ function closeModal(id) {
   if (id === 'modal-operatore') { aggiornaStatoAssenze(); }
 }
 
-function escapeHtml(str) {
-  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-// Per valori di testo libero (nomi operatori, nomi fase/macchina/scheda) usati come argomento
-// dentro onclick="fn('${...}')": escapeHtml da solo non basta -- un apice singolo nel dato
-// termina prematuramente la stringa JS letterale nell'attributo, un vettore di injection
-// reale. La decodifica HTML degli attributi avviene PRIMA che il motore JS interpreti il
-// codice dell'handler, quindi un entity HTML (&#39;) non protegge: l'apice va neutralizzato a
-// livello di stringa JS (\'), non a livello di entity HTML. Sostituisce i due fix isolati e
-// incompleti (.replace(/'/g,"\\'") senza escapeHtml) già presenti nel file prima di questo
-// giro di sicurezza (2026-09-09).
-function escapeJsAttr(str) {
-  return escapeHtml(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-}
-
 // ═══════════════════════════════════════════════
 // NOTIFICHE — HELPER
 // ═══════════════════════════════════════════════
@@ -10112,23 +10091,10 @@ async function initOneSignalResp() {
   });
 }
 
-async function inviaNotificaPush(destinatarioId, titolo, messaggio) {
-  try {
-    const session = await sb.auth.getSession();
-    const token = session?.data?.session?.access_token || SUPABASE_ANON;
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/send-push`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ destinatario_id: destinatarioId, messaggio })
-    });
-    if (!res.ok) console.warn('Push response:', res.status, await res.text());
-  } catch(e) { console.warn('Push errore:', e); }
-}
-
 async function inviaNotificaATutti(tipo, testo, ordineId = null) {
   const { data: utenti } = await sb.from('users').select('id').eq('attivo', true).neq('eliminato', true);
   if (!utenti?.length) return;
-  // Il trigger DB trg_push_notifica invia automaticamente la push per ogni INSERT — non chiamare inviaNotificaPush qui
+  // Il trigger DB trg_push_notifica invia automaticamente la push per ogni INSERT: qui basta inserire la notifica
   await sb.from('notifiche').insert(utenti.map(u => ({ destinatario_id: u.id, tipo, testo, ordine_id: ordineId })));
 }
 
@@ -10284,19 +10250,6 @@ function buildEtaFromFasi(ordiniList, fasiMap) {
   return eta;
 }
 
-function scadenzaClass(scadenza) {
-  if (!scadenza) return '';
-  const oggi = new Date(); oggi.setHours(0,0,0,0);
-  const diff = Math.floor((new Date(scadenza) - oggi) / 86400000);
-  if (diff < 0) return 'scad-danger';
-  if (diff <= 3) return 'scad-warning';
-  if (diff <= 7) return 'scad-ok';
-  return '';
-}
-function formatDate(d) {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
 function minutiToOreMinuti(m) {
   if (!m && m !== 0) return '—';
   const tot = Math.round(Number(m));
@@ -10304,11 +10257,6 @@ function minutiToOreMinuti(m) {
   const h = Math.floor(tot / 60);
   const min = tot % 60;
   return h > 0 ? `${h}h ${min > 0 ? min + 'm' : ''}`.trim() : `${min}m`;
-}
-
-function formatDateTime(d) {
-  if (!d) return '—';
-  return new Date(d).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 // Etichette e colori da configurazione / stati di sistema: tutte in js/etichette.js
@@ -10345,15 +10293,6 @@ function logLabel(a) {
   return m[a] || a;
 }
 
-function toast(msg, type = 'info') {
-  const t = document.getElementById('toast');
-  if (!t) return;
-  t.textContent = msg;
-  t.className = 'toast show' + (type === 'ok' ? ' ok' : type === 'err' ? ' err' : '');
-  clearTimeout(t._timer);
-  t._timer = setTimeout(() => t.classList.remove('show'), 3500);
-}
-
 async function riassegnaFaseExtra(faseExtraId, ordineId) {
   const opId = document.getElementById('riassegna-op-select')?.value;
   if (!opId) { toast('Seleziona un operatore', 'err'); return; }
@@ -10371,10 +10310,6 @@ const strutturaLabel = (s) => Etichette.struttura(s);
 const materialeLabel = (m) => Etichette.materiale(m);
 const tipoProdLabel = (t) => Etichette.tipoProdotto(t);
 const tipoLabel = (t) => strutturaLabel(t);
-function getFaseNome(faseId) {
-  const f = fasi.find(x => x.id === faseId);
-  return f ? f.nome : `Fase ${faseId}`;
-}
 // Proprietà di fase lette dalla configurazione (fasi.e_cnc, fasi.e_attesa_esterna, fasi.gruppo_spedizione)
 const isCNC = (id) => fasi.find(f => f.id === id)?.e_cnc === true;
 const isEsterna = (id) => fasi.find(f => f.id === id)?.e_attesa_esterna === true;
@@ -11083,7 +11018,7 @@ async function openModificaOrdine(id) {
   document.getElementById('mod-scadenza').value = ordine.scadenza || '';
   document.getElementById('mod-note').value = ordine.note_generali || '';
   _consegna.mod = ordine.modalita_consegna || 'da_spedire'; consegnaDisegna('mod');
-  { const fr = codiciFratelliGruppo(ordine); document.getElementById('mod-consegna-gruppo').textContent = fr.length ? Etichette.consegnaTesti.gruppoCambio(fr) : ''; }
+  { const fr = codiciFratelliGruppo(ordine, ordiniCache); document.getElementById('mod-consegna-gruppo').textContent = fr.length ? Etichette.consegnaTesti.gruppoCambio(fr) : ''; }
   document.getElementById('modal-modifica').dataset.ordineId = id;
   document.getElementById('modal-modifica').dataset.isExtra = isExtra ? 'true' : 'false';
   // Sezione fasi extra — visibile su tutti gli ordini
@@ -11117,7 +11052,7 @@ async function salvaModificaOrdine() {
   };
   { const ord0 = [...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === id);
     if (_consegna.mod && ord0 && _consegna.mod !== (ord0.modalita_consegna || 'da_spedire')) {
-      const fr = codiciFratelliGruppo(ord0);
+      const fr = codiciFratelliGruppo(ord0, ordiniCache);
       if (fr.length && !confirm(Etichette.consegnaTesti.gruppoCambio(fr) + '\n\nProcedere?')) return;
       payload.modalita_consegna = _consegna.mod;
     } }

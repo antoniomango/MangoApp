@@ -67,7 +67,7 @@ async function leggiConfigPubblica(client) {
 // Versione del client — da incrementare SEMPRE insieme a CACHE in sw.js (stesso valore,
 // stesso commit). Letta da responsabile.html per la guardia di versione sulle operazioni
 // distruttive (esportazione/archiviazione) — vedi Checklist-Sicurezza.md nel vault.
-const APP_VERSION = 'mango-v77';
+const APP_VERSION = 'mango-v78';
 
 // Guardia di versione per operatore.html e ufficio.html: se la versione minima richiesta dal server (config_pubblica) è
 // maggiore di questa, un client rimasto in cache non resta in uso. Prima prova da solo ad aggiornarsi (cancella cache e
@@ -181,8 +181,8 @@ let _fotoViewerState = { items: [], idx: 0, ordineFaseId: null, containerId: nul
 // quindi auth.uid() risulterebbe sempre NULL e il ramo "responsabile" di valida_sessione
 // (che confronta auth.uid() = p_user_id) fallirebbe sempre, anche per un responsabile
 // autenticato. sb.functions.invoke() NON inoltra automaticamente il JWT della sessione Auth
-// corrente (stesso motivo per cui inviaNotificaPush() in responsabile.html usa già un fetch
-// manuale con Authorization esplicito per send-push, invece di functions.invoke()) — va
+// corrente (per questo le chiamate dal responsabile alle funzioni che richiedono il suo
+// JWT usano un fetch con Authorization esplicito, invece di functions.invoke()) — va
 // allegato qui esplicitamente. Per un operatore (anon, PIN, nessuna sessione Supabase Auth)
 // non c'è nulla da inoltrare: il fallback è la stessa anon key già usata implicitamente oggi,
 // comportamento identico a prima.
