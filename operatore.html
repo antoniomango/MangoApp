@@ -1558,7 +1558,7 @@ async function renderOrdineDetail(ordineId) {
           const depOf = ordFasi.find(of => of.fase_id === depId);
           return depOf && _depNonSoddisfatta(depId, depOf);
         });
-      const icon = f.in_pressa ? '<i data-ic="clessidra"></i>' : f.stato === 'completata' ? '✓' : (f.stato === 'in_attesa' && est) ? '<i data-ic="pausa"></i>' : (isBloccata || f.stato === 'in_attesa_cliente') ? '<i data-ic="lucchetto"></i>' : isCustom ? '★' : f.fase_id;
+      const icon = f.stato === 'completata' ? '✓' : (f.stato === 'in_attesa' && est) ? '<i data-ic="pausa"></i>' : (isBloccata || f.stato === 'in_attesa_cliente') ? '<i data-ic="lucchetto"></i>' : isCustom ? '★' : f.fase_id;
       const extraBadges = [
         cnc ? '<span style="font-size:9px;font-weight:700;background:var(--violet);color:var(--on-violet);padding:1px 4px;border-radius:3px;margin-left:4px">CNC</span>' : '',
         est ? '<span style="font-size:9px;font-weight:700;background:var(--ext);color:var(--on-ext);padding:1px 4px;border-radius:3px;margin-left:4px">EXT</span>' : ''
@@ -1569,7 +1569,7 @@ async function renderOrdineDetail(ordineId) {
           .filter(depId => { const d = ordFasi.find(of => of.fase_id === depId); return d && _depNonSoddisfatta(depId, d); })
           .map(depId => { const fm = fasi.find(fm => fm.id === depId); return escapeHtml(fm ? fm.nome : depId); });
         subLabel = 'Attende: ' + blockantiNomi.join(', ');
-      } else if (f.stato === 'completata') subLabel = f.in_pressa ? Etichette.presa.inPressa : 'Completata';
+      } else if (f.stato === 'completata') subLabel = 'Completata';
       else if (est) subLabel = f.stato === 'in_attesa' ? 'In attesa dal fornitore' : 'Fase esterna';
       else subLabel = 'Da fare';
       return `<div class="fase-row ${f.stato}" onclick="openFaseDetail('${f.id}', '${ordineId}')">
@@ -1578,7 +1578,7 @@ async function renderOrdineDetail(ordineId) {
           <div class="fn">${nomeFase}${extraBadges}</div>
           <div class="fo" style="${isBloccata ? 'color:var(--violet);font-size:11px' : ''}">${subLabel}</div>
         </div>
-        <span class="badge badge-${f.in_pressa ? 'in_attesa' : f.stato}" style="font-size:10px">${f.in_pressa ? Etichette.presa.inPressa : statoFaseLabel(f.stato)}</span>
+        <span class="badge badge-${f.stato}" style="font-size:10px">${statoFaseLabel(f.stato)}</span>
         <span class="arrow">›</span>
       </div>`;
     }).join('');
@@ -1838,7 +1838,7 @@ async function renderFaseDetail(ordFaseId, ordineId) {
   document.getElementById('fase-det-title').textContent = `${numLabel}. ${nomeFase}`;
   const badgeEl = document.getElementById('fase-det-badge');
   badgeEl.className = `badge badge-${f.stato}`;
-  badgeEl.textContent = f.in_pressa ? Etichette.presa.inPressa : statoFaseLabel(f.stato);
+  badgeEl.textContent = statoFaseLabel(f.stato);
 
   let bodyHtml = '';
 
@@ -1969,8 +1969,6 @@ const ERRORI_COMPLETAMENTO = {
   tempo_scaduto: 'Non si può più annullare: chiedi al responsabile',
   non_completata: 'La fase non risulta completata',
   ordine_spedito: 'L\'ordine è già spedito',
-  scegli_macchina_presa: Etichette.presa.errori.scegli_macchina_presa,
-  macchina_non_valida: Etichette.presa.errori.macchina_non_valida,
 };
 const erroreCompletamento = (data, error) => ERRORI_COMPLETAMENTO[data?.errore] || data?.errore || (error ? msgErr(error) : 'Operazione non riuscita');
 
@@ -1984,15 +1982,9 @@ async function pezziFase(ordFaseId, ordineId, azione) {
   await renderOrdineDetail(ordineId);
 }
 
-// Pulsanti di completamento: normale, "Messo in pressa" (fase con tempo di presa sulla macchina in uso) o, se la macchina non è nota
-// e la fase ne ha più d'una, un pulsante per macchina. Nessun tempo né ora: solo i nomi.
+// Pulsante di completamento: uguale per tutte le fasi. Nessun tempo né ora.
 function bottoniCompleta(f, ordFaseId, ordineId, aPezzi) {
-  const btn = (testo, macchinaId, extra) => `<button class="btn btn-ok btn-completa-fase" style="margin-top:${extra ? 8 : 14}px" onclick="completaFase('${ordFaseId}', '${ordineId}'${macchinaId ? ", '" + macchinaId + "'" : ''})">${escapeHtml(testo)}</button>`;
-  const r = f.presa?.risolta;
-  if (!r || r.stato === 'nessuna') return btn('✓ ' + (aPezzi ? 'Completata (tutti i pezzi)' : 'Completata'), null, false);
-  if (r.stato === 'ok') return btn(Etichette.presa.pulsante, r.macchina_id, false);
-  return `<div class="ov-scelta-macchina">${escapeHtml(Etichette.presa.sceltaMacchina)}</div>` +
-    (r.opzioni || []).map(o => btn(o.presa ? Etichette.presa.pulsanteSu(o.nome) : Etichette.presa.completataSu(o.nome), o.id, true)).join('');
+  return `<button class="btn btn-ok btn-completa-fase" style="margin-top:14px" onclick="completaFase('${ordFaseId}', '${ordineId}')">${escapeHtml('✓ ' + (aPezzi ? 'Completata (tutti i pezzi)' : 'Completata'))}</button>`;
 }
 
 // Spedizione unica: la chiusura vale sempre per tutti gli ordini del gruppo (lo garantisce il database).
@@ -2006,7 +1998,7 @@ function codiciSpedizioneFase(ordine, faseId) {
   return ordiniCache.filter(o => o.gruppo_spedizione_id === ordine.gruppo_spedizione_id).map(o => o.codice || '—').sort();
 }
 
-async function completaFase(ordFaseId, ordineId, macchinaId) {
+async function completaFase(ordFaseId, ordineId) {
   const note = document.getElementById('note-op')?.value.trim() || null;
   // fase con più pressate: prima della chiusura si chiede se è l'ultima (Annulla = non succede nulla)
   const piu = _faseDetCorrente?.id === ordFaseId && fasePiuPressate(_faseDetCorrente?.fase_id);
@@ -2020,7 +2012,7 @@ async function completaFase(ordFaseId, ordineId, macchinaId) {
   bottoniFase.forEach(b => { b.disabled = true; b.textContent = 'Attendere...'; });
 
   if (isOnline) {
-    const { data, error } = await sb.rpc('completa_fase_diretta', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_fase_id: ordFaseId, p_note_operatore: note, p_macchina_id: macchinaId || null, p_ultima_pressata: piu ? ultima : null });
+    const { data, error } = await sb.rpc('completa_fase_diretta', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_fase_id: ordFaseId, p_note_operatore: note, p_ultima_pressata: piu ? ultima : null });
     if (error || !data?.ok) {
       ripristinaBottoni();
       toast(erroreCompletamento(data, error), 'err');
@@ -2035,13 +2027,11 @@ async function completaFase(ordFaseId, ordineId, macchinaId) {
     }
     if ((data.chiusi_con || []).length) {
       toast(Etichette.spedizioneUnica.chiusa([...(data.chiusi_con || []), ordiniCache.find(o => o.id === ordineId)?.codice || '—'].sort()), 'ok');
-    } else if (data.in_pressa) {
-      toast(Etichette.presa.toast, 'ok');
     } else {
       toast('Fase completata!', 'ok');
     }
   } else {
-    try { await queueAction({ type: 'completa_diretta', ordFaseId, note, gruppo: false, macchinaId: macchinaId || null, ultima: piu ? ultima : null }); }
+    try { await queueAction({ type: 'completa_diretta', ordFaseId, note, gruppo: false, ultima: piu ? ultima : null }); }
     catch (e) {
       console.warn('queueAction', e);
       ripristinaBottoni();
@@ -2688,7 +2678,7 @@ function renderOggiVoce(v, solaLettura) {
         <button class="btn btn-primary"${occ} onclick="oggiPezzi('${escapeJsAttr(v.voce_id)}','piu')">${occ ? '…' : '+1 pezzo'}</button>
         <button class="btn btn-ok"${occ} onclick="oggiCompleta('${escapeJsAttr(v.voce_id)}')">Tutti</button>`;
     } else {
-      azioni = `<button class="btn btn-ok"${occ} onclick="oggiCompleta('${escapeJsAttr(v.voce_id)}')">${occ ? '…' : (v.con_presa ? Etichette.presa.pulsante : '✓ Completata')}</button>`;
+      azioni = `<button class="btn btn-ok"${occ} onclick="oggiCompleta('${escapeJsAttr(v.voce_id)}')">${occ ? '…' : '✓ Completata'}</button>`;
     }
   }
   const apri = v.ordine_fase_id ? `openFaseDetail('${escapeJsAttr(v.ordine_fase_id)}','${escapeJsAttr(v.ordine_id)}')` : `openFaseExtraDetail('${escapeJsAttr(v.fase_extra_id)}','${escapeJsAttr(v.ordine_id)}')`;
@@ -2699,7 +2689,6 @@ function renderOggiVoce(v, solaLettura) {
       ${v.urgente && !v.fatta ? `<span class="oggi-urgente">${Etichette.attesaEsterna.urgente}</span>` : ''}
       ${v.aggiunta ? '<span class="oggi-segno">aggiunta</span>' : ''}
       ${v.fatta ? '<span class="oggi-segno" style="background:var(--ok-soft);color:var(--ok-ink)">✓ Fatta</span>' : ''}
-      ${v.fatta && v.in_pressa ? `<span class="oggi-segno" style="background:var(--info-soft);color:var(--info-ink)">${escapeHtml(Etichette.presa.inPressa)}</span>` : ''}
       ${ordiniCache.some(x => x.id === v.ordine_id) ? `<button type="button" class="btn btn-secondary piccolo" style="width:auto;flex:0 0 auto" onclick="openOrdineDetail('${escapeJsAttr(v.ordine_id)}')" aria-label="Foto e dettaglio ordine"><i data-ic="fotocamera"></i> Foto</button>` : ''}
       ${v.pezzi && !v.fatta && oggiModoMultiplo ? `<span class="og-conta" style="font-family:var(--font-mono);font-size:12px;color:var(--muted)">${v.pezzi.fatti} di ${v.pezzi.totali}</span>` : ''}
     </div>
@@ -2771,7 +2760,7 @@ function oggiContaPressata(ordFaseId, faseExtraId, totale) {
 async function oggiCompleta(voceId) {
   const v = oggiTrovaVoce(voceId); if (!v) return;
   if (oggiOperazione) return;
-  // fase con più pressate: prima della chiusura (o del "Messo in pressa") si chiede se è l'ultima; Annulla = non succede nulla
+  // fase con più pressate: prima della chiusura si chiede se è l'ultima; Annulla = non succede nulla
   let ultima = null;
   if (v.piu_pressate) { ultima = await chiediUltimaPressata(); if (ultima === null) return; }
   await oggiEsegui(async () => {
@@ -2797,8 +2786,6 @@ async function oggiCompleta(voceId) {
     }
     if ((data.chiusi_con || []).length) {
       toast(Etichette.spedizioneUnica.chiusa(v.spedizione_unica ? v.spedizione_unica.ordini.map(x => x.codice) : data.chiusi_con), 'ok');
-    } else if (data.in_pressa) {
-      toast(Etichette.presa.toast, 'ok');
     } else {
       toast(data.gia_completata ? 'Era già completata' : 'Completata!', 'ok');
     }

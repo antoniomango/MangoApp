@@ -98,10 +98,7 @@ const Etichette = (() => {
   // Fasi con tempo di presa (incollaggio in pressa / strettoio): il pezzo resta sulla macchina senza l'operatore
   const _oraBreve = iso => iso ? new Date(iso).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : '';
   const PRESA = {
-    pulsante: '✓ Messo in pressa', pulsanteSu: nome => '✓ Messo in pressa — ' + nome, completataSu: nome => '✓ Completata — ' + nome,
-    inPressa: 'In pressa', sceltaMacchina: 'Su quale macchina?', toast: 'Messo in pressa',
-    errori: { scegli_macchina_presa: 'Scegli la macchina su cui è stato messo in pressa.', macchina_non_valida: 'Macchina non valida per questa fase.' },
-    // responsabile
+    // responsabile: prese già registrate
     inPressaSu: (macchina, fino) => 'In pressa' + (macchina ? ' su ' + macchina : '') + (fino ? ' fino alle ' + _oraBreve(fino) : ''),
     config: {
       titolo: 'Tempo di presa', minuti: 'Minuti sotto pressa', ordini: 'Ante per pressata',
