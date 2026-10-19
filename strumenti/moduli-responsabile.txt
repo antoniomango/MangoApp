@@ -4,3 +4,6 @@ dati.js
 stime.js
 sistema.js
 orario.js
+anagrafiche.js
+lavorazioni.js
+notifiche.js
