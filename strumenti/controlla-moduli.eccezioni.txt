@@ -1,0 +1,1 @@
+# Eccezioni note a "nessun nome di primo livello dichiarato due volte" (pagina nome  # motivo). Una riga per eccezione.

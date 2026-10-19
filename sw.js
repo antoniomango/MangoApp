@@ -1,4 +1,4 @@
-const CACHE = 'mango-v82';
+const CACHE = 'mango-v83';
 const ASSETS = [
   '/MangoApp/operatore.html',
   '/MangoApp/responsabile.html',
@@ -22,6 +22,7 @@ const ASSETS = [
   '/MangoApp/js/accesso.js',
   '/MangoApp/js/regole-pin.js',
   '/MangoApp/css/tema.css',
+  '/MangoApp/css/responsabile.css',
   '/MangoApp/fonts/Geist-Variable.woff2',
   '/MangoApp/fonts/GeistMono-Variable.woff2',
   '/MangoApp/fonts/OFL-Geist.txt'
@@ -39,7 +40,7 @@ try {
 }
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS.map(u => new Request(u, { cache: 'reload' })))));
   self.skipWaiting();
 });
 
