@@ -1814,45 +1814,14 @@
 <script src="js/etichette.js"></script>
 <script src="js/calendario.js"></script>
 <script src="js/flusso-schermo.js"></script>
+<script src="js/responsabile/stato.js"></script>
+<script src="js/responsabile/dati.js"></script>
+<script src="js/responsabile/stime.js"></script>
+<script src="js/responsabile/sistema.js"></script>
+<script src="js/responsabile/orario.js"></script>
 <script>
-// ═══════════════════════════════════════════════
-// CONFIGURAZIONE SUPABASE
-// ═══════════════════════════════════════════════
-// SUPABASE_URL / SUPABASE_ANON arrivano da js/config.js (ambiente produzione/test)
-const { createClient } = supabase;
-const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 
-// ═══════════════════════════════════════════════
-// STATE
-// ═══════════════════════════════════════════════
-let currentUser = null;
-let currentUserRow = null;
 
-// Contratto richiesto dal componente foto condiviso (js/config.js): session_token è sempre
-// null qui — il responsabile è autenticato via Supabase Auth (auth.uid()), non PIN/session_token.
-function _identitaCorrente() {
-  return { userId: currentUserRow?.id || null, sessionToken: null, soloLettura: false };
-}
-let fasi = []; // [{id, nome, descrizione, posizione, trigger_tipo_prodotto}]
-let tipiProdotto = []; // [{id, label, posizione}]
-let ordiniCache = [];
-let spedizioniNonProntePerGruppo = {};   // gruppo_id → [{ ordine_id, codice, fasi }]
-let gruppiSpedizioneCache = {};   // id gruppo → { id, nome, clienti, consegna } (RPC gruppi_spedizione_elenco)
-let ordiniSpeditiCache = [];
-let lavoroStatsCache = {}; // ordine_id → {minuti_lavoro, minuti_attesa_esterna, n_operatori}
-let _spediti30Count = 0; // contatore spediti 30gg inclusi archiviati
-let operatoriCache = [];
-let notificheCache = [];
-let currentOrdineId = null;
-let _realtimeChannel = null; // canale Realtime attivo (evita doppia sottoscrizione al ritorno dalla background)
-let faseMediaMinutiMap = {}; // fase_id -> avg minuti per pezzo
-let faseEsternaSet = new Set(); // fase_id (int) delle fasi con e_attesa_esterna=true
-let faseExtraMediaMinutiMap = {}; // nome_lower -> mediana minuti per unità (fasi_ordine_extra)
-let catalogoFasiExtra = []; // catalogo_fasi_extra in memoria
-let _etaMinutiCache = {}; // ordine_id -> minuti ETA equivalenti (critico interno + calendario esterno scalato)
-let prioritaConfig = []; // [{id, etichetta, peso, posizione, attivo}] da priorita_ordine_config
-let attributiConfig = []; // [{chiave, etichetta, opzioni:[{valore,etichetta,posizione,attivo}]}] da attributi_prodotto_config + attributo_opzioni
-let riassegnaOrdFaseId = null;
 
 // ═══════════════════════════════════════════════
 // INIT
@@ -2049,225 +2018,19 @@ async function doLogout() {
   await sb.auth.signOut();
 }
 
-// ═══════════════════════════════════════════════
-// DATA LOADING
-// ═══════════════════════════════════════════════
-async function caricaNomiFasiExtraStoria() {
-  const { data } = await sb.from('fasi_ordine_extra')
-    .select('nome')
-    .not('nome', 'is', null)
-    .order('nome');
-  if (!data) return;
-  // Conta frequenza e ordina per numero utilizzi (più usati prima)
-  const freq = {};
-  data.forEach(r => { if (r.nome) freq[r.nome] = (freq[r.nome] || 0) + 1; });
-  const ordinati = Object.entries(freq).sort((a, b) => b[1] - a[1]).map(e => e[0]);
-  const dl = document.getElementById('nomi-fasi-extra-storia');
-  if (dl) dl.innerHTML = ordinati.map(n => `<option value="${escapeHtml(n)}">`).join('');
-}
 
-async function loadFasi() {
-  const [{ data: fasiData }, { data: tipiCriteri }, { data: materCriteri }, { data: strutCriteri }, { data: competenzeData }, { data: dipData }, { data: modiData }, { data: attrCriteri }] = await Promise.all([
-    sb.from('fasi').select('*, tipo_gestione').order('posizione').order('id'),
-    sb.from('fase_tipi_prodotto').select('fase_id, tipo_prodotto_id'),
-    sb.from('fase_materiali').select('fase_id, materiale_valore'),
-    sb.from('fase_strutture').select('fase_id, struttura_valore'),
-    sb.from('competenze_operatore_fase').select('fase_id, operatore_id, priorita').order('priorita'),
-    sb.from('fase_dipendenze').select('fase_id, dipende_da_fase_id'),
-    sb.from('fase_criteri_modo').select('fase_id, attributo_chiave, modo'),
-    sb.from('fase_criteri_attributi').select('fase_id, attributo_chiave, valore'),
-  ]);
-  const modoDi = (faseId, chiave) => (modiData || []).find(r => r.fase_id === faseId && r.attributo_chiave === chiave)?.modo || 'solo';
-  fasi = (fasiData || []).map(f => ({
-    ...f,
-    attiva:            f.attiva !== false,
-    modo_tipi:         modoDi(f.id, 'tipo_prodotto'),
-    modo_materiali:    modoDi(f.id, 'materiale'),
-    modo_strutture:    modoDi(f.id, 'struttura'),
-    criteri_attributi: (attrCriteri || []).filter(r => r.fase_id === f.id).reduce((m, r) => { (m[r.attributo_chiave] ||= []).push(r.valore); return m; }, {}),
-    modi_attr:         Object.fromEntries((modiData || []).filter(r => r.fase_id === f.id && !['tipo_prodotto', 'materiale', 'struttura'].includes(r.attributo_chiave)).map(r => [r.attributo_chiave, r.modo])),
-    criteri_tipi:      (tipiCriteri  || []).filter(r => r.fase_id === f.id).map(r => r.tipo_prodotto_id),
-    criteri_materiali: (materCriteri || []).filter(r => r.fase_id === f.id).map(r => r.materiale_valore),
-    criteri_strutture: (strutCriteri || []).filter(r => r.fase_id === f.id).map(r => r.struttura_valore),
-    competenze:        (competenzeData || []).filter(r => r.fase_id === f.id).sort((a,b) => a.priorita - b.priorita).map(r => r.operatore_id),
-    dipendenze:        (dipData || []).filter(r => r.fase_id === f.id).map(r => r.dipende_da_fase_id),
-  }));
-  renderFasiOpzionaliForm();
-}
 
-// Fasi attive (le disattivate restano in `fasi` solo per risolvere i nomi dello storico)
-function fasiAttive() { return fasi.filter(f => f.attiva !== false); }
 
-// Il responsabile legge le tabelle di configurazione; il modulo condiviso Etichette ne riceve una copia
-function sincronizzaEtichette() {
-  Etichette.imposta({ tipi_prodotto: tipiProdotto, attributi: attributiConfig, priorita: prioritaConfig, lati: typeof latiConfig !== 'undefined' ? latiConfig : [] });
-}
 
-async function loadPrioritaConfig() {
-  const { data } = await sb.from('priorita_ordine_config').select('*').order('posizione');
-  prioritaConfig = data || [];
-  sincronizzaEtichette();
-  popolaPrioritaSelects();
-}
 
-async function loadAttributiConfig() {
-  const [{ data }, { data: opz }] = await Promise.all([
-    sb.from('attributi_prodotto_config').select('*').order('posizione'),
-    sb.from('attributo_opzioni').select('attributo_chiave, valore, etichetta, posizione, attivo').order('posizione'),
-  ]);
-  attributiConfig = (data || []).map(a => ({
-    ...a,
-    opzioni: (opz || []).filter(o => o.attributo_chiave === a.chiave).sort((x, y) => (x.posizione || 0) - (y.posizione || 0)),
-  }));
-  sincronizzaEtichette();
-  popolaAttributiSelects();
-}
 
-function popolaPrioritaSelects() {
-  const opts = prioritaConfig.filter(p => p.attivo).map(p =>
-    `<option value="${escapeHtml(p.id)}">${escapeHtml(p.etichetta)}</option>`
-  ).join('');
-  const allOpts = `<option value="">Tutte le priorità</option>` + opts;
-  ['ord-prio', 'mod-prio'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.innerHTML = opts;
-  });
-  const fltEl = document.getElementById('ord-priorita');
-  if (fltEl) fltEl.innerHTML = allOpts;
-}
 
-function popolaAttributiSelects() {
-  attributiConfig.forEach(attr => {
-    const sorted = [...(attr.opzioni || [])].filter(o => o.attivo !== false).sort((a, b) => (a.posizione||0) - (b.posizione||0));
-    const opts = sorted.map(o =>
-      `<option value="${escapeHtml(o.valore)}">${escapeHtml(o.etichetta)}</option>`
-    ).join('');
-    if (attr.chiave === 'struttura') {
-      ['ord-struttura', 'mod-struttura'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.innerHTML = opts;
-      });
-      const fltEl = document.getElementById('flt-struttura');
-      if (fltEl) fltEl.innerHTML = `<option value="">Tutte le strutture</option>` + opts;
-    }
-  });
-}
 
-function renderFasiOpzionaliForm() {
-  const container = document.getElementById('std-fasi-opzionali-container');
-  if (!container) return;
-  const fasiOp = fasiAttive().filter(f => f.opzionale);
-  if (!fasiOp.length) { container.style.display = 'none'; return; }
-  container.innerHTML = fasiOp.map(f => `
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;font-weight:600;margin-bottom:4px">
-      <input type="checkbox" id="ord-fase-opz-${f.id}">
-      ${escapeHtml(f.nome)}
-    </label>
-  `).join('');
-  container.style.display = '';
-}
 
-async function loadTipiProdotto() {
-  const { data } = await sb.from('tipi_prodotto').select('*').order('posizione').order('id');
-  tipiProdotto = data || [];
-  sincronizzaEtichette();
-  popolaTipiProdottoSelects();
-}
 
-function popolaTipiProdottoSelects() {
-  const opts = tipiProdotto.map(t => `<option value="${t.id}">${t.label}</option>`).join('');
-  const optsConTutti = `<option value="">Tutti i tipi</option>` + opts;
-  const flt = document.getElementById('flt-tipo-prodotto');
-  const crea = document.getElementById('ord-tipo-prodotto');
-  const mod = document.getElementById('mod-tipo-prodotto');
-  if (flt) flt.innerHTML = optsConTutti;
-  if (crea) crea.innerHTML = opts;
-  if (mod) mod.innerHTML = opts;
-}
 
-async function loadOrdini() {
-  const { data } = await sb.from('ordini')
-    .select('*, creato_da_user:users!creato_da(nome, cognome)')
-    .in('stato', ['aperto', 'sospeso', 'attesa_spedizione'])
-    .neq('eliminato', true);
-  const prioWeights = Object.fromEntries(prioritaConfig.map(p => [p.id, p.peso]));
-  ordiniCache = (data || []).sort((a, b) => {
-    const as = a.stato === 'attesa_spedizione' ? 0 : 1;
-    const bs = b.stato === 'attesa_spedizione' ? 0 : 1;
-    if (as !== bs) return as - bs;
-    const pd = (prioWeights[b.priorita] ?? 0) - (prioWeights[a.priorita] ?? 0);
-    if (pd !== 0) return pd;
-    if (a.scadenza && b.scadenza) return new Date(a.scadenza) - new Date(b.scadenza);
-    if (a.scadenza) return -1;
-    if (b.scadenza) return 1;
-    return new Date(b.creato_il) - new Date(a.creato_il);
-  });
 
-  if (ordiniCache.some(o => o.gruppo_spedizione_id)) {
-    const { data: gj } = await sb.rpc('gruppi_spedizione_elenco', { p_responsabile_id: currentUserRow.id, p_session_token: null });
-    gruppiSpedizioneCache = Object.fromEntries((gj?.gruppi || []).map(g => [g.id, g]));
-  } else gruppiSpedizioneCache = {};
 
-  // gruppi con le fasi di spedizione unica chiuse ma altri ordini ancora da finire (stesso momento del ricaricamento degli ordini)
-  spedizioniNonProntePerGruppo = {};
-  if (ordiniCache.some(o => o.gruppo_spedizione_id)) {
-    try {
-      const { data: np } = await sb.rpc('spedizioni_non_pronte', { p_responsabile_id: currentUserRow.id, p_session_token: null });
-      (np?.gruppi || []).forEach(g => { spedizioniNonProntePerGruppo[g.gruppo_id] = g.membri || []; });
-    } catch (e) { console.warn('spedizioni_non_pronte', e); }
-  }
-
-  const trenta30 = new Date(); trenta30.setDate(trenta30.getDate() - 30);
-  const [{ data: spediti }, { count: cnt30 }] = await Promise.all([
-    sb.from('ordini').select('*').eq('stato', 'spedito').neq('eliminato', true).order('spedito_il', { ascending: false }),
-    sb.from('ordini').select('id', { count: 'exact', head: true }).eq('stato', 'spedito').gte('spedito_il', trenta30.toISOString()),
-  ]);
-  ordiniSpeditiCache = spediti || [];
-  _spediti30Count = cnt30 ?? 0;
-  // Carica statistiche lavoro per tutti gli ordini spediti in batch
-  if (ordiniSpeditiCache.length) {
-    const ids = ordiniSpeditiCache.map(o => o.id);
-    const { data: stats } = await sb.rpc('statistiche_lavoro_ordini', { p_ordine_ids: ids });
-    lavoroStatsCache = {};
-    (stats || []).forEach(s => { lavoroStatsCache[s.ordine_id] = s; });
-  }
-}
-
-async function loadOperatori() {
-  const { data } = await sb.from('users')
-    .select('id, nome, cognome, ruolo, attivo, ore_default, escluso_pianificazione, pin_da_cambiare, pin_da_reimpostare, pin_scelta_scadenza, puo_registrare_avvisi')
-    .in('ruolo', ['operatore', 'sola_lettura'])
-    .neq('eliminato', true)
-    .order('cognome');
-  operatoriCache = data || [];
-}
-
-async function loadNotifiche() {
-  const [{ data }, { count }] = await Promise.all([
-    sb.from('notifiche')
-      .select('*, ordini(codice)')
-      .eq('destinatario_id', currentUserRow?.id)
-      .order('creata_il', { ascending: false })
-      .limit(50),
-    // Conteggio reale delle non lette — il badge non può derivare da notificheCache,
-    // che è troncata a 50 righe: con più di 50 non lette il badge sottostimerebbe.
-    sb.from('notifiche')
-      .select('id', { count: 'exact', head: true })
-      .eq('destinatario_id', currentUserRow?.id).eq('letta', false),
-  ]);
-
-  notificheCache = data || [];
-  const unread = count || 0;
-  const badge = document.getElementById('notif-badge');
-  if (unread > 0) {
-    badge.textContent = unread;
-    badge.style.display = 'flex';
-  } else {
-    badge.style.display = 'none';
-  }
-  const bb = document.getElementById('barra-conta-notif');
-  if (bb) { bb.textContent = String(unread); bb.hidden = !unread; }
-}
 
 // ═══════════════════════════════════════════════
 // REALTIME
@@ -2931,221 +2694,16 @@ async function mostraNotaTempiKpi() {
   el.hidden = false;
 }
 
-// ═══════════════════════════════════════════════
-// SISTEMA (config_sistema) e REGISTRO MODIFICHE (config_modifiche)
-// ═══════════════════════════════════════════════
-let _sistema = {};   // chiave -> valore, da config_sistema
-
-async function loadSistemaConfig() {
-  const { data } = await sb.from('config_sistema').select('chiave, valore');
-  _sistema = Object.fromEntries((data || []).map(r => [r.chiave, r.valore]));
-  renderSistemaConfig();
-  renderSistemaLink();
-  renderSicurezzaAccount();
-  loadJobSchedulati();
-}
-
-// ── Sicurezza dell'account: verifica a due fattori con l'app di autenticazione ──
-async function renderSicurezzaAccount() {
-  const el = document.getElementById('sicurezza-account-body');
-  if (!el || !currentUserRow) return;
-  const [{ data: st }, { data: lf }, { data: aal }] = await Promise.all([
-    sb.rpc('mfa_stato', { p_responsabile_id: currentUserRow.id, p_session_token: null }),
-    sb.auth.mfa.listFactors(),
-    sb.auth.mfa.getAuthenticatorAssuranceLevel(),
-  ]);
-  const verificato = (lf?.totp || []).find(f => f.status === 'verified');
-  const conCodice = aal?.currentLevel === 'aal2';
-  const richiesta = !!st?.richiesta;
-  let corpo;
-  if (!verificato) {
-    corpo = `<div style="font-size:13px;margin-bottom:10px">Non attiva. Con la verifica a due fattori, oltre alla password serve un codice a 6 cifre generato da un'app sul tuo telefono (Google Authenticator, Microsoft Authenticator, Authy…).</div>
-      <button class="btn btn-primary" onclick="mfaAvviaIscrizione()">Attiva la verifica a due fattori</button>
-      <div id="mfa-iscrizione" style="margin-top:14px"></div>`;
-  } else if (!conCodice) {
-    corpo = `<div style="font-size:13px;margin-bottom:10px">Attiva sul tuo account. Per modificare queste impostazioni conferma prima un codice.</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><input type="text" id="mfa-codice" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="Codice a 6 cifre" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit;width:170px"><button class="btn btn-primary" onclick="mfaConfermaSessione()">Conferma codice</button></div>`;
-  } else if (!richiesta) {
-    corpo = `<div style="font-size:13px;margin-bottom:10px">Attiva sul tuo account, ma <strong>non ancora obbligatoria</strong>: finché non la rendi obbligatoria, chi conosce la password entra anche senza codice.</div>
-      <button class="btn btn-ok" onclick="mfaImposta(true)">Rendi obbligatoria</button>`;
-  } else {
-    corpo = `<div style="font-size:13px;margin-bottom:10px"><strong>Obbligatoria</strong>: senza il codice non si entra e le operazioni da responsabile sono rifiutate.</div>
-      <button class="btn btn-secondary" onclick="mfaImposta(false)">Togli l'obbligo</button>`;
-  }
-  el.innerHTML = '<div style="font-size:13px;font-weight:600;margin-bottom:6px">Verifica a due fattori (account responsabile)</div>' + corpo;
-}
-
-async function mfaAvviaIscrizione() {
-  const box = document.getElementById('mfa-iscrizione');
-  // un tentativo lasciato a metà va tolto prima di iniziarne un altro
-  const { data: lf } = await sb.auth.mfa.listFactors();
-  for (const f of (lf?.all || []).filter(x => x.factor_type === 'totp' && x.status !== 'verified')) await sb.auth.mfa.unenroll({ factorId: f.id });
-  const { data, error } = await sb.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'MangoApp ' + new Date().toISOString().slice(0, 10) });
-  if (error || !data) { box.innerHTML = '<div style="color:var(--alert);font-size:13px">Impossibile avviare l\'attivazione. Riprova.</div>'; return; }
-  window._mfaFattoreInCorso = data.id;
-  box.innerHTML = `<div style="font-size:13px;margin-bottom:8px">1. Apri l'app di autenticazione e scansiona questo codice (oppure inserisci la chiave a mano).</div>
-    <img alt="Codice QR per l'app di autenticazione" src="${escapeHtml(data.totp.qr_code)}" style="width:180px;height:180px;background:#fff;padding:6px;border-radius:8px">
-    <div style="font-size:12px;margin:8px 0;color:var(--muted)">Chiave: <code style="word-break:break-all">${escapeHtml(data.totp.secret)}</code></div>
-    <div style="font-size:13px;margin-bottom:8px">2. Scrivi qui il codice a 6 cifre che mostra l'app.</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><input type="text" id="mfa-codice" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="Codice a 6 cifre" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit;width:170px"><button class="btn btn-primary" onclick="mfaVerificaIscrizione()">Verifica e attiva</button></div>`;
-}
-async function mfaVerificaIscrizione() {
-  const codice = (document.getElementById('mfa-codice')?.value || '').replace(/\s/g, '');
-  const { error } = await sb.auth.mfa.challengeAndVerify({ factorId: window._mfaFattoreInCorso, code: codice });
-  if (error) { toast('Codice non valido: riprova', 'err'); return; }
-  toast('Verifica a due fattori attivata. Ora puoi renderla obbligatoria.', 'ok');
-  renderSicurezzaAccount();
-}
-async function mfaConfermaSessione() {
-  const codice = (document.getElementById('mfa-codice')?.value || '').replace(/\s/g, '');
-  const { data: lf } = await sb.auth.mfa.listFactors();
-  const f = (lf?.totp || []).find(x => x.status === 'verified');
-  const { error } = f ? await sb.auth.mfa.challengeAndVerify({ factorId: f.id, code: codice }) : { error: new Error('nessun fattore') };
-  if (error) { toast('Codice non valido: riprova', 'err'); return; }
-  renderSicurezzaAccount();
-}
-async function mfaImposta(attiva) {
-  if (attiva && !confirm('Da ora, per entrare servirà la password e il codice dell\'app. Se perdi il telefono senza aver salvato la chiave non potrai più entrare da solo. Confermi?')) return;
-  const { data, error } = await sb.rpc('imposta_mfa_responsabile', { p_attiva: attiva, p_responsabile_id: currentUserRow.id, p_session_token: null });
-  if (error || !data?.ok) { toast('Operazione non riuscita (' + (data?.errore || error?.message || '') + ')', 'err'); return; }
-  toast(attiva ? 'Verifica a due fattori obbligatoria' : 'Obbligo tolto', 'ok');
-  renderSicurezzaAccount();
-}
-
-function renderSistemaConfig() {
-  const el = document.getElementById('sistema-config-body');
-  if (!el) return;
-  const riga = (titolo, sotto, campo) => `<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:16px"><div style="flex:1;min-width:220px"><div style="font-size:13px;font-weight:600">${titolo}</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${sotto}</div></div>${campo}</div>`;
-  const ro = v => `<code style="font-size:12px;word-break:break-all;max-width:320px">${escapeHtml(v || '— non impostato —')}</code>`;
-  el.innerHTML =
-    riga('Indirizzo dell\'app', 'Usato nei link delle notifiche (sola lettura: si imposta in fase di installazione)', ro(_sistema.app_base_url)) +
-    riga('Indirizzo delle funzioni server', 'Usato per le notifiche push (sola lettura: si imposta in fase di installazione)', ro(_sistema.edge_functions_base_url)) +
-    riga('Fuso orario dell\'azienda', 'Nome del fuso (es. Europe/Rome): decide "oggi", gli orari di lavoro e i promemoria, indipendentemente dal dispositivo',
-      `<input type="text" value="${escapeHtml(_sistema.fuso_orario || '')}" onchange="salvaSistema('fuso_orario', this.value.trim())" style="width:180px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">`) +
-    riga('Fotocamera interna attiva', 'Se attiva l\'app operatore scatta le foto con la fotocamera interna anziché con quella di sistema',
-      `<input type="checkbox" ${_sistema.fotocamera_interna_attiva === 'true' ? 'checked' : ''} onchange="salvaSistema('fotocamera_interna_attiva', this.checked ? 'true' : 'false')" style="width:18px;height:18px">`) +
-    riga('Versione minima del client', 'I dispositivi con una versione più vecchia devono ricaricare l\'app prima di operazioni delicate (es. mango-v40)',
-      `<input type="text" value="${escapeHtml(_sistema.versione_minima_client || '')}" pattern="mango-v[0-9]+" onchange="salvaSistema('versione_minima_client', this.value.trim())" style="width:130px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">`) +
-    riga('Limite database (MB)', 'Dimensione massima prevista del database: alimenta la barra di utilizzo in Archivio',
-      `<input type="number" min="1" step="1" value="${escapeHtml(_sistema.limite_db_mb || '')}" onchange="salvaSistema('limite_db_mb', this.value.trim())" style="width:110px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px">`) +
-    riga('Notifiche push — ID app', 'Identificativo dell\'app di notifiche (OneSignal); vuoto = notifiche push disattivate',
-      `<input type="text" value="${escapeHtml(_sistema.onesignal_app_id || '')}" onchange="salvaSistema('onesignal_app_id', this.value.trim())" style="width:270px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
-    riga('PIN — tentativi errati consentiti', 'Dopo questo numero di errori nella finestra, l\'accesso si blocca (da 3 a 5)',
-      `<input type="number" min="3" max="5" step="1" value="${escapeHtml(_sistema.pin_tentativi_max || '')}" onchange="salvaSistema('pin_tentativi_max', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
-    riga('PIN — finestra dei tentativi (minuti)', 'Intervallo in cui si contano i tentativi errati (da 15 a 120)',
-      `<input type="number" min="15" max="120" step="1" value="${escapeHtml(_sistema.pin_finestra_minuti || '')}" onchange="salvaSistema('pin_finestra_minuti', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
-    riga('PIN — primo blocco (minuti)', 'Durata del primo blocco; raddoppia a ogni blocco consecutivo (da 15 a 120)',
-      `<input type="number" min="15" max="120" step="1" value="${escapeHtml(_sistema.pin_blocco_base_minuti || '')}" onchange="salvaSistema('pin_blocco_base_minuti', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
-    riga('PIN — blocco massimo (minuti)', 'Tetto alla durata del blocco (da 1440 a 10080)',
-      `<input type="number" min="1440" max="10080" step="1" value="${escapeHtml(_sistema.pin_blocco_max_minuti || '')}" onchange="salvaSistema('pin_blocco_max_minuti', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
-    riga('PIN — avviso al responsabile dopo N blocchi', 'Dopo questo numero di blocchi consecutivi il responsabile riceve una notifica (da 1 a 3)',
-      `<input type="number" min="1" max="3" step="1" value="${escapeHtml(_sistema.pin_blocchi_alert || '')}" onchange="salvaSistema('pin_blocchi_alert', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
-    riga('Durata della sessione operatore (ore)', 'Dopo questo tempo l\'operatore deve rifare il PIN (da 1 a 24)',
-      `<input type="number" min="1" max="24" step="1" value="${escapeHtml(_sistema.sessione_ore || '')}" onchange="salvaSistema('sessione_ore', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`);
-}
 
 
-// ── Link delle viste (sezione Sistema): indirizzi da configurazione (app_base_url) o dedotti dalla pagina; mai ?env, token o dati riservati ──
-let _sistemaLink = [];
-function indirizzoBaseApp() {
-  const cfg = String(_sistema.app_base_url || '').trim().replace(/\/+$/, '');
-  if (/^https?:\/\/[^\s?#]+$/i.test(cfg)) return { base: cfg, dedotto: false };
-  return { base: location.origin + location.pathname.replace(/[^\/]*$/, '').replace(/\/+$/, ''), dedotto: true };   // origine + cartella della pagina, senza nome file, query o hash
-}
-function indirizzoLocale(base) {
-  let h = ''; try { h = new URL(base).hostname.toLowerCase(); } catch (e) { return false; }
-  return h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h === '::1' || h === '[::1]' || /^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h) || /^169\.254\./.test(h);
-}
-function renderSistemaLink() {
-  const el = document.getElementById('sistema-link-body'); if (!el) return;
-  const T = Etichette.linkViste, { base, dedotto } = indirizzoBaseApp();
-  _sistemaLink = T.viste.map(v => ({ nome: v.nome, url: base + '/' + v.file }));
-  const avvisi = [];
-  if (indirizzoLocale(base)) avvisi.push(T.avvisoLocale);
-  if (!IS_PRODUZIONE) avvisi.push(T.avvisoTest);
-  const nota = dedotto ? `<div style="font-size:11px;color:var(--muted);margin-bottom:10px">${escapeHtml(T.avvisoDedotto)}</div>` : '';
-  const puoCondividere = typeof navigator.share === 'function';
-  const btn = 'btn btn-secondary';
-  el.innerHTML = `<div style="font-size:13px;font-weight:600;margin-bottom:4px">${escapeHtml(T.titolo)}</div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">${escapeHtml(T.sotto)}</div>
-    ${avvisi.map(a => `<div role="alert" style="background:var(--warn-soft);color:var(--warn-ink);border:1px solid var(--warn-line);border-radius:10px;padding:10px 12px;font-size:12px;font-weight:600;margin-bottom:10px">${escapeHtml(a)}</div>`).join('')}${nota}
-    ${T.viste.map((v, i) => { const u = _sistemaLink[i].url, n = escapeHtml(v.nome); return `<div style="padding:12px 0;border-top:1px solid var(--border)">
-      <div style="font-size:13px;font-weight:600">${n}</div>
-      <div style="font-size:12px;color:var(--muted);margin:2px 0 8px">${escapeHtml(v.per)} ${escapeHtml(v.accesso)}</div>
-      <textarea class="sistema-link-url" readonly rows="2" spellcheck="false" aria-label="${escapeHtml(T.ariaIndirizzo(v.nome))}" onfocus="this.select()" style="width:100%;box-sizing:border-box;resize:none;field-sizing:content;min-height:44px;padding:8px 10px;margin-bottom:8px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--ink);font-family:var(--font-mono);font-size:12px;word-break:break-all">${escapeHtml(u)}</textarea>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <button type="button" class="${btn}" style="width:auto;min-height:44px" onclick="copiaLinkVista(${i})" aria-label="${escapeHtml(T.ariaCopia(v.nome))}"><i data-ic="appunti"></i> ${escapeHtml(T.copia)}</button>
-        <a class="${btn}" style="width:auto;min-height:44px;display:inline-flex;align-items:center;gap:6px;text-decoration:none" href="${escapeHtml(u)}" target="_blank" rel="noopener" aria-label="${escapeHtml(T.ariaApri(v.nome))}"><i data-ic="invio"></i> ${escapeHtml(T.apri)}</a>
-        ${puoCondividere ? `<button type="button" class="${btn}" style="width:auto;min-height:44px" onclick="condividiLinkVista(${i})" aria-label="${escapeHtml(T.ariaCondividi(v.nome))}"><i data-ic="megafono"></i> ${escapeHtml(T.condividi)}</button>` : ''}
-      </div></div>`; }).join('')}
-    <div style="border-top:1px solid var(--border);padding-top:12px;font-size:12px;color:var(--muted);line-height:1.5">
-      <div>${escapeHtml(T.installa)}</div><div style="margin-top:4px">${escapeHtml(T.approva)}</div><div style="margin-top:4px">${escapeHtml(T.nota)}</div></div>`;
-}
-async function copiaLinkVista(i) {
-  const v = _sistemaLink[i]; if (!v) return;
-  const T = Etichette.linkViste;
-  try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(v.url); toast(T.copiato(v.nome), 'ok'); return; } } catch (e) { /* si prova la riserva */ }
-  const inp = document.querySelectorAll('#sistema-link-body .sistema-link-url')[i];   // riserva: selezione + execCommand (http, iframe)
-  let fatto = false;
-  if (inp) { try { inp.focus(); inp.select(); inp.setSelectionRange(0, 9999); fatto = !!document.execCommand('copy'); } catch (e) { fatto = false; } }
-  toast(fatto ? T.copiato(v.nome) : T.nonCopiato, fatto ? 'ok' : 'err');
-}
-async function condividiLinkVista(i) {
-  const v = _sistemaLink[i]; if (!v || typeof navigator.share !== 'function') return;
-  try { await navigator.share({ title: 'Mango — ' + v.nome, url: v.url }); } catch (e) { /* annullato dall'utente */ }
-}
 
-// Job pianificati sul server (sola lettura: gli orari si cambiano solo in installazione, vedi documentazione)
-async function loadJobSchedulati() {
-  const el = document.getElementById('sistema-job-body');
-  if (!el) return;
-  const { data, error } = await sb.rpc('elenco_job_schedulati', { p_responsabile_id: currentUserRow.id, p_session_token: null });
-  if (error || !data?.ok) { el.innerHTML = '<div style="color:var(--muted);font-size:13px">Elenco dei job non disponibile</div>'; return; }
-  const esito = e => e === 'succeeded' ? 'ok' : (e || '—');
-  el.innerHTML = '<div style="font-size:13px;font-weight:600;margin-bottom:4px">Attività pianificate sul server</div>' +
-    '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">Sola lettura: gli orari (formato cron, in UTC) si impostano in fase di installazione. Gli intervalli di conservazione dei dati si cambiano nelle Soglie.</div>' +
-    '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="text-align:left;color:var(--muted);font-size:11px"><th style="padding:4px 6px">Attività</th><th style="padding:4px 6px">Orario (cron)</th><th style="padding:4px 6px">Attiva</th><th style="padding:4px 6px">Ultimo esito</th></tr></thead><tbody>' +
-    data.job.map(j => '<tr style="border-top:1px solid var(--border)"><td style="padding:5px 6px">' + escapeHtml(j.nome) + '</td><td style="padding:5px 6px"><code>' + escapeHtml(j.schedule) + '</code></td><td style="padding:5px 6px">' + (j.attivo ? 'sì' : 'no') + '</td><td style="padding:5px 6px">' + escapeHtml(esito(j.ultimo_esito)) + '</td></tr>').join('') +
-    '</tbody></table></div>';
-}
 
-async function salvaSistema(chiave, valore) {
-  const { data, error } = await sb.rpc('imposta_config_sistema', { p_chiave: chiave, p_valore: valore, p_responsabile_id: currentUserRow.id, p_session_token: null });
-  if (error || !data?.ok) toast('Salvataggio NON riuscito: ' + (data?.errore || error?.message || ''), 'err');
-  else toast('Impostazione salvata', 'ok');
-  await loadSistemaConfig();
-}
 
-const REGISTRO_PAGINA = 100;
-let _registroRighe = [];
 
-async function loadRegistroModifiche(reset) {
-  const body = document.getElementById('registro-config-body');
-  if (!body) return;
-  if (reset) _registroRighe = [];
-  let q = sb.from('config_modifiche').select('id, tabella, chiave_riga, azione, valori_prima, valori_dopo, utente_id, creato_il')
-    .order('id', { ascending: false }).range(_registroRighe.length, _registroRighe.length + REGISTRO_PAGINA - 1);
-  const tab = document.getElementById('reg-tabella')?.value, dal = document.getElementById('reg-dal')?.value, al = document.getElementById('reg-al')?.value;
-  if (tab) q = q.eq('tabella', tab);
-  if (dal) q = q.gte('creato_il', dal + 'T00:00:00');
-  if (al) q = q.lte('creato_il', al + 'T23:59:59');
-  const { data, error } = await q;
-  if (error) { body.innerHTML = `<div style="color:var(--alert)">${escapeHtml(error.message)}</div>`; return; }
-  _registroRighe = _registroRighe.concat(data || []);
-  const sel = document.getElementById('reg-tabella');
-  if (sel && sel.options.length <= 1) {
-    const { data: tabelle } = await sb.from('config_modifiche').select('tabella').order('id', { ascending: false }).limit(1000);
-    [...new Set((tabelle || []).map(r => r.tabella))].sort().forEach(t => sel.add(new Option(t, t)));
-  }
-  const ids = [...new Set(_registroRighe.map(r => r.utente_id).filter(Boolean))];
-  const { data: utenti } = ids.length ? await sb.from('users').select('id, nome, cognome').in('id', ids) : { data: [] };
-  const nome = id => { const u = (utenti || []).find(x => x.id === id); return u ? `${u.nome} ${u.cognome}` : '—'; };
-  const compatto = v => v == null ? '—' : escapeHtml(JSON.stringify(v)).slice(0, 400);
-  body.innerHTML = _registroRighe.length ? `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase"><th style="padding:6px">Quando</th><th style="padding:6px">Chi</th><th style="padding:6px">Tabella</th><th style="padding:6px">Azione</th><th style="padding:6px">Prima</th><th style="padding:6px">Dopo</th></tr></thead><tbody>${
-    _registroRighe.map(r => `<tr style="border-top:1px solid var(--border);vertical-align:top"><td style="padding:6px;white-space:nowrap">${new Date(r.creato_il).toLocaleString('it-IT')}</td><td style="padding:6px">${escapeHtml(nome(r.utente_id))}</td><td style="padding:6px">${escapeHtml(r.tabella)}${r.chiave_riga ? `<div style="color:var(--muted);font-size:11px">${escapeHtml(r.chiave_riga)}</div>` : ''}</td><td style="padding:6px">${escapeHtml(r.azione)}</td><td style="padding:6px;font-family:var(--font-mono);font-size:11px;max-width:260px;word-break:break-all">${compatto(r.valori_prima)}</td><td style="padding:6px;font-family:var(--font-mono);font-size:11px;max-width:260px;word-break:break-all">${compatto(r.valori_dopo)}</td></tr>`).join('')}</tbody></table></div>` : '<span style="color:var(--muted)">Nessuna modifica registrata.</span>';
-  const altre = document.getElementById('reg-altre');
-  if (altre) altre.style.display = (data || []).length === REGISTRO_PAGINA ? '' : 'none';
-}
+
+
+
+
 
 // ═══════════════════════════════════════════════
 // DESTINATARI NOTIFICHE CONFIG
@@ -5962,12 +5520,7 @@ function apriRichiestaStorico(id) {
 // ═══════════════════════════════════════════════
 // ORARIO LAVORO
 // ═══════════════════════════════════════════════
-let orarioConfig = null;   // solo per la schermata Orario Lavoro: il calendario vero (giorni lavorativi, minuti, oggi) è in Calendario
 
-async function loadOrarioConfig() {
-  const { data } = await sb.from('config_orario').select('*').single();
-  orarioConfig = data;
-}
 
 async function loadFaseMediaMinuti() {
   const [{ data }, { data: fasiCatalogo }] = await Promise.all([
@@ -6022,149 +5575,17 @@ async function loadFaseExtraMediaMinuti() {
   });
 }
 
-// Minuti netti di una fascia (inizio, fine, pausa): il riepilogo mostra solo ciò che viene digitato; il calcolo vero è nel server
-function _minutiFascia(inizio, fine, pausa) {
-  if (!inizio || !fine) return 0;
-  const [h1, m1] = inizio.split(':').map(Number);
-  const [h2, m2] = fine.split(':').map(Number);
-  return Math.max(0, (h2 * 60 + m2) - (h1 * 60 + m1) - (pausa || 0));
-}
 
-function aggiornaRiepilogoOrario() {
-  const pausa = document.getElementById('or-pausa').checked;
-  const minPausa = pausa ? (numeroOLiteral(document.getElementById('or-minuti-pausa').value) ?? 0) : 0;
-  const sabato = document.getElementById('or-sabato').checked;
-  const domenica = document.getElementById('or-domenica').checked;
-  const minGiorno = _minutiFascia(document.getElementById('or-inizio').value, document.getElementById('or-fine').value, minPausa);
-  const minSabato = sabato ? _minutiFascia(document.getElementById('or-inizio-sabato').value, document.getElementById('or-fine-sabato').value, numeroOLiteral(document.getElementById('or-pausa-sabato').value) ?? 0) : 0;
-  const minDomenica = domenica ? _minutiFascia(document.getElementById('or-inizio-domenica').value, document.getElementById('or-fine-domenica').value, numeroOLiteral(document.getElementById('or-pausa-domenica').value) ?? 0) : 0;
 
-  const fmtOre = min => {
-    const hh = Math.floor(min / 60), mm = Math.round(min % 60);
-    return mm > 0 ? `${hh}h ${mm}min` : `${hh}h`;
-  };
-  const cella = (titolo, valore, extra = '') => `<div><div style="color:var(--muted);font-size:11px;margin-bottom:2px">${titolo}</div><div style="font-weight:700;font-size:16px;${extra}">${valore}</div></div>`;
-  let html = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">`;
-  html += cella('Ore nette / giorno (lun–ven)', fmtOre(minGiorno));
-  if (pausa) html += cella('Di cui pausa', `${minPausa} min`);
-  if (sabato) html += cella('Sabato', fmtOre(minSabato));
-  if (domenica) html += cella('Domenica', fmtOre(minDomenica));
-  html += cella('Totale settimana', fmtOre(minGiorno * 5 + minSabato + minDomenica), 'color:var(--accent)');
-  html += `</div>`;
-  document.getElementById('or-riepilogo').innerHTML = html;
-}
 
-function renderOrarioConfig() {
-  if (!orarioConfig) return;
-  const hm = v => (v || '').slice(0, 5);
-  document.getElementById('or-inizio').value = hm(orarioConfig.ora_inizio);
-  document.getElementById('or-fine').value = hm(orarioConfig.ora_fine);
-  const pausa = orarioConfig.pausa_attiva ?? true;
-  document.getElementById('or-pausa').checked = pausa;
-  document.getElementById('or-minuti-pausa').value = orarioConfig.pausa_minuti ?? 0;   // ?? e non ||: 0 resta 0
-  document.getElementById('or-pausa-hint').style.display = pausa ? '' : 'none';
-  document.getElementById('or-sabato').checked = orarioConfig.sabato_lavorativo;
-  document.getElementById('or-inizio-sabato').value = hm(orarioConfig.ora_inizio_sabato);
-  document.getElementById('or-fine-sabato').value = hm(orarioConfig.ora_fine_sabato);
-  document.getElementById('or-pausa-sabato').value = orarioConfig.pausa_sabato_minuti ?? 0;
-  document.getElementById('or-sabato-ore-row').style.display = orarioConfig.sabato_lavorativo ? 'grid' : 'none';
-  document.getElementById('or-domenica').checked = orarioConfig.domenica_lavorativa;
-  document.getElementById('or-inizio-domenica').value = hm(orarioConfig.ora_inizio_domenica);
-  document.getElementById('or-fine-domenica').value = hm(orarioConfig.ora_fine_domenica);
-  document.getElementById('or-pausa-domenica').value = orarioConfig.pausa_domenica_minuti ?? 0;
-  document.getElementById('or-domenica-ore-row').style.display = orarioConfig.domenica_lavorativa ? 'grid' : 'none';
-  aggiornaRiepilogoOrario();
-  loadChiusureAziendali();
-  loadStraordinari();
-}
 
-function toggleOrarioPausa(cb) {
-  document.getElementById('or-pausa-hint').style.display = cb.checked ? '' : 'none';
-  aggiornaRiepilogoOrario();
-}
-function toggleOrarioSabato(cb) {
-  document.getElementById('or-sabato-ore-row').style.display = cb.checked ? 'grid' : 'none';
-  aggiornaRiepilogoOrario();
-}
-function toggleOrarioDomenica(cb) {
-  document.getElementById('or-domenica-ore-row').style.display = cb.checked ? 'grid' : 'none';
-  aggiornaRiepilogoOrario();
-}
 
-// ── Straordinari per giorni o periodi (tabella straordinari) ──
-let _straordinari = [];
-let _editStraordinario = null;
 
-async function loadStraordinari() {
-  const { data, error } = await sb.from('straordinari').select('id, data_inizio, data_fine, ore_extra, descrizione')
-    .gte('data_fine', Calendario.oggiIso()).order('data_inizio').order('id').limit(200);
-  const el = document.getElementById('or-straordinari-list');
-  if (!el) return;
-  if (error) { el.innerHTML = `<span style="color:var(--alert)">${escapeHtml(error.message)}</span>`; return; }
-  _straordinari = data || [];
-  el.innerHTML = _straordinari.length ? _straordinari.map(s => `
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);flex-wrap:wrap">
-      <span style="font-size:13px;font-weight:600">${_dIt(s.data_inizio)}${s.data_fine !== s.data_inizio ? ' → ' + _dIt(s.data_fine) : ''}</span>
-      <span style="font-size:12px;background:var(--alert-soft);color:var(--alert-ink);padding:2px 8px;border-radius:6px">+${String(Number(s.ore_extra)).replace('.', ',')} h/giorno</span>
-      <span style="flex:1;font-size:12px;color:var(--muted)">${escapeHtml(s.descrizione || '')}</span>
-      <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="avviaModificaStraordinario('${s.id}')">Modifica</button>
-      <button class="btn btn-danger" style="padding:4px 10px;font-size:12px" onclick="eliminaStraordinario('${s.id}')" aria-label="Elimina">✕</button>
-    </div>`).join('') : 'Nessuno straordinario programmato';
-}
 
-function annullaModificaStraordinario() {
-  _editStraordinario = null;
-  ['or-str-dal', 'or-str-al', 'or-str-ore', 'or-str-desc'].forEach(id => { document.getElementById(id).value = ''; });
-  document.getElementById('or-str-form-title').textContent = 'Aggiungi straordinario';
-  document.getElementById('or-str-btn-salva').textContent = '+ Aggiungi';
-  document.getElementById('or-str-btn-annulla').style.display = 'none';
-}
 
-function avviaModificaStraordinario(id) {
-  const s = _straordinari.find(x => x.id === id); if (!s) return;
-  _editStraordinario = id;
-  document.getElementById('or-str-dal').value = s.data_inizio;
-  document.getElementById('or-str-al').value = s.data_fine;
-  document.getElementById('or-str-ore').value = s.ore_extra;
-  document.getElementById('or-str-desc').value = s.descrizione || '';
-  document.getElementById('or-str-form-title').textContent = 'Modifica straordinario';
-  document.getElementById('or-str-btn-salva').textContent = '✓ Salva modifica';
-  document.getElementById('or-str-btn-annulla').style.display = '';
-}
 
-async function salvaStraordinario() {
-  const dal = document.getElementById('or-str-dal').value, al = document.getElementById('or-str-al').value || dal;
-  const ore = numeroOLiteral(document.getElementById('or-str-ore').value);
-  if (!dal || ore === null || ore <= 0) { toast('Indica il giorno (o il periodo) e le ore extra per giorno', 'err'); return; }
-  const { data, error } = await sb.rpc('imposta_straordinario', { p_id: _editStraordinario, p_data_inizio: dal, p_data_fine: al, p_ore_extra: ore,
-    p_descrizione: document.getElementById('or-str-desc').value, p_responsabile_id: currentUserRow.id, p_session_token: null });
-  if (error || !data?.ok) {
-    const msg = { periodo_sovrapposto: 'Il periodo si sovrappone a un altro straordinario', date_non_valide: 'Date non valide', ore_extra_non_valide: 'Ore extra non valide (da 0 a 12)' }[data?.errore];
-    toast(msg || 'Errore: ' + (data?.errore || error?.message || ''), 'err'); return;
-  }
-  annullaModificaStraordinario();
-  await Promise.all([loadStraordinari(), Calendario.carica(sb, currentUserRow.id, null)]);
-  toast('Straordinario salvato', 'ok');
-}
 
-async function eliminaStraordinario(id) {
-  if (!confirm('Eliminare questo straordinario?')) return;
-  const { data, error } = await sb.rpc('elimina_straordinario', { p_id: id, p_responsabile_id: currentUserRow.id, p_session_token: null });
-  if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
-  await Promise.all([loadStraordinari(), Calendario.carica(sb, currentUserRow.id, null)]);
-  toast('Straordinario eliminato', 'ok');
-}
 
-// Numero da un campo di testo: vuoto o non numerico = null (mai un valore di ripiego: 0 resta 0)
-// Ore di una giornata tipo dal calendario unico (server): nessun 8 scritto nel codice
-const oreGiornoDefault = () => (Calendario.minutiGiorno() || 0) / 60;
-
-function numeroOLiteral(v) {
-  const t = String(v ?? '').trim().replace(',', '.');
-  if (t === '') return null;
-  const n = Number(t);
-  return Number.isFinite(n) ? n : null;
-}
 
 // Soglie KPI: nomi, gruppi, limiti, passo e valore predefinito arrivano da kpi_config (una sola fonte).
 // Le modifiche non salvate restano in memoria (kpiBozza), mai lette dal DOM al momento del click.
@@ -6782,128 +6203,12 @@ async function loadConfrontoTempiRiferimento() {
     }).join('')}</tbody></table></div>`;
 }
 
-async function salvaOrario() {
-  // Nessun valore di ripiego: un campo vuoto o non numerico blocca il salvataggio, 0 resta 0; la validazione vera è nel server
-  const pausa = numeroOLiteral(document.getElementById('or-minuti-pausa').value);
-  const pausaSab = numeroOLiteral(document.getElementById('or-pausa-sabato').value);
-  const pausaDom = numeroOLiteral(document.getElementById('or-pausa-domenica').value);
-  const orari = ['or-inizio', 'or-fine', 'or-inizio-sabato', 'or-fine-sabato', 'or-inizio-domenica', 'or-fine-domenica'].map(id => document.getElementById(id).value);
-  if (pausa === null || pausaSab === null || pausaDom === null || orari.some(v => !v)) {
-    toast('Compila tutti i campi con valori validi (0 è ammesso)', 'err'); return;
-  }
-  const payload = {
-    ora_inizio: document.getElementById('or-inizio').value,
-    ora_fine: document.getElementById('or-fine').value,
-    pausa_attiva: document.getElementById('or-pausa').checked,
-    pausa_minuti: pausa,
-    sabato_lavorativo: document.getElementById('or-sabato').checked,
-    ora_inizio_sabato: document.getElementById('or-inizio-sabato').value,
-    ora_fine_sabato: document.getElementById('or-fine-sabato').value,
-    pausa_sabato_minuti: pausaSab,
-    domenica_lavorativa: document.getElementById('or-domenica').checked,
-    ora_inizio_domenica: document.getElementById('or-inizio-domenica').value,
-    ora_fine_domenica: document.getElementById('or-fine-domenica').value,
-    pausa_domenica_minuti: pausaDom,
-  };
-  const { data, error } = await sb.rpc('imposta_config_orario', { p_dati: payload, p_responsabile_id: currentUserRow.id, p_session_token: null });
-  if (error || !data?.ok) { toast('Salvataggio NON riuscito: ' + (data?.errore || error?.message || ''), 'err'); return; }
-  await Promise.all([loadOrarioConfig(), Calendario.carica(sb, currentUserRow.id, null)]);
-  toast('Orario salvato', 'ok');
-}
 
-// Stato edit mode chiusura: { id }
-let _editChiusura = null;
 
-function annullaModificaChiusura() {
-  _editChiusura = null;
-  document.getElementById('or-chiusura-dal').value = '';
-  document.getElementById('or-chiusura-al').value = '';
-  document.getElementById('or-chiusura-desc').value = '';
-  document.getElementById('or-chiusura-form-title').textContent = 'Aggiungi chiusura';
-  document.getElementById('or-chiusura-btn-salva').textContent = '+ Aggiungi';
-  document.getElementById('or-chiusura-btn-annulla').style.display = 'none';
-}
 
-function avviaModificaChiusura(id, dal, al, desc) {
-  _editChiusura = { id };
-  document.getElementById('or-chiusura-dal').value = dal;
-  document.getElementById('or-chiusura-al').value = al;
-  document.getElementById('or-chiusura-desc').value = desc || '';
-  document.getElementById('or-chiusura-form-title').textContent = 'Modifica chiusura';
-  document.getElementById('or-chiusura-btn-salva').textContent = '✓ Salva modifica';
-  document.getElementById('or-chiusura-btn-annulla').style.display = '';
-  document.getElementById('or-chiusura-dal').focus();
-}
 
-async function loadChiusureAziendali() {
-  const oggi = Calendario.oggiIso();
-  const { data } = await sb.from('chiusure_aziendali')
-    .select('id, data_inizio, data_fine, descrizione')
-    .gte('data_fine', oggi)
-    .order('data_inizio');
 
-  const el = document.getElementById('or-chiusure-list');
-  if (!el) return;
 
-  const chiusure = data || [];
-  if (!chiusure.length) {
-    el.innerHTML = '<span style="font-size:12px;color:var(--muted);font-style:italic">Nessuna chiusura programmata</span>';
-    return;
-  }
-
-  el.innerHTML = chiusure.map(c => {
-    const range = c.data_inizio === c.data_fine ? formatDate(c.data_inizio) : `${formatDate(c.data_inizio)} – ${formatDate(c.data_fine)}`;
-    const desc = c.descrizione ? ` · ${escapeHtml(c.descrizione)}` : '';
-    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;margin-bottom:6px;font-size:12px">
-      <span style="flex:1;font-weight:600">${range}</span><span style="color:var(--muted)">${desc}</span>
-      <button style="background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;color:var(--ink);font-size:11px;padding:1px 7px" onclick="avviaModificaChiusura('${c.id}','${c.data_inizio}','${c.data_fine}','${escapeJsAttr(c.descrizione || '')}')" title="Modifica">Modifica</button>
-      <button style="background:none;border:none;cursor:pointer;color:var(--alert);font-size:13px;padding:0 4px" onclick="eliminaChiusura('${c.id}')" title="Elimina" aria-label="Elimina">✕</button>
-    </div>`;
-  }).join('');
-}
-
-async function aggiungiChiusura() {
-  const dal = document.getElementById('or-chiusura-dal').value;
-  const al = document.getElementById('or-chiusura-al').value || dal;
-  const desc = document.getElementById('or-chiusura-desc').value.trim() || null;
-
-  if (!dal) { toast('Seleziona la data di inizio', 'err'); return; }
-
-  if (_editChiusura) {
-    const { data, error } = await sb.rpc('modifica_chiusura_aziendale', {
-      p_id:              _editChiusura.id,
-      p_data_inizio:     dal,
-      p_data_fine:       al,
-      p_descrizione:     desc,
-      p_responsabile_id: currentUserRow.id,
-    });
-    if (error || !data?.ok) { toast(data?.errore || error?.message || 'Errore', 'err'); return; }
-    toast('Chiusura aggiornata', 'ok');
-  } else {
-    const { data, error } = await sb.rpc('imposta_chiusura_aziendale', {
-      p_data_inizio:     dal,
-      p_data_fine:       al,
-      p_descrizione:     desc,
-      p_responsabile_id: currentUserRow.id,
-    });
-    if (error || !data?.ok) { toast(data?.errore || error?.message || 'Errore', 'err'); return; }
-    toast('Chiusura aggiunta', 'ok');
-  }
-
-  annullaModificaChiusura();
-  loadChiusureAziendali();
-}
-
-async function eliminaChiusura(id) {
-  const { data, error } = await sb.rpc('elimina_chiusura_aziendale', {
-    p_chiusura_id:     id,
-    p_responsabile_id: currentUserRow.id,
-  });
-  if (error || !data?.ok) { toast(data?.errore || error?.message || 'Errore', 'err'); return; }
-  toast('Chiusura eliminata', 'ok');
-  annullaModificaChiusura();
-  loadChiusureAziendali();
-}
 
 // ═══════════════════════════════════════════════
 // MACRO FASI
@@ -9113,10 +8418,6 @@ function _htmlTabFuori(righe) {
     </div>`;
 }
 
-function closeModal(id) {
-  document.getElementById(id)?.classList.remove('open');
-  if (id === 'modal-operatore') { aggiornaStatoAssenze(); }
-}
 
 // ═══════════════════════════════════════════════
 // NOTIFICHE — HELPER
@@ -9374,161 +8675,13 @@ async function checkOrdiniInRitardo() {
   }
 }
 
-async function calcolaStimaSingoloOrdine(id) {
-  const el = document.getElementById('det-stima-consegna');
-  if (!el) return;
-  const ordine = ordiniCache.find(o => o.id === id);
-  if (!ordine) { el.textContent = '—'; return; }
 
-  const minTotale = _etaMinutiCache[id];
-  if (!minTotale) { el.textContent = 'Dati insufficienti'; el.style.color = 'var(--muted)'; return; }
 
-  const minutiGiorno = Calendario.minutiGiorno();
-  if (!minutiGiorno) { el.textContent = 'Dati insufficienti'; el.style.color = 'var(--muted)'; return; }
-
-  const giorni = Math.ceil(minTotale / minutiGiorno);
-
-  // Usa la RPC DB (include chiusure aziendali, sabato_lavorativo) per la data autorevole
-  let dataStimataStr;
-  try {
-    const { data: dataDB } = await sb.rpc('data_consegna_stimata', { p_giorni_lavorativi_necessari: giorni });
-    dataStimataStr = dataDB;
-  } catch (_) {
-    dataStimataStr = Calendario.aggiungiGiorniLavorativi(Calendario.oggiIso(), giorni).toISOString().split('T')[0];
-  }
-
-  const isRischio = ordine.scadenza && dataStimataStr > ordine.scadenza;
-  el.textContent = formatDate(dataStimataStr) + (isRischio ? ' ⚠️' : ' ✓');
-  el.style.color = isRischio ? 'var(--alert)' : 'var(--ok)';
-}
-
-// Calcola ETA per lista ordini usando coda per fase_id (critical path).
-// fasiMap: { ordine_id -> [{fase_id, stato}] }
-// Ritorna { ordine_id -> minuti_eta } e aggiorna _etaMinutiCache.
-// Calcola ETA per lista ordini.
-// Fasi INTERNE: modello coda per fase (critical path con altri ordini in attesa).
-// Fasi ESTERNE: aggiunte direttamente all'ETA come giorni-calendario-equivalenti
-//   (il fornitore lavora in parallelo, non fa coda con gli operatori interni).
-// Il valore in _etaMinutiCache è in "minuti-lavorativi-equivalenti":
-//   diviso per minutiGiornoGlobale dà i giorni totali stimati per il cliente.
-function buildEtaFromFasi(ordiniList, fasiMap) {
-  const minGiorno = Calendario.minutiGiorno() || Infinity;   // senza calendario caricato nessuna stima in giorni (mai un valore inventato)
-
-  // Coda per fasi INTERNE (seriali per fase, condivise tra ordini)
-  const faseQueue = {};
-  ordiniList.forEach(o => {
-    const q = o.quantita || 1;
-    const scad = o.scadenza || '9999-12-31';
-    (fasiMap[o.id] || [])
-      .filter(f => !f.esterna && (f.stato === 'disponibile' || f.stato === 'in_corso'))
-      .forEach(f => {
-        const fid = parseInt(f.fase_id);
-        const media = faseMediaMinutiMap[fid];
-        if (!media) return;
-        const minuti = (f.stato === 'in_corso' ? media * Calendario.costante('fattore_fase_in_corso') : media) * q;
-        if (!faseQueue[fid]) faseQueue[fid] = [];
-        faseQueue[fid].push({ ordine_id: o.id, minuti, scad });
-      });
-  });
-  Object.values(faseQueue).forEach(q => q.sort((a, b) => a.scad.localeCompare(b.scad)));
-
-  const eta = {};
-
-  // Mappa fase_id -> dipendenze reali (fase_dipendenze, caricate in loadFasi() dentro `fasi`)
-  const dipendenzeMap = {};
-  fasi.forEach(f => { dipendenzeMap[f.id] = f.dipendenze || []; });
-
-  // Critical path interno: somma (attesa in coda + durata) lungo le dipendenze reali tra le
-  // fasi rimanenti dello stesso ordine — non un massimo globale su tutte le fasi (un pezzo
-  // deve passarle in sequenza se dipendono l'una dall'altra). Fasi senza una dipendenza reale
-  // tra loro restano parallele: l'ETA finale è il massimo tra i "rami" che confluiscono,
-  // esattamente come nel ramo bloccante più lungo, non un massimo su tutte le 17 fasi.
-  ordiniList.forEach(o => {
-    const fasiRimanenti = (fasiMap[o.id] || [])
-      .filter(f => !f.esterna && (f.stato === 'disponibile' || f.stato === 'in_corso'));
-    const idsRimanenti = new Set(fasiRimanenti.map(f => parseInt(f.fase_id)));
-
-    // Costo proprio di ciascuna fase (attesa in coda + durata) — logica invariata rispetto a prima.
-    const costo = {};
-    fasiRimanenti.forEach(f => {
-      const fid = parseInt(f.fase_id);
-      const queue = faseQueue[fid];
-      if (!queue) return;
-      const pos = queue.findIndex(i => i.ordine_id === o.id);
-      if (pos < 0) return;
-      const attesa = queue.slice(0, pos).reduce((s, i) => s + i.minuti, 0);
-      costo[fid] = attesa + queue[pos].minuti;
-    });
-
-    // Finish-time per fase = costo proprio + il massimo tra le dipendenze dirette ancora
-    // rimanenti (0 se una dipendenza non è tra le fasi rimanenti: già completata/non applicabile,
-    // quindi non contribuisce altra attesa). Guardia anti-ciclo difensiva: fase_dipendenze è
-    // dati editabili da UI, un ciclo non dovrebbe esistere ma non deve mai appendere il browser.
-    const finish = {};
-    const inCorsoCalcolo = new Set();
-    function calcolaFinish(fid) {
-      if (finish[fid] !== undefined) return finish[fid];
-      if (!(fid in costo)) return 0;
-      if (inCorsoCalcolo.has(fid)) return 0; // ciclo rilevato, tronca invece di appendere
-      inCorsoCalcolo.add(fid);
-      const preds = (dipendenzeMap[fid] || []).filter(d => idsRimanenti.has(d));
-      const maxPred = preds.reduce((m, d) => Math.max(m, calcolaFinish(d)), 0);
-      inCorsoCalcolo.delete(fid);
-      finish[fid] = maxPred + costo[fid];
-      return finish[fid];
-    }
-
-    let maxMin = 0;
-    fasiRimanenti.forEach(f => {
-      maxMin = Math.max(maxMin, calcolaFinish(parseInt(f.fase_id)));
-    });
-    if (maxMin > 0) eta[o.id] = maxMin;
-  });
-
-  // Fasi ESTERNE: aggiunta diretta come minuti-calendario scalati
-  // Scaling: min_cal * (minGiorno/1440) → quando diviso per minGiorno = giorni calendario
-  ordiniList.forEach(o => {
-    let extEquiv = 0;
-    (fasiMap[o.id] || [])
-      .filter(f => f.esterna)
-      .forEach(f => {
-        const fid = parseInt(f.fase_id);
-        const media = faseMediaMinutiMap[fid];
-        if (!media) return;
-        const minCal = f.inCorso ? media * Calendario.costante('fattore_fase_in_corso') : media; // in_corso/in_attesa = quota restante (kpi_config)
-        extEquiv += minCal * (minGiorno / 1440);
-      });
-    if (extEquiv > 0) eta[o.id] = (eta[o.id] || 0) + extEquiv;
-  });
-
-  Object.assign(_etaMinutiCache, eta);
-  return eta;
-}
-
-function minutiToOreMinuti(m) {
-  if (!m && m !== 0) return '—';
-  const tot = Math.round(Number(m));
-  if (tot <= 0) return '0m';
-  const h = Math.floor(tot / 60);
-  const min = tot % 60;
-  return h > 0 ? `${h}h ${min > 0 ? min + 'm' : ''}`.trim() : `${min}m`;
-}
 
 // Etichette e colori da configurazione / stati di sistema: tutte in js/etichette.js
 const prioLabel = (p) => Etichette.prioritaEtichetta(p);
 const statoLabel = (s, o) => Etichette.statoOrdine(s, o);
 const nomeUtenteOperatore = id => { const u = operatoriCache.find(x => x.id === id); return u ? [u.nome, u.cognome].filter(Boolean).join(' ') : ''; };
-// Blocco "Tempo di presa" di una coppia fase–macchina (stesso aspetto nella sezione Fasi e nella sezione Macchine)
-function presaBloccoHtml(attiva, minuti, ordini, fnToggle, fnCampo, idArg) {
-  const C = Etichette.presa.config;
-  const val = v => (v === null || v === undefined || Number.isNaN(v)) ? '' : v;
-  return `<label style="cursor:pointer"><input type="checkbox" ${attiva ? 'checked' : ''} onchange="${fnToggle}(${idArg}, this.checked)"> ${escapeHtml(C.titolo)}</label>` + (attiva ? `
-    <label>${escapeHtml(C.minuti)} <input type="number" min="1" max="1440" step="1" inputmode="numeric" value="${val(minuti)}" oninput="${fnCampo}(${idArg}, 'presa_minuti', this.value)"></label>
-    <label>${escapeHtml(C.ordini)} <input type="number" min="1" max="50" step="1" inputmode="numeric" value="${val(ordini)}" oninput="${fnCampo}(${idArg}, 'ante_per_pressata', this.value)"></label>
-    <span class="presa-nota">${escapeHtml(Etichette.presa.config.spiega)} ${escapeHtml(C.moltiplicatore)}${minuti > 0 && ordini > 0 ? ' ' + escapeHtml(C.occupa(minuti, ordini)) + '.' : ''}</span>` : '');
-}
-const presaNumero = v => (v === '' || v === null || v === undefined) ? null : Number(v);
-const presaValida = (minuti, ordini) => Number.isInteger(minuti) && minuti >= 1 && minuti <= 1440 && Number.isInteger(ordini) && ordini >= 1 && ordini <= 50;
 
 // Consegna e avviso al cliente, in forma breve per elenchi e schede (solo per chi non è "da spedire")
 function badgeConsegnaHtml(o) {
@@ -9561,19 +8714,6 @@ async function riassegnaFaseExtra(faseExtraId, ordineId) {
 // ═══════════════════════════════════════════════
 // START
 // ═══════════════════════════════════════════════
-const strutturaLabel = (s) => Etichette.struttura(s);
-const materialeLabel = (m) => Etichette.materiale(m);
-const tipoProdLabel = (t) => Etichette.tipoProdotto(t);
-const tipoLabel = (t) => strutturaLabel(t);
-// Proprietà di fase lette dalla configurazione (fasi.e_cnc, fasi.e_attesa_esterna, fasi.gruppo_spedizione)
-const isCNC = (id) => fasi.find(f => f.id === id)?.e_cnc === true;
-const isEsterna = (id) => fasi.find(f => f.id === id)?.e_attesa_esterna === true;
-const fasePiuPressate = (id) => fasi.find(f => f.id === id)?.piu_pressate === true;
-const fasePressatePreviste = (id) => fasi.find(f => f.id === id)?.pressate_previste ?? null;
-// numero di pressate previste accanto alla casella "più pressate": compare solo con la casella spuntata
-const pressateNumeroHtml = (cls, valore, visibile, extra = '', idLabel = '') => `<label ${idLabel ? `id="${idLabel}" ` : ''}class="pp-num" style="display:${visibile ? 'inline-flex' : 'none'};align-items:center;gap:6px;font-size:12px;color:var(--muted);white-space:nowrap" title="${escapeHtml(Etichette.pressate.config.previsteSpiega)}">${escapeHtml(Etichette.pressate.config.previste)}
-  <input type="number" class="${cls}" min="1" max="20" step="1" inputmode="numeric" value="${valore ?? 1}" style="width:60px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--ink);font-size:13px" ${extra}></label>`;
-const pressateNumeroValido = (v) => { const n = Number(v); return Number.isInteger(n) && n >= 1 && n <= 20 ? n : null; };
 
 async function eliminaOrdine(id) {
   const ordine = [...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === id);
