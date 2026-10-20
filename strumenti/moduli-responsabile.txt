@@ -13,3 +13,5 @@ oggi.js
 pianificazione.js
 assenze.js
 operatori.js
+fasi-config.js
+macchine.js

@@ -1,4 +1,4 @@
-const CACHE = 'mango-v88';
+const CACHE = 'mango-v89';
 const ASSETS = [
   '/MangoApp/operatore.html',
   '/MangoApp/responsabile.html',
@@ -37,6 +37,8 @@ const ASSETS = [
   '/MangoApp/js/responsabile/pianificazione.js',
   '/MangoApp/js/responsabile/assenze.js',
   '/MangoApp/js/responsabile/operatori.js',
+  '/MangoApp/js/responsabile/fasi-config.js',
+  '/MangoApp/js/responsabile/macchine.js',
   '/MangoApp/fonts/Geist-Variable.woff2',
   '/MangoApp/fonts/GeistMono-Variable.woff2',
   '/MangoApp/fonts/OFL-Geist.txt'
