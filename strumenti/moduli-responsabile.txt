@@ -7,3 +7,5 @@ orario.js
 anagrafiche.js
 lavorazioni.js
 notifiche.js
+archivio.js
+tempi-kpi.js
