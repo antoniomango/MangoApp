@@ -9,3 +9,5 @@ lavorazioni.js
 notifiche.js
 archivio.js
 tempi-kpi.js
+oggi.js
+pianificazione.js
