@@ -6,7 +6,7 @@
 //     (un let/const doppio è un SyntaxError che si vede solo caricando la pagina). Eccezioni note: strumenti/controlla-moduli.eccezioni.txt
 //  2. ogni file js/ e css/ citato da una pagina HTML e ogni file di js/responsabile/ è nella precache ASSETS di sw.js
 //  3. in responsabile.html: i file di js/responsabile/ stanno DOPO config.deploy.js, config.js, comune.js, etichette.js e PRIMA dello script
-//     in linea principale; se esiste strumenti/moduli-responsabile.txt (un file per riga) l'ordine deve essere quello
+//     in linea principale; avvio.js è l'ultimo modulo e init(); la sua ultima istruzione; se esiste strumenti/moduli-responsabile.txt (un file per riga) l'ordine deve essere quello
 //  4. APP_VERSION (js/config.js) uguale a CACHE (sw.js)
 import fs from 'fs';
 import path from 'path';
@@ -163,8 +163,8 @@ ok(`tutti i ${richiesti.size} file js/ e css/ caricati dalle pagine sono in ASSE
   const base = ['js/config.deploy.js', 'js/config.js', 'js/comune.js', 'js/etichette.js'];
   const moduli = sc.map((s, i) => ({ s, i })).filter(({ s }) => s.src && pulito(s.src).startsWith('js/responsabile/'));
   const inLinea = sc.map((s, i) => ({ s, i })).filter(({ s }) => !s.src && s.codice.trim().length > 0);
-  // script in linea principale = il più lungo (oggi lo script da ~9.700 righe; dopo la divisione resta solo quello di avvio/service worker)
-  const principale = inLinea.slice().sort((a, b) => b.s.codice.length - a.s.codice.length)[0];
+  // script in linea principale = il più lungo tra quelli dopo config.js (dopo la divisione resta solo il blocco del service worker; quelli in <head> non contano)
+  const principale = inLinea.filter(({ i }) => i > idx('js/config.js')).sort((a, b) => b.s.codice.length - a.s.codice.length)[0];
   const problemi = [];
   for (let k = 0; k < base.length; k++) { if (idx(base[k]) < 0) problemi.push(`${base[k]} non è caricato da responsabile.html`); else if (k > 0 && idx(base[k]) < idx(base[k - 1])) problemi.push(`${base[k]} deve stare dopo ${base[k - 1]}`); }
   if (principale && idx('js/etichette.js') > principale.i) problemi.push('js/etichette.js deve stare prima dello script in linea principale');
@@ -174,6 +174,16 @@ ok(`tutti i ${richiesti.size} file js/ e css/ caricati dalle pagine sono in ASSE
     // prima dello script in linea principale, oppure di qualunque script in linea che dichiari/usi init()
     const dopoPrincipale = inLinea.filter(({ i: j, s: x }) => j < i && /\binit\s*\(\s*\)\s*;/.test(x.codice));
     if (dopoPrincipale.length) problemi.push(`${f} è caricato dopo lo script in linea che avvia la pagina (init())`);
+  }
+  // avvio.js: ultimo modulo di js/responsabile/ e init(); sua ultima istruzione
+  {
+    const ultimo = moduli[moduli.length - 1];
+    if (!ultimo || pulito(ultimo.s.src) !== 'js/responsabile/avvio.js') problemi.push("js/responsabile/avvio.js deve essere l'ultimo modulo di js/responsabile/ caricato da responsabile.html");
+    if (esiste('js/responsabile/avvio.js')) {
+      const righe = maschera(leggi('js/responsabile/avvio.js')).split(String.fromCharCode(10)).map((r) => r.trim()).filter(Boolean);
+      if (righe[righe.length - 1] !== 'init();') problemi.push("l'ultima istruzione di js/responsabile/avvio.js deve essere init();");
+      if (righe.filter((r) => r === 'init();').length !== 1) problemi.push('js/responsabile/avvio.js deve contenere init(); una sola volta come istruzione di primo livello');
+    } else problemi.push('js/responsabile/avvio.js non esiste');
   }
   if (esiste('strumenti/moduli-responsabile.txt')) {
     const att = leggi('strumenti/moduli-responsabile.txt').split('\n').map((r) => r.replace(/#.*/, '').trim()).filter(Boolean);

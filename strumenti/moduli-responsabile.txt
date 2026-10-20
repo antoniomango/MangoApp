@@ -18,3 +18,5 @@ macchine.js
 ordini-lista.js
 ordine-dettaglio.js
 ordine-form.js
+navigazione.js
+avvio.js
