@@ -458,6 +458,7 @@ const Etichette = (() => {
     motivoUscitaPiano: m => MOTIVI_USCITA_PIANO[m] || vuoto(m),
     origineVocePiano: o => ORIGINI_VOCE_PIANO[o] || '',
     motivoIngressoPiano: m => MOTIVI_INGRESSO_PIANO[m] || '',
+    dopoFase: n => 'Aggiunta dopo «' + n + '»',
     STATI_RICHIESTA,
   };
 })();

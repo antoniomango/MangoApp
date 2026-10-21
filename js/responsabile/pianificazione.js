@@ -5,6 +5,7 @@
 let pianoCfg = null;          // risposta di piano_parametri_elenco
 let pianoBozza = {};          // chiave -> valore numerico in modifica (tenuto in memoria a ogni cambio, mai letto dal DOM al salvataggio)
 let pianoSimulazione = null;
+let pianoCatene = null;       // risposta di piano_catene_elenco (null = non disponibile)
 let pianoFuoriPiano = null;   // risposta di piano_fuori_piano_statistiche (null = non ancora caricata o non disponibile)
 const _GIORNI_SETT = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
 const _PIANO_ERRORI = {
@@ -28,6 +29,8 @@ async function loadPianoConfig() {
   // statistiche in sola lettura: se non arrivano la pagina resta com'è
   const st = await sb.rpc('piano_fuori_piano_statistiche', { p_responsabile_id: currentUserRow.id, p_session_token: null, p_settimane: 4 });
   pianoFuoriPiano = (!st.error && st.data?.ok) ? st.data : null;
+  const ca = await sb.rpc('piano_catene_elenco', { p_responsabile_id: currentUserRow.id, p_session_token: null });
+  pianoCatene = (!ca.error && ca.data?.ok) ? ca.data : null;
   renderPianoConfig();
 }
 
@@ -47,7 +50,7 @@ function renderPianoConfig() {
     po ? `<strong>Piano di oggi:</strong> generato (${_fmtMin(po.minuti_capacita)} di capacità, ${po.n_persone} persone, ${po.n_riempimenti} riempimenti)` : (st.oggi_lavorativo ? '<strong>Piano di oggi:</strong> non ancora generato' : '<strong>Piano di oggi:</strong> giorno non lavorativo'),
   ].filter(Boolean).map(x => `<li style="margin-bottom:4px">${x}</li>`).join('');
   const senzaTempo = (pianoCfg.fasi_senza_tempo || []);
-  let html = renderPianoFuoriPiano() + `<div class="card" style="padding:18px 22px">
+  let html = renderPianoFuoriPiano() + renderPianoCatene() + `<div class="card" style="padding:18px 22px">
       <h3 style="font-size:15px;margin-bottom:8px">Come funziona</h3>
       <ol style="padding-left:20px;font-size:13px;line-height:1.55;margin-bottom:12px">
         <li><strong>Piano iniziale.</strong> All'inizio di ogni turno il sistema costruisce la lista delle attività del giorno: prende le fasi aperte nell'ordine di priorità degli ordini (scadenza e urgenza), rispetta le dipendenze fra le fasi e si ferma quando la somma delle stime raggiunge la capacità, cioè le ore di lavorazioni per persona presente (il tetto) moltiplicate per le persone presenti. Le ore di lavorazioni sono la somma dei tempi di riferimento delle fasi: il tempo di una fase fatta in due conta una volta sola, il tetto lo assorbe. Esempio: 4 persone e tetto 3,5 = 14 ore di lavorazioni. Una macchina è un posto di lavoro e non può superare le ore di una persona.</li>
@@ -98,6 +101,21 @@ function renderPianoFuoriPiano() {
       <h3 style="font-size:15px;margin-bottom:6px">Fuori piano, ultime ${st.settimane} settimane</h3>
       <div style="font-size:12px;color:var(--ink-2);line-height:1.5;margin-bottom:10px">Attività completate in un giorno in cui non erano nella lista del giorno. Contano come lavoro fatto nell'avanzamento e nella regolazione del tetto. Una percentuale alta indica fasi che la squadra fa di seguito, prima che il piano le proponga.</div>
       <table class="table" style="width:100%;font-size:13px"><thead><tr><th>Fase</th><th style="text-align:right">Nel piano</th><th style="text-align:right">Fuori piano</th><th style="text-align:right">Fuori piano %</th></tr></thead><tbody>${corpo}</tbody></table>
+    </div>`;
+}
+
+// Coppie di fasi che la squadra fa di solito lo stesso giorno, imparate dallo storico. In sola lettura: le soglie si cambiano nei parametri «Catena in giornata».
+function renderPianoCatene() {
+  const st = pianoCatene;
+  if (!st) return '';
+  const fmtD = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'long' }) : '–';
+  const righe = (st.coppie || []).map(c => `<tr><td>${escapeHtml(c.fase_prima)} → ${escapeHtml(c.fase_dopo)}</td><td style="text-align:right">${_pNum(c.percentuale)}%</td><td style="text-align:right">${c.campioni}</td>
+      <td>${c.attiva ? '<span class="badge" style="background:var(--ok-soft);color:var(--ok-ink)">attiva</span>' : '<span style="color:var(--muted)">non attiva</span>'}</td><td>${c.attiva ? 'dal ' + fmtD(c.attiva_dal) : ''}</td></tr>`).join('');
+  const corpo = righe || '<tr><td colspan="5" style="color:var(--muted)">Nessuna coppia di fasi con storico nel periodo.</td></tr>';
+  return `<div class="card" style="padding:16px 20px">
+      <h3 style="font-size:15px;margin-bottom:6px">Fasi in catena</h3>
+      <div style="font-size:12px;color:var(--ink-2);line-height:1.5;margin-bottom:10px">Coppie di fasi in sequenza che negli ultimi ${st.finestra_giorni} giorni la squadra ha fatto spesso lo stesso giorno. Una coppia è attiva da ${_pNum(st.soglia_ingresso)}% (con almeno ${st.campioni_minimi} casi) e lo resta finché non scende sotto ${_pNum(st.soglia_uscita)}%. Quando la prima fase di una coppia attiva viene completata, la successiva entra da sola nella lista di oggi${st.regola_attiva ? '' : ' (regola ora spenta: tetto a zero)'}. Si aggiorna ogni mattina.</div>
+      <table class="table" style="width:100%;font-size:13px"><thead><tr><th>Coppia</th><th style="text-align:right">Lo stesso giorno</th><th style="text-align:right">Casi</th><th>Stato</th><th>Da quando</th></tr></thead><tbody>${corpo}</tbody></table>
     </div>`;
 }
 
