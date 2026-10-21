@@ -174,6 +174,42 @@ setInterval(() => {
   if (document.getElementById('sec-oggi')?.classList.contains('active') || document.getElementById('sec-pianificazione')?.classList.contains('active')) produzioneCambiata();
 }, 30000);
 
+// Schede delle fasi richiudibili: stato aperto/chiuso per fase (chiave del gruppo), separato fra «eseguibili» (ese) e «in arrivo» (arr).
+// Ricordato in localStorage come {"ese":[chiavi aperte],"arr":[chiavi aperte]}; se lo storage non c'è resta in memoria. Di base tutte chiuse.
+const OGGI_APERTE_CHIAVE = 'mangoapp-responsabile-oggi-aperte';
+let _oggiAperte = null;
+function _oggiAperteStato() {
+  if (_oggiAperte) return _oggiAperte;
+  _oggiAperte = { ese: new Set(), arr: new Set() };
+  try {
+    const s = JSON.parse(localStorage.getItem(OGGI_APERTE_CHIAVE) || 'null');
+    if (s && typeof s === 'object') for (const z of ['ese', 'arr']) if (Array.isArray(s[z])) s[z].forEach(k => _oggiAperte[z].add(String(k)));
+  } catch (e) { /* storage non disponibile: stato in memoria */ }
+  return _oggiAperte;
+}
+function _oggiAperteSalva() {
+  const a = _oggiAperteStato();
+  try { localStorage.setItem(OGGI_APERTE_CHIAVE, JSON.stringify({ ese: [...a.ese], arr: [...a.arr] })); } catch (e) { /* storage non disponibile */ }
+}
+function _oggiImpostaScheda(card, aperta) {
+  const hdr = card.querySelector('.card-hdr'), corpo = card.querySelector('.oggi-corpo'), fr = card.querySelector('.oggi-freccia');
+  if (!hdr || !corpo) return;
+  corpo.hidden = !aperta; hdr.setAttribute('aria-expanded', aperta ? 'true' : 'false'); hdr.style.marginBottom = aperta ? '' : '0';
+  if (fr) fr.textContent = aperta ? '▾' : '▸';
+  const a = _oggiAperteStato()[card.dataset.oggiSez];
+  if (a) { if (aperta) a.add(card.dataset.oggiK); else a.delete(card.dataset.oggiK); }
+}
+function oggiToggleFase(hdr) {
+  const card = hdr.closest('[data-oggi-k]'); if (!card) return;
+  _oggiImpostaScheda(card, hdr.getAttribute('aria-expanded') !== 'true'); _oggiAperteSalva();
+}
+function oggiTastoFase(ev, hdr) {
+  if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); oggiToggleFase(hdr); }
+}
+function oggiApriTutte(aperta) {
+  document.querySelectorAll('#oggi-r-corpo [data-oggi-k]').forEach(c => _oggiImpostaScheda(c, aperta)); _oggiAperteSalva();
+}
+
 function renderOggiResp() {
   const riep = document.getElementById('oggi-r-riepilogo'), corpo = document.getElementById('oggi-r-corpo'), sub = document.getElementById('oggi-r-sub');
   if (!riep || !corpo || !oggiR) return;
@@ -237,12 +273,19 @@ function renderOggiResp() {
   // «Da chiudere oggi»: scorciatoia in cima, stesse voci e stessa tabella dei blocchi (non le sposta); assente se la lista è vuota o il parametro è spento
   const daChiudere = Array.isArray(d.da_chiudere) ? d.da_chiudere : [];
   const riquadroDaChiudere = daChiudere.length ? `<div class="card" style="border-left:4px solid var(--urgente-ink)"><div class="card-hdr"><h3>${escapeHtml(Etichette.daChiudere.titolo)}</h3><span style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${escapeHtml(Etichette.daChiudere.conteggio(daChiudere.length))}</span></div><div style="font-size:12px;color:var(--muted);margin:0 0 8px">${escapeHtml(Etichette.daChiudere.spiega)}</div>${tabella(daChiudere, true)}</div>` : '';
-  let html = riquadroAvvisi() + riquadroFornitori() + riquadroDaChiudere + principali.map(g => `<div class="card"><div class="card-hdr"><h3>${escapeHtml(g.fase_nome)}${g.voci.some(v => v.urgente && !v.fatta) ? ` <span class="badge" style="background:var(--urgente-bg);color:var(--urgente-ink);font-size:10px">${Etichette.attesaEsterna.urgente}</span>` : ''}</h3><span style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${g.fatte} di ${g.totali}</span></div>${tabella(g.voci)}</div>`).join('');
+  const chiaveG = g => g.chiave || (g.fase_id != null ? 'f:' + g.fase_id : 'extra:' + g.fase_nome);
+  // scheda di una fase: intestazione sempre visibile e cliccabile, tabella nel corpo richiudibile
+  const schedaFase = (sez, g, stile, titoloExtra, conteggio) => {
+    const k = chiaveG(g), aperta = _oggiAperteStato()[sez].has(k);
+    return `<div class="card"${stile ? ` style="${stile}"` : ''} data-oggi-sez="${sez}" data-oggi-k="${escapeHtml(k)}"><div class="card-hdr" role="button" tabindex="0" aria-expanded="${aperta}" style="cursor:pointer${aperta ? '' : ';margin-bottom:0'}" onclick="oggiToggleFase(this)" onkeydown="oggiTastoFase(event,this)"><h3><span class="oggi-freccia" aria-hidden="true">${aperta ? '▾' : '▸'}</span> ${escapeHtml(g.fase_nome)}${titoloExtra}</h3><span style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${conteggio}</span></div><div class="oggi-corpo"${aperta ? '' : ' hidden'}>${tabella(g.voci)}</div></div>`;
+  };
+  const barraTutte = (principali.length || inArrivo.length) ? `<div style="display:flex;gap:8px;margin:0 0 12px"><button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="oggiApriTutte(true)">Apri tutte</button><button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="oggiApriTutte(false)">Chiudi tutte</button></div>` : '';
+  let html = riquadroAvvisi() + riquadroFornitori() + riquadroDaChiudere + barraTutte + principali.map(g => schedaFase('ese', g, '', g.voci.some(v => v.urgente && !v.fatta) ? ` <span class="badge" style="background:var(--urgente-bg);color:var(--urgente-ink);font-size:10px">${Etichette.attesaEsterna.urgente}</span>` : '', `${g.fatte} di ${g.totali}`)).join('');
   if (!principali.length) html += '<div class="empty-state"><p>Nessuna attività eseguibile adesso.</p></div>';
   if (inArrivo.length) {
     const minArrivo = inArrivo.reduce((t, g) => t + g.voci.reduce((u, v) => u + (Number(v.minuti_stimati) || 0), 0), 0);
     html += `<div role="separator" style="display:flex;align-items:center;gap:10px;margin:22px 0 12px;color:var(--ink-2);font-family:var(--font-mono);font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase"><span style="flex:1;height:2px;background:var(--border-strong)"></span><span>In arrivo · ${_fmtMin(minArrivo)}</span><span style="flex:1;height:2px;background:var(--border-strong)"></span></div>`;
-    html += inArrivo.map(g => `<div class="card" style="background:var(--phase-bg)"><div class="card-hdr"><h3>${escapeHtml(g.fase_nome)}</h3><span style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${g.totali} in attesa</span></div>${tabella(g.voci)}</div>`).join('');
+    html += inArrivo.map(g => schedaFase('arr', g, 'background:var(--phase-bg)', '', `${g.totali} in attesa`)).join('');
   }
   if (!(d.gruppi || []).length) html += '<div class="empty-state"><p>Nessuna attività nel piano di oggi.</p></div>';
   if ((d.esterne || []).length) {
