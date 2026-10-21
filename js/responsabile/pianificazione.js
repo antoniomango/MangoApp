@@ -5,6 +5,7 @@
 let pianoCfg = null;          // risposta di piano_parametri_elenco
 let pianoBozza = {};          // chiave -> valore numerico in modifica (tenuto in memoria a ogni cambio, mai letto dal DOM al salvataggio)
 let pianoSimulazione = null;
+let pianoFuoriPiano = null;   // risposta di piano_fuori_piano_statistiche (null = non ancora caricata o non disponibile)
 const _GIORNI_SETT = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
 const _PIANO_ERRORI = {
   tetto_minimo_maggiore_del_massimo: 'Il tetto minimo non può superare il massimo.',
@@ -23,6 +24,10 @@ async function loadPianoConfig() {
   const { data, error } = await sb.rpc('piano_parametri_elenco', { p_responsabile_id: currentUserRow.id, p_session_token: null });
   if (error || !data?.ok) { document.getElementById('piano-cfg-corpo').innerHTML = `<div class="empty-state"><p>Parametri non disponibili: ${escapeHtml(data?.errore || error?.message || '')}</p></div>`; return; }
   pianoCfg = data; pianoBozza = {}; pianoSimulazione = null;
+  renderPianoConfig();
+  // statistiche in sola lettura: se non arrivano la pagina resta com'è
+  const st = await sb.rpc('piano_fuori_piano_statistiche', { p_responsabile_id: currentUserRow.id, p_session_token: null, p_settimane: 4 });
+  pianoFuoriPiano = (!st.error && st.data?.ok) ? st.data : null;
   renderPianoConfig();
 }
 
@@ -78,8 +83,23 @@ function renderPianoConfig() {
       <div style="font-size:12px;color:var(--muted);margin-top:6px;font-style:italic">Esempio: ${escapeHtml(p.esempio || '')}</div>
     </div>`;
   });
+  html += renderPianoFuoriPiano();
   html += `<div id="piano-simulazione">${renderPianoSimulazione()}</div>`;
   el.innerHTML = html;
+}
+
+// Tabella in sola lettura: per ogni fase, quante attività completate erano nel piano del giorno e quante no. Mai per persona.
+function renderPianoFuoriPiano() {
+  const st = pianoFuoriPiano;
+  if (!st) return '';
+  const righe = (st.per_fase || []).filter(f => (f.nel_piano || 0) + (f.fuori_piano || 0) > 0);
+  const corpo = righe.length ? righe.map(f => `<tr><td>${escapeHtml(f.fase_nome)}</td><td style="text-align:right">${f.nel_piano}</td><td style="text-align:right">${f.fuori_piano}</td><td style="text-align:right;font-weight:600">${f.percentuale == null ? '–' : _pNum(f.percentuale) + '%'}</td></tr>`).join('')
+    : '<tr><td colspan="4" style="color:var(--muted)">Nessuna attività completata nel periodo.</td></tr>';
+  return `<div class="card" style="padding:16px 20px;margin-top:12px">
+      <h3 style="font-size:15px;margin-bottom:6px">Fuori piano, ultime ${st.settimane} settimane</h3>
+      <div style="font-size:12px;color:var(--ink-2);line-height:1.5;margin-bottom:10px">Attività completate in un giorno in cui non erano nella lista del giorno. Contano come lavoro fatto nell'avanzamento e nella regolazione del tetto. Una percentuale alta indica fasi che la squadra fa di seguito, prima che il piano le proponga.</div>
+      <table class="table" style="width:100%;font-size:13px"><thead><tr><th>Fase</th><th style="text-align:right">Nel piano</th><th style="text-align:right">Fuori piano</th><th style="text-align:right">Fuori piano %</th></tr></thead><tbody>${corpo}</tbody></table>
+    </div>`;
 }
 
 function pianoImposta(chiave, valore) {

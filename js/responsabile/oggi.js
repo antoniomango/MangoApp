@@ -200,7 +200,7 @@ function renderOggiResp() {
   const pctMin = p.minuti_pianificati ? Math.round(p.minuti_fatti / p.minuti_pianificati * 100) : 0;
   const cella = (titolo, valore, nota) => `<div class="card" style="padding:14px 16px;margin-bottom:0"><div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">${titolo}</div><div style="font-size:20px;font-weight:700;margin-top:4px">${valore}</div><div style="font-size:12px;color:var(--muted);margin-top:2px">${nota || ''}</div></div>`;
   riep.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px">
-      ${cella('Attività', `${av.fatte} di ${av.totali}`, 'fatte / totali')}
+      ${cella('Attività', `${av.fatte} di ${av.totali}`, av.fuori_piano ? `fatte / totali · di cui ${av.fuori_piano} fuori piano` : 'fatte / totali')}
       ${cella('Minuti stimati', `${_fmtMin(p.minuti_fatti)} <span style="font-size:13px;font-weight:600;color:var(--muted)">/ ${_fmtMin(p.minuti_pianificati)}</span>`, `${pctMin}% del piano`)}
       ${cella('Capacità del giorno', _fmtMin(p.minuti_capacita), `${p.n_persone} persone presenti · ${_fmtOre(p.ore_persone_presenti)}`)}
       ${cella('Tetto in uso', `${_fmtOre(p.tetto_ore)} <span style="font-size:13px;font-weight:600;color:var(--muted)">di lavorazioni per persona presente</span>`, 'regolato ogni settimana')}
