@@ -68,7 +68,7 @@ async function loadRicezioniResp() {
   renderOggiResp();
 }
 // riquadro "In attesa dai fornitori": arrivi di materiale e rientri da lavorazione esterna, con i giorni di attesa e cosa bloccano
-function riquadroFornitori() {
+function riquadroFornitori(richiudibile) {
   if (!ricezioniR) return '';
   const lista = ricezioniR.ricezioni || [];
   const giorni = (n) => n === 1 ? '1 giorno' : n + ' giorni';
@@ -94,9 +94,11 @@ function riquadroFornitori() {
   const urgenti = lista.filter(r => r.urgente).length;
   const riassunto = Etichette.riepilogoSolleciti(lista);
   const nRitardo = lista.filter(r => r.stato_limite === 'in_ritardo').length;
-  return `<div class="card"><div class="card-hdr"><h3>${Etichette.attesaEsterna.titolo}</h3><span style="font-size:12px;color:var(--muted)">${lista.length ? lista.length + (lista.length === 1 ? ' ricezione' : ' ricezioni') + (urgenti ? ' · ' + urgenti + (urgenti === 1 ? ' blocca lavoro' : ' bloccano lavoro') : '') : ''}</span></div>
-    ${riassunto ? `<div style="font-size:13px;font-weight:700;color:var(--${nRitardo ? 'alert' : 'warn'}-ink);margin:2px 0 8px">${escapeHtml(riassunto)}</div>` : ''}
-    ${lista.length ? `<div style="overflow-x:auto"><table><thead><tr><th>Ordine</th><th>Cosa si aspetta</th><th>Attesa</th><th>Cosa fare</th><th></th></tr></thead><tbody>${lista.map(riga).join('')}</tbody></table></div>` : '<div style="color:var(--muted);font-size:13px;padding:8px 0">Nessuna ricezione in attesa.</div>'}</div>`;
+  const conta = lista.length ? lista.length + (lista.length === 1 ? ' ricezione' : ' ricezioni') + (urgenti ? ' · ' + urgenti + (urgenti === 1 ? ' blocca lavoro' : ' bloccano lavoro') : '') : '';
+  const corpo = `${riassunto ? `<div style="font-size:13px;font-weight:700;color:var(--${nRitardo ? 'alert' : 'warn'}-ink);margin:2px 0 8px">${escapeHtml(riassunto)}</div>` : ''}
+    ${lista.length ? `<div style="overflow-x:auto"><table><thead><tr><th>Ordine</th><th>Cosa si aspetta</th><th>Attesa</th><th>Cosa fare</th><th></th></tr></thead><tbody>${lista.map(riga).join('')}</tbody></table></div>` : '<div style="color:var(--muted);font-size:13px;padding:8px 0">Nessuna ricezione in attesa.</div>'}`;
+  if (!richiudibile) return `<div class="card"><div class="card-hdr"><h3>${Etichette.attesaEsterna.titolo}</h3><span style="font-size:12px;color:var(--muted)">${conta}</span></div>${corpo}</div>`;
+  return riquadroOggi('fornitori', '', Etichette.attesaEsterna.titolo, `<span style="font-size:12px;color:var(--muted)">${conta}</span>`, corpo);
 }
 async function confermaRicezioneResp(chiave) {
   const r = (ricezioniR?.ricezioni || []).find(x => (x.ordine_fase_id || x.fase_extra_id) === chiave); if (!r) return;
@@ -174,22 +176,40 @@ setInterval(() => {
   if (document.getElementById('sec-oggi')?.classList.contains('active') || document.getElementById('sec-pianificazione')?.classList.contains('active')) produzioneCambiata();
 }, 30000);
 
+// Riquadri di Oggi richiudibili («Da chiudere oggi», «In attesa esterna»): stato nel campo "riq" = identificativi dei riquadri CHIUSI; di base sono aperti.
+function riquadroOggi(id, stile, titolo, destra, corpo) {
+  const chiuso = _oggiAperteStato().riq.has(id);
+  return `<div class="card"${stile ? ` style="${stile}"` : ''} data-oggi-riq="${id}"><div class="card-hdr" role="button" tabindex="0" aria-expanded="${!chiuso}" style="cursor:pointer${chiuso ? ';margin-bottom:0' : ''}" onclick="oggiToggleRiquadro(this)" onkeydown="oggiTastoRiquadro(event,this)"><h3><span class="oggi-freccia" aria-hidden="true">${chiuso ? '▸' : '▾'}</span> ${escapeHtml(titolo)}</h3>${destra}</div><div class="oggi-corpo"${chiuso ? ' hidden' : ''}>${corpo}</div></div>`;
+}
+function oggiToggleRiquadro(hdr) {
+  const card = hdr.closest('[data-oggi-riq]'); if (!card) return;
+  const aperto = hdr.getAttribute('aria-expanded') !== 'true', corpo = card.querySelector('.oggi-corpo'), fr = card.querySelector('.oggi-freccia');
+  if (corpo) corpo.hidden = !aperto;
+  hdr.setAttribute('aria-expanded', aperto ? 'true' : 'false'); hdr.style.marginBottom = aperto ? '' : '0';
+  if (fr) fr.textContent = aperto ? '▾' : '▸';
+  const r = _oggiAperteStato().riq; if (aperto) r.delete(card.dataset.oggiRiq); else r.add(card.dataset.oggiRiq);
+  _oggiAperteSalva();
+}
+function oggiTastoRiquadro(ev, hdr) {
+  if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); oggiToggleRiquadro(hdr); }
+}
+
 // Schede delle fasi richiudibili: stato aperto/chiuso per fase (chiave del gruppo), separato fra «eseguibili» (ese) e «in arrivo» (arr).
-// Ricordato in localStorage come {"ese":[chiavi aperte],"arr":[chiavi aperte]}; se lo storage non c'è resta in memoria. Di base tutte chiuse.
+// Ricordato in localStorage come {"ese":[chiavi aperte],"arr":[chiavi aperte],"riq":[riquadri chiusi]}; se lo storage non c'è resta in memoria. Di base tutte chiuse.
 const OGGI_APERTE_CHIAVE = 'mangoapp-responsabile-oggi-aperte';
 let _oggiAperte = null;
 function _oggiAperteStato() {
   if (_oggiAperte) return _oggiAperte;
-  _oggiAperte = { ese: new Set(), arr: new Set() };
+  _oggiAperte = { ese: new Set(), arr: new Set(), riq: new Set() };
   try {
     const s = JSON.parse(localStorage.getItem(OGGI_APERTE_CHIAVE) || 'null');
-    if (s && typeof s === 'object') for (const z of ['ese', 'arr']) if (Array.isArray(s[z])) s[z].forEach(k => _oggiAperte[z].add(String(k)));
+    if (s && typeof s === 'object') for (const z of ['ese', 'arr', 'riq']) if (Array.isArray(s[z])) s[z].forEach(k => _oggiAperte[z].add(String(k)));
   } catch (e) { /* storage non disponibile: stato in memoria */ }
   return _oggiAperte;
 }
 function _oggiAperteSalva() {
   const a = _oggiAperteStato();
-  try { localStorage.setItem(OGGI_APERTE_CHIAVE, JSON.stringify({ ese: [...a.ese], arr: [...a.arr] })); } catch (e) { /* storage non disponibile */ }
+  try { localStorage.setItem(OGGI_APERTE_CHIAVE, JSON.stringify({ ese: [...a.ese], arr: [...a.arr], riq: [...a.riq] })); } catch (e) { /* storage non disponibile */ }
 }
 function _oggiImpostaScheda(card, aperta) {
   const hdr = card.querySelector('.card-hdr'), corpo = card.querySelector('.oggi-corpo'), fr = card.querySelector('.oggi-freccia');
@@ -219,7 +239,7 @@ function renderOggiResp() {
   if (!d.piano_presente) {
     const a0 = document.getElementById('oggi-r-aggiornato'); if (a0) a0.textContent = '';
     riep.innerHTML = '';
-    corpo.innerHTML = riquadroAvvisi() + riquadroFornitori() + `<div class="empty-state"><div class="icon"><i data-ic="calendario"></i></div>
+    corpo.innerHTML = riquadroAvvisi() + riquadroFornitori(true) + `<div class="empty-state"><div class="icon"><i data-ic="calendario"></i></div>
       <p>${d.lavorativo ? 'Il piano di oggi non è ancora stato generato: nasce all\'inizio del turno. Puoi crearlo subito con "Rigenera piano di oggi".' : 'Oggi non è un giorno lavorativo: nessun piano.'}</p></div>`;
     return;
   }
@@ -272,7 +292,7 @@ function renderOggiResp() {
   });
   // «Da chiudere oggi»: scorciatoia in cima, stesse voci e stessa tabella dei blocchi (non le sposta); assente se la lista è vuota o il parametro è spento
   const daChiudere = Array.isArray(d.da_chiudere) ? d.da_chiudere : [];
-  const riquadroDaChiudere = daChiudere.length ? `<div class="card" style="border-left:4px solid var(--urgente-ink)"><div class="card-hdr"><h3>${escapeHtml(Etichette.daChiudere.titolo)}</h3><span style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${escapeHtml(Etichette.daChiudere.conteggio(daChiudere.length))}</span></div><div style="font-size:12px;color:var(--muted);margin:0 0 8px">${escapeHtml(Etichette.daChiudere.spiega)}</div>${tabella(daChiudere, true)}</div>` : '';
+  const riquadroDaChiudere = daChiudere.length ? riquadroOggi('chiudere', 'border-left:4px solid var(--urgente-ink)', Etichette.daChiudere.titolo, `<span style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${escapeHtml(Etichette.daChiudere.conteggio(daChiudere.length))}</span>`, `<div style="font-size:12px;color:var(--muted);margin:0 0 8px">${escapeHtml(Etichette.daChiudere.spiega)}</div>${tabella(daChiudere, true)}`) : '';
   const chiaveG = g => g.chiave || (g.fase_id != null ? 'f:' + g.fase_id : 'extra:' + g.fase_nome);
   // scheda di una fase: intestazione sempre visibile e cliccabile, tabella nel corpo richiudibile
   const schedaFase = (sez, g, stile, titoloExtra, conteggio) => {
@@ -280,7 +300,7 @@ function renderOggiResp() {
     return `<div class="card"${stile ? ` style="${stile}"` : ''} data-oggi-sez="${sez}" data-oggi-k="${escapeHtml(k)}"><div class="card-hdr" role="button" tabindex="0" aria-expanded="${aperta}" style="cursor:pointer${aperta ? '' : ';margin-bottom:0'}" onclick="oggiToggleFase(this)" onkeydown="oggiTastoFase(event,this)"><h3><span class="oggi-freccia" aria-hidden="true">${aperta ? '▾' : '▸'}</span> ${escapeHtml(g.fase_nome)}${titoloExtra}</h3><span style="font-family:var(--font-mono);font-size:13px;color:var(--muted)">${conteggio}</span></div><div class="oggi-corpo"${aperta ? '' : ' hidden'}>${tabella(g.voci)}</div></div>`;
   };
   const barraTutte = (principali.length || inArrivo.length) ? `<div style="display:flex;gap:8px;margin:0 0 12px"><button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="oggiApriTutte(true)">Apri tutte</button><button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="oggiApriTutte(false)">Chiudi tutte</button></div>` : '';
-  let html = riquadroAvvisi() + riquadroFornitori() + riquadroDaChiudere + barraTutte + principali.map(g => schedaFase('ese', g, '', g.voci.some(v => v.urgente && !v.fatta) ? ` <span class="badge" style="background:var(--urgente-bg);color:var(--urgente-ink);font-size:10px">${Etichette.attesaEsterna.urgente}</span>` : '', `${g.fatte} di ${g.totali}`)).join('');
+  let html = riquadroAvvisi() + riquadroFornitori(true) + riquadroDaChiudere + barraTutte + principali.map(g => schedaFase('ese', g, '', g.voci.some(v => v.urgente && !v.fatta) ? ` <span class="badge" style="background:var(--urgente-bg);color:var(--urgente-ink);font-size:10px">${Etichette.attesaEsterna.urgente}</span>` : '', `${g.fatte} di ${g.totali}`)).join('');
   if (!principali.length) html += '<div class="empty-state"><p>Nessuna attività eseguibile adesso.</p></div>';
   if (inArrivo.length) {
     const minArrivo = inArrivo.reduce((t, g) => t + g.voci.reduce((u, v) => u + (Number(v.minuti_stimati) || 0), 0), 0);
