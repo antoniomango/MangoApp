@@ -846,13 +846,30 @@ function renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine, stats) {
       <div class="ord-info" style="margin-bottom:16px">${statoBadge}${extraBadge}</div>
       <div class="detail-meta">${metaHtml}</div>
     </div>
+    <div id="note-riservate-ufficio"></div>
     ${fasiHtml}
   `;
+  caricaNoteRiservateUfficio(o.id);
 
   document.getElementById('lista-view').style.display   = 'none';
   document.getElementById('storico-view').style.display = 'none';
   document.getElementById('detail-view').style.display  = 'block';
   window.scrollTo(0, 0);
+}
+
+// Note riservate dell'ordine: sola lettura, testo sempre con escape
+async function caricaNoteRiservateUfficio(ordineId) {
+  const el = document.getElementById('note-riservate-ufficio');
+  if (!el) return;
+  const { data } = await sb.rpc('note_riservate_ufficio', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_id: ordineId });
+  if (!data?.ok || !data.note?.length || !document.body.contains(el)) return;
+  el.innerHTML = `<div class="detail-card">
+    <div class="detail-section-title"><i data-ic="lucchetto"></i> Note riservate</div>
+    ${data.note.map(n => `<div style="margin-bottom:10px">
+      <div style="font-size:11px;color:var(--muted)">${escapeHtml(formatDataCompleta(n.creata_il))}${n.autore ? ' · ' + escapeHtml(n.autore) : ''}</div>
+      <div style="white-space:pre-wrap">${escapeHtml(n.testo)}</div>
+    </div>`).join('')}
+  </div>`;
 }
 
 function faseRowHtml(f) {

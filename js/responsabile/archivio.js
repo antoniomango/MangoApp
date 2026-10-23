@@ -61,14 +61,12 @@ function renderArchivioTable() {
   }).join('');
 }
 
-// ─── Resa leggibile del log (cronologia PDF) ──────────────────────────────────
-const _statoFaseMinuscolo = (s) => Etichette.statoFase(s).toLowerCase();
+// ─── Nomi e testi del registro (usati anche dal dettaglio ordine) ─────────────
 function _nomeOp(id) {
   if (!id) return null;
   const op = operatoriCache.find(o => o.id === id);
   return op ? `${op.nome} ${op.cognome}` : null;
 }
-// Converte una riga di archivio_log in { titolo, dettagli[] } in italiano leggibile.
 // Testo del registro per le scelte manuali sulle fasi di un ordine (imposta_fase_ordine / ripristina_fase_ordine_automatica)
 function _testoSceltaFaseLog(d) {
   const base = d.fase_scelta === 'torna_automatico' ? 'Fase tornata automatica'
@@ -76,48 +74,10 @@ function _testoSceltaFaseLog(d) {
   return base + (d.segue_regole ? ' (come le regole automatiche)' : ' (scelta manuale: resta finché non la cambi)');
 }
 
-function _leggiLogRiga(azione, dettaglio, fasiOrd) {
-  const d = dettaglio || {};
-  const ofase = d.ordine_fase_id ? fasiOrd.find(f => f.id === d.ordine_fase_id) : null;
-  const faseNome = ofase ? (ofase.nome_custom || fasi.find(x => x.id === ofase.fase_id)?.nome) : null;
-
-  // Due "fase_iniziata" per la stessa fase = aggiunta di un collega, non un nuovo inizio
-  if (azione === 'fase_iniziata' && d.aggiunto_da && d.operatore_id) {
-    const nome = _nomeOp(d.operatore_id) || d.operatore_id;
-    return { titolo: `Collega aggiunto: ${nome}${faseNome ? ` — ${faseNome}` : ''}`, dettagli: [] };
-  }
-
-  let titolo = Etichette.azioneLog(azione);
-  if (faseNome) titolo += ` — ${faseNome}`;
-
-  const dettagli = [];
-  if (d.manuale_responsabile) dettagli.push('Completata manualmente dal responsabile');
-  if (d.riapertura_responsabile) dettagli.push('Riaperta dal responsabile');
-  if (d.unione) dettagli.push('Fasi unite in un unico avanzamento');
-  if (d.durata_min != null) dettagli.push(`Durata: ${Number(d.durata_min).toFixed(0)} min`);
-  if (d.concluso_da) dettagli.push(`Conclusa da: ${_nomeOp(d.concluso_da) || d.concluso_da}`);
-  if (d.preso_in_carico_da) dettagli.push(`Presa in carico da: ${_nomeOp(d.preso_in_carico_da) || d.preso_in_carico_da}`);
-  if (d.rimosso_da) dettagli.push(`Rimosso da: ${_nomeOp(d.rimosso_da) || d.rimosso_da}`);
-  if (Array.isArray(d.operatori) && d.operatori.length) {
-    dettagli.push(`Operatori: ${d.operatori.map(id => _nomeOp(id) || id).join(', ')}`);
-  }
-  if (azione === 'fase_riassegnata') {
-    const vecchio = d.vecchio_operatore ? (_nomeOp(d.vecchio_operatore) || d.vecchio_operatore) : '—';
-    const nuovo = d.nuovo_operatore ? (_nomeOp(d.nuovo_operatore) || d.nuovo_operatore) : '—';
-    dettagli.push(`Da ${vecchio} a ${nuovo}`);
-  } else if (d.vecchio_operatore) {
-    dettagli.push(`Operatore precedente: ${_nomeOp(d.vecchio_operatore) || d.vecchio_operatore}`);
-  }
-  if (d.stato_precedente) dettagli.push(`Stato precedente: ${_statoFaseMinuscolo(d.stato_precedente)}`);
-  if (d.modifica) dettagli.push('Ordine modificato dopo la creazione');
-  if (d.fase_scelta) dettagli.push(_testoSceltaFaseLog(d));
-  // Campi non riconosciuti: omessi deliberatamente (non mostrare JSON grezzo)
-
-  return { titolo, dettagli };
-}
-
 // ─── Genera PDF scheda ordine con jsPDF ───────────────────────────────────────
-function generaPDFOrdine(ordine, fasiOrd, fasiExtra, logOrd, allegati, opzioni = {}) {
+// Una pagina o poco più: dati dell'ordine, date chiave, fasi esterne, note riservate, numero di foto.
+// Nessun operatore, nessun tempo, nessuna cronologia. `note` = note riservate dell'ordine, `nFoto` = foto nella cartella (null se non note).
+function generaPDFOrdine(ordine, fasiOrd, fasiExtra, note, nFoto) {
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W = 190, L = 10;
@@ -134,236 +94,118 @@ function generaPDFOrdine(ordine, fasiOrd, fasiExtra, logOrd, allegati, opzioni =
     doc.text(title, L, y); y += 6;
   };
 
+  // etichetta e valore; il valore va a capo se lungo
   const kv = (label, value) => {
     checkPage();
     doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
     doc.text(label + ':', L, y);
-    // Colonna valore mai fissa a 44mm: per etichette lunghe (sezione Totali) etichetta e
-    // valore si sovrappongono. Si misura l'etichetta e si allarga solo se serve — le
-    // etichette corte (Dati Ordine) restano sui 44mm di sempre.
     const colValore = Math.max(44, doc.getTextWidth(label + ':') + 6);
     doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-    doc.text(String(value ?? '—'), L + colValore, y); y += lineH;
+    const righe = doc.splitTextToSize(String(value ?? '—'), W - colValore);
+    righe.forEach((riga, i) => { if (i > 0) checkPage(); doc.text(riga, L + colValore, y); y += lineH; });
+  };
+
+  // riga di testo semplice (fasi esterne): a capo se lunga
+  const riga = (testo) => {
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
+    doc.splitTextToSize(testo, W).forEach(r => { checkPage(); doc.text(r, L, y); y += lineH; });
   };
 
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('it-IT') : '—';
-  const fmtDT = (d) => d ? new Date(d).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+  const giornoLocale = (d) => new Date(d).toLocaleDateString('sv-SE');          // AAAA-MM-GG nel fuso del browser
+  const giornoIso = (d) => String(d).length <= 10 ? String(d) : giornoLocale(d);   // scadenza è una data, i timestamp si portano al giorno locale
+  // giorni di calendario fra due date (b − a)
+  const giorniTra = (a, b) => {
+    const [ya, ma, da] = giornoIso(a).split('-').map(Number), [yb, mb, db] = giornoIso(b).split('-').map(Number);
+    return Math.round((Date.UTC(yb, mb - 1, db) - Date.UTC(ya, ma - 1, da)) / 86400000);
+  };
+  const giorni = (n) => n === 1 ? '1 giorno' : n + ' giorni';
 
-  // Ordina le fasi per posizione di produzione (fasiOrd non ha un ordine garantito dalla query)
+  // fasi in ordine di produzione (fasiOrd non ha un ordine garantito dalla query)
   const fasiOrdinate = [...(fasiOrd || [])].sort((a, b) => {
     const posA = fasi.find(x => x.id === a.fase_id)?.posizione ?? 9999;
     const posB = fasi.find(x => x.id === b.fase_id)?.posizione ?? 9999;
     return posA - posB;
   });
 
-  // Header
+  // 1. Intestazione
   doc.setFillColor(245, 245, 245); doc.rect(L - 2, y - 6, W + 4, 14, 'F');
   doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.setTextColor(20, 20, 20);
   doc.text(`Scheda Ordine — ${ordine.codice || ordine.id}`, L, y); y += 7;
   doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(80, 80, 80);
-  doc.text(`Esportato il ${new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })}`, L, y); y += 9;
+  doc.text(`${ordine.cliente || '—'} · Esportato il ${new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'long', year: 'numeric' })}`, L, y); y += 9;
 
-  // Dati ordine
-  section('Dati Ordine');
-  kv('Cliente', ordine.cliente);
-  kv('Codice', ordine.codice);
+  // 2. Ordine
+  section('Ordine');
   kv('Tipo', ordine.tipo === 'extra' ? 'Ordine Extra' : 'Standard');
   if (ordine.tipo !== 'extra') {
-    kv('Struttura', ordine.struttura);
-    kv('Tipo Prodotto', ordine.tipo_prodotto);
-    Etichette.valoriLatoOrdine(ordine).forEach(a => a.valori.forEach(v => kv(v.lato_etichetta ? v.lato_etichetta + ': ' + a.etichetta : a.etichetta, v.testo)));
+    kv('Prodotto', [tipoProdLabel(ordine.tipo_prodotto), strutturaLabel(ordine.struttura)].filter(x => x && x !== '—').join(' · ') || '—');
+    const attributi = [];
+    Etichette.valoriLatoOrdine(ordine).forEach(a => a.valori.forEach(v => attributi.push((v.lato_etichetta ? v.lato_etichetta + ': ' : '') + a.etichetta + ': ' + v.testo)));
+    if (attributi.length) kv('Attributi', attributi.join(' · '));
     const lavPdf = Etichette.lavorazioniCncOrdine(ordine, lavorazioneCncNome(ordine.lavorazione_cnc_id));
     if (lavPdf.length) kv('Lavorazioni CNC', lavPdf.map(l => l.testo).join('; '));
   }
   kv('Quantità', ordine.quantita);
   kv('Priorità', ordine.priorita);
+  kv('Scadenza', fmtDate(ordine.scadenza));
+  if (ordine.note_generali) kv('Note', ordine.note_generali);
+
+  // 3. Date chiave
+  section('Date chiave');
   kv('Creato il', fmtDate(ordine.creato_il));
   kv('Scadenza', fmtDate(ordine.scadenza));
-  kv('Spedito il', fmtDate(ordine.spedito_il));
-  kv('Completato il', fmtDate(ordine.completato_il));
-  if (ordine.note_generali) {
-    checkPage();
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
-    doc.text('Note:', L, y);
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-    const noteLines = doc.splitTextToSize(ordine.note_generali, W - 46);
-    noteLines.forEach((line, i) => { if (i > 0) checkPage(); doc.text(line, L + 44, y); y += lineH; });
+  let pronto = fmtDate(ordine.completato_il);
+  if (ordine.completato_il && ordine.scadenza) {
+    const d = giorniTra(ordine.scadenza, ordine.completato_il);
+    pronto += d <= 0 ? ' — in tempo' : ` — ${giorni(d)} dopo la scadenza`;
+  }
+  kv('Pronto per la spedizione il', pronto);
+  let spedito = fmtDate(ordine.spedito_il);
+  if (ordine.spedito_il) {
+    const att = ordine.completato_il ? giorniTra(ordine.completato_il, ordine.spedito_il) : null;
+    spedito += ` — attesa corriere/cliente: ${att === null || att < 0 ? '—' : giorni(att)}`;
+  }
+  kv('Spedito il', spedito);
+
+  // 4. Fasi esterne (solo se l'ordine ne ha di applicabili)
+  const tipoGestione = (f) => f.fase_id !== undefined ? (fasi.find(x => x.id === f.fase_id)?.tipo_gestione || 'standard') : (f.tipo_gestione || 'standard');
+  const attesaEsterna = (f) => f.fase_id !== undefined ? !!fasi.find(x => x.id === f.fase_id)?.e_attesa_esterna : !!f.e_attesa_esterna;
+  const nomeFase = (f) => f.fase_id !== undefined ? (f.nome_custom || fasi.find(x => x.id === f.fase_id)?.nome || '—') : (f.nome || '—');
+  const applicabili = [...fasiOrdinate, ...(fasiExtra || [])].filter(f => f.stato !== 'non_applicabile');
+  const fuori = applicabili.filter(f => tipoGestione(f) === 'spedizione_esterna' || (f.fase_id === undefined && f.spedita_il));
+  const arrivi = applicabili.filter(f => !fuori.includes(f) && (tipoGestione(f) === 'conferma_ricezione' || attesaEsterna(f)));
+  if (fuori.length || arrivi.length) {
+    section('Fasi esterne');
+    fuori.forEach(f => {
+      const gg = (f.spedita_il && f.completata_il) ? giorniTra(f.spedita_il, f.completata_il) : null;
+      riga(`${nomeFase(f)} — inviato il ${fmtDate(f.spedita_il)} · rientrato il ${fmtDate(f.completata_il)} · giorni fuori: ${gg === null || gg < 0 ? '—' : gg}`);
+    });
+    arrivi.forEach(f => riga(`${nomeFase(f)} — arrivato il ${fmtDate(f.completata_il)}`));
   }
 
-  // ─── Dal giorno configurato (config_sistema.tempi_non_registrati_dal) la fase completata non registra più operatore, inizio e tempo ───
-  // `dal` arriva dalla configurazione ('AAAA-MM-GG', o null se non impostata): niente data scritta nel codice.
-  const dal = opzioni.tempiNonRegistratiDal || null;
-  const giornoLocale = (d) => new Date(d).toLocaleDateString('sv-SE');          // AAAA-MM-GG nel fuso del browser
-  const conDatiRegistrati = (f) => f.stato === 'completata' && !!f.completata_il && (!dal || giornoLocale(f.completata_il) < dal);
-  const macchineElenco = opzioni.macchine || [];
-
-  const fasiEseguibili = fasiOrdinate.filter(f => f.stato !== 'non_applicabile');
-  const extraEseguibili = (fasiExtra || []).filter(f => f.stato !== 'non_applicabile');
-  const tutteLeFasi = [...fasiEseguibili, ...extraEseguibili];
-  const fasiCompletate = tutteLeFasi.filter(f => f.stato === 'completata').length;
-  const tuttePrimaDellaData = tutteLeFasi.length > 0 && tutteLeFasi.every(conDatiRegistrati);   // totali ore solo se TUTTE le fasi hanno dati registrati
-  const mostraDatiRegistrati = tutteLeFasi.some(conDatiRegistrati);                             // colonne operatore/tempo/inizio solo se almeno una fase li ha
-  const fasiSaltate = fasiOrdinate.filter(f => f.scelta_motivo === 'fasi_successive_completate');
-
-  // ─── Sintesi ───
-  section('Sintesi');
-  kv('Creato il', fmtDT(ordine.creato_il));
-  kv('Completato il', fmtDT(ordine.completato_il));
-  kv('Spedito il', fmtDT(ordine.spedito_il));
-  const giorni = (ordine.creato_il && ordine.spedito_il) ? Math.round((new Date(ordine.spedito_il) - new Date(ordine.creato_il)) / 86400000) : null;
-  kv('Giorni dalla creazione alla spedizione', giorni === null ? '—' : giorni);
-  const entroScadenza = (ordine.scadenza && ordine.spedito_il) ? (giornoLocale(ordine.spedito_il) <= String(ordine.scadenza).slice(0, 10) ? 'Sì' : 'No') : '—';
-  kv('Spedito entro la scadenza', entroScadenza);
-  kv('Fasi eseguite', `${fasiCompletate} su ${tutteLeFasi.length}`);
-  if (fasiSaltate.length) {
-    checkPage();
-    doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
-    doc.text('Fasi saltate:', L, y);
-    doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-    const nomiSaltate = fasiSaltate.map(f => f.nome_custom || fasi.find(x => x.id === f.fase_id)?.nome || `#${f.fase_id}`).join(', ');
-    doc.splitTextToSize(nomiSaltate, W - 46).forEach((line, i) => { if (i > 0) checkPage(); doc.text(line, L + 44, y); y += lineH; });
-  }
-  if (tuttePrimaDellaData) {
-    // Tempo di lavorazione vs tempo di attesa esterna: il campo che distingue i due è e_attesa_esterna (su ordine_fasi si risale al catalogo `fasi`;
-    // su fasi_ordine_extra è diretto sulla riga). Mostrati solo se tutte le fasi hanno i tempi registrati: mai "0h 00m" né totali parziali.
-    const eAttesaEsterna = (f) => fasi.find(x => x.id === f.fase_id)?.e_attesa_esterna === true;
-    const minutiExtra = (f) => Number(f.tempo_accumulato_minuti ?? (Number(f.ore_stimate_manuali) || 0) * 60) || 0;
-    const minutiLavorazione = fasiEseguibili.reduce((s, f) => s + (eAttesaEsterna(f) ? 0 : (Number(f.tempo_accumulato_minuti) || 0)), 0)
-      + extraEseguibili.reduce((s, f) => s + (f.e_attesa_esterna ? 0 : minutiExtra(f)), 0);
-    const minutiAttesa = fasiEseguibili.reduce((s, f) => s + (eAttesaEsterna(f) ? (Number(f.tempo_accumulato_minuti) || 0) : 0), 0)
-      + extraEseguibili.reduce((s, f) => s + (f.e_attesa_esterna ? minutiExtra(f) : 0), 0);
-    const fmtOre = (min) => `${Math.floor(min / 60)}h ${String(Math.round(min) % 60).padStart(2, '0')}m`;
-    kv('Tempo di lavorazione', fmtOre(minutiLavorazione));
-    kv('Tempo di attesa esterna', fmtOre(minutiAttesa));
-    kv('Tempo complessivo (lavorazione + attesa)', fmtOre(Math.round(minutiLavorazione + minutiAttesa)));
-  }
-
-  // Tabella generica: colonne con peso di larghezza, righe di celle {t: testo, s: 'attenzione' per il corsivo arancione}; il testo va a capo nella cella
-  const tabella = (colonne, righe) => {
-    const gap = 2, pesoTot = colonne.reduce((s, c) => s + c.peso, 0), util = W - gap * (colonne.length - 1);
-    let x = L;
-    const pos = colonne.map(c => { const w = util * c.peso / pesoTot; const p = { x, w }; x += w + gap; return p; });
-    const intestazione = () => {
-      doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
-      colonne.forEach((c, i) => doc.text(c.t, pos[i].x, y));
-      y += lineH * 0.85; hr(220, 220, 220);
-    };
-    intestazione();
-    for (const riga of righe) {
-      doc.setFontSize(8.5); doc.setFont('helvetica', 'normal');
-      const celle = riga.map((c, i) => doc.splitTextToSize(String(c.t ?? ''), pos[i].w));
-      const alt = Math.max(...celle.map(l => l.length), 1) * 3.6;
-      if (y + alt > 272) { doc.addPage(); y = 15; intestazione(); }
-      celle.forEach((linee, i) => {
-        const attenzione = riga[i].s === 'attenzione';
-        doc.setFont('helvetica', attenzione ? 'italic' : 'normal');
-        if (attenzione) doc.setTextColor(200, 120, 40); else doc.setTextColor(30, 30, 30);
-        linee.forEach((linea, k) => doc.text(linea, pos[i].x, y + k * 3.6));
-      });
-      y += Math.max(alt, lineH);
-    }
-  };
-  const nomeOperatore = (f) => { const op = operatoriCache.find(x => x.id === f.operatore_id); return op ? `${op.nome} ${op.cognome}` : (f.operatore_id ? '?' : '—'); };
-
-  // Fasi standard — omesse per ordini di tipo extra (non hanno un catalogo fasi standard)
-  if (ordine.tipo !== 'extra' && fasiEseguibili.length) {
-    if (y > 235) { doc.addPage(); y = 15; }   // titolo, intestazione e almeno una riga stanno insieme
-    section('Fasi di Produzione');
-    const piuPezzi = Number(ordine.quantita) > 1;
-    const colonne = [{ t: 'Fase', peso: 3 }, { t: 'Completata il', peso: 2 }];
-    if (piuPezzi) colonne.push({ t: 'Pezzi', peso: 1 });
-    if (mostraDatiRegistrati) colonne.push({ t: 'Operatore', peso: 2 }, { t: 'Tempo (min)', peso: 1.6 }, { t: 'Inizio', peso: 1.4 });
-    colonne.push({ t: 'Note', peso: 3 });
-    tabella(colonne, fasiEseguibili.map(f => {
-      const faseName = f.nome_custom || fasi.find(x => x.id === f.fase_id)?.nome || `#${f.fase_id}`;
-      const registrati = conDatiRegistrati(f);
-      const riga = [{ t: faseName }, f.stato === 'completata' ? { t: fmtDT(f.completata_il) } : { t: 'non eseguita', s: 'attenzione' }];
-      // una fase completata ha fatto tutti i pezzi (chiudendola il contatore si azzera); per le altre si mostra l'avanzamento, se c'è
-      if (piuPezzi) riga.push({ t: f.stato === 'completata' ? `${ordine.quantita} su ${ordine.quantita}` : (Number(f.pezzi_completati) > 0 ? `${f.pezzi_completati} su ${ordine.quantita}` : '—') });
-      if (mostraDatiRegistrati) riga.push({ t: registrati ? nomeOperatore(f) : '' }, { t: registrati ? (f.tempo_accumulato_minuti != null ? Number(f.tempo_accumulato_minuti).toFixed(1) : '—') : '' }, { t: registrati ? fmtDate(f.iniziata_il) : '' });
-      riga.push({ t: f.note_operatore || '' });
-      return riga;
-    }));
-    if (dal && mostraDatiRegistrati) {
+  // 5. Note riservate (più recenti in alto), omesse se non ce ne sono
+  const noteOrdinate = [...(note || [])].sort((a, b) => String(b.creata_il).localeCompare(String(a.creata_il)));
+  if (noteOrdinate.length) {
+    section('Note riservate');
+    noteOrdinate.forEach(n => {
       checkPage();
-      doc.setFontSize(8); doc.setFont('helvetica', 'italic'); doc.setTextColor(120, 120, 120);
-      doc.text(`Dal ${new Date(dal + 'T12:00:00').toLocaleDateString('it-IT')} operatore e tempi non vengono più registrati alla fase.`, L, y + 2); y += 5;
-    }
-  }
-
-  // Fasi extra — sezione sempre presente: chi legge deve sapere che è stata controllata, non restare nel dubbio se manchi o non sia stata cercata.
-  if (y > 235) { doc.addPage(); y = 15; }
-  section('Fasi Extra');
-  if (!fasiExtra || !fasiExtra.length) {
-    doc.setFontSize(9); doc.setFont('helvetica', 'italic'); doc.setTextColor(140, 140, 140);
-    doc.text('Nessuna', L, y); y += lineH;
-  } else {
-    const colonne = [{ t: 'Nome', peso: 3 }, { t: 'Macchina', peso: 2 }, { t: 'Stato', peso: 1.6 }, { t: 'Completata il', peso: 2 }];
-    if (mostraDatiRegistrati) colonne.push({ t: 'Operatore', peso: 2 });
-    colonne.push({ t: 'Note', peso: 3 });
-    tabella(colonne, fasiExtra.map(f => {
-      const registrati = conDatiRegistrati(f);
-      const riga = [{ t: f.nome || '—' }, { t: macchineElenco.find(m => m.id === f.macchina_id)?.nome || '—' }, { t: f.stato ? _statoFaseMinuscolo(f.stato) : '—' },
-                    { t: f.completata_il ? fmtDT(f.completata_il) : '—' }];
-      if (mostraDatiRegistrati) riga.push({ t: registrati ? nomeOperatore(f) : '' });
-      riga.push({ t: f.note_operatore || '' });
-      return riga;
-    }));
-  }
-
-  // Elenco foto — nome file + fase di appartenenza (le foto stanno nella cartella accanto al PDF)
-  if (allegati && allegati.length) {
-    section('Foto Allegate');
-    doc.setFontSize(8.5);
-    for (const a of allegati) {
-      checkPage();
-      const ofase = fasiOrdinate.find(f => f.id === a.ordine_fase_id);
-      const faseNome = ofase ? (ofase.nome_custom || fasi.find(x => x.id === ofase.fase_id)?.nome) : null;
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor(100, 100, 100);
+      doc.text(fmtDate(n.creata_il), L, y);
       doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-      doc.text(a.url_file.split('/').pop(), L, y);
-      doc.setTextColor(120, 120, 120);
-      doc.text(faseNome || (a.ordine_fase_id ? '—' : 'Ordine'), L + 100, y);
-      y += lineH * 0.85;
-    }
+      doc.splitTextToSize(String(n.testo || ''), W - 30).forEach(r => { checkPage(); doc.text(r, L + 30, y); y += lineH; });
+      y += 1;
+    });
   }
 
-  // Cronologia completa
-  if (logOrd && logOrd.length) {
-    section('Cronologia Completa');
-    for (const l of logOrd) {
-      const u = l.users ? `${l.users.nome} ${l.users.cognome}` : '—';
-      const { titolo, dettagli } = _leggiLogRiga(l.azione, l.dettaglio, fasiOrdinate);
-      // Il titolo può andare a capo (nomi fase lunghi) — misurato PRIMA di disegnare,
-      // altrimenti l'avanzamento verticale fisso di sotto non tiene conto delle righe in
-      // più e la seconda riga del titolo finisce sopra la voce di cronologia successiva.
-      // Il font va fissato esplicitamente PRIMA di ogni splitTextToSize: lo stato lasciato
-      // dall'iterazione precedente (7.5, dettagli) non è quello con cui il titolo verrà
-      // disegnato (8.5) — misurare con la dimensione sbagliata fa calcolare un a-capo più
-      // permissivo di quanto poi la riga occupi davvero, riproducendo la stessa sovrapposizione.
-      doc.setFontSize(8.5); doc.setFont('helvetica', 'normal');
-      const titoloLines = doc.splitTextToSize(titolo, 78);
-      doc.setFontSize(7.5);
-      const dettagliLines = dettagli.flatMap(riga => doc.splitTextToSize(riga, W - 14));
-      const altezzaTitolo = Math.max(titoloLines.length * 3.6, lineH * 0.85);
-      const altezzaBlocco = altezzaTitolo + dettagliLines.length * 3.5;
-      // L'intero blocco (titolo + dettagli) si valuta per il salto pagina in un colpo solo,
-      // non riga per riga: altrimenti una voce può iniziare in fondo a una pagina e
-      // continuare nella successiva, spezzata a metà.
-      if (y + altezzaBlocco > 272) { doc.addPage(); y = 15; }
-
-      doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(60, 80, 120);
-      doc.text(`${fmtDT(l.timestamp)}`, L, y);
-      doc.setFont('helvetica', 'normal'); doc.setTextColor(30, 30, 30);
-      titoloLines.forEach((line, i) => doc.text(line, L + 42, y + i * 3.6));
-      doc.setTextColor(100, 100, 100);
-      doc.text(u, L + 122, y);
-      y += altezzaTitolo;
-      doc.setFontSize(7.5); doc.setTextColor(140, 140, 140);
-      dettagliLines.forEach(line => { doc.text(line, L + 6, y); y += 3.5; });
-    }
+  // 6. Foto
+  if (nFoto !== null && nFoto !== undefined) {
+    y += 2; checkPage();
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(100, 100, 100);
+    doc.text(`${nFoto} foto nella cartella dell'ordine`, L, y); y += lineH;
   }
 
-  // Footer su ogni pagina
+  // 7. Piè di pagina su ogni pagina
   const totalPages = doc.internal.getNumberOfPages();
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);
@@ -372,6 +214,34 @@ function generaPDFOrdine(ordine, fasiOrd, fasiExtra, logOrd, allegati, opzioni =
   }
 
   return doc.output('blob');
+}
+
+// Dati e anteprima dello stesso PDF dell'archiviazione, senza archiviare né scrivere nulla (pulsante «Anteprima PDF» nel dettaglio ordine)
+async function anteprimaPDFOrdine(ordineId) {
+  const o = [...ordiniCache, ...ordiniSpeditiCache].find(x => x.id === ordineId);
+  if (!o) return;
+  // la scheda si apre in una scheda del browser: la finestra va aperta subito, nel gesto del clic
+  const finestra = window.open('', '_blank');
+  try {
+    const [{ data: fasiOrd, error: e1 }, { data: fasiExtra, error: e2 }, { data: esitoNote }, { data: esitoFoto }] = await Promise.all([
+      sb.from('ordine_fasi').select('id, fase_id, nome_custom, stato, completata_il, spedita_il').eq('ordine_id', o.id).order('id'),
+      sb.from('fasi_ordine_extra').select('id, nome, stato, completata_il, spedita_il, e_attesa_esterna, tipo_gestione').eq('ordine_id', o.id).order('creato_il'),
+      sb.rpc('note_riservate_elenco', { p_responsabile_id: currentUserRow.id, p_session_token: null, p_ordine_ids: [o.id] }),
+      sb.functions.invoke('allegati-ordine-url', { headers: await _headerAutorizzazione(), body: { p_responsabile_id: currentUserRow.id, p_ordine_id: o.id } }),
+    ]);
+    if (e1 || e2) throw new Error('fasi non disponibili');
+    if (!esitoNote?.ok) throw new Error('note riservate non disponibili');
+    await arricchisciOrdini([o]);
+    const nFoto = esitoFoto?.ok ? (esitoFoto.allegati || []).length : null;
+    const blob = generaPDFOrdine(o, fasiOrd, fasiExtra, esitoNote.note, nFoto);
+    const url = URL.createObjectURL(blob);
+    if (finestra) finestra.location.href = url;
+    else { const a = document.createElement('a'); a.href = url; a.download = `scheda-ordine-${o.codice || o.id}.pdf`; a.click(); }
+    setTimeout(() => URL.revokeObjectURL(url), 5 * 60 * 1000);
+  } catch (e) {
+    if (finestra) finestra.close();
+    toast('Anteprima non disponibile: ' + e.message, 'err');
+  }
 }
 
 // ─── Scrive un file nella sottocartella e RILEGGE DAL DISCO per verificare che sia
@@ -430,11 +300,10 @@ async function _esportaOrdiniConVerifica(ordini) {
   try { dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' }); }
   catch (e) { return; }   // selezione annullata (o negata): nessuna archiviazione
 
-  // da questa data la fase completata non registra più operatore, inizio e tempo: la scheda PDF li omette (data da config_sistema)
-  const { data: cfgTempi } = await sb.from('config_sistema').select('valore').eq('chiave', 'tempi_non_registrati_dal').maybeSingle();
-  const tempiNonRegistratiDal = cfgTempi?.valore || null;
-  if (!macchineList.length) await loadMacchine();
-  if (!operatoriCache.length && typeof loadOperatori === 'function') { try { await loadOperatori(); } catch (e) { /* i nomi restano "?" */ } }
+  // note riservate di tutti gli ordini dell'esportazione, in una sola chiamata: se non si leggono, nessun PDF viene scritto (nessun ordine archiviato)
+  const { data: esitoNote } = await sb.rpc('note_riservate_elenco', { p_responsabile_id: currentUserRow.id, p_session_token: null, p_ordine_ids: ordini.map(x => x.id) });
+  const notePerOrdine = esitoNote?.ok ? {} : null;
+  (esitoNote?.note || []).forEach(n => { (notePerOrdine[n.ordine_id] = notePerOrdine[n.ordine_id] || []).push(n); });
 
   const totale = ordini.length;
   const falliti = [];
@@ -446,19 +315,16 @@ async function _esportaOrdiniConVerifica(ordini) {
     try {
       const [
         { data: fasiOrd },
-        { data: logOrd },
         { data: fasiExtra },
       ] = await Promise.all([
         sb.from('ordine_fasi')
-          .select('id, fase_id, nome_custom, stato, operatore_id, tempo_accumulato_minuti, n_ordini_batch, iniziata_il, completata_il, note_operatore, pezzi_completati, scelta_manuale, scelta_motivo')
+          .select('id, fase_id, nome_custom, stato, completata_il, spedita_il')
           .eq('ordine_id', o.id).order('id'),
-        sb.from('archivio_log')
-          .select('azione, utente_id, timestamp, dettaglio, users!utente_id(nome,cognome)')
-          .eq('ordine_id', o.id).order('timestamp'),
         sb.from('fasi_ordine_extra')
-          .select('id, nome, stato, operatore_id, ore_stimate_manuali, completata_il, note_operatore, iniziata_il, e_attesa_esterna, macchina_id, tempo_accumulato_minuti')
+          .select('id, nome, stato, completata_il, spedita_il, e_attesa_esterna, tipo_gestione')
           .eq('ordine_id', o.id).order('creato_il'),
       ]);
+      if (!notePerOrdine) throw new Error('note riservate non disponibili');
 
       // Path e URL firmati ottenuti insieme dalla stessa edge function della galleria (V-29:
       // niente più lettura diretta di storage.objects — vedi caricaGalleriaOrdineDettaglio).
@@ -493,7 +359,7 @@ async function _esportaOrdiniConVerifica(ordini) {
 
       if (!scritturaFallita) {
         await arricchisciOrdini([o]);
-        const pdfBlob = generaPDFOrdine(o, fasiOrd, fasiExtra, logOrd, allegati, { tempiNonRegistratiDal, macchine: macchineList });
+        const pdfBlob = generaPDFOrdine(o, fasiOrd, fasiExtra, notePerOrdine[o.id] || [], allegati.length);
         const okPdf = await _scriviEVerifica(subDir, 'scheda-ordine.pdf', pdfBlob);
         if (!okPdf) scritturaFallita = 'verifica su disco fallita per scheda-ordine.pdf';
         else scrittiVerificati++;

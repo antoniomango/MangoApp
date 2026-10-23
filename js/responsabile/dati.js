@@ -166,6 +166,12 @@ async function loadOrdini() {
     } catch (e) { console.warn('spedizioni_non_pronte', e); }
   }
 
+  // segno «note riservate» nella lista: un'unica chiamata leggera per tutti gli ordini
+  try {
+    const { data: nc } = await sb.rpc('note_riservate_conteggi', { p_responsabile_id: currentUserRow.id, p_session_token: null });
+    noteRiservateConteggi = Object.fromEntries((nc?.ordini || []).map(x => [x.ordine_id, x.n]));
+  } catch (e) { console.warn('note_riservate_conteggi', e); }
+
   const trenta30 = new Date(); trenta30.setDate(trenta30.getDate() - 30);
   const [{ data: spediti }, { count: cnt30 }] = await Promise.all([
     sb.from('ordini').select('*').eq('stato', 'spedito').neq('eliminato', true).order('spedito_il', { ascending: false }),

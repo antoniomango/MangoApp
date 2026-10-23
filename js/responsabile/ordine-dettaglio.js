@@ -13,6 +13,79 @@ async function openDettaglioOrdine(id) {
   await renderDettaglioOrdine(id);
 }
 
+// ─── Note riservate dell'ordine: elenco datato, scrive solo il responsabile ───
+const NOTE_RISERVATE_ERRORI = { testo_vuoto: 'scrivi il testo della nota', testo_troppo_lungo: 'massimo 2000 caratteri', nota_non_trovata: "nota non trovata (forse cancellata da un'altra scheda)", ordine_non_trovato: 'ordine non trovato' };
+function _erroreNoteRiservate(data, error) { return NOTE_RISERVATE_ERRORI[data?.errore] || data?.errore || error?.message || 'sconosciuto'; }
+
+async function caricaNoteRiservate(ordineId) {
+  notaRiservataInModifica = null; notaRiservataBozza = '';
+  const { data, error } = await sb.rpc('note_riservate_elenco', { p_responsabile_id: currentUserRow.id, p_session_token: null, p_ordine_ids: [ordineId] });
+  if (ordineId !== currentOrdineId) return;
+  if (error || !data?.ok) { noteRiservateOrdine = []; renderNoteRiservate(ordineId, 'Note riservate non disponibili: ' + _erroreNoteRiservate(data, error)); return; }
+  noteRiservateOrdine = data.note || [];
+  noteRiservateConteggi[ordineId] = noteRiservateOrdine.length;
+  renderNoteRiservate(ordineId);
+}
+
+function renderNoteRiservate(ordineId, errore) {
+  const el = document.getElementById('det-note-riservate-body');
+  if (!el) return;
+  const righe = noteRiservateOrdine.map(n => {
+    if (notaRiservataInModifica && notaRiservataInModifica.id === n.id) {
+      return `<div class="nota-riservata" style="margin-bottom:12px">
+        <textarea rows="3" maxlength="2000" style="width:100%;resize:vertical" oninput="notaRiservataInModifica.testo=this.value">${escapeHtml(notaRiservataInModifica.testo)}</textarea>
+        <div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-ok" onclick="salvaNotaRiservata('${ordineId}')">Salva</button><button class="btn btn-secondary" onclick="annullaModificaNotaRiservata('${ordineId}')">Annulla</button></div>
+      </div>`;
+    }
+    return `<div class="nota-riservata" style="margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+      <div style="font-size:12px;color:var(--muted)">${escapeHtml(formatDateTime(n.creata_il))}${n.autore ? ' · ' + escapeHtml(n.autore) : ''}${n.modificata_il ? ' · modificata ' + escapeHtml(formatDateTime(n.modificata_il)) : ''}</div>
+      <div style="white-space:pre-wrap;margin:4px 0">${escapeHtml(n.testo)}</div>
+      <div style="display:flex;gap:8px"><button class="btn btn-secondary" style="padding:3px 10px;font-size:12px" onclick="iniziaModificaNotaRiservata('${ordineId}','${n.id}')">Modifica</button><button class="btn btn-secondary" style="padding:3px 10px;font-size:12px" onclick="eliminaNotaRiservata('${ordineId}','${n.id}')">Elimina</button></div>
+    </div>`;
+  }).join('');
+  el.innerHTML = `${errore ? `<div style="color:var(--alert);margin-bottom:8px">${escapeHtml(errore)}</div>` : ''}
+    <div style="margin-bottom:14px">
+      <textarea id="nota-riservata-nuova" rows="2" maxlength="2000" placeholder="Nuova nota riservata…" style="width:100%;resize:vertical" oninput="notaRiservataBozza=this.value">${escapeHtml(notaRiservataBozza)}</textarea>
+      <button class="btn btn-secondary" style="margin-top:6px" onclick="aggiungiNotaRiservata('${ordineId}')">Aggiungi nota</button>
+    </div>
+    ${righe || (errore ? '' : '<div style="color:var(--muted)">Nessuna nota riservata.</div>')}`;
+}
+
+async function aggiungiNotaRiservata(ordineId) {
+  const testo = (notaRiservataBozza || '').trim();
+  if (!testo) { toast('Scrivi il testo della nota', 'err'); return; }
+  const { data, error } = await sb.rpc('note_riservata_aggiungi', { p_responsabile_id: currentUserRow.id, p_session_token: null, p_ordine_id: ordineId, p_testo: testo });
+  if (error || !data?.ok) { toast('Errore: ' + _erroreNoteRiservate(data, error), 'err'); return; }
+  notaRiservataBozza = '';
+  await caricaNoteRiservate(ordineId);
+}
+
+function iniziaModificaNotaRiservata(ordineId, notaId) {
+  const n = noteRiservateOrdine.find(x => x.id === notaId);
+  if (!n) return;
+  notaRiservataInModifica = { id: notaId, testo: n.testo };
+  renderNoteRiservate(ordineId);
+}
+function annullaModificaNotaRiservata(ordineId) { notaRiservataInModifica = null; renderNoteRiservate(ordineId); }
+
+async function salvaNotaRiservata(ordineId) {
+  if (!notaRiservataInModifica) return;
+  const { data, error } = await sb.rpc('note_riservata_modifica', { p_responsabile_id: currentUserRow.id, p_session_token: null, p_nota_id: notaRiservataInModifica.id, p_testo: notaRiservataInModifica.testo });
+  if (error || !data?.ok) {
+    toast('Errore: ' + _erroreNoteRiservate(data, error), 'err');
+    if (data?.errore === 'nota_non_trovata') await caricaNoteRiservate(ordineId);
+    return;
+  }
+  await caricaNoteRiservate(ordineId);
+}
+
+async function eliminaNotaRiservata(ordineId, notaId) {
+  if (!confirm("Eliminare questa nota riservata? L'operazione non può essere annullata.")) return;
+  const { data, error } = await sb.rpc('note_riservata_elimina', { p_responsabile_id: currentUserRow.id, p_session_token: null, p_nota_id: notaId });
+  if (error || !data?.ok) toast('Errore: ' + _erroreNoteRiservate(data, error), 'err');
+  await caricaNoteRiservate(ordineId);
+}
+
 async function renderDettaglioOrdine(id) {
   const ordine = [...ordiniCache, ...ordiniSpeditiCache].find(o => o.id === id);
   if (!ordine) { showSection('dashboard'); return; }
@@ -59,6 +132,9 @@ async function renderDettaglioOrdine(id) {
     noteBody.innerHTML = '';
   }
 
+  // Note riservate (tabella a parte, mai visibili agli operatori)
+  caricaNoteRiservate(id);
+
   // Calcola stima consegna per questo ordine (con coda)
   calcolaStimaSingoloOrdine(id);
 
@@ -74,6 +150,7 @@ async function renderDettaglioOrdine(id) {
   } else {
     actEl.innerHTML = `<span class="badge badge-spedito">${Etichette.azioneSpedito(ordine)} ${ordine.spedito_il ? formatDate(ordine.spedito_il) : ''}</span>`;
   }
+  actEl.insertAdjacentHTML('beforeend', `<button class="btn btn-secondary" onclick="anteprimaPDFOrdine('${id}')"><i data-ic="appunti"></i> Anteprima PDF</button>`);
   // Pulsante modifica e elimina: solo su ordini non ancora spediti
   if (ordine.stato !== 'spedito') {
     actEl.innerHTML += `<button class="btn btn-secondary" onclick="openModificaOrdine('${id}')"><i data-ic="matita"></i> Modifica</button>`;

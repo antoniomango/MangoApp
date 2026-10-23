@@ -16,6 +16,10 @@ function _identitaCorrente() {
 let fasi = []; // [{id, nome, descrizione, posizione, trigger_tipo_prodotto}]
 let tipiProdotto = []; // [{id, label, posizione}]
 let ordiniCache = [];
+let noteRiservateConteggi = {};   // ordine_id → numero di note riservate (RPC note_riservate_conteggi), per il segno nella lista
+let noteRiservateOrdine = [];   // note dell'ordine aperto nel dettaglio, più recenti in alto
+let notaRiservataInModifica = null;   // { id, testo } della nota in modifica, null se nessuna
+let notaRiservataBozza = '';   // testo della nuova nota in scrittura
 let spedizioniNonProntePerGruppo = {};   // gruppo_id → [{ ordine_id, codice, fasi }]
 let gruppiSpedizioneCache = {};   // id gruppo → { id, nome, clienti, consegna } (RPC gruppi_spedizione_elenco)
 let ordiniSpeditiCache = [];
