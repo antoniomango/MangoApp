@@ -33,7 +33,7 @@ function renderNoteRiservate(ordineId, errore) {
   const righe = noteRiservateOrdine.map(n => {
     if (notaRiservataInModifica && notaRiservataInModifica.id === n.id) {
       return `<div class="nota-riservata" style="margin-bottom:12px">
-        <textarea rows="3" maxlength="2000" style="width:100%;resize:vertical" oninput="notaRiservataInModifica.testo=this.value">${escapeHtml(notaRiservataInModifica.testo)}</textarea>
+        <div class="form-group" style="margin-bottom:0"><textarea rows="3" maxlength="2000" style="resize:vertical" oninput="notaRiservataInModifica.testo=this.value">${escapeHtml(notaRiservataInModifica.testo)}</textarea></div>
         <div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-ok" onclick="salvaNotaRiservata('${ordineId}')">Salva</button><button class="btn btn-secondary" onclick="annullaModificaNotaRiservata('${ordineId}')">Annulla</button></div>
       </div>`;
     }
@@ -45,7 +45,7 @@ function renderNoteRiservate(ordineId, errore) {
   }).join('');
   el.innerHTML = `${errore ? `<div style="color:var(--alert);margin-bottom:8px">${escapeHtml(errore)}</div>` : ''}
     <div style="margin-bottom:14px">
-      <textarea id="nota-riservata-nuova" rows="2" maxlength="2000" placeholder="Nuova nota riservata…" style="width:100%;resize:vertical" oninput="notaRiservataBozza=this.value">${escapeHtml(notaRiservataBozza)}</textarea>
+      <div class="form-group" style="margin-bottom:0"><textarea id="nota-riservata-nuova" rows="2" maxlength="2000" placeholder="Nuova nota riservata…" style="resize:vertical" oninput="notaRiservataBozza=this.value">${escapeHtml(notaRiservataBozza)}</textarea></div>
       <button class="btn btn-secondary" style="margin-top:6px" onclick="aggiungiNotaRiservata('${ordineId}')">Aggiungi nota</button>
     </div>
     ${righe || (errore ? '' : '<div style="color:var(--muted)">Nessuna nota riservata.</div>')}`;
@@ -107,6 +107,7 @@ async function renderDettaglioOrdine(id) {
     ${latiLavorazioniDettaglioHtml(ordine)}`}
     <div class="detail-field"><label>Priorità</label>${Etichette.badgePriorita(ordine.priorita)}</div>
     <div class="detail-field"><label>Stato</label><span class="badge badge-${ordine.stato}">${statoLabel(ordine.stato, ordine)}</span></div>
+    ${Etichette.attesaSpedizione(ordine) ? `<div class="detail-field"><label>In attesa</label><span>${escapeHtml(Etichette.attesaSpedizione(ordine))}</span></div>` : ''}
     <div class="detail-field"><label>Consegna</label><span>${escapeHtml(Etichette.modalitaConsegna(ordine.modalita_consegna || 'da_spedire'))}${ordine.modalita_consegna === 'da_avvisare' ? `<div class="consegna-avviso">${escapeHtml(Etichette.statoAvviso(ordine, nomeUtenteOperatore(ordine.avvisato_da)))}</div>` : ''}</span></div>
     <div class="detail-field"><label>Scadenza</label><span style="color:${isLate ? 'var(--alert)' : 'inherit'}">${ordine.scadenza ? formatDate(ordine.scadenza) : '—'}${ordine.scadenza ? ` · Settimana ${settimanaIsoDaData(ordine.scadenza)}` : ''}${isLate ? ' <i data-ic="avviso"></i> In ritardo' : ''}</span></div>
     <div class="detail-field"><label>Consegna stimata</label><span id="det-stima-consegna" style="color:var(--muted)">Calcolo…</span></div>

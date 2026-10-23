@@ -85,6 +85,18 @@ const Etichette = (() => {
     if (ritiraOrdine(o) && stato === 'spedito') return 'Ritirato';
     return STATI_ORDINE[stato] || vuoto(stato);
   }
+  // Da quando un ordine pronto aspetta di essere spedito: data (GG/MM) e giorni di calendario nel fuso locale
+  function attesaSpedizione(o, adesso) {
+    if (!o || o.stato !== 'attesa_spedizione' || !o.completato_il) return '';
+    const d = new Date(o.completato_il);
+    if (isNaN(d)) return '';
+    const data = String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+    const oggi = adesso || new Date();
+    const giorni = Math.round((new Date(oggi.getFullYear(), oggi.getMonth(), oggi.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000);
+    const testo = 'Pronto per la spedizione dal ' + data;
+    if (giorni < 0) return testo;
+    return testo + ' · ' + (giorni === 0 ? 'da oggi' : giorni === 1 ? 'da 1 giorno' : 'da ' + giorni + ' giorni');
+  }
   const azioneSpedito = o => ritiraOrdine(o) ? 'Ritirato' : 'Spedito';
   const SUGGERIMENTO_CONSEGNA = (cliente, s) => !s || !s.modalita ? '' : cliente + ' di solito: ' + modalitaConsegna(s.modalita) + ' (' + s.conteggio + ' degli ultimi ' + s.su + ' ordini)';
   const CONSEGNA_TESTI = {
@@ -445,7 +457,7 @@ const Etichette = (() => {
     priorita: () => priorita, lati: () => lati, tipi: () => tipi, attributi: () => attributi,
     prioritaEtichetta, prioritaPeso, confrontaPriorita, colorePriorita, badgePriorita,
     statoOrdine: (s, o) => o ? statoOrdineConsegna(s, o) : (STATI_ORDINE[s] || vuoto(s)),
-    modalitaConsegna, modalitaConsegnaElenco: () => MODALITA_CONSEGNA, quandoSiFa: () => QUANDO_SI_FA, quandoSiFaTesti: QUANDO_SI_FA_TESTI, ritiraOrdine, statoAvviso, consegnaOperatore,
+    modalitaConsegna, modalitaConsegnaElenco: () => MODALITA_CONSEGNA, quandoSiFa: () => QUANDO_SI_FA, quandoSiFaTesti: QUANDO_SI_FA_TESTI, ritiraOrdine, attesaSpedizione, statoAvviso, consegnaOperatore,
     erroreSalvataggio: ERRORE_SALVATAGGIO, presa: PRESA, pressate: PRESSATE, fasiAbbinate: FASI_ABBINATE, azioneSpedito, suggerimentoConsegna: SUGGERIMENTO_CONSEGNA, consegnaTesti: CONSEGNA_TESTI, spedizioneUnica: SPEDIZIONE_UNICA, avvisi: AVVISI, dataOraBreve: _dataOra,
     statoFase: s => STATI_FASE[s] || vuoto(s),
     statoRichiesta: s => STATI_RICHIESTA[s] || vuoto(s),
