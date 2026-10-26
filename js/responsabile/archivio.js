@@ -4,6 +4,15 @@
 // ═══════════════════════════════════════════════
 // ARCHIVIO
 // ═══════════════════════════════════════════════
+function minutiToOreMinuti(m) {
+  if (!m && m !== 0) return '—';
+  const tot = Math.round(Number(m));
+  if (tot <= 0) return '0m';
+  const h = Math.floor(tot / 60);
+  const min = tot % 60;
+  return h > 0 ? `${h}h ${min > 0 ? min + 'm' : ''}`.trim() : `${min}m`;
+}
+
 function renderArchivioTable() {
   const vista = document.getElementById('arch-vista')?.value || 'da_esportare';
   const search = document.getElementById('arch-search')?.value.toLowerCase() || '';

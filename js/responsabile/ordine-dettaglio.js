@@ -136,8 +136,8 @@ async function renderDettaglioOrdine(id) {
   // Note riservate (tabella a parte, mai visibili agli operatori)
   caricaNoteRiservate(id);
 
-  // Calcola stima consegna per questo ordine (con coda)
-  calcolaStimaSingoloOrdine(id);
+  // Stima di consegna del server per questo ordine
+  mostraStimaDettaglio(id);
 
   // Actions
   const actEl = document.getElementById('det-actions');
@@ -496,57 +496,9 @@ async function confermRiassegna() {
 // ═══════════════════════════════════════════════
 
 
-async function loadFaseMediaMinuti() {
-  const [{ data }, { data: fasiCatalogo }] = await Promise.all([
-    sb.from('ordine_fasi')
-      .select('fase_id, tempo_accumulato_minuti, n_ordini_batch, ordini(quantita)')
-      .eq('stato', 'completata')
-      .gt('tempo_accumulato_minuti', 0)
-      .lt('tempo_accumulato_minuti', Calendario.costante('outlier_max_minuti') ?? 20000)
-      .not('fase_id', 'is', null),
-    sb.from('fasi').select('id, e_attesa_esterna'),
-  ]);
-  // Costruisce il set di fase_id con attesa esterna
+async function loadFasiEsterne() {
+  const { data: fasiCatalogo } = await sb.from('fasi').select('id, e_attesa_esterna');
   faseEsternaSet = new Set((fasiCatalogo || []).filter(f => f.e_attesa_esterna).map(f => f.id));
-  if (!data) return;
-  const map = {};
-  data.forEach(f => {
-    const q = f.ordini?.quantita || 1;
-    const minPerPezzo = f.tempo_accumulato_minuti / (f.n_ordini_batch || 1) / q;
-    if (!map[f.fase_id]) map[f.fase_id] = [];
-    map[f.fase_id].push(minPerPezzo);
-  });
-  faseMediaMinutiMap = {};
-  Object.entries(map).forEach(([id, vals]) => {
-    faseMediaMinutiMap[parseInt(id)] = vals.reduce((a, b) => a + b, 0) / vals.length;
-  });
-  // mango-v45: i tempi per fase non si registrano più. Le stime (ETA di dashboard e ordini) usano gli stessi tempi di riferimento del piano del giorno;
-  // la mediana storica resta solo per le fasi senza tempo di riferimento.
-  const { data: rif } = await sb.rpc('stime_fasi_riferimento', { p_responsabile_id: currentUserRow.id, p_session_token: null });
-  if (rif?.ok) {
-    Object.entries(rif.fasi || {}).forEach(([id, v]) => {
-      if (!v.senza_tempo || !faseMediaMinutiMap[parseInt(id)]) faseMediaMinutiMap[parseInt(id)] = Number(v.minuti_pezzo);
-    });
-  }
-}
-
-async function loadFaseExtraMediaMinuti() {
-  const { data } = await sb.from('fasi_ordine_extra')
-    .select('nome, tempo_accumulato_minuti, n_ordini_batch')
-    .eq('stato', 'completata')
-    .gt('tempo_accumulato_minuti', 0);
-  if (!data) return;
-  const map = {};
-  data.forEach(r => {
-    const key = r.nome.toLowerCase();
-    if (!map[key]) map[key] = [];
-    map[key].push(r.tempo_accumulato_minuti / Math.max(r.n_ordini_batch || 1, 1));
-  });
-  faseExtraMediaMinutiMap = {};
-  Object.entries(map).forEach(([name, vals]) => {
-    vals.sort((a, b) => a - b);
-    faseExtraMediaMinutiMap[name] = vals[Math.floor(vals.length / 2)];
-  });
 }
 
 

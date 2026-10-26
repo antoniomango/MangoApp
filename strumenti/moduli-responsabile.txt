@@ -1,7 +1,7 @@
 # Ordine di caricamento dei file di js/responsabile/ in responsabile.html (verificato da controlla-moduli.mjs)
 stato.js
 dati.js
-stime.js
+previsioni.js
 sistema.js
 orario.js
 anagrafiche.js

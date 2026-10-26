@@ -98,7 +98,7 @@ async function postLogin() {
   // Load fasi e tipi prodotto (devono precedere il resto)
   await Promise.all([loadFasi(), loadTipiProdotto(), loadPrioritaConfig(), loadAttributiConfig(), loadLatiConfig(), loadLavorazioniCnc(), Calendario.carica(sb, currentUserRow.id, null)]);
   // Load data
-  await Promise.all([loadOrdini(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadMacroFasi(), loadFaseMediaMinuti(), loadFaseExtraMediaMinuti(), caricaNomiFasiExtraStoria(), loadMacchine()]);
+  await Promise.all([loadOrdini(), loadOperatori(), loadNotifiche(), loadOrarioConfig(), loadMacroFasi(), loadFasiEsterne(), caricaNomiFasiExtraStoria(), loadMacchine()]);
   // Check ordini in ritardo (solo responsabile)
   if (currentUserRow?.ruolo === 'responsabile') checkOrdiniInRitardo();
   // Realtime
@@ -246,7 +246,7 @@ function setupRealtime() {
       _flussoCtl?.richiedi();
       await refreshStime();
       if (currentOrdineId) {
-        calcolaStimaSingoloOrdine(currentOrdineId);
+        mostraStimaDettaglio(currentOrdineId);
         renderDettaglioOrdine(currentOrdineId);
       }
       produzioneCambiata();      // Oggi e Pianificazione si aggiornano da sole quando cambia lo stato di una fase

@@ -332,6 +332,7 @@ async function fetchAllRows(queryBuilderFn, pageSize = 1000) {
 async function loadKpi() {
   mostraNotaTempiKpi();
   loadConfrontoTempiRiferimento();   // indipendente dal periodo selezionato (ha la sua data)
+  loadAffidabilitaPrevisioni();      // idem: ha il suo intervallo
   const giorni = parseInt(document.getElementById('kpi-periodo').value);
   const dal = giorni > 0 ? new Date(Date.now() - giorni * 86400000).toISOString() : null;
 

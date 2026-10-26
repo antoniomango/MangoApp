@@ -29,11 +29,8 @@ let operatoriCache = [];
 let notificheCache = [];
 let currentOrdineId = null;
 let _realtimeChannel = null; // canale Realtime attivo (evita doppia sottoscrizione al ritorno dalla background)
-let faseMediaMinutiMap = {}; // fase_id -> avg minuti per pezzo
 let faseEsternaSet = new Set(); // fase_id (int) delle fasi con e_attesa_esterna=true
-let faseExtraMediaMinutiMap = {}; // nome_lower -> mediana minuti per unità (fasi_ordine_extra)
 let catalogoFasiExtra = []; // catalogo_fasi_extra in memoria
-let _etaMinutiCache = {}; // ordine_id -> minuti ETA equivalenti (critico interno + calendario esterno scalato)
 let prioritaConfig = []; // [{id, etichetta, peso, posizione, attivo}] da priorita_ordine_config
 let attributiConfig = []; // [{chiave, etichetta, opzioni:[{valore,etichetta,posizione,attivo}]}] da attributi_prodotto_config + attributo_opzioni
 let riassegnaOrdFaseId = null;

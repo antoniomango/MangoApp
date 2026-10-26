@@ -368,7 +368,7 @@ async function loadAvanzamenti(ids) {
   // Ordini extra → fasi_ordine_extra
   if (extraIds.length) {
     const { data } = await sb.from('fasi_ordine_extra')
-      .select('ordine_id, nome, stato, e_attesa_esterna')
+      .select('ordine_id, stato')
       .in('ordine_id', extraIds);
     (data || []).forEach(f => {
       if (!map[f.ordine_id]) map[f.ordine_id] = { tot: 0, done: 0, inCorso: 0, fasiRim: [] };
@@ -376,31 +376,9 @@ async function loadAvanzamenti(ids) {
       if (f.stato === 'completata') map[f.ordine_id].done++;
       if (f.stato === 'in_corso') map[f.ordine_id].inCorso++;
     });
-    // ETA per ordini extra (mediana per nome, fallback globale, poi kpi_config default=30)
-    const allExtraVals = Object.values(faseExtraMediaMinutiMap).filter(v => v > 0);
-    allExtraVals.sort((a, b) => a - b);
-    const extraFallback = allExtraVals.length ? allExtraVals[Math.floor(allExtraVals.length / 2)] : 30;
-    (data || []).filter(f => f.stato !== 'completata' && !f.e_attesa_esterna).forEach(f => {
-      const med = faseExtraMediaMinutiMap[f.nome?.toLowerCase()] ?? extraFallback;
-      const contrib = f.stato === 'in_corso' ? med * Calendario.costante('fattore_fase_in_corso') : med;
-      _etaMinutiCache[f.ordine_id] = (_etaMinutiCache[f.ordine_id] || 0) + contrib;
-    });
   }
 
-  const minutiGiorno = Calendario.minutiGiorno();   // giornata tipo dal calendario unico (server)
-
-  // Costruisce fasiMap nel formato atteso da buildEtaFromFasi (con flag esterna)
-  const fasiMap = {};
-  ids.forEach(id => {
-    const s = map[id];
-    fasiMap[id] = (s?.fasiRim || []).map(f => ({
-      fase_id: f.fase_id,
-      stato: f.inCorso ? 'in_corso' : 'disponibile',
-      esterna: f.esterna || false,
-    }));
-  });
-  const stdOrdini = ids.map(id => ordiniCache.find(o => o.id === id)).filter(Boolean);
-  const etaMinutiPerOrdine = buildEtaFromFasi(stdOrdini, fasiMap);
+  await caricaStimeServer();   // stima unica: la simulazione del server
 
   // Ordina per scadenza per render
   const idsSorted = [...ids].sort((a, b) => {
@@ -443,18 +421,13 @@ async function loadAvanzamenti(ids) {
     tr.classList.remove('scad-rischio');
     if (stimaEl) stimaEl.innerHTML = '';
 
-    const minTotale = etaMinutiPerOrdine[id];
-    if (minTotale > 0) {
-      const giorniRimanenti = Math.ceil(minTotale / minutiGiorno);
-      const dataStimata = Calendario.aggiungiGiorniLavorativi(Calendario.oggiIso(), giorniRimanenti);
-      const dataStimataStr = dataStimata.toISOString().split('T')[0];
-      const isRischio = ordine?.scadenza && dataStimataStr > ordine.scadenza;
-      if (isRischio) tr.classList.add('scad-rischio');
-      if (stimaEl) {
-        const stimaFmt = dataStimata.toLocaleDateString('it-IT', { day:'2-digit', month:'2-digit' });
-        const color = isRischio ? 'var(--warn-ink-2)' : 'var(--muted)';
-        const icon = isRischio ? '<i data-ic="avviso"></i>' : '<i data-ic="previsione"></i>';
-        stimaEl.innerHTML = `<span style="color:${color}">${icon} stima: ${stimaFmt}</span>`;
+    const stima = stimaListaOrdine(id, ordine?.scadenza);
+    if (stima) {
+      if (stima.rischio) tr.classList.add('scad-rischio');
+      if (stimaEl && stima.testo) {
+        const color = stima.rischio ? 'var(--warn-ink-2)' : 'var(--muted)';
+        const icon = stima.rischio ? '<i data-ic="avviso"></i>' : '<i data-ic="previsione"></i>';
+        stimaEl.innerHTML = `<span style="color:${color}"${stima.titolo ? ` title="${escapeHtml(stima.titolo)}"` : ''}>${icon} ${escapeHtml(stima.testo)}</span>`;
       }
     }
   });
