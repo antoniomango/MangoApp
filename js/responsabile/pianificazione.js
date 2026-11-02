@@ -13,6 +13,7 @@ const _PIANO_ERRORI = {
   tetto_attuale_fuori_da_minimo_e_massimo: 'Il tetto in uso deve restare fra il minimo e il massimo.',
   giorni_minimi_maggiori_della_finestra: 'I giorni che devono dare lo stesso segnale non possono superare i giorni considerati.',
   soglia_scarsa_non_minore_della_piena: 'La soglia "lista troppo lunga" deve essere più bassa della soglia "lista troppo corta".',
+  quota_minima_riempimento_maggiore_della_soglia_tempo: 'La quota minima di giornata trascorsa non può superare la quota massima del riempimento.',
 };
 function _pianoErrore(d, e) {
   if (d?.errore === 'valore_fuori_intervallo') return `«${d.etichetta}»: valore fuori dai limiti (${d.min}–${d.max}).`;
@@ -54,8 +55,8 @@ function renderPianoConfig() {
       <h3 style="font-size:15px;margin-bottom:8px">Come funziona</h3>
       <ol style="padding-left:20px;font-size:13px;line-height:1.55;margin-bottom:12px">
         <li><strong>Piano iniziale.</strong> All'inizio di ogni turno il sistema costruisce la lista delle attività del giorno: prende le fasi aperte nell'ordine di priorità degli ordini (scadenza e urgenza), rispetta le dipendenze fra le fasi e si ferma quando la somma delle stime raggiunge la capacità, cioè le ore di lavorazioni per persona presente (il tetto) moltiplicate per le persone presenti. Le ore di lavorazioni sono la somma dei tempi di riferimento delle fasi: il tempo di una fase fatta in due conta una volta sola, il tetto lo assorbe. Esempio: 4 persone e tetto 3,5 = 14 ore di lavorazioni. Una macchina è un posto di lavoro e non può superare le ore di una persona.</li>
-        <li><strong>Riempimento in giornata.</strong> Se la squadra completa gran parte della lista prima del previsto, la lista si allunga da sola con altre attività. Gli ordini nuovi o urgenti entrano al riempimento successivo, o subito se li aggiungi tu dalla pagina Oggi.</li>
-        <li><strong>Regolazione del tetto, una volta a settimana.</strong> Il sistema guarda le ultime giornate: se la lista era spesso troppo corta alza il tetto di un passo, se era spesso troppo lunga lo abbassa. Sempre dentro il minimo e il massimo che imposti tu. È l'unica regolazione automatica: non si correggono più i tempi delle singole fasi.</li>
+        <li><strong>Riempimento in giornata.</strong> Dopo una quota minima di giornata, se la squadra ha fatto gran parte del lavoro in lista (contando anche le attività completate fuori lista), misura il suo ritmo reale e allunga la lista con altre attività, fino a coprire il lavoro che a quel ritmo si farebbe nel tempo che resta (mai oltre la capacità residua). Gli ordini nuovi o urgenti entrano al riempimento successivo, o subito se li aggiungi tu dalla pagina Oggi.</li>
+        <li><strong>Regolazione del tetto, una volta a settimana.</strong> Il sistema guarda le ultime giornate, confrontando il lavoro fatto (lista più attività fatte fuori lista) con la capacità del giorno: se la lista era spesso troppo corta alza il tetto di un passo, se era spesso troppo lunga lo abbassa. I giorni in cui la squadra ha fatto poco perché non restava più lavoro in lista non contano. Se i segnali sono contrari il tetto resta fermo. Sempre dentro il minimo e il massimo che imposti tu. È l'unica regolazione automatica: non si correggono più i tempi delle singole fasi.</li>
       </ol>
       <ul style="list-style:none;padding:12px 14px;background:var(--phase-bg);border-radius:8px;font-size:13px;margin:0">${statoRiga}</ul>
     </div>`;
@@ -90,17 +91,24 @@ function renderPianoConfig() {
   el.innerHTML = html;
 }
 
+// Motivi per cui una fase pronta non è entrata nella lista del giorno (piano_esclusioni); «non registrato» per i giorni senza riga.
+const _MOTIVI_ESCLUSIONE = { limite_ordine: 'ordine al limite di fasi', capacita: 'capacità esaurita', macchina: 'macchina non disponibile', dipendenze: 'dipendenze non soddisfatte', altro: 'altro', non_registrato: 'non registrato' };
+function _motiviEsclusioneHtml(m) {
+  const voci = Object.keys(_MOTIVI_ESCLUSIONE).filter(k => (m || {})[k] > 0).map(k => `${_MOTIVI_ESCLUSIONE[k]}: ${m[k]}`);
+  return voci.length ? escapeHtml(voci.join(' · ')) : '–';
+}
+
 // Tabella in sola lettura: per ogni fase, quante attività completate erano nel piano del giorno e quante no. Mai per persona.
 function renderPianoFuoriPiano() {
   const st = pianoFuoriPiano;
   if (!st) return '';
   const righe = (st.per_fase || []).filter(f => (f.nel_piano || 0) + (f.fuori_piano || 0) > 0);
-  const corpo = righe.length ? righe.map(f => `<tr><td>${escapeHtml(f.fase_nome)}</td><td style="text-align:right">${f.nel_piano}</td><td style="text-align:right">${f.fuori_piano}</td><td style="text-align:right;font-weight:600">${f.percentuale == null ? '–' : _pNum(f.percentuale) + '%'}</td></tr>`).join('')
-    : '<tr><td colspan="4" style="color:var(--muted)">Nessuna attività completata nel periodo.</td></tr>';
+  const corpo = righe.length ? righe.map(f => `<tr><td>${escapeHtml(f.fase_nome)}</td><td style="text-align:right">${f.nel_piano}</td><td style="text-align:right">${f.fuori_piano}</td><td style="text-align:right;font-weight:600">${f.percentuale == null ? '–' : _pNum(f.percentuale) + '%'}</td><td style="font-size:12px;color:var(--ink-2)">${f.fuori_piano ? _motiviEsclusioneHtml(f.motivi) : '–'}</td></tr>`).join('')
+    : '<tr><td colspan="5" style="color:var(--muted)">Nessuna attività completata nel periodo.</td></tr>';
   return `<div class="card" style="padding:16px 20px">
       <h3 style="font-size:15px;margin-bottom:6px">Fuori piano, ultime ${st.settimane} settimane</h3>
-      <div style="font-size:12px;color:var(--ink-2);line-height:1.5;margin-bottom:10px">Attività completate in un giorno in cui non erano nella lista del giorno. Contano come lavoro fatto nell'avanzamento e nella regolazione del tetto. Una percentuale alta indica fasi che la squadra fa di seguito, prima che il piano le proponga.</div>
-      <table class="table" style="width:100%;font-size:13px"><thead><tr><th>Fase</th><th style="text-align:right">Nel piano</th><th style="text-align:right">Fuori piano</th><th style="text-align:right">Fuori piano %</th></tr></thead><tbody>${corpo}</tbody></table>
+      <div style="font-size:12px;color:var(--ink-2);line-height:1.5;margin-bottom:10px">Attività completate in un giorno in cui non erano nella lista del giorno. Contano come lavoro fatto nell'avanzamento e nella regolazione del tetto. Una percentuale alta indica fasi che la squadra fa di seguito, prima che il piano le proponga. L'ultima colonna dice perché erano rimaste fuori (per fase, mai per persona); «non registrato» per i giorni precedenti a questa funzione.</div>
+      <table class="table" style="width:100%;font-size:13px"><thead><tr><th>Fase</th><th style="text-align:right">Nel piano</th><th style="text-align:right">Fuori piano</th><th style="text-align:right">Fuori piano %</th><th>Perché non erano in lista</th></tr></thead><tbody>${corpo}</tbody></table>
     </div>`;
 }
 
@@ -156,17 +164,17 @@ async function simulaPiano() {
 function renderPianoSimulazione() {
   const s = pianoSimulazione;
   if (!s) return `<div class="card" style="padding:16px 20px;margin-top:8px"><div style="font-size:13px;color:var(--muted)"><strong style="color:var(--ink)">Simula</strong> — cambia i valori qui sopra e premi "Simula": vedrai cosa sarebbe successo negli ultimi giorni registrati (tetto risultante, giorni "lista troppo corta" e "troppo lunga") senza salvare nulla.</div></div>`;
-  const classe = { corta: 'lista troppo corta', lunga: 'lista troppo lunga', giusta: 'lista giusta', vuoto: 'nessuna attività' };
-  const colore = { corta: 'var(--info-ink)', lunga: 'var(--warn-ink)', giusta: 'var(--ok-ink)', vuoto: 'var(--muted)' };
-  const riga = (g) => `<tr><td>${new Date(g.data + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' })}</td><td>${g.completato_pct == null ? '—' : String(g.completato_pct).replace('.', ',') + '%'}</td><td>${g.riempimenti || 0}</td><td style="color:${colore[g.classe]};font-weight:600">${classe[g.classe]}</td></tr>`;
+  const classe = { corta: 'lista troppo corta', lunga: 'lista troppo lunga', giusta: 'lista giusta', vuoto: 'nessuna attività', lavoro_esaurito: 'lavoro esaurito (non conta)' };
+  const colore = { corta: 'var(--info-ink)', lunga: 'var(--warn-ink)', giusta: 'var(--ok-ink)', vuoto: 'var(--muted)', lavoro_esaurito: 'var(--muted)' };
+  const riga = (g) => `<tr><td>${new Date(g.data + 'T12:00:00').toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' })}</td><td>${g.completato_pct == null ? '—' : String(g.completato_pct).replace('.', ',') + '%'}</td><td>${g.residuo_minuti == null ? '—' : _fmtMin(g.residuo_minuti)}</td><td>${g.riempimenti || 0}</td><td style="color:${colore[g.classe]};font-weight:600">${classe[g.classe] || escapeHtml(g.classe)}</td></tr>`;
   const cambia = Number(s.tetto_dopo) !== Number(s.tetto_prima);
   return `<div class="card" style="padding:16px 20px;margin-top:8px;border-color:var(--accent)">
     <h3 style="font-size:15px;margin-bottom:6px">Simulazione (non salvata)</h3>
     <div style="font-size:13px;margin-bottom:6px">Con questi valori la regolazione di oggi darebbe: <strong>${s.esito === 'alzato' ? 'tetto in aumento' : s.esito === 'abbassato' ? 'tetto in diminuzione' : s.esito === 'dati_insufficienti' ? 'nessun cambiamento (giorni insufficienti)' : 'tetto invariato'}</strong>
       — da ${_pNum(s.tetto_prima)} h a <strong>${_pNum(s.tetto_dopo)} h</strong>${cambia ? '' : ' (stesso valore)'}.</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${escapeHtml(s.motivo)} ${s.automatica_attiva ? '' : 'La regolazione automatica è disattivata: il tetto cambierebbe solo a mano.'}</div>
-    <div style="font-size:13px;margin-bottom:8px"><strong>${s.n_giorni}</strong> giorni registrati considerati: <strong>${s.n_corti}</strong> "lista troppo corta", <strong>${s.n_lunghi}</strong> "lista troppo lunga".</div>
-    ${(s.giorni || []).length ? `<div style="overflow-x:auto"><table><thead><tr><th>Giorno</th><th>Completato del piano iniziale</th><th>Riempimenti</th><th>Esito</th></tr></thead><tbody>${s.giorni.map(riga).join('')}</tbody></table></div>` : '<div style="font-size:12px;color:var(--muted)">Nessun giorno registrato: la simulazione diventa utile dopo qualche giornata con il piano attivo.</div>'}
+    <div style="font-size:13px;margin-bottom:8px"><strong>${s.n_giorni}</strong> giorni registrati considerati: <strong>${s.n_corti}</strong> "lista troppo corta", <strong>${s.n_lunghi}</strong> "lista troppo lunga"${s.n_lavoro_esaurito ? `, <strong>${s.n_lavoro_esaurito}</strong> a lavoro esaurito (non contano)` : ''}.</div>
+    ${(s.giorni || []).length ? `<div style="overflow-x:auto"><table><thead><tr><th>Giorno</th><th>Fatto sulla capacità</th><th>Rimasto in lista</th><th>Riempimenti</th><th>Esito</th></tr></thead><tbody>${s.giorni.map(riga).join('')}</tbody></table></div>` : '<div style="font-size:12px;color:var(--muted)">Nessun giorno registrato: la simulazione diventa utile dopo qualche giornata con il piano attivo.</div>'}
   </div>`;
 }
 

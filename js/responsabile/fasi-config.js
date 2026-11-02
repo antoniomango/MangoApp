@@ -278,7 +278,7 @@ function fsModello(f) {
   const m = {
     id: f.id, nome: f.nome || '', descrizione: f.descrizione || '', macro_fase_id: f.macro_fase_id ?? null,
     tipo_gestione: f.tipo_gestione || 'standard', e_attesa_esterna: !!f.e_attesa_esterna, avvio_automatico: !!f.avvio_automatico,
-    e_cnc: !!f.e_cnc, opzionale: !!f.opzionale, gruppo_spedizione: !!f.gruppo_spedizione, piu_pressate: !!f.piu_pressate, pressate_previste: f.pressate_previste ?? null, abbinata_a_fase_id: faseAbbinataId(f.id), ambito_tempo: f.ambito_tempo || 'anta',
+    e_cnc: !!f.e_cnc, opzionale: !!f.opzionale, gruppo_spedizione: !!f.gruppo_spedizione, piu_pressate: !!f.piu_pressate, riempitivo: !!f.riempitivo, pressate_previste: f.pressate_previste ?? null, abbinata_a_fase_id: faseAbbinataId(f.id), ambito_tempo: f.ambito_tempo || 'anta',
     tempo_da_lavorazioni_cnc: !!f.tempo_da_lavorazioni_cnc, materiale_ricezione: f.materiale_ricezione || '',
     solo_per_consegna: f.solo_per_consegna ? [...f.solo_per_consegna].sort() : null,   // null = sempre
     dipendenze: [...(f.dipendenze || [])].sort((a, b) => a - b),
@@ -304,7 +304,7 @@ const fsLista = () => fasiAttive();
 function fsModelloVuoto() {
   const lista = fasiAttive();
   const m = { id: 0, nome: '', descrizione: '', macro_fase_id: null, tipo_gestione: 'standard', e_attesa_esterna: false, avvio_automatico: false, e_cnc: false, opzionale: false,
-    gruppo_spedizione: false, piu_pressate: false, pressate_previste: null, abbinata_a_fase_id: null, ambito_tempo: 'anta', tempo_da_lavorazioni_cnc: false, materiale_ricezione: '', solo_per_consegna: null,
+    gruppo_spedizione: false, piu_pressate: false, riempitivo: false, pressate_previste: null, abbinata_a_fase_id: null, ambito_tempo: 'anta', tempo_da_lavorazioni_cnc: false, materiale_ricezione: '', solo_per_consegna: null,
     dipendenze: [], dipendenti: [], dopo: lista.length ? String(lista[lista.length - 1].id) : 'top', macchine: [], competenze: [], tempo: { tipico: '', massimo: '' } };
   fasiCriteriDef().forEach(def => { m[def.campo] = []; m[def.modo] = 'solo'; });
   return m;
@@ -471,7 +471,7 @@ function fsSet(campo, valore, rerender = true) {
   FS.draft[campo] = valore;
   if (campo === 'tipo_gestione') {
     FS.draft.e_attesa_esterna = valore !== 'standard';   // impostata dal tipo di fase
-    if (valore !== 'standard') { FS.draft.piu_pressate = false; FS.draft.pressate_previste = null; }   // la domanda sulle pressate non vale per le fasi esterne
+    if (valore !== 'standard') { FS.draft.piu_pressate = false; FS.draft.pressate_previste = null; FS.draft.riempitivo = false; }   // la domanda sulle pressate non vale per le fasi esterne
   }
   if (campo === 'piu_pressate') FS.draft.pressate_previste = valore ? (FS.draft.pressate_previste ?? 1) : null;
   if (campo === 'tempo_da_lavorazioni_cnc' && valore) FS.draft.ambito_tempo = 'anta';
@@ -555,7 +555,7 @@ function fsTempoModificabile(id) {
 }
 function fsPayload() {
   const d = FS.draft, o = FS.mod[d.id], p = {};
-  ['nome', 'descrizione', 'macro_fase_id', 'tipo_gestione', 'e_attesa_esterna', 'avvio_automatico', 'e_cnc', 'opzionale', 'gruppo_spedizione', 'piu_pressate', 'pressate_previste', 'abbinata_a_fase_id', 'ambito_tempo', 'tempo_da_lavorazioni_cnc', 'materiale_ricezione', 'solo_per_consegna'].forEach(k => {
+  ['nome', 'descrizione', 'macro_fase_id', 'tipo_gestione', 'e_attesa_esterna', 'avvio_automatico', 'e_cnc', 'opzionale', 'gruppo_spedizione', 'piu_pressate', 'riempitivo', 'pressate_previste', 'abbinata_a_fase_id', 'ambito_tempo', 'tempo_da_lavorazioni_cnc', 'materiale_ricezione', 'solo_per_consegna'].forEach(k => {
     if (JSON.stringify(d[k]) !== JSON.stringify(o[k])) p[k] = k === 'nome' ? d.nome.trim() : k === 'materiale_ricezione' ? String(d[k] || '').trim() : d[k];
   });
   const crit = {};
@@ -818,6 +818,7 @@ function fsRenderDettaglio() {
         <div class="fs-row inline"><div><div class="fs-crit-t">Fase CNC</div><div class="fs-desc">Mostra il badge CNC sull'ordine e nell'app.</div></div>${fsSwitch('fs-o-cnc', m.e_cnc, "fsSet('e_cnc',this.checked)")}</div>
         <div class="fs-row inline"><div><div class="fs-crit-t">Opzionale</div><div class="fs-desc">Non si crea da sola: la abiliti tu dall'ordine.</div></div>${fsSwitch('fs-o-opz', m.opzionale, "fsSet('opzionale',this.checked)")}</div>
         <div class="fs-row inline"><div><div class="fs-crit-t">Spedizione unica</div><div class="fs-desc">Per gli ordini della stessa spedizione la fase è una sola: compare una volta nel piano (con il tempo di un ordine) e, quando la si completa, si chiude per tutti.</div></div>${fsSwitch('fs-o-gs', m.gruppo_spedizione, "fsSet('gruppo_spedizione',this.checked,false)")}</div>
+        ${fsEster(m) ? '' : `<div class="fs-row inline"><div><div class="fs-crit-t">Fase riempitiva</div><div class="fs-desc">Si può fare in qualunque momento: entra nel piano solo se avanza capacità e non occupa posti dell'ordine.</div></div>${fsSwitch('fs-o-riemp', m.riempitivo, "fsSet('riempitivo',this.checked,false)")}</div>`}
         ${fsEster(m) || !(m.macchine.length || m.piu_pressate) ? '' : `<div class="fs-row inline"><div><div class="fs-crit-t">${escapeHtml(Etichette.pressate.config.casella)}</div><div class="fs-desc">${escapeHtml(Etichette.pressate.config.spiega)}</div>${m.macchine.length ? '' : `<div class="fs-desc" style="color:var(--alert-ink)">${escapeHtml(Etichette.pressate.config.serveMacchina)}</div>`}</div>${fsSwitch('fs-o-pp', m.piu_pressate, "fsSet('piu_pressate',this.checked)")}</div>`}
         ${!fsEster(m) && m.piu_pressate && m.macchine.length ? `<div class="fs-row"><label class="fs-lbl" for="fs-g-pv">${escapeHtml(Etichette.pressate.config.previste)}</label><input class="fs-inp num" id="fs-g-pv" type="number" min="1" max="20" step="1" inputmode="numeric" value="${m.pressate_previste ?? ''}" oninput="fsSetPrevisteNum(this.value)" style="width:100px"><div class="fs-desc">${escapeHtml(Etichette.pressate.config.previsteSpiega)}</div></div>` : ''}
         ${fsAbbinataHtml(m)}
