@@ -10,14 +10,27 @@ function renderTipiProdottoConfig() {
     el.innerHTML = '<p style="color:var(--muted);padding:12px 0">Nessun tipo prodotto configurato.</p>';
     return;
   }
-  el.innerHTML = tipiProdotto.map(t => `
+  el.innerHTML = tipiProdotto.map((t, i) => `
     <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
       <span style="font-size:13px;font-weight:600;flex:1">${escapeHtml(t.label)}</span>
       <span style="font-size:11px;color:var(--muted);font-family:monospace">${escapeHtml(t.id)}</span>
+      <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="spostaTipoProdotto('${escapeHtml(t.id)}','su')" aria-label="Sposta su"${i === 0 ? ' disabled' : ''}>↑</button>
+      <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="spostaTipoProdotto('${escapeHtml(t.id)}','giu')" aria-label="Sposta giù"${i === tipiProdotto.length - 1 ? ' disabled' : ''}>↓</button>
       <button class="btn btn-secondary" style="padding:4px 10px;font-size:12px" onclick="openModalModificaTipoProdotto('${escapeHtml(t.id)}')">Modifica</button>
       <button class="btn btn-danger" style="padding:4px 10px;font-size:12px" onclick="eliminaTipoProdotto('${escapeHtml(t.id)}')" aria-label="Elimina">✕</button>
     </div>
   `).join('');
+}
+
+// L'ordine decide anche il tipo proposto per primo nel form Nuovo ordine
+async function spostaTipoProdotto(id, direzione) {
+  const { data, error } = await sb.rpc('sposta_tipo_prodotto', { p_id: id, p_direzione: direzione, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) {
+    const msg = { gia_al_limite: 'Già in ' + (direzione === 'su' ? 'cima' : 'fondo') + ' all\'elenco', non_trovato: 'Tipo prodotto non trovato' }[data?.errore];
+    toast(msg || 'Errore: ' + (data?.errore || error?.message || ''), 'err');
+  }
+  await loadTipiProdotto();
+  renderTipiProdottoConfig();
 }
 
 function openModalNuovoTipoProdotto() {
@@ -269,6 +282,7 @@ async function creaAttributo() {
   const { data, error } = await sb.rpc('salva_attributo', { p_chiave: null, p_dati: dati, p_responsabile_id: currentUserRow.id, p_session_token: null });
   if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
   document.getElementById('na-etichetta').value = '';
+  document.getElementById('na-obbl').checked = false;
   toast('Attributo creato', 'ok');
   await loadAttributiConfig(); renderAttributiConfig(); await loadFasi();
 }
