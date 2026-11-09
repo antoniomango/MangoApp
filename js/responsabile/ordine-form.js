@@ -404,9 +404,6 @@ async function creaOrdine() {
   }
 
   // Le fasi applicabili le decide solo il database (trigger sull'inserimento dell'ordine); registro e ordine nella stessa RPC
-  await inviaNotificaATutti('ordine_creato',
-    `Nuovo ordine ${tipo === 'extra' ? 'extra' : 'standard'}: ${cliente} — ${codice}`, newOrdine.id);
-
   // Spedizione unica: se il responsabile ha confermato il suggerimento mostrato dopo aver
   // compilato il cliente, aggiunge il nuovo ordine (più quelli suggeriti) alla stessa spedizione.
   if (document.getElementById('suggerimento-gruppo-spedizione-check')?.checked && _suggerimentoGruppoOrdiniIds.length) {
@@ -419,9 +416,14 @@ async function creaOrdine() {
     if (!gData?.ok) toast('Ordine creato, ma non è stato possibile aggiungerlo alla spedizione unica: ' + (Etichette.spedizioneUnica.errori[gData?.errore] || Etichette.consegnaTesti.errori[gData?.errore] || gData?.errore || ''), 'err');
   }
 
+  // Il modale si chiude subito: notifiche e ricarica elenco non lo trattengono (il piano del giorno si aggiorna col job di ogni minuto)
   closeModal('modal-ordine');
-  toast('Ordine creato con successo', 'ok');
-  await loadOrdini();
+  toast('Ordine creato. Il piano del giorno si aggiorna entro un minuto', 'ok');
+  const dopo = await Promise.allSettled([
+    inviaNotificaATutti('ordine_creato', `Nuovo ordine ${tipo === 'extra' ? 'extra' : 'standard'}: ${cliente} — ${codice}`, newOrdine.id),
+    loadOrdini()
+  ]);
+  dopo.forEach(r => { if (r.status === 'rejected') console.warn('Dopo la creazione dell\'ordine:', r.reason); });
   renderDashboard();
   renderOrdiniTable();
 }
