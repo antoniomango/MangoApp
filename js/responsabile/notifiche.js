@@ -347,8 +347,11 @@ async function initOneSignalResp() {
   });
 }
 
-async function inviaNotificaATutti(tipo, testo, ordineId = null) {
-  const { data: utenti } = await sb.from('users').select('id').eq('attivo', true).neq('eliminato', true);
+async function inviaNotificaATutti(tipo, testo, ordineId = null, opzioni = {}) {
+  let q = sb.from('users').select('id').eq('attivo', true).neq('eliminato', true);
+  // Con escludiAutore chi esegue l'azione non riceve la propria notifica
+  if (opzioni?.escludiAutore && currentUserRow?.id) q = q.neq('id', currentUserRow.id);
+  const { data: utenti } = await q;
   if (!utenti?.length) return;
   // Il trigger DB trg_push_notifica invia automaticamente la push per ogni INSERT: qui basta inserire la notifica
   await sb.from('notifiche').insert(utenti.map(u => ({ destinatario_id: u.id, tipo, testo, ordine_id: ordineId })));

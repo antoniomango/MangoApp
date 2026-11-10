@@ -420,7 +420,7 @@ async function creaOrdine() {
   closeModal('modal-ordine');
   toast('Ordine creato. Il piano del giorno si aggiorna entro un minuto', 'ok');
   const dopo = await Promise.allSettled([
-    inviaNotificaATutti('ordine_creato', `Nuovo ordine ${tipo === 'extra' ? 'extra' : 'standard'}: ${cliente} — ${codice}`, newOrdine.id),
+    inviaNotificaATutti('ordine_creato', `Nuovo ordine ${tipo === 'extra' ? 'extra' : 'standard'}: ${cliente} — ${codice}`, newOrdine.id, { escludiAutore: true }),
     loadOrdini()
   ]);
   dopo.forEach(r => { if (r.status === 'rejected') console.warn('Dopo la creazione dell\'ordine:', r.reason); });
@@ -433,7 +433,7 @@ async function sospendi(id) {
   const o = ordiniCache.find(x => x.id === id);
   const { data: esSosp, error: errSosp } = await sb.rpc('imposta_stato_ordine', { p_ordine_id: id, p_stato: 'sospeso', p_responsabile_id: currentUserRow.id, p_session_token: null });
   if (errSosp || !esSosp?.ok) { toast('Errore: ' + (esSosp?.errore || errSosp?.message || ''), 'err'); return; }
-  await inviaNotificaATutti('ordine_sospeso', `Ordine sospeso: ${o?.cliente || ''} — ${o?.codice || ''}`, id);
+  await inviaNotificaATutti('ordine_sospeso', `Ordine sospeso: ${o?.cliente || ''} — ${o?.codice || ''}`, id, { escludiAutore: true });
   toast('Ordine sospeso', 'ok');
   await loadOrdini();
   renderDashboard();
@@ -445,7 +445,7 @@ async function riattiva(id) {
   const o = ordiniCache.find(x => x.id === id);
   const { data: esRiat, error: errRiat } = await sb.rpc('imposta_stato_ordine', { p_ordine_id: id, p_stato: 'aperto', p_responsabile_id: currentUserRow.id, p_session_token: null });
   if (errRiat || !esRiat?.ok) { toast('Errore: ' + (esRiat?.errore || errRiat?.message || ''), 'err'); return; }
-  await inviaNotificaATutti('ordine_sospeso', `Ordine riattivato: ${o?.cliente || ''} — ${o?.codice || ''}`, id);
+  await inviaNotificaATutti('ordine_sospeso', `Ordine riattivato: ${o?.cliente || ''} — ${o?.codice || ''}`, id, { escludiAutore: true });
   toast('Ordine riattivato', 'ok');
   await loadOrdini();
   renderDashboard();
