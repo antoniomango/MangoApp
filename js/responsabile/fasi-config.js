@@ -119,20 +119,16 @@ async function loadUfficio() {
   const idsAttivi = ordiniAttivi.map(o => o.id);
   if (!idsAttivi.length) { renderUfficio(ordiniAttivi, []); return; }
 
-  // Come per ufficio.html: mai leggere ordine_fasi senza filtro su ordine_id.
-  // Il filtro .in('stato', [...]) qui sotto copriva di fatto TUTTI gli stati possibili,
-  // quindi equivaleva a leggere l'intera tabella — Supabase/PostgREST tronca in silenzio
-  // oltre il limite "Max Rows" del progetto una volta che la tabella cresce abbastanza.
-  const { data: ordFasi, count: nOrdFasi } = await sb.from('ordine_fasi')
-    .select('ordine_id, fase_id, stato', { count: 'exact' })
-    .in('ordine_id', idsAttivi);
-
-  const risultato = ordFasi || [];
-  if (typeof nOrdFasi === 'number' && nOrdFasi !== risultato.length) {
-    console.error(`[responsabile/ufficio] ordine_fasi troncato: ricevute ${risultato.length} righe su ${nOrdFasi} attese.`);
+  // Avanzamento tramite RPC: un solo jsonb, non soggetto al limite di righe delle select.
+  const { data: av, error: avErr } = await sb.rpc('avanzamento_fasi_batch_responsabile', { p_ordine_ids: idsAttivi });
+  if (avErr || !av?.ok) {
+    toast('Avanzamento ordini non caricato: ' + (av?.errore || avErr?.message || 'errore'), 'err');
+    const el = document.getElementById('ufficio-ordini');
+    if (el) el.innerHTML = '<div class="empty-state"><p>Avanzamento non disponibile. Riprova.</p></div>';
+    return;
   }
 
-  renderUfficio(ordiniAttivi, risultato);
+  renderUfficio(ordiniAttivi, av.dati?.ordine_fasi || []);
 }
 
 function renderUfficio(ordini, ordFasi) {

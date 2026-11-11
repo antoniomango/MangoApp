@@ -346,10 +346,17 @@ async function loadAvanzamenti(ids) {
 
   const map = {};
 
+  // Un'unica chiamata che restituisce un solo jsonb (non soggetto al limite di righe delle select)
+  const { data: av, error: avErr } = await sb.rpc('avanzamento_fasi_batch_responsabile', { p_ordine_ids: ids });
+  if (avErr || !av?.ok) {
+    toast('Avanzamento ordini non caricato: ' + (av?.errore || avErr?.message || 'errore'), 'err');
+    return;
+  }
+  const stdSet = new Set(stdIds), extraSet = new Set(extraIds);
+
   // Ordini standard → ordine_fasi
   if (stdIds.length) {
-    const { data } = await sb.from('ordine_fasi').select('ordine_id, stato, fase_id').in('ordine_id', stdIds);
-    (data || []).forEach(f => {
+    (av.dati?.ordine_fasi || []).filter(f => stdSet.has(f.ordine_id)).forEach(f => {
       if (!map[f.ordine_id]) map[f.ordine_id] = { tot: 0, done: 0, inCorso: 0, fasiRim: [] };
       if (f.stato === 'non_applicabile') return;
       const isEsterna = faseEsternaSet.has(parseInt(f.fase_id));
@@ -367,10 +374,7 @@ async function loadAvanzamenti(ids) {
 
   // Ordini extra → fasi_ordine_extra
   if (extraIds.length) {
-    const { data } = await sb.from('fasi_ordine_extra')
-      .select('ordine_id, stato')
-      .in('ordine_id', extraIds);
-    (data || []).forEach(f => {
+    (av.dati?.fasi_extra || []).filter(f => extraSet.has(f.ordine_id)).forEach(f => {
       if (!map[f.ordine_id]) map[f.ordine_id] = { tot: 0, done: 0, inCorso: 0, fasiRim: [] };
       map[f.ordine_id].tot++;
       if (f.stato === 'completata') map[f.ordine_id].done++;
