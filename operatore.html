@@ -1678,20 +1678,7 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
         <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Il pezzo è tornato dal fornitore? Conferma la ricezione per chiudere la fase.</p>
         <button class="btn btn-ok" onclick="confermaRicezioneExtra('${faseExtraId}','${ordineId}')"><i data-ic="spunta"></i> Conferma ricezione pezzo</button>
       </div>`;
-    } else if (f.stato === 'completata') {
-      bodyHtml += `<div class="azione-box" style="border-color:var(--border);margin-top:12px">
-        <h4>↩ Riapri fase</h4>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Hai ancora lavoro da fare su questa fase? Riaprila per continuare.</p>
-        <button class="btn btn-secondary" onclick="riapriFaseExtraOp('${faseExtraId}','${ordineId}')">↩ Riapri fase</button>
-      </div>`;
     }
-  } else if (f.stato === 'completata' && !sospeso) {
-    bodyHtml += `
-      <div class="azione-box" style="border-color:var(--border);margin-top:12px">
-        <h4>↩ Riapri fase</h4>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Hai ancora lavoro da fare su questa fase? Riaprila per continuare.</p>
-        <button class="btn btn-secondary" onclick="riapriFaseExtraOp('${faseExtraId}','${ordineId}')">↩ Riapri fase</button>
-      </div>`;
   } else if (['disponibile', 'in_corso', 'in_attesa'].includes(f.stato)) {
     // nessuna presa in carico: la fase si segna direttamente come completata
     bodyHtml += `<div class="azione-box"><h4>Completa fase</h4>
@@ -1702,28 +1689,6 @@ async function renderFaseExtraDetail(faseExtraId, ordineId) {
   }
 
   document.getElementById('fase-det-body').innerHTML = bodyHtml;
-}
-
-async function riapriFaseOp(ordFaseId, ordineId) {
-  const nomeFase = document.getElementById('fase-det-title')?.textContent || 'questa fase';
-  if (!confirm('Hai altro lavoro da fare su questa fase? Riaprila.')) return;
-  if (!confirm(`Sei sicuro di voler riaprire la fase "${nomeFase}"?`)) return;
-  const { data, error } = await sb.rpc('riapri_fase_operatore', { p_ordine_fase_id: ordFaseId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-  if (error || !data?.ok) { toast(error ? msgErr(error) : 'Errore: ' + (data?.errore || ''), 'err'); return; }
-  toast('Fase riaperta', 'ok');
-  await renderFaseDetail(ordFaseId, ordineId);
-  renderHome();
-}
-
-async function riapriFaseExtraOp(faseExtraId, ordineId) {
-  const nomeFase = document.getElementById('fase-det-title')?.textContent || 'questa fase';
-  if (!confirm('Hai altro lavoro da fare su questa fase? Riaprila.')) return;
-  if (!confirm(`Sei sicuro di voler riaprire la fase "${nomeFase}"?`)) return;
-  const { data, error } = await sb.rpc('annulla_presa_in_carico_extra', { p_fase_extra_id: faseExtraId, p_operatore_id: currentUser.id, p_session_token: sessionToken });
-  if (error || !data?.ok) { toast(error ? msgErr(error) : 'Errore: ' + (data?.errore || ''), 'err'); return; }
-  toast('Fase riaperta', 'ok');
-  await renderFaseExtraDetail(faseExtraId, ordineId);
-  renderHome();
 }
 
 async function confermaRicezioneFase(ordFaseId, ordineId) {
@@ -1941,14 +1906,6 @@ async function renderFaseDetail(ordFaseId, ordineId) {
             <button class="btn btn-ok" onclick="segnaSpedito('${ordineId}')">✓ Segna come ${Etichette.ritiraOrdine(ordine) ? 'ritirato' : 'spedito'}</button>
           </div>`;
       }
-    }
-    if (!sospeso) {
-      bodyHtml += `
-        <div class="azione-box" style="border-color:var(--border);margin-top:12px">
-          <h4>↩ Riapri fase</h4>
-          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Hai ancora lavoro da fare su questa fase? Riaprila per continuare.</p>
-          <button class="btn btn-secondary" onclick="riapriFaseOp('${ordFaseId}','${ordineId}')">↩ Riapri fase</button>
-        </div>`;
     }
   }
 

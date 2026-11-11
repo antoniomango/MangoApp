@@ -596,12 +596,12 @@ async function completaFaseExtraResp(faseExtraId, ordineId) {
 
 async function riaprieFaseExtraResp(faseExtraId, ordineId) {
   if (!confirm('Riaprire questa fase impostandola su "disponibile"?')) return;
-  const { data } = await sb.rpc('riapri_fase_extra_resp', {
+  const { data, error } = await sb.rpc('riapri_fase_extra_resp', {
     p_fase_extra_id: faseExtraId,
     p_responsabile_id: currentUserRow.id,
     p_session_token: null
   });
-  if (!data?.ok) { toast('Errore: ' + (data?.errore || ''), 'err'); return; }
+  if (error || !data?.ok) { toast('Errore: ' + (data?.errore || error?.message || ''), 'err'); return; }
   closeModal('modal-fase');
   toast('Fase riaperta', 'ok');
   renderDettaglioOrdine(ordineId);
