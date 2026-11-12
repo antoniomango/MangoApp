@@ -468,12 +468,7 @@
 <!-- SEZIONE 13: FASI -->
 <div class="page">
   <div class="section-header"><div class="section-num">13</div><h2>Le fasi di produzione</h2></div>
-  <p>Ogni ordine standard passa attraverso fino a <span id="guida-n-fasi">…</span> fasi. Alcune potrebbero essere <span class="badge">N/A</span> in base al tipo di prodotto, al materiale e alla struttura. L'elenco qui sotto è generato dalla configurazione attuale: nomi, ordine e regole sono sempre aggiornati.</p>
-  <table class="fase-table">
-    <thead><tr><th class="num">#</th><th>Nome fase</th><th>Note</th></tr></thead>
-    <tbody id="guida-fasi-body"><tr><td colspan="3">Caricamento dell'elenco delle fasi…</td></tr>
-    </tbody>
-  </table>
+  <p>Ogni ordine passa attraverso più fasi. Alcune potrebbero essere <span class="badge">N/A</span> in base al tipo di prodotto, al materiale e alla struttura. L'elenco delle fasi, nell'ordine in cui si lavorano, lo trovi nell'app Operatore.</p>
   <div class="info-box" style="margin-top:16px">
     <strong>Ordini Extra</strong>
     Gli ordini speciali (tipo "extra") hanno fasi personalizzate definite dal responsabile. Il funzionamento è identico: prendi in carico, lavora, completa.
@@ -505,35 +500,7 @@
   </button>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0/dist/umd/supabase.min.js" integrity="sha384-JBR+x8blGwjDRO63aHCGiZMD4VNiTR4ZUGA+N6ZKLf3zNt1fK8IBpcgPaMrxqWBp" crossorigin="anonymous"></script>
-<script src="js/config.deploy.js"></script>
-<script src="js/config.js"></script>
 <script src="js/regole-pin.js"></script>
 <script>MangoRegolePin.rendi(document.getElementById('guida-regole-pin'));</script>
-<script>
-// Tabella delle fasi generata dalla configurazione (RPC guida_fasi): nomi, ordine e criteri in linguaggio semplice.
-(async () => {
-  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const corpo = document.getElementById('guida-fasi-body');
-  try {
-    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-    const { data, error } = await sb.rpc('guida_fasi');
-    if (error || !Array.isArray(data)) throw new Error(error?.message || 'risposta non valida');
-    document.getElementById('guida-n-fasi').textContent = data.length;
-    corpo.innerHTML = data.map((f, i) => {
-      const note = [];
-      (f.criteri || []).forEach(c => note.push((c.modo === 'tutti_tranne' ? 'Tutti tranne ' : 'Solo ') + c.valori.map(esc).join(', ') + ' (' + esc(c.titolo.toLowerCase()) + ')'));
-      if (f.opzionale) note.push('Opzionale: si attiva solo se richiesta dall\'ordine');
-      if (f.avvio_automatico) note.push('Parte in attesa al momento della creazione dell\'ordine');
-      if (f.tipo_gestione === 'conferma_ricezione') note.push('Si completa alla conferma di ricezione');
-      if (f.tipo_gestione === 'spedizione_esterna') note.push('Lavorazione esterna: spedizione e rientro del pezzo');
-      if (f.e_cnc) note.push('Fase CNC');
-      return '<tr><td class="num">' + (i + 1) + '</td><td>' + esc(f.nome) + '</td><td>' + note.join(' · ') + '</td></tr>';
-    }).join('');
-  } catch (e) {
-    corpo.innerHTML = '<tr><td colspan="3">Elenco delle fasi non disponibile al momento (' + esc(e.message) + ').</td></tr>';
-  }
-})();
-</script>
 </body>
 </html>

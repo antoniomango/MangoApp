@@ -29,25 +29,91 @@ const AMBIENTI = {
 
 const AMBIENTE_DEFAULT = (window.MANGO_CONFIG && AMBIENTI[window.MANGO_CONFIG.ambienteDefault]) ? window.MANGO_CONFIG.ambienteDefault : 'produzione';
 
-function rilevaAmbiente() {
-  const daUrl = new URLSearchParams(location.search).get('env');
-  if (daUrl) {
-    if (AMBIENTI[daUrl]) {
-      localStorage.setItem('mangoapp-env', daUrl);
-      return daUrl;
-    }
-    // Parametro presente ma sconosciuto (es. errore di battitura): default
-    // sicuro a produzione, e ripulisce lo stato salvato — un typo non deve
-    // MAI lasciare l'app agganciata a un ambiente non-produzione per errore.
-    localStorage.removeItem('mangoapp-env');
-    return AMBIENTE_DEFAULT;
-  }
-  const salvato = localStorage.getItem('mangoapp-env');
-  if (salvato && AMBIENTI[salvato]) return salvato;
-  return AMBIENTE_DEFAULT;
+// Ambiente di test sul sito pubblico: solo con conferma esplicita e per un tempo limitato.
+const DURATA_AMBIENTE_TEST_ORE = 8;
+const CHIAVE_AMBIENTE = 'mangoapp-env';
+
+// Indirizzo locale: file:, localhost, loopback, reti private, *.local.
+function ambienteIndirizzoLocale(host, protocollo) {
+  if (protocollo === 'file:') return true;
+  const h = String(host || '').toLowerCase().replace(/^\[|\]$/g, '');
+  if (h === 'localhost' || h === '127.0.0.1' || h === '::1' || h.endsWith('.local')) return true;
+  const m = /^(\d+)\.(\d+)\.\d+\.\d+$/.exec(h);
+  if (!m) return false;
+  const a = +m[1], b = +m[2];
+  return a === 10 || a === 127 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31);
 }
 
-const AMBIENTE      = rilevaAmbiente();
+// Logica pura della scelta dell'ambiente. Restituisce
+// { ambiente, scade, daSalvare, daRimuovere, daTogliereDallUrl }:
+// daSalvare = { env, scade } da scrivere in 'mangoapp-env' (scade null = senza scadenza, solo indirizzo locale).
+function sceltaAmbiente({ cerca, host, protocollo, salvato, ora, conferma }) {
+  const locale = ambienteIndirizzoLocale(host, protocollo);
+  const daUrl = new URLSearchParams(cerca || '').get('env');
+  const esito = (ambiente, extra) => Object.assign({ ambiente, scade: null, daSalvare: null, daRimuovere: false, daTogliereDallUrl: !locale && daUrl !== null }, extra);
+  // Valore salvato: JSON { env, scade } oppure testo semplice delle versioni precedenti.
+  const leggiSalvato = () => {
+    if (!salvato) return null;
+    let o = null;
+    try { o = JSON.parse(salvato); } catch (e) { o = null; }
+    if (o && typeof o === 'object') return AMBIENTI[o.env] ? { env: o.env, scade: typeof o.scade === 'number' ? o.scade : null } : null;
+    return AMBIENTI[salvato] ? { env: salvato, scade: null } : null;
+  };
+
+  if (locale) {
+    if (daUrl) {
+      if (AMBIENTI[daUrl]) return esito(daUrl, { daSalvare: { env: daUrl, scade: null } });
+      return esito(AMBIENTE_DEFAULT, { daRimuovere: true });
+    }
+    const s = leggiSalvato();
+    return s ? esito(s.env) : esito(AMBIENTE_DEFAULT);
+  }
+
+  // Indirizzo pubblico
+  if (daUrl) {
+    if (daUrl !== AMBIENTE_DEFAULT && AMBIENTI[daUrl]) {
+      let ok = false;
+      try {
+        ok = typeof conferma === 'function' && conferma(
+          'Stai per entrare nell\'ambiente di ' + daUrl.toUpperCase() + ', non in produzione.\n\n' +
+          'Quello che fai qui non arriva in produzione. L\'accesso a questo ambiente scade dopo ' + DURATA_AMBIENTE_TEST_ORE + ' ore.\n\n' +
+          'Vuoi continuare?') === true;
+      } catch (e) { ok = false; }
+      if (ok) {
+        const scade = ora + DURATA_AMBIENTE_TEST_ORE * 3600 * 1000;
+        return esito(daUrl, { scade, daSalvare: { env: daUrl, scade } });
+      }
+    }
+    return esito(AMBIENTE_DEFAULT, { daRimuovere: true });
+  }
+  const s = leggiSalvato();
+  if (s && s.scade !== null && s.scade > ora && s.env !== AMBIENTE_DEFAULT) return esito(s.env, { scade: s.scade });
+  return esito(AMBIENTE_DEFAULT, { daRimuovere: !!salvato });
+}
+
+function rilevaAmbiente() {
+  let salvato = null;
+  try { salvato = localStorage.getItem(CHIAVE_AMBIENTE); } catch (e) { salvato = null; }
+  const r = sceltaAmbiente({
+    cerca: location.search, host: location.hostname, protocollo: location.protocol, salvato, ora: Date.now(),
+    conferma: (typeof window.confirm === 'function') ? (t) => window.confirm(t) : null
+  });
+  try {
+    if (r.daSalvare) localStorage.setItem(CHIAVE_AMBIENTE, r.daSalvare.scade === null ? r.daSalvare.env : JSON.stringify(r.daSalvare));
+    else if (r.daRimuovere) localStorage.removeItem(CHIAVE_AMBIENTE);
+  } catch (e) { /* archivio non disponibile: l'ambiente vale solo per questa pagina */ }
+  if (r.daTogliereDallUrl) {
+    try {
+      const u = new URL(location.href);
+      u.searchParams.delete('env');
+      history.replaceState(null, '', u.pathname + u.search + u.hash);
+    } catch (e) {}
+  }
+  return r;
+}
+
+const _SCELTA_AMBIENTE = rilevaAmbiente();
+const AMBIENTE      = _SCELTA_AMBIENTE.ambiente;
 const SUPABASE_URL  = AMBIENTI[AMBIENTE].url;
 const SUPABASE_ANON = AMBIENTI[AMBIENTE].anon;
 const IS_PRODUZIONE = AMBIENTE === 'produzione';
@@ -67,7 +133,7 @@ async function leggiConfigPubblica(client) {
 // Versione del client — da incrementare SEMPRE insieme a CACHE in sw.js (stesso valore,
 // stesso commit). Letta da responsabile.html per la guardia di versione sulle operazioni
 // distruttive (esportazione/archiviazione) — vedi Checklist-Sicurezza.md nel vault.
-const APP_VERSION = 'mango-v104';
+const APP_VERSION = 'mango-v105';
 
 // Guardia di versione per operatore.html e ufficio.html: se la versione minima richiesta dal server (config_pubblica) è
 // maggiore di questa, un client rimasto in cache non resta in uso. Prima prova da solo ad aggiornarsi (cancella cache e
@@ -132,7 +198,12 @@ function mostraBandaAmbienteTest() {
   if (IS_PRODUZIONE) return;
   const banda = document.createElement('div');
   banda.id = 'mango-banda-ambiente';
-  banda.textContent = `⚠ AMBIENTE DI ${AMBIENTE.toUpperCase()} — NON È PRODUZIONE ⚠`;
+  let scadenza = '';
+  if (_SCELTA_AMBIENTE.scade) {
+    const d = new Date(_SCELTA_AMBIENTE.scade);
+    scadenza = ' — scade alle ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+  banda.textContent = `⚠ AMBIENTE DI ${AMBIENTE.toUpperCase()} — NON È PRODUZIONE${scadenza} ⚠`;
   banda.style.cssText = [
     'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:999999',
     'background:#B03A2E', 'color:#fff', 'font-family:sans-serif',
