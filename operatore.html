@@ -939,6 +939,7 @@ async function doLoginPin(pin) {
     if (!(await _verificaPinHashLocale(userId, pin))) { showErr('PIN errato'); return { ok: false }; }
     currentUser = cached;
     await cacheSet('current-user', currentUser); // rinnova la finestra SESSIONE_OFFLINE_TTL_MS
+    await impostaScadenzaSessione(null); // l'accesso offline ha la sua finestra: nessuna scadenza del server
   }
   entraNellApp();
   return { ok: true };
@@ -951,6 +952,7 @@ async function concludiLoginOnline(userId, data, pin) {
   await cacheSet('current-pin-hash', null); // non salviamo PIN in chiaro
   await _salvaPinHashLocale(userId, pin); // hash locale per un eventuale login offline, vedi sopra
   if (data.session_token) { sessionToken = data.session_token; await cacheSet('current-session-token', data.session_token); }
+  await impostaScadenzaSessione(data.scadenza || null);
   entraNellApp();
 }
 
@@ -990,6 +992,8 @@ document.addEventListener('click', e => {
 async function showApp() {
   // Carica session token in memoria se non già impostato (es. login da cache)
   if (!sessionToken) sessionToken = await cacheGet('current-session-token') || null;
+  if (!sessionScadenzaMs) { const sc = await cacheGet('current-session-scadenza'); if (sc) await impostaScadenzaSessione(sc); }
+  if (await controllaScadenzaSessione()) return;
   // Controlla se il responsabile ha forzato il logout per questo utente
   if (navigator.onLine && currentUser?.id) {
     const { data: check } = await sb.rpc('controlla_sessione', { p_user_id: currentUser.id, p_session_token: sessionToken });
@@ -1041,13 +1045,42 @@ async function showApp() {
   }
 }
 
+// Scadenza della sessione (fine turno + margine, decisa dal server): allo scadere l'app torna da sola al PIN.
+// I timer si fermano quando il telefono dorme: il controllo ripete anche al ritorno in primo piano.
+// L'uscita non tocca la coda delle azioni offline: partono con il token nuovo dopo il rientro.
+let sessionScadenzaMs = null;
+let _scadenzaTimer = null;
+async function impostaScadenzaSessione(iso) {
+  clearTimeout(_scadenzaTimer); _scadenzaTimer = null;
+  const ms = iso ? Date.parse(iso) : NaN;
+  sessionScadenzaMs = Number.isFinite(ms) ? ms : null;
+  await cacheSet('current-session-scadenza', sessionScadenzaMs ? iso : null);
+  if (sessionScadenzaMs) _scadenzaTimer = setTimeout(controllaScadenzaSessione, Math.min(Math.max(sessionScadenzaMs - Date.now(), 0) + 500, 2147483647));
+}
+async function controllaScadenzaSessione() {
+  if (!currentUser || !sessionScadenzaMs) return false;
+  if (Date.now() < sessionScadenzaMs) {
+    clearTimeout(_scadenzaTimer);
+    _scadenzaTimer = setTimeout(controllaScadenzaSessione, Math.min(sessionScadenzaMs - Date.now() + 500, 2147483647));
+    return false;
+  }
+  await doLogout();
+  if (navigator.onLine) loadLoginUsers();
+  showErr('Turno finito: per rientrare inserisci il PIN.');
+  return true;
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) controllaScadenzaSessione(); });
+window.addEventListener('pageshow', () => { controllaScadenzaSessione(); });
+
 async function doLogout() {
   if (typeof _profiloEsci === 'function') _profiloEsci();
   _oneSignalEsci();
   currentUser = null;
   sessionToken = null;
+  clearTimeout(_scadenzaTimer); _scadenzaTimer = null; sessionScadenzaMs = null;
   await cacheSet('current-user', null);
   await cacheSet('current-session-token', null);
+  await cacheSet('current-session-scadenza', null);
   document.getElementById('app-screen').style.display = 'none';
   document.getElementById('login-screen').style.display = 'flex';
   if (window.pinPad) pinPad.azzera();

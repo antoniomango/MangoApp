@@ -107,8 +107,12 @@ function renderSistemaConfig() {
       `<input type="number" min="1440" max="10080" step="1" value="${escapeHtml(_sistema.pin_blocco_max_minuti || '')}" onchange="salvaSistema('pin_blocco_max_minuti', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
     riga('PIN — avviso al responsabile dopo N blocchi', 'Dopo questo numero di blocchi consecutivi il responsabile riceve una notifica (da 1 a 3)',
       `<input type="number" min="1" max="3" step="1" value="${escapeHtml(_sistema.pin_blocchi_alert || '')}" onchange="salvaSistema('pin_blocchi_alert', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
-    riga('Durata della sessione operatore (ore)', 'Dopo questo tempo l\'operatore deve rifare il PIN (da 1 a 24)',
-      `<input type="number" min="1" max="24" step="1" value="${escapeHtml(_sistema.sessione_ore || '')}" onchange="salvaSistema('sessione_ore', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`);
+    riga('Durata massima della sessione (ore)', 'Tetto per ogni sessione: dopo questo tempo si rifà il PIN (da 1 a 24). Gli operatori escono comunque prima, a fine turno',
+      `<input type="number" min="1" max="24" step="1" value="${escapeHtml(_sistema.sessione_ore || '')}" onchange="salvaSistema('sessione_ore', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
+    riga('Uscita degli operatori dopo la fine del turno (minuti)', 'Gli operatori escono da soli ' + escapeHtml(_sistema.sessione_margine_fine_turno_minuti || '30') + ' minuti dopo la fine del turno e rientrano con il PIN (da 0 a 240)',
+      `<input type="number" min="0" max="240" step="1" value="${escapeHtml(_sistema.sessione_margine_fine_turno_minuti || '')}" onchange="salvaSistema('sessione_margine_fine_turno_minuti', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
+    riga('Accesso fuori orario (ore)', 'Chi entra dopo la fine del turno o in un giorno non lavorativo ha una sessione di ' + escapeHtml(_sistema.sessione_fuori_turno_ore || '5') + ' ore (da 1 a 12)',
+      `<input type="number" min="1" max="12" step="1" value="${escapeHtml(_sistema.sessione_fuori_turno_ore || '')}" onchange="salvaSistema('sessione_fuori_turno_ore', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`);
 }
 
 // ── Link delle viste (sezione Sistema): indirizzi da configurazione (app_base_url) o dedotti dalla pagina; mai ?env, token o dati riservati ──
