@@ -304,6 +304,14 @@ textarea:focus { border-color: var(--accent); }
 .profilo-menu { display: flex; flex-direction: column; gap: 2px; margin-bottom: 14px; min-width: 200px; }
 .profilo-menu button { display: flex; align-items: center; gap: 10px; background: none; border: none; color: var(--ink); font: inherit; font-size: 14px; padding: 10px 6px; border-radius: 8px; cursor: pointer; text-align: left; min-height: 44px; }
 .profilo-menu button:hover, .profilo-menu button:focus-visible { background: var(--phase-bg); }
+.profilo-menu .profilo-voce { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-size: 14px; padding: 10px 6px; border-radius: 8px; min-height: 44px; }
+.profilo-menu .profilo-voce:hover, .profilo-menu .profilo-voce:focus-visible { background: var(--phase-bg); }
+.profilo-menu-fondo { margin: 14px 0 6px; padding-top: 8px; border-top: 1px solid var(--border); }
+.profilo-versione { font-size: 11px; color: var(--muted); text-align: center; }
+.user-chip { border: 1px solid var(--border); max-width: 62vw; }
+.user-chip #user-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.user-chip i[data-ic] { width: 18px; height: 18px; flex: none; }
+.user-chip .online-dot { flex: none; }
 .profilo-menu i[data-ic] { width: 18px; height: 18px; color: var(--muted); }
 .prof-hdr { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .prof-hdr .page-title { margin-bottom: 0; }
@@ -375,11 +383,11 @@ textarea:focus { border-color: var(--accent); }
       Mango
     </div>
     <div style="display:flex;align-items:center;gap:10px">
-      <button type="button" class="user-chip" id="user-chip" aria-haspopup="true" aria-expanded="false" aria-controls="pannello-profilo" onclick="toggleProfilo()">
+      <button type="button" class="user-chip" id="user-chip" aria-label="Menu" aria-haspopup="true" aria-expanded="false" aria-controls="pannello-profilo" onclick="toggleProfilo()">
         <div class="online-dot" id="conn-dot"></div>
         <span id="user-chip-name"></span>
+        <i data-ic="menu"></i>
       </button>
-      <button onclick="doLogout()" style="background:none;border:none;color:var(--chrome-muted);font-size:12px;cursor:pointer">esci</button>
     </div>
   </div>
 
@@ -394,6 +402,11 @@ textarea:focus { border-color: var(--accent); }
     </div>
     <div class="section-title">Aspetto</div>
     <div id="tema-selettore-op"></div>
+    <div class="profilo-menu profilo-menu-fondo">
+      <a class="profilo-voce" href="guida_operatori.html" target="_blank" rel="noopener"><i data-ic="guida"></i> Guida</a>
+      <button type="button" onclick="esciConConferma()"><i data-ic="esci"></i> Esci</button>
+    </div>
+    <div class="profilo-versione" id="profilo-versione"></div>
   </div>
 
   <div class="app-content">
@@ -958,6 +971,14 @@ function toggleProfilo(forza) {
   p.hidden = !apri;
   document.getElementById('user-chip').setAttribute('aria-expanded', apri ? 'true' : 'false');
 }
+document.addEventListener('keydown', e => {
+  const p = document.getElementById('pannello-profilo');
+  if (e.key === 'Escape' && p && !p.hidden) toggleProfilo(false);
+});
+function esciConConferma() {
+  if (confirm('Vuoi uscire? Per rientrare servirà il PIN.')) { toggleProfilo(false); doLogout(); }
+}
+document.getElementById('profilo-versione').textContent = 'Versione ' + APP_VERSION;
 document.addEventListener('click', e => {
   const p = document.getElementById('pannello-profilo');
   if (p && !p.hidden && !p.contains(e.target) && !e.target.closest('#user-chip')) toggleProfilo(false);

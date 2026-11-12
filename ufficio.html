@@ -62,8 +62,20 @@ header {
 .logo .logo-mark { width: 26px; height: 26px; }
 .header-right { display: flex; align-items: center; gap: 16px; font-size: 12px; color: var(--chrome-muted); font-family: var(--font-mono); }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); display: inline-block; margin-right: 4px; }
-.header-right .esci-link { cursor: pointer; text-decoration: underline; }
-.header-right .esci-link:hover { color: var(--chrome-ink); }
+.user-chip { background: var(--chrome-fill); color: var(--chrome-ink); border: 1px solid var(--border); font: inherit; cursor: pointer; min-height: 32px; padding: 5px 10px; border-radius: 20px; font-size: 12px; display: flex; align-items: center; gap: 6px; max-width: 62vw; }
+.user-chip #header-user-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.user-chip .status-dot { margin-right: 0; flex: none; }
+.user-chip i[data-ic] { width: 18px; height: 18px; flex: none; }
+.profilo-panel { position: fixed; top: 52px; right: 12px; z-index: 150; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); box-shadow: var(--shadow-lg); padding: 14px 16px; }
+.profilo-panel[hidden] { display: none; }
+.profilo-panel .section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-family: var(--font-mono); margin: 0 0 10px; }
+.profilo-menu { display: flex; flex-direction: column; gap: 2px; min-width: 200px; }
+.profilo-menu button { display: flex; align-items: center; gap: 10px; background: none; border: none; color: var(--ink); font: inherit; font-size: 14px; padding: 10px 6px; border-radius: 8px; cursor: pointer; text-align: left; min-height: 44px; }
+.profilo-menu button:hover, .profilo-menu button:focus-visible { background: var(--phase-bg); }
+.profilo-menu i[data-ic] { width: 18px; height: 18px; color: var(--muted); }
+.profilo-menu-fondo { margin: 14px 0 6px; padding-top: 8px; border-top: 1px solid var(--border); }
+.profilo-versione { font-size: 11px; color: var(--muted); text-align: center; }
+@media (max-width: 600px) { header { padding: 0 12px; } .logo { font-size: 12px; letter-spacing: 0.08em; gap: 6px; } }
 
 /* ── MAIN ── */
 #lista-view { max-width: 720px; margin: 0 auto; padding: 20px 16px 40px; }
@@ -216,20 +228,30 @@ header {
       Mango Srl
     </div>
     <div class="header-right">
-      <span><span class="status-dot"></span>connesso</span>
-      <span id="header-user-nome">—</span>
-      <span class="esci-link" onclick="doLogout()">esci</span>
+      <button type="button" class="user-chip" id="user-chip" aria-label="Menu" aria-haspopup="true" aria-expanded="false" aria-controls="pannello-profilo" onclick="toggleProfilo()">
+        <span class="status-dot" id="conn-dot" title="connesso"></span>
+        <span id="header-user-nome">—</span>
+        <i data-ic="menu"></i>
+      </button>
     </div>
   </header>
+
+  <!-- Menu utente: aspetto, esci, versione -->
+  <div class="profilo-panel" id="pannello-profilo" hidden>
+    <div class="section-title">Aspetto</div>
+    <div id="tema-selettore-uff"></div>
+    <div class="profilo-menu profilo-menu-fondo">
+      <button type="button" onclick="esciConConferma()"><i data-ic="esci"></i> Esci</button>
+    </div>
+    <div class="profilo-versione" id="profilo-versione"></div>
+  </div>
 
   <!-- Lista ordini attivi -->
   <div id="lista-view">
     <div class="view-tabs">
       <button class="view-tab active">Produzione</button>
       <button class="view-tab" onclick="mostraStorico()"><i data-ic="pacco"></i> Storico</button>
-      <button class="view-tab tab-avvisi" style="display:none" onclick="mostraAvvisi()"><i data-ic="campana"></i> Clienti da avvisare<span class="tab-conta avvisi-n" style="display:none"></span></button>
-      <div id="tema-selettore-uff" style="margin-left:auto"></div>
-    </div>
+      <button class="view-tab tab-avvisi" style="display:none" onclick="mostraAvvisi()"><i data-ic="campana"></i> Clienti da avvisare<span class="tab-conta avvisi-n" style="display:none"></span></button>    </div>
     <div class="search-wrap">
       <i data-ic="cerca"></i>
       <input type="text" id="ufficio-search" placeholder="Cerca cliente o codice…" oninput="applicaFiltro()" autocomplete="off">
@@ -403,6 +425,25 @@ function mostraApp() {
   }
 }
 
+
+function toggleProfilo(forza) {
+  const p = document.getElementById('pannello-profilo');
+  const apri = forza !== undefined ? forza : p.hidden;
+  p.hidden = !apri;
+  document.getElementById('user-chip').setAttribute('aria-expanded', apri ? 'true' : 'false');
+}
+document.addEventListener('click', e => {
+  const p = document.getElementById('pannello-profilo');
+  if (p && !p.hidden && !p.contains(e.target) && !e.target.closest('#user-chip')) toggleProfilo(false);
+});
+document.addEventListener('keydown', e => {
+  const p = document.getElementById('pannello-profilo');
+  if (e.key === 'Escape' && p && !p.hidden) toggleProfilo(false);
+});
+function esciConConferma() {
+  if (confirm('Vuoi uscire? Per rientrare servirà il PIN.')) { toggleProfilo(false); doLogout(); }
+}
+document.getElementById('profilo-versione').textContent = 'Versione ' + APP_VERSION;
 
 function doLogout() {
   clearInterval(refreshTimer);
