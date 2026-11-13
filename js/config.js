@@ -133,7 +133,7 @@ async function leggiConfigPubblica(client) {
 // Versione del client — da incrementare SEMPRE insieme a CACHE in sw.js (stesso valore,
 // stesso commit). Letta da responsabile.html per la guardia di versione sulle operazioni
 // distruttive (esportazione/archiviazione) — vedi Checklist-Sicurezza.md nel vault.
-const APP_VERSION = 'mango-v108';
+const APP_VERSION = 'mango-v109';
 
 // Guardia di versione per operatore.html e ufficio.html: se la versione minima richiesta dal server (config_pubblica) è
 // maggiore di questa, un client rimasto in cache non resta in uso. Prima prova da solo ad aggiornarsi (cancella cache e
@@ -716,7 +716,7 @@ function _visInstallaGestiZoom(stage, img) {
   const css = `
 #vis-foto-overlay { display:none; position:fixed; inset:0; z-index:10001; background:#000; flex-direction:column; }
 #vis-foto-overlay.open { display:flex; }
-#vis-foto-bar { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; background:rgba(0,0,0,.6); position:relative; z-index:2; flex:0 0 auto; }
+#vis-foto-bar { display:flex; align-items:center; justify-content:space-between; padding:calc(10px + env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left)); background:rgba(0,0,0,.6); position:relative; z-index:2; flex:0 0 auto; }
 #vis-foto-bar button { background:none; border:none; color:#fff; font-size:22px; cursor:pointer; padding:6px 10px; line-height:1; }
 #vis-foto-counter { color:#fff; font-size:13px; }
 #vis-foto-stage { flex:1 1 auto; min-height:0; position:relative; overflow:hidden; touch-action:none; display:flex; align-items:center; justify-content:center; }
