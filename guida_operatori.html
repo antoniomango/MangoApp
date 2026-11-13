@@ -1,506 +1,613 @@
 <!DOCTYPE html>
-<html lang="it" data-theme="light">
+<html lang="it">
 <head>
 <meta charset="UTF-8">
-<title>Mango SRL — Guida Operatori</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Guida per gli operatori</title>
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<script src="js/tema.js"></script>
 <link rel="stylesheet" href="css/tema.css">
 <style>
-  /* documento da stampare: resta sempre in bianco e nero (data-theme="light" fisso),
-     da tema.css prende solo i font locali */
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-padding-top: 76px; -webkit-text-size-adjust: 100%; }
+  body { margin: 0; font-family: var(--font-sans); background: var(--bg); color: var(--ink); font-size: 16px; line-height: 1.55; }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  .barra { position: fixed; top: 0; left: 0; right: 0; z-index: 10; background: var(--surface); border-bottom: 1px solid var(--border);
+           padding: env(safe-area-inset-top) 0 0; }
+  .barra-in { max-width: 760px; margin: 0 auto; padding: 10px 16px; display: flex; align-items: center; gap: 12px; }
+  .torna { font: inherit; font-weight: 600; font-size: 15px; color: var(--on-accent); background: var(--accent); border: 0; border-radius: var(--radius-ctl);
+           padding: 10px 14px; cursor: pointer; text-decoration: none; white-space: nowrap; min-height: 44px; display: inline-flex; align-items: center; }
+  .barra-titolo { font-weight: 600; font-size: 15px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  body {
-    font-family: var(--font-sans);
-    font-size: 11pt;
-    color: #000;
-    background: #fff;
-    line-height: 1.6;
-  }
+  main { max-width: 760px; margin: 0 auto; padding: 84px 16px 48px; padding-top: calc(84px + env(safe-area-inset-top)); }
+  h1 { font-size: 26px; line-height: 1.2; margin: 8px 0 6px; }
+  .intro { color: var(--muted); margin: 0 0 20px; }
+  h2 { font-size: 21px; line-height: 1.25; margin: 0 0 10px; }
+  h3 { font-size: 16px; margin: 20px 0 6px; }
+  p { margin: 0 0 10px; }
+  ul, ol { margin: 0 0 12px; padding-left: 22px; }
+  li { margin: 3px 0; }
+  b, strong { font-weight: 600; }
 
-  .cover {
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: #fff;
-    color: #000;
-    page-break-after: always;
-    text-align: center;
-    padding: 48px;
-    border: 3px solid #000;
-    margin: 8mm;
-  }
-  .cover-logo {
-    width: 56px; height: 56px;
-    border: 3px solid #000;
-    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-    margin-bottom: 24px;
-  }
-  .cover h1 {
-    font-family: var(--font-mono);
-    font-size: 28pt;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-  }
-  .cover .subtitle { font-size: 14pt; font-weight: 300; margin-bottom: 48px; color: #333; }
-  .cover .doc-info {
-    font-size: 10pt; color: #555;
-    border-top: 1px solid #aaa;
-    padding-top: 24px; width: 100%; max-width: 400px;
-  }
-  .cover .doc-info strong { color: #000; }
+  .sommario { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 14px 16px; margin: 0 0 24px; }
+  .sommario h2 { font-size: 15px; margin: 0 0 6px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+  .sommario ol { margin: 0; padding-left: 24px; columns: 1; }
+  .sommario a { color: var(--ink); text-decoration: none; display: inline-block; padding: 5px 0; min-height: 32px; }
+  .sommario a:hover { text-decoration: underline; }
+  @media (min-width: 640px) { .sommario ol { columns: 2; column-gap: 28px; } }
 
-  .page { padding: 28mm 22mm 22mm 22mm; page-break-after: always; }
-  .page:last-child { page-break-after: avoid; }
+  section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 18px 16px; margin: 0 0 16px; }
+  .serve { color: var(--muted); margin-bottom: 12px; }
+  .btn { display: inline-block; font-weight: 600; background: var(--fill); border: 1px solid var(--border-strong); border-radius: 8px; padding: 1px 7px; white-space: nowrap; }
+  .nota { background: var(--warn-bg); color: var(--on-warn); border-radius: var(--radius-ctl); padding: 10px 12px; margin: 10px 0; }
+  .errori li { margin: 5px 0; }
 
-  .section-header {
-    display: flex; align-items: center; gap: 14px;
-    margin-bottom: 24px; padding-bottom: 12px;
-    border-bottom: 2px solid #000;
-  }
-  .section-num {
-    width: 36px; height: 36px;
-    background: #fff; color: #000;
-    border: 2px solid #000; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 700; font-size: 14pt; flex-shrink: 0;
-  }
-  .section-header h2 { font-size: 16pt; font-weight: 700; }
+  figure { margin: 14px 0; }
+  figure img, figure video { display: block; width: 100%; max-width: 390px; height: auto; margin: 0 auto; border: 1px solid var(--border-strong); border-radius: 14px; background: var(--surface-2); }
+  figcaption { max-width: 390px; margin: 6px auto 0; font-size: 14px; color: var(--muted); text-align: center; }
 
-  h3 {
-    font-size: 12pt; font-weight: 700; color: #000;
-    margin: 20px 0 8px;
-    display: flex; align-items: center; gap: 8px;
-    border-bottom: 1px solid #ccc; padding-bottom: 4px;
-  }
-  h3::before { content: '▸'; }
-  p { margin-bottom: 10px; }
-
-  .steps { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
-  .step {
-    display: flex; align-items: flex-start; gap: 14px;
-    border: 1px solid #bbb; border-radius: 4px; padding: 10px 12px;
-  }
-  .step-num {
-    width: 24px; height: 24px;
-    border: 2px solid #000; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 9.5pt; font-weight: 700; flex-shrink: 0; margin-top: 1px;
-  }
-  .step-body { flex: 1; }
-  .step-body strong { display: block; font-size: 10.5pt; margin-bottom: 2px; }
-  .step-body span { font-size: 9.5pt; color: #444; }
-
-  .info-box {
-    border-left: 4px solid #000;
-    border-top: 1px solid #bbb; border-bottom: 1px solid #bbb; border-right: 1px solid #bbb;
-    padding: 10px 14px; margin: 12px 0; font-size: 9.5pt;
-  }
-  .info-box strong { display: block; margin-bottom: 4px; font-size: 10pt; }
-
-  .badge {
-    display: inline-block; padding: 1px 7px; border-radius: 3px;
-    font-size: 8.5pt; font-weight: 700; font-family: var(--font-mono);
-    vertical-align: middle; border: 1.5px solid #000; background: #fff; color: #000;
-  }
-
-  .fase-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 9.5pt; }
-  .fase-table th {
-    border: 1px solid #000; padding: 6px 10px;
-    text-align: left; font-weight: 700; font-size: 9pt;
-  }
-  .fase-table td { padding: 5px 10px; border: 1px solid #ccc; }
-  .fase-table tr:nth-child(even) td { background: #f5f5f5; }
-  .fase-table .num { font-family: var(--font-mono); color: #555; text-align: center; width: 32px; }
-
-  .stato-flow { display: flex; align-items: center; gap: 8px; margin: 14px 0; flex-wrap: wrap; }
-  .stato-node {
-    padding: 5px 14px; border-radius: 3px;
-    font-size: 9.5pt; font-weight: 700;
-    border: 2px solid #000; background: #fff; color: #000;
-  }
-  .arrow { color: #000; font-size: 14pt; line-height: 1; }
-
-  .azioni-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
-  .azione-card { border: 1px solid #bbb; border-radius: 4px; padding: 10px 12px; }
-  .azione-card .azione-titolo { font-weight: 700; font-size: 10pt; margin-bottom: 4px; }
-  .azione-card p { font-size: 9pt; color: #444; margin: 0; }
-
-  .indice { margin: 20px 0; }
-  .indice-item {
-    display: flex; align-items: center; padding: 9px 0;
-    border-bottom: 1px dotted #aaa; gap: 12px;
-  }
-  .indice-num {
-    width: 26px; height: 26px;
-    border: 2px solid #000; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 10pt; font-weight: 700; flex-shrink: 0;
-  }
-  .indice-item span { font-size: 11pt; flex: 1; }
-  .indice-item .dots { flex: 1; border-bottom: 1px dotted #aaa; margin: 0 8px; }
-
-  @media print {
-    body { -webkit-print-color-adjust: economy; print-color-adjust: economy; }
-    .no-print { display: none; }
-    .cover { margin: 0; height: 100vh; }
-  }
-.regole-pin { text-align: left; font-size: 13.5px; line-height: 1.45; background: #f7f7f7; border: 1px solid #ddd; border-radius: 10px; padding: 12px 16px; margin: 10px 0 14px; }
-.regole-pin p { margin: 0 0 8px; } .regole-pin ul { margin: 0 0 8px; padding-left: 20px; }
+  .tema-pie { text-align: center; margin: 24px 0 0; color: var(--muted); font-size: 14px; }
+  .tema-seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--radius-ctl); overflow: hidden; margin-top: 8px; }
+  .tema-seg button { font: inherit; font-size: 14px; background: var(--surface); color: var(--ink); border: 0; padding: 10px 16px; min-height: 44px; cursor: pointer; }
+  .tema-seg button + button { border-left: 1px solid var(--border-strong); }
+  .tema-seg button[aria-pressed="true"], .tema-seg button.attivo { background: var(--accent); color: var(--on-accent); }
 </style>
 </head>
 <body>
 
-<!-- COPERTINA -->
-<div class="cover">
-  <div class="cover-logo"></div>
-  <h1>Mango</h1>
-  <div class="subtitle">Guida all'utilizzo — Operatori</div>
-  <div class="doc-info">
-    <strong>Mango SRL — Gestione Produzione</strong><br>
-    Versione 2.0 &nbsp;·&nbsp; Giugno 2025<br><br>
-    Questo documento è riservato al personale interno.<br>
-    Conservarlo in postazione come riferimento rapido.
+<header class="barra">
+  <div class="barra-in">
+    <a class="torna" id="torna" href="operatore.html">← Torna all'app</a>
+    <span class="barra-titolo">Guida per gli operatori</span>
   </div>
-</div>
+</header>
 
-<!-- INDICE -->
-<div class="page">
-  <div class="section-header">
-    <div class="section-num">☰</div>
-    <h2>Indice</h2>
-  </div>
-  <div class="indice">
-    <div class="indice-item"><div class="indice-num">1</div><span>Accesso all'applicazione</span><div class="dots"></div></div>
-    <div class="indice-item"><div class="indice-num">2</div><span>Schermata principale (Home)</span><div class="dots"></div></div>
-    <div class="indice-item"><div class="indice-num">3</div><span>Dashboard Avanzamento Ordini</span><div class="dots"></div></div>
-    <div class="indice-item"><div class="indice-num">4</div><span>Prendere in carico una fase</span><div class="dots"></div></div>
-    <div class="indice-item"><div class="indice-num">5</div><span>Lavorare in due su una fase</span><div class="dots"></div></div>
-    <div class="indice-item"><div class="indice-num">6</div><span>Completare una fase</span><div class="dots"></div></div>
-    <div class="indice-item"><div class="indice-num">7</div><span>Mettere una fase in attesa</span><div class="dots"></div></div>
-    <div class="indice-item"><div class="indice-num">8</div><span>Subentrare in una fase di un collega</span><div class="dots"></div></div>
-    <div class="indice-item"><div class="indice-num">9</div><span>Annullare la presa in carico</span><div class="dots"></div></div>
-    <div class="indice-item"><div class="indice-num">10</div><span>Segnalare una non conformità (NC)</span><div class="dots"></div></div>
-    <div class="indice-item"><div class="indice-num">11</div><span>Scheda Attività personale</span><div class="dots"></div></div>
-    <div class="indice-item"><div class="indice-num">12</div><span>Indicatori scadenza ordini</span><div class="dots"></div></div>
-    <div class="indice-item"><div class="indice-num">13</div><span>Le fasi di produzione</span><div class="dots"></div></div>
-  </div>
-  <div class="info-box" style="margin-top:32px">
-    <strong>Come aprire l'applicazione</strong>
-    Apri il browser sul tuo telefono e digita l'indirizzo fornito dal responsabile (es. <strong>192.168.1.85:3000/operatore.html</strong>). Assicurati di essere connesso alla WiFi aziendale.
-  </div>
-</div>
+<main>
+  <h1>Guida per gli operatori</h1>
+  <p class="intro">Come usare l'app, passo dopo passo. I nomi dei pulsanti sono scritti tra «virgolette», come li vedi sul telefono.</p>
 
-<!-- SEZIONE 1: ACCESSO -->
-<div class="page">
-  <div class="section-header"><div class="section-num">1</div><h2>Accesso all'applicazione</h2></div>
-  <p>L'accesso avviene tramite <strong>nome</strong> e <strong>PIN personale</strong> a 6 cifre. Non è richiesta una password email. Il tuo telefono deve essere stato approvato dal responsabile: la prima volta compare un codice da comunicargli, e appena approva potrai scegliere il tuo PIN.</p>
-  <div class="steps">
-    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Seleziona il tuo nome</strong><span>Tocca il menu a tendina e scegli il tuo nome dall'elenco operatori.</span></div></div>
-    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Inserisci il PIN</strong><span>Digita le 6 cifre del tuo PIN personale. I caratteri sono nascosti per privacy.</span></div></div>
-    <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Premi "Accedi"</strong><span>Se il PIN è corretto entri direttamente nella schermata principale.</span></div></div>
-  </div>
-  <h3>Scegliere il PIN</h3>
-  <p>Quando il responsabile approva il tuo telefono, l'app ti chiede di scegliere da solo il tuo PIN (due volte). Ecco le regole:</p>
-  <div id="guida-regole-pin"></div>
-  <div class="info-box warn"><strong>⚠ PIN errato</strong>Se il PIN non viene riconosciuto compare un messaggio rosso. Controlla di aver selezionato il nome giusto. In caso di problemi rivolgiti al responsabile.</div>
-  <div class="info-box ok"><strong>✓ Sessione salvata</strong>L'app ricorda la tua sessione: se chiudi e riapri il browser non devi rifare il login, a meno che tu non abbia fatto il logout manuale.</div>
-  <h3>Logout</h3>
-  <p>Tocca il tuo nome in alto a destra e seleziona <strong>Esci</strong>. Fallo sempre se condividi il dispositivo con altri operatori.</p>
-</div>
+  <nav class="sommario" aria-label="Sommario">
+    <h2>Sommario</h2>
+    <ol>
+      <li><a href="#s1" data-vai="s1">Prima volta</a></li>
+      <li><a href="#s2" data-vai="s2">Entrare e uscire</a></li>
+      <li><a href="#s3" data-vai="s3">Home</a></li>
+      <li><a href="#s4" data-vai="s4">Oggi</a></li>
+      <li><a href="#s5" data-vai="s5">Fasi esterne e materiale in arrivo</a></li>
+      <li><a href="#s6" data-vai="s6">Ordine pronto: spedito o ritirato</a></li>
+      <li><a href="#s7" data-vai="s7">Foto dell'ordine</a></li>
+      <li><a href="#s8" data-vai="s8">Notifiche</a></li>
+      <li><a href="#s9" data-vai="s9">Il mio profilo</a></li>
+      <li><a href="#s10" data-vai="s10">Senza rete</a></li>
+      <li><a href="#s11" data-vai="s11">Messaggi speciali</a></li>
+      <li><a href="#s12" data-vai="s12">Altre voci che puoi trovare</a></li>
+      <li><a href="#s13" data-vai="s13">Domande frequenti</a></li>
+    </ol>
+  </nav>
 
-<!-- SEZIONE 2: HOME -->
-<div class="page">
-  <div class="section-header"><div class="section-num">2</div><h2>Schermata principale (Home)</h2></div>
-  <p>Dopo l'accesso arrivi sulla schermata <strong>Home</strong>, divisa in due aree:</p>
-  <h3>Le mie fasi attive</h3>
-  <p>In cima trovi le fasi che hai in corso (<span class="badge">In corso</span>) o in pausa (<span class="badge">In attesa</span>). Da qui puoi gestirle con un tocco.</p>
-  <h3>Ricerca e lista ordini</h3>
-  <p>Sotto trovi un <strong>campo di ricerca</strong> per trovare rapidamente un ordine per cliente o numero, e la lista completa degli ordini aperti. Ogni card mostra:</p>
-  <div class="steps">
-    <div class="step"><div class="step-num">●</div><div class="step-body"><strong>Nome cliente e numero ordine</strong><span>Es. "Rossi Mario — L 116 B"</span></div></div>
-    <div class="step"><div class="step-num">●</div><div class="step-body"><strong>Struttura e tipo prodotto</strong><span>Es. "4 Lati · Portoncino"</span></div></div>
-    <div class="step"><div class="step-num">●</div><div class="step-body"><strong>Priorità e data di scadenza</strong><span>Con indicatore visivo se l'ordine è in ritardo o in scadenza.</span></div></div>
-    <div class="step"><div class="step-num">●</div><div class="step-body"><strong>Fasi libere</strong><span>La scritta "fasi libere ✓" indica che ci sono fasi disponibili da prendere in carico.</span></div></div>
-  </div>
-  <h3>Navigazione — barra in fondo</h3>
-  <div class="azioni-grid">
-    <div class="azione-card"><div class="azione-titolo">🏠 Home</div><p>Le tue fasi attive e la lista ordini con ricerca.</p></div>
-    <div class="azione-card"><div class="azione-titolo">📈 Avanzamento</div><p>Dashboard con il progresso di tutti gli ordini.</p></div>
-    <div class="azione-card"><div class="azione-titolo">⚠️ NC</div><p>Segnala o consulta le non conformità.</p></div>
-    <div class="azione-card"><div class="azione-titolo">📊 Attività</div><p>Il riepilogo delle tue fasi completate.</p></div>
-  </div>
-  <div class="info-box"><strong>Indicatore di connessione</strong>Pallino verde = online. Pallino arancione = offline. In offline puoi consultare gli ordini già caricati ma non aggiornare le fasi.</div>
-</div>
-
-<!-- SEZIONE 3: AVANZAMENTO -->
-<div class="page">
-  <div class="section-header"><div class="section-num">3</div><h2>Dashboard Avanzamento Ordini</h2></div>
-  <p>La scheda <strong>📈 Avanzamento</strong> mostra una panoramica di tutti gli ordini aperti con il loro stato di avanzamento. È pensata per aiutarti a capire quali ordini sono più indietro e vanno spinti.</p>
-
-  <h3>Cosa vedi per ogni ordine</h3>
-  <div class="steps">
-    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Nome cliente, numero ordine e priorità</strong><span>Il badge priorità (Normale / Urgente / Extra Urgente) è sempre visibile in alto a destra.</span></div></div>
-    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Barra di progresso</strong><span>Mostra visivamente quante fasi sono state completate rispetto al totale. Diventa verde quando l'ordine è al 100%.</span></div></div>
-    <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Contatore fasi</strong><span>Es. "12/18 fasi · 67%" — sai esattamente a che punto è l'ordine.</span></div></div>
-    <div class="step"><div class="step-num">4</div><div class="step-body"><strong>Pallini colorati per ogni fase</strong><span>Verde = completata · Blu = in corso · Arancione = in attesa · Grigio = disponibile.</span></div></div>
-    <div class="step"><div class="step-num">5</div><div class="step-body"><strong>Data di scadenza</strong><span>Mostrata in giallo se entro 3 giorni, in rosso se già scaduta.</span></div></div>
-  </div>
-
-  <div class="info-box ok">
-    <strong>✓ Solo lettura</strong>
-    Dalla dashboard avanzamento non si può fare nulla — è solo consultazione. Per prendere in carico una fase torna nella Home, cerca l'ordine e toccalo.
-  </div>
-
-  <div class="info-box">
-    <strong>Ordini sospesi</strong>
-    Gli ordini sospesi dal responsabile appaiono in grigio con la scritta "SOSPESO". Non lavorarci finché il responsabile non li riattiva.
-  </div>
-</div>
-
-<!-- SEZIONE 4: PRENDERE IN CARICO -->
-<div class="page">
-  <div class="section-header"><div class="section-num">4</div><h2>Prendere in carico una fase</h2></div>
-  <p>Prendere in carico una fase significa dichiarare che sei tu ad eseguirla. Una fase può essere presa in carico solo se è in stato <span class="badge">Disponibile</span>.</p>
-  <div class="steps">
-    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Tocca l'ordine nella lista</strong><span>Si apre il dettaglio con tutte le fasi dell'ordine.</span></div></div>
-    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Tocca la fase che vuoi eseguire</strong><span>Scegli la fase con il cerchietto vuoto (○) — disponibile. Le fasi con ✓ sono già completate.</span></div></div>
-    <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Premi "▶ Prendi in carico"</strong><span>La fase passa in stato <span class="badge">In corso</span> e viene assegnata a te. Il timer parte in automatico.</span></div></div>
-  </div>
-  <div class="info-box warn">
-    <strong>⚠ Attenzione</strong>
-    Se hai preso in carico una fase per errore, usa il pulsante <strong>"✕ Annulla presa in carico"</strong> (vedi sezione 9) per liberarla senza conseguenze.
-  </div>
-  <h3>Fasi non applicabili (N/A)</h3>
-  <p>Alcune fasi mostrano il badge <span class="badge">N/A</span> — non si applicano a quel tipo di prodotto o materiale. Non è necessario fare nulla su queste fasi.</p>
-  <h3>Fase 9 — Attesa Struttura</h3>
-  <p>Questa fase parte automaticamente in stato <span class="badge">In attesa</span> appena viene creato un nuovo ordine. Il timer di attesa scorre fin dal primo giorno. Quando la struttura arriva in azienda, il responsabile o l'operatore la segna come completata. Questo permette di tracciare esattamente quanti giorni si è aspettato il fornitore.</p>
-</div>
-
-<!-- SEZIONE 5: LAVORARE IN DUE -->
-<div class="page">
-  <div class="section-header"><div class="section-num">5</div><h2>Lavorare in due su una fase</h2></div>
-  <p>Alcune lavorazioni richiedono necessariamente due operatori. Il sistema supporta più operatori sulla stessa fase contemporaneamente.</p>
-
-  <h3>Come unirsi a una fase già in corso</h3>
-  <p>Se una fase è già <span class="badge">In corso</span> presa da un collega e devi lavorarci anche tu:</p>
-  <div class="steps">
-    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Tocca la fase in corso</strong><span>Vedrai il nome del collega che la sta eseguendo e la scritta "In corso".</span></div></div>
-    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Premi "+ Unisciti"</strong><span>Vieni aggiunto alla fase senza toglierla al collega. Entrambi risultate assegnati.</span></div></div>
-  </div>
-
-  <div class="info-box ok">
-    <strong>✓ Differenza tra "Unisciti" e "Subentra"</strong>
-    <ul style="margin-top:6px;padding-left:16px;font-size:9.5pt;line-height:1.9">
-      <li><strong>Unisciti</strong> → lavori insieme al collega, entrambi siete registrati sulla fase.</li>
-      <li><strong>Subentra</strong> → prendi il posto del collega, lui viene rimosso dalla fase.</li>
+  <!-- 1 -->
+  <section id="s1">
+    <h2>1. Prima volta</h2>
+    <p class="serve">La prima volta devi far riconoscere il tuo telefono e scegliere il tuo PIN. Poi entri ogni giorno solo con il PIN.</p>
+    <p>La prima volta l'app te la installa il responsabile.</p>
+    <ol>
+      <li>Apri l'app sul telefono.</li>
+      <li>Se vedi «Telefono da autorizzare», il telefono non è ancora approvato.</li>
+      <li>Comunica al responsabile il codice che vedi sullo schermo.</li>
+      <li>Aspetta. La schermata si controlla da sola ogni pochi secondi. Puoi anche toccare «Ricontrolla».</li>
+      <li>Quando il telefono è approvato, il responsabile può aprirti la scelta del PIN. Vedi «Ciao …, scegli il tuo PIN».</li>
+      <li>Scrivi il PIN due volte: la seconda volta il titolo diventa «Ripeti il PIN».</li>
+      <li>Se i due PIN sono diversi, vedi «I due PIN non coincidono, riprova». Ricomincia.</li>
+    </ol>
+    <figure>
+      <img src="guida/img/IMG-01.webp" width="780" alt="Schermata «Telefono da autorizzare» con un codice di sei cifre e il pulsante «Ricontrolla»" loading="lazy">
+      <figcaption>Comunica questo codice al responsabile.</figcaption>
+    </figure>
+    <figure>
+      <img src="guida/img/IMG-02.webp" width="780" alt="Scelta del PIN: le regole del PIN, tre pallini pieni su sei e il tastierino numerico" loading="lazy">
+      <figcaption>Scegli un PIN di 6 cifre e scrivilo due volte.</figcaption>
+    </figure>
+    <h3>Regole del PIN</h3>
+    <ul>
+      <li>Il PIN deve avere 6 cifre.</li>
+      <li>Non sono accettati:
+        <ul>
+          <li>tutte le cifre uguali (per esempio 111111);</li>
+          <li>sequenze (per esempio 123456, 654321, 147258);</li>
+          <li>ripetizioni (per esempio 121212, 123123, 112233);</li>
+          <li>PIN uguali letti al contrario (per esempio 123321);</li>
+          <li>un anno all'inizio (per esempio 1985…, 2024…);</li>
+          <li>date: le prime 4 cifre non devono formare giorno e mese (per esempio 2507…), e le cifre dalla 3ª alla 6ª non devono formare mese e giorno (per esempio …0725).</li>
+        </ul>
+      </li>
+      <li>Consiglio: scegli la 1ª cifra tra 4 e 9 e la 3ª tra 2 e 9. Così non sarà mai una data o un anno.</li>
+      <li>Non usare il PIN di altri, del telefono o della banca. Non dirlo a nessuno.</li>
     </ul>
-  </div>
-
-  <h3>Chi può completare la fase</h3>
-  <p>Quando lavorate in due, <strong>chiunque dei due</strong> può premere "✓ Segna come completata". Il sistema registra tutti gli operatori che hanno partecipato.</p>
-
-  <div class="info-box">
-    <strong>Registro operatori</strong>
-    Nel dettaglio della fase, sotto "Operatori su questa fase", vedrai i nomi di tutti coloro che hanno lavorato su quella fase. Questi dati vengono usati per i report del responsabile.
-  </div>
-
-  <h3>Se vuoi uscire dalla fase prima che sia completata</h3>
-  <p>Usa il pulsante <strong>"✕ Annulla presa in carico"</strong>. Se il tuo collega è ancora sulla fase, la fase rimane in corso a lui. Se eri l'unico, la fase torna disponibile (vedi sezione 9).</p>
-</div>
-
-<!-- SEZIONE 6: COMPLETARE -->
-<div class="page">
-  <div class="section-header"><div class="section-num">6</div><h2>Completare una fase</h2></div>
-  <p>Quando hai finito di lavorare su una fase devi segnalarla come completata.</p>
-  <div class="steps">
-    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Tocca la fase in corso</strong><span>Dalla Home → "Le mie fasi attive" o dal dettaglio ordine.</span></div></div>
-    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Aggiungi eventuali note (facoltativo)</strong><span>Annota anomalie, informazioni utili per le fasi successive o comunicazioni al responsabile.</span></div></div>
-    <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Allega una foto (facoltativo)</strong><span>Tocca "📷 Scatta/allega foto" per documentare il lavoro svolto. Le foto vengono salvate nell'archivio dell'ordine.</span></div></div>
-    <div class="step"><div class="step-num">4</div><div class="step-body"><strong>Premi "✓ Segna come completata"</strong><span>La fase passa in stato <span class="badge">Completata</span> con data e ora registrate automaticamente.</span></div></div>
-  </div>
-  <div class="info-box ok">
-    <strong>✓ Spedizione ordine</strong>
-    Quando tutte le fasi sono completate o N/A compare il pulsante <strong>"✓ Segna come spedito"</strong>. Premilo solo quando il prodotto è fisicamente uscito dall'azienda.
-  </div>
-  <h3>Flusso degli stati di una fase</h3>
-  <div class="stato-flow">
-    <span class="stato-node">○ Disponibile</span>
-    <span class="arrow">→</span>
-    <span class="stato-node" style="border-style:double">▶ In corso</span>
-    <span class="arrow">→</span>
-    <span class="stato-node" style="background:#eee">✓ Completata</span>
-  </div>
-  <div class="stato-flow" style="margin-top:-4px">
-    <span style="width:130px"></span>
-    <span class="arrow">↕</span>
-    <span class="stato-node" style="border-style:dashed;margin-left:8px">⏸ In attesa</span>
-  </div>
-  <p style="font-size:9pt;color:#555;margin-top:8px">Da <em>In attesa</em> si può tornare <em>In corso</em> oppure completare direttamente.</p>
-</div>
-
-<!-- SEZIONE 7: IN ATTESA -->
-<div class="page">
-  <div class="section-header"><div class="section-num">7</div><h2>Mettere una fase in attesa</h2></div>
-  <p>Usa questa funzione quando devi interrompere temporaneamente una fase — stai aspettando materiale, attrezzatura o istruzioni dal responsabile.</p>
-  <div class="steps">
-    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Apri la fase che hai in corso</strong><span>Dalla sezione "Le mie fasi attive" o dal dettaglio ordine.</span></div></div>
-    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Premi "⏸ Metti in attesa"</strong><span>La fase passa in stato <span class="badge">In attesa</span>. Rimane assegnata a te ma è sospesa.</span></div></div>
-    <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Quando sei pronto, riprendi</strong><span>Tu o un collega potete premere <strong>"▶ Riprendi fase"</strong> per riattivarla.</span></div></div>
-  </div>
-  <div class="info-box">
-    <strong>Quando usare "In attesa"</strong>
-    <ul style="margin-top:6px;padding-left:16px;font-size:9.5pt;line-height:1.8">
-      <li>Attesa materiali (legno, vetro, ferramenta…)</li>
-      <li>Fine turno — riprenderà un collega il giorno dopo</li>
-      <li>Problema tecnico che richiede valutazione del responsabile</li>
+    <h3>Cosa vedi dopo</h3>
+    <p>Entri nell'app e vedi «Ciao, » seguito dal tuo nome.</p>
+    <h3>Errori comuni</h3>
+    <ul class="errori">
+      <li>«Questo PIN sembra una data, scegline un altro». Scegline uno che rispetti le regole sopra.</li>
+      <li>«Questo PIN è una sequenza troppo facile».</li>
+      <li>«La scelta del PIN non è più disponibile: rivolgiti al responsabile». Il tempo per sceglierlo è finito: chiedi al responsabile di riaprirlo.</li>
+      <li>«Telefono non più autorizzato»: il telefono non può più entrare. Rivolgiti al responsabile.</li>
+      <li>«Verifica non riuscita»: controlla la connessione e tocca «Ricontrolla».</li>
     </ul>
-  </div>
-</div>
+  </section>
 
-<!-- SEZIONE 8: SUBENTRO -->
-<div class="page">
-  <div class="section-header"><div class="section-num">8</div><h2>Subentrare in una fase di un collega</h2></div>
-  <p>Se una fase è stata messa in attesa o il collega non è disponibile, puoi prenderla in carico tu.</p>
-
-  <h3>Caso A — Fase in attesa ⏸</h3>
-  <p>Chiunque può riprendere liberamente una fase in stato <span class="badge">In attesa</span>.</p>
-  <div class="steps">
-    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Tocca la fase in attesa</strong><span>Mostra il nome dell'operatore che l'aveva presa.</span></div></div>
-    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Premi "▶ Riprendi fase"</strong><span>La fase passa in corso a tuo nome.</span></div></div>
-  </div>
-
-  <h3>Caso B — Fase in corso di un collega ▶</h3>
-  <p>Se la fase è già <span class="badge">In corso</span> e vuoi <strong>sostituire</strong> il collega (non affiancarti — per affiancarti usa "+ Unisciti" della sezione 5):</p>
-  <div class="steps">
-    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Apri la fase del collega</strong><span>Vedrai il pulsante "↩ Prendi in carico" (subentro).</span></div></div>
-    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Premi "↩ Prendi in carico" e conferma</strong><span>Compare un messaggio di conferma. Premendo OK subentri. Il collega viene notificato.</span></div></div>
-  </div>
-
-  <div class="info-box warn">
-    <strong>⚠ Il subentro viene sempre registrato</strong>
-    Ogni cambio di operatore è salvato nel registro dell'ordine. Usa il subentro con responsabilità.
-  </div>
-</div>
-
-<!-- SEZIONE 9: ANNULLA PRESA IN CARICO -->
-<div class="page">
-  <div class="section-header"><div class="section-num">9</div><h2>Annullare la presa in carico</h2></div>
-  <p>Se hai preso in carico una fase per errore o non puoi più lavorarci, puoi annullare la presa in carico senza conseguenze. L'azione viene comunque registrata nel log.</p>
-
-  <div class="steps">
-    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Apri la fase che hai in corso</strong><span>Deve essere una fase che hai preso in carico tu.</span></div></div>
-    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Scorri in fondo al riquadro azioni</strong><span>Trovi il pulsante <strong>"✕ Annulla presa in carico"</strong> in piccolo in fondo.</span></div></div>
-    <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Conferma l'operazione</strong><span>Appare un messaggio di conferma. Premendo OK la fase viene liberata.</span></div></div>
-  </div>
-
-  <div class="info-box ok">
-    <strong>✓ Cosa succede dopo</strong>
-    <ul style="margin-top:6px;padding-left:16px;font-size:9.5pt;line-height:1.8">
-      <li>Se eri l'unico operatore sulla fase → torna a <span class="badge">Disponibile</span> per tutti.</li>
-      <li>Se lavoravi insieme a un collega → lui continua, tu esci dalla fase.</li>
+  <!-- 2 -->
+  <section id="s2">
+    <h2>2. Entrare e uscire</h2>
+    <p class="serve">Entri con il tuo nome e il PIN. Esci quando lasci il telefono ad altri.</p>
+    <h3>Per entrare</h3>
+    <ol>
+      <li>Scegli il tuo nome dalla lista «Chi sei».</li>
+      <li>Scrivi il PIN con il tastierino. L'app lo controlla quando hai scritto le cifre.</li>
+    </ol>
+    <h3>Per uscire</h3>
+    <ol>
+      <li>In alto a destra tocca il tuo nome con l'icona del menu.</li>
+      <li>Si apre il menu. In fondo ci sono «Guida» e «Esci».</li>
+      <li>Tocca «Esci». L'app chiede «Vuoi uscire? Per rientrare servirà il PIN.»</li>
+      <li>Conferma. Torni alla schermata di accesso.</li>
+    </ol>
+    <figure>
+      <img src="guida/img/IMG-04.webp" width="780" alt="Menu aperto dal nome in alto a destra, con «Il mio profilo», «Aspetto», «Guida», «Esci» e il numero di versione" loading="lazy">
+      <figcaption>Dal tuo nome apri il menu ed esci.</figcaption>
+    </figure>
+    <p>Poco dopo la fine del turno l'app ti fa uscire da sola: per rientrare usa il PIN.</p>
+    <p>In fondo al menu leggi «Versione …» con il numero della versione dell'app.</p>
+    <h3>Errori comuni</h3>
+    <ul class="errori">
+      <li>«PIN errato»: riprova con calma.</li>
+      <li>«Troppi tentativi errati — riprova dopo le …»: aspetta l'ora indicata.</li>
+      <li>«Seleziona il tuo nome»: prima scegli il nome, poi scrivi il PIN.</li>
     </ul>
-  </div>
+  </section>
 
-  <div class="info-box warn">
-    <strong>⚠ L'annullamento è registrato</strong>
-    Anche se la fase torna disponibile, nel log dell'ordine rimane traccia che l'hai presa in carico e poi annullata. Evita di usarlo frequentemente.
-  </div>
-</div>
+  <!-- 3 -->
+  <section id="s3">
+    <h2>3. Home</h2>
+    <p class="serve">La Home è la lista di tutti gli ordini aperti. Da qui apri un ordine per vedere le sue fasi e le sue foto.</p>
+    <figure>
+      <img src="guida/img/IMG-03.webp" width="780" alt="Home con il campo di ricerca, la legenda dei colori delle scadenze e l'elenco degli ordini, con il gruppo «In attesa corriere» in cima" loading="lazy">
+      <figcaption>La Home mostra tutti gli ordini aperti.</figcaption>
+    </figure>
+    <h3>Cosa vedi</h3>
+    <ul>
+      <li>In alto «Ciao, » con il tuo nome e la data di oggi.</li>
+      <li>Il campo «Cerca cliente o codice ordine…».</li>
+      <li>Il titolo «Ordini con fasi disponibili».</li>
+      <li>Ogni ordine ha cliente, codice, scadenza, la priorità e una barra con la percentuale «% completato».</li>
+      <li>Gli ordini sono divisi per mese di scadenza. Sotto «Senza scadenza» trovi quelli senza data.</li>
+      <li>In cima c'è il gruppo «In attesa corriere»: sono gli ordini finiti, pronti da spedire o da ritirare.</li>
+      <li>Un ordine in ritardo ha la scritta «IN RITARDO». Uno fermo dal responsabile ha «SOSPESO». Se non c'è niente da fare vedi «Nessuna fase disponibile».</li>
+      <li>«Spedizione unica con …» ti dice quali altri ordini partono insieme a questo.</li>
+    </ul>
+    <h3>Aprire un ordine</h3>
+    <ol>
+      <li>Scrivi nel campo di ricerca, se serve.</li>
+      <li>Tocca la riga dell'ordine.</li>
+      <li>Per tornare tocca «← Torna alla home».</li>
+    </ol>
+    <p>«Da chiudere oggi» sta nella pagina «Oggi» (vedi sezione 4). Il materiale in arrivo si gestisce da «Ricevi materiale» (sezione 5).</p>
+    <figure>
+      <img src="guida/img/IMG-05.webp" width="780" alt="Dettaglio di un ordine: dati dell'ordine, «Allega foto a questo ordine», due foto allegate e l'elenco delle fasi con lo stato di ciascuna" loading="lazy">
+      <figcaption>Qui vedi le fasi dell'ordine e le sue foto.</figcaption>
+    </figure>
+    <h3>Errori comuni</h3>
+    <ul class="errori">
+      <li>«Nessun ordine aperto»: non ci sono ordini in lista.</li>
+      <li>«Nessun risultato»: la ricerca non trova niente. Cancella il testo.</li>
+    </ul>
+  </section>
 
-<!-- SEZIONE 10: NC -->
-<div class="page">
-  <div class="section-header"><div class="section-num">10</div><h2>Segnalare una non conformità (NC)</h2></div>
-  <p>Una <strong>non conformità</strong> è un problema rilevato durante la produzione: difetto sul materiale, errore di lavorazione, discrepanza rispetto all'ordine. Va segnalata immediatamente.</p>
-  <div class="steps">
-    <div class="step"><div class="step-num">1</div><div class="step-body"><strong>Tocca la scheda "⚠️ NC" in fondo allo schermo</strong><span>Si apre la sezione non conformità.</span></div></div>
-    <div class="step"><div class="step-num">2</div><div class="step-body"><strong>Seleziona l'ordine interessato</strong><span>Scegli dal menu il codice ordine relativo al problema.</span></div></div>
-    <div class="step"><div class="step-num">3</div><div class="step-body"><strong>Seleziona la fase in cui hai rilevato il problema</strong><span>Indica la fase specifica dove si è verificata la non conformità.</span></div></div>
-    <div class="step"><div class="step-num">4</div><div class="step-body"><strong>Descrivi il problema e premi "Invia"</strong><span>La NC viene registrata e inviata al responsabile.</span></div></div>
-  </div>
-  <div class="info-box ok"><strong>✓ Continua a lavorare</strong>Segnalare una NC non blocca l'ordine. Continua sulle altre fasi a meno che il responsabile non ti comunichi diversamente.</div>
-  <div class="info-box warn"><strong>⚠ Segnala sempre e subito</strong>Non aspettare la fine del turno. Prima si segnala, prima si risolve.</div>
-</div>
+  <!-- 4 -->
+  <section id="s4">
+    <h2>4. Oggi</h2>
+    <p class="serve">«Oggi» è il piano del giorno, uguale per tutta la squadra. Mostra cosa fare, raggruppato per fase.</p>
+    <figure>
+      <img src="guida/img/IMG-06.webp" width="780" alt="Pagina «Oggi» con il numero di attività fatte, il pulsante «Ricevi materiale» e l'elenco delle fasi del giorno, una con il segno «Urgente»" loading="lazy">
+      <figcaption>Oggi mostra le fasi da fare.</figcaption>
+    </figure>
+    <h3>Cosa vedi</h3>
+    <ul>
+      <li>In alto la data e quante attività sono fatte, per esempio «3 di 10 attività».</li>
+      <li>Il pulsante «Ricevi materiale» (vedi sezione 5).</li>
+      <li>Una lista di fasi. Ogni fase dice quante voci sono fatte, per esempio «1 di 3».</li>
+      <li>Il gruppo «Da chiudere oggi» è in cima. Sono le fasi più urgenti, con i codici degli ordini.</li>
+      <li>Sotto c'è «Altre fasi di oggi» (se non c'è «Da chiudere oggi», il titolo è «Fasi di oggi»).</li>
+      <li>Più in basso c'è «In arrivo»: sono lavori che aspettano un'altra fase. Vedi «dopo: …» e non puoi ancora toccarli.</li>
+      <li>La scritta «Urgente» segna ciò che serve subito.</li>
+      <li>Se non c'è niente da fare vedi «Nessuna attività eseguibile adesso». Se il piano non c'è ancora, l'app te lo dice.</li>
+    </ul>
 
-<!-- SEZIONE 11 + 12 -->
-<div class="page">
-  <div class="section-header"><div class="section-num">11</div><h2>Scheda Attività personale</h2></div>
-  <p>La scheda <strong>📊 Attività</strong> mostra tutte le fasi che hai completato: ordine, fase, data/ora inizio e completamento.</p>
-  <div class="azioni-grid">
-    <div class="azione-card"><div class="azione-titolo">📋 Storico</div><p>Tutte le fasi svolte nel tempo.</p></div>
-    <div class="azione-card"><div class="azione-titolo">⏱ Tempi</div><p>Quanto hai impiegato per ciascuna fase.</p></div>
-  </div>
+    <h3>Completare una fase</h3>
+    <ol>
+      <li>Tocca il nome della fase nella lista.</li>
+      <li>Trovi le voci: cliente e codice dell'ordine, e quanti pezzi.</li>
+      <li>Quando hai finito, tocca «✓ Completata» sulla voce.</li>
+      <li>Vedi «Completata!». La voce diventa verde con «✓ Fatta».</li>
+      <li>Per tornare alla lista tocca «← Tutte le fasi».</li>
+    </ol>
+    <figure>
+      <img src="guida/img/IMG-07.webp" width="780" alt="Voci di una fase: una da completare, una a pezzi con «3 di 8» e «+1 pezzo», una già fatta con «Annulla»" loading="lazy">
+      <figcaption>Tocca «✓ Completata» quando hai finito.</figcaption>
+    </figure>
+    <figure>
+      <video controls playsinline muted preload="none" poster="guida/video/CLIP-01.jpg" width="390">
+        <source src="guida/video/CLIP-01.mp4" type="video/mp4">
+      </video>
+      <figcaption>Completa una fase in «Oggi» con un tocco.</figcaption>
+    </figure>
+    <p>Puoi anche completare dalla scheda della fase (tocca il nome dell'ordine nella voce): trovi «Completa fase» e il pulsante «✓ Completata». Puoi scrivere una nota se vuoi («Le tue note (opzionale)»).</p>
 
-  <div class="section-header" style="margin-top:32px"><div class="section-num">12</div><h2>Indicatori scadenza ordini</h2></div>
-  <p>Nella Home e nella dashboard Avanzamento, le card degli ordini cambiano aspetto in base alla scadenza:</p>
-  <div class="steps">
-    <div class="step">
-      <div class="step-num" style="border-style:solid">○</div>
-      <div class="step-body">
-        <strong>Nessun indicatore — ordine nella norma</strong>
-        <span>La scadenza è ancora lontana (più di 3 giorni). Nessuna urgenza particolare.</span>
-      </div>
-    </div>
-    <div class="step" style="border-left:4px solid #888">
-      <div class="step-num">!</div>
-      <div class="step-body">
-        <strong>Bordo giallo lampeggiante — scadenza entro 3 giorni</strong>
-        <span>L'ordine scade a breve. Priorità alta: organizzati per completare le fasi rimanenti.</span>
-      </div>
-    </div>
-    <div class="step" style="border-left:4px solid #333">
-      <div class="step-num">!!</div>
-      <div class="step-body">
-        <strong>Bordo rosso lampeggiante — ordine in ritardo</strong>
-        <span>La data di consegna è già passata. Segnala al responsabile e spingi al massimo sulle fasi rimaste.</span>
-      </div>
-    </div>
-  </div>
-  <div class="info-box warn">
-    <strong>⚠ Gli ordini in ritardo hanno priorità assoluta</strong>
-    Quando vedi un bordo rosso, coordina con il responsabile per capire quali fasi portare avanti per prime.
-  </div>
-</div>
+    <h3>Completare più fasi insieme</h3>
+    <ol>
+      <li>Dentro una fase con almeno due voci, tocca «☑ Seleziona più ordini».</li>
+      <li>Spunta le voci che hai finito.</li>
+      <li>In basso tocca «✓ Completa» con il numero delle voci scelte. Accanto c'è «Annulla» per lasciare la scelta.</li>
+      <li>Per uscire dalla scelta tocca «✕ Esci dalla selezione».</li>
+      <li>Vedi per esempio «3 completate!».</li>
+    </ol>
+    <figure>
+      <img src="guida/img/IMG-08.webp" width="780" alt="Selezione di più voci: due caselle spuntate e, in basso, i pulsanti «✓ Completa» e «Annulla»" loading="lazy">
+      <figcaption>Spunta più voci e completale insieme.</figcaption>
+    </figure>
+    <p>Questa scelta non è per le voci con più pressate e per le spedizioni: quelle si segnano una alla volta.</p>
 
-<!-- SEZIONE 13: FASI -->
-<div class="page">
-  <div class="section-header"><div class="section-num">13</div><h2>Le fasi di produzione</h2></div>
-  <p>Ogni ordine passa attraverso più fasi. Alcune potrebbero essere <span class="badge">N/A</span> in base al tipo di prodotto, al materiale e alla struttura. L'elenco delle fasi, nell'ordine in cui si lavorano, lo trovi nell'app Operatore.</p>
-  <div class="info-box" style="margin-top:16px">
-    <strong>Ordini Extra</strong>
-    Gli ordini speciali (tipo "extra") hanno fasi personalizzate definite dal responsabile. Il funzionamento è identico: prendi in carico, lavora, completa.
-  </div>
-</div>
+    <h3>«+1 pezzo»</h3>
+    <p>Su alcune fasi la voce mostra il conteggio dei pezzi, per esempio «3 di 8».</p>
+    <ol>
+      <li>Ogni volta che finisci un pezzo tocca «+1 pezzo».</li>
+      <li>Se hai sbagliato, tocca «−» per togliere un pezzo.</li>
+      <li>Se hai finito tutto, tocca «Tutti».</li>
+      <li>Quando arrivi all'ultimo pezzo la fase si completa da sola. Vedi «Tutti i pezzi fatti!».</li>
+    </ol>
+    <figure>
+      <video controls playsinline muted preload="none" poster="guida/video/CLIP-02.jpg" width="390">
+        <source src="guida/video/CLIP-02.mp4" type="video/mp4">
+      </video>
+      <figcaption>Con «+1 pezzo» conti i pezzi finiti uno alla volta.</figcaption>
+    </figure>
 
-<!-- PROMEMORIA -->
-<div class="page" style="page-break-after:avoid">
-  <div class="section-header"><div class="section-num">✓</div><h2>Promemoria rapido — Regole d'uso</h2></div>
-  <div class="steps">
-    <div class="step"><div class="step-num">✓</div><div class="step-body"><strong>Prendi in carico solo le fasi che puoi eseguire</strong><span>Non tenere fasi bloccate senza lavorarci. Se ti fermi, mettile in attesa.</span></div></div>
-    <div class="step"><div class="step-num">✓</div><div class="step-body"><strong>Se lavorate in due, entrambi dovete premere "+ Unisciti"</strong><span>Solo così entrambi risultate registrati sul lavoro svolto.</span></div></div>
-    <div class="step"><div class="step-num">✓</div><div class="step-body"><strong>Segna sempre completata la fase prima di passare alla successiva</strong><span>Il responsabile monitora l'avanzamento in tempo reale dalla sua dashboard.</span></div></div>
-    <div class="step"><div class="step-num">✓</div><div class="step-body"><strong>Quando arriva la struttura, segna subito la fase 9 come completata</strong><span>Il tempo di attesa viene tracciato automaticamente dall'app.</span></div></div>
-    <div class="step"><div class="step-num">✓</div><div class="step-body"><strong>Segnala subito qualsiasi problema tramite NC</strong><span>Non aspettare — la non conformità va registrata nel momento in cui la rilevi.</span></div></div>
-    <div class="step"><div class="step-num">✓</div><div class="step-body"><strong>Ordini con bordo rosso = massima priorità</strong><span>Coordina con il responsabile e spingiti a completare le fasi rimanenti.</span></div></div>
-    <div class="step"><div class="step-num">✓</div><div class="step-body"><strong>Non condividere il tuo PIN</strong><span>Il PIN è personale. Le azioni registrate nell'app sono a tuo nome.</span></div></div>
-    <div class="step"><div class="step-num">✓</div><div class="step-body"><strong>In caso di dubbi chiedi al responsabile</strong><span>Non tentare operazioni di cui non sei sicuro.</span></div></div>
-  </div>
-  <div style="margin-top:32px;text-align:center;padding:20px;border:2px solid #000;border-radius:4px">
-    <div style="font-family:var(--font-mono);font-size:11pt;letter-spacing:0.1em;margin-bottom:4px;font-weight:700">MANGO SRL</div>
-    <div style="font-size:9pt;color:#555">Gestione Produzione — Versione 2.0 · Giugno 2025</div>
-  </div>
-</div>
+    <h3>Pressate</h3>
+    <p>Alcune fasi richiedono più pressate. Quando completi vedi la domanda «È l'ultima pressata?».</p>
+    <ul>
+      <li>«Sì, ho finito»: la fase è completata.</li>
+      <li>«No, ne serve un'altra»: la fase resta da fare. Vedi «Pressata registrata: la fase resta da fare».</li>
+      <li>«Annulla»: non succede niente.</li>
+    </ul>
+    <p>Le pressate già fatte compaiono come «2 pressate già fatte» (è solo un conteggio).</p>
 
-<div class="no-print" style="position:fixed;bottom:24px;right:24px">
-  <button onclick="window.print()" style="background:#8B5E3C;color:white;border:none;padding:14px 24px;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.3)">
-    🖨️ Stampa / Salva PDF
-  </button>
-</div>
+    <h3>Spedizione unica</h3>
+    <p>Se più ordini partono insieme, vedi «Si chiude per tutta la spedizione». Completando uno, si completano tutti. Se un ordine del gruppo non è pronto, a schermo resta il titolo «Spedizione chiusa» con il pulsante «Ho capito».</p>
 
-<script src="js/regole-pin.js"></script>
-<script>MangoRegolePin.rendi(document.getElementById('guida-regole-pin'));</script>
+    <h3>«Annulla» (se hai completato per sbaglio)</h3>
+    <ol>
+      <li>Subito dopo il completamento, sulla voce verde compare «↩ Annulla».</li>
+      <li>Toccalo. Vedi «Completamento annullato». La voce torna da fare.</li>
+      <li>«Annulla» vale solo per poco tempo dopo il completamento. Poi sparisce.</li>
+      <li>Se è passato troppo tempo vedi «Non si può più annullare: chiedi al responsabile». Solo il responsabile può riaprire la fase.</li>
+    </ol>
+    <figure>
+      <video controls playsinline muted preload="none" poster="guida/video/CLIP-03.jpg" width="390">
+        <source src="guida/video/CLIP-03.mp4" type="video/mp4">
+      </video>
+      <figcaption>Hai sbagliato? Subito dopo puoi toccare «↩ Annulla».</figcaption>
+    </figure>
+
+    <h3>Errori comuni</h3>
+    <ul class="errori">
+      <li>«Non disponibile offline» per «+1 pezzo», «Annulla» e il completamento di più voci: servono internet.</li>
+      <li>«Prima va completata una fase precedente»: la fase è bloccata. Guarda «dopo: …».</li>
+      <li>«L'ordine è sospeso: contatta il responsabile».</li>
+      <li>«Era già completata»: l'ha già segnata un collega.</li>
+    </ul>
+  </section>
+
+  <!-- 5 -->
+  <section id="s5">
+    <h2>5. Fasi esterne e materiale in arrivo</h2>
+    <p class="serve">Alcuni lavori vanno da un fornitore. Tu segni quando il pezzo parte e quando il materiale o il pezzo torna.</p>
+    <h3>Spedire un pezzo al fornitore</h3>
+    <ol>
+      <li>In «Oggi» trovi la voce con il pulsante «Segna spedita». Compare solo quando le fasi prima sono finite.</li>
+      <li>Toccalo. L'app chiede due conferme: «Confermi la spedizione al fornitore? Verrà registrata la data di uscita.» e «Confermi di aver spedito questo pezzo?»</li>
+      <li>Vedi «Spedizione registrata!».</li>
+    </ol>
+    <p>Dalla scheda della fase trovi lo stesso con «Segna come spedito».</p>
+    <h3>Confermare che arriva il materiale o il pezzo</h3>
+    <ol>
+      <li>In «Oggi» tocca «Ricevi materiale».</li>
+      <li>Vedi l'elenco. «Serve per lavorare» è ciò che blocca altro lavoro. «Altro in arrivo» è il resto.</li>
+      <li>Puoi cercare con «Cerca cliente o codice ordine…».</li>
+      <li>Quando il materiale è arrivato, tocca il pulsante verde «✓ Conferma arrivo» con il nome del materiale. Per un pezzo che torna dal fornitore è «✓ Conferma rientro».</li>
+      <li>L'app chiede «Confermi che è arrivato il materiale …?» Rispondi di sì. Per il materiale può chiederti anche «Confermi di aver ricevuto davvero il materiale per questo pezzo?»</li>
+      <li>La voce sparisce dall'elenco. Le fasi che aspettavano entrano in «Oggi».</li>
+      <li>Per tornare tocca «← Oggi».</li>
+    </ol>
+    <figure>
+      <img src="guida/img/IMG-09.webp" width="780" alt="Elenco «Ricevi materiale» con i gruppi «Serve per lavorare» e «Altro in arrivo» e il pulsante verde «Conferma arrivo»" loading="lazy">
+      <figcaption>Conferma quando il materiale è arrivato.</figcaption>
+    </figure>
+    <p>Dalla scheda di una fase d'attesa trovi anche «Conferma ricezione» e «Conferma ricezione pezzo».</p>
+    <h3>Errori comuni</h3>
+    <ul class="errori">
+      <li>«Serve la connessione per confermare»: aspetta di avere internet.</li>
+      <li>«Nessuna ricezione in attesa»: non c'è niente da ricevere.</li>
+      <li>«Ricezione già confermata»: l'ha già fatto un collega.</li>
+    </ul>
+  </section>
+
+  <!-- 6 -->
+  <section id="s6">
+    <h2>6. Ordine pronto: spedito o ritirato</h2>
+    <p class="serve">Quando tutte le fasi sono finite, l'ordine passa in «In attesa corriere». Tu segni quando parte o quando il cliente lo ritira.</p>
+    <h3>Un ordine</h3>
+    <ol>
+      <li>Dalla Home apri l'ordine che sta nel gruppo «In attesa corriere».</li>
+      <li>Tocca «Segna come spedito». Se il cliente ritira, il pulsante è «Segna come ritirato».</li>
+      <li>L'app chiede «Segnare questo ordine come spedito?» (o «…come ritirato?»). Conferma.</li>
+      <li>Vedi «Ordine spedito!» (o «Ordine ritirato!») e torni alla Home.</li>
+    </ol>
+    <figure>
+      <img src="guida/img/IMG-10.webp" width="780" alt="Dettaglio di un ordine finito con il pulsante «Segna come spedito»" loading="lazy">
+      <figcaption>Quando l'ordine parte, tocca «Segna come spedito».</figcaption>
+    </figure>
+    <p>Se l'ordine è in una spedizione unica, l'app propone di segnare tutti gli ordini pronti insieme («Spedisci tutti» o «Ritira tutti») oppure «Solo questo».</p>
+    <h3>Più ordini insieme</h3>
+    <ol>
+      <li>Nella Home, nel gruppo «In attesa corriere», tocca «☑ Seleziona più ordini».</li>
+      <li>Spunta gli ordini che partono.</li>
+      <li>In basso leggi per esempio «2 selezionati». Tocca «Spedisci».</li>
+      <li>L'app chiede «Segnare come spediti 2 ordini? L'azione è irreversibile.» Conferma.</li>
+      <li>Per rinunciare tocca «Annulla» in basso o «✕ Annulla» in alto.</li>
+    </ol>
+    <h3>Errori comuni</h3>
+    <ul class="errori">
+      <li>«Non disponibile offline»: serve internet.</li>
+      <li>«Seleziona almeno un ordine da spedire».</li>
+      <li>Dopo il «Sì» non si torna indietro da solo: se sbagli, avvisa il responsabile.</li>
+    </ul>
+  </section>
+
+  <!-- 7 -->
+  <section id="s7">
+    <h2>7. Foto dell'ordine</h2>
+    <p class="serve">Puoi aggiungere foto a un ordine per mostrare un lavoro o un problema. Le vedono tutti quelli che lavorano sull'ordine.</p>
+    <ol>
+      <li>Apri l'ordine dalla Home. Trovi «Foto dell'ordine».</li>
+      <li>Tocca «Allega foto a questo ordine».</li>
+      <li>Scegli «Scatta foto» o «Allega da galleria».</li>
+      <li>Con «Scatta foto» si apre la fotocamera dell'app: puoi fare più scatti. Poi tocca «Carica tutte».</li>
+      <li>Con «Allega da galleria» scegli le foto e tocca «Carica foto».</li>
+      <li>Vedi per esempio «2 foto caricate».</li>
+      <li>Per vedere una foto più grande, toccala.</li>
+    </ol>
+    <p>Dalla schermata «Oggi» il pulsante «Foto» sulla voce ti porta allo stesso ordine.</p>
+    <p><b>Eliminare una foto.</b> Tocca «Seleziona», scegli le foto e tocca «Elimina selezionate»; l'app chiede conferma.</p>
+    <h3>Errori comuni</h3>
+    <ul class="errori">
+      <li>«Per allegare foto serve la connessione»: le foto non si salvano senza internet.</li>
+      <li>«Ordine già spedito: non si possono più allegare foto».</li>
+      <li>«Fotocamera non disponibile: le foto andranno nella galleria del telefono»: permetti l'uso della fotocamera, oppure usa «Allega da galleria».</li>
+      <li>«Scatto non riuscito, riprova».</li>
+    </ul>
+  </section>
+
+  <!-- 8 -->
+  <section id="s8">
+    <h2>8. Notifiche</h2>
+    <p class="serve">Le notifiche ti avvisano di cose importanti: per esempio un ordine sospeso, in ritardo o pronto da spedire.</p>
+    <ol>
+      <li>In basso tocca «Notifiche». Un numero rosso sull'icona dice quante non hai ancora letto.</li>
+      <li>Le notifiche nuove hanno lo sfondo giallo e il testo in grassetto.</li>
+      <li>Per segnarle tutte come lette tocca «Segna tutte lette».</li>
+      <li>Vedi «Tutte le notifiche segnate come lette».</li>
+    </ol>
+    <figure>
+      <img src="guida/img/IMG-11.webp" width="780" alt="Pagina «Notifiche» con tre avvisi, due nuovi con lo sfondo giallo, e il pulsante «Segna tutte lette»" loading="lazy">
+      <figcaption>Le notifiche nuove hanno lo sfondo giallo.</figcaption>
+    </figure>
+    <p>Chi esegue un'azione non riceve la notifica di quella stessa azione.</p>
+    <p>Per ricevere gli avvisi anche fuori dall'app, consenti le notifiche quando il telefono lo chiede.</p>
+    <h3>Errori comuni</h3>
+    <ul class="errori">
+      <li>«Nessuna notifica»: non c'è niente di nuovo.</li>
+      <li>«Errore: notifiche non aggiornate, riprova»: controlla internet e riprova.</li>
+    </ul>
+  </section>
+
+  <!-- 9 -->
+  <section id="s9">
+    <h2>9. Il mio profilo</h2>
+    <p class="serve">Qui vedi e correggi i tuoi dati, chiedi ferie o permessi, vedi chi è assente e cambi il PIN.</p>
+    <h3>Aprire il profilo</h3>
+    <ol>
+      <li>Tocca il tuo nome con l'icona del menu, in alto a destra.</li>
+      <li>Sotto «Il mio profilo» scegli: «I miei dati», «Richieste», «Assenze squadra» o «Cambia PIN».</li>
+      <li>Per tornare alla Home tocca la freccia «‹» in alto.</li>
+    </ol>
+    <h3>I miei dati</h3>
+    <p>I dati che ti chiede il responsabile (per esempio le taglie). Li vedi solo tu e il responsabile.</p>
+    <ol>
+      <li>Scrivi o scegli i valori.</li>
+      <li>Tocca «Salva». Vedi «Dati salvati».</li>
+    </ol>
+    <p>Se non c'è niente da compilare vedi «Nessun dato richiesto per ora».</p>
+    <h3>Richieste (ferie e permessi)</h3>
+    <ol>
+      <li>Apri «Richieste». Sotto «Nuova richiesta» scegli il «Tipo».</li>
+      <li>Scegli «Dal» e «Al». Per i permessi a ore scegli il «Giorno» e l'orario «Dalle» e «Alle».</li>
+      <li>Se vuoi, scrivi una «Nota (facoltativa)». Non scrivere informazioni sulla salute.</li>
+      <li>Tocca «Invia richiesta». Vedi «Richiesta inviata al responsabile».</li>
+      <li>Sotto «Le mie richieste» vedi lo stato: «In attesa», «Approvata», «Non approvata» o «Annullata».</li>
+      <li>Finché è «In attesa» puoi toccare «Annulla richiesta» e confermare.</li>
+    </ol>
+    <figure>
+      <video controls playsinline muted preload="none" poster="guida/video/CLIP-04.jpg" width="390">
+        <source src="guida/video/CLIP-04.mp4" type="video/mp4">
+      </video>
+      <figcaption>Chiedi un permesso dal tuo profilo.</figcaption>
+    </figure>
+    <h3>Assenze squadra</h3>
+    <p>Vedi le assenze approvate dei colleghi nelle prossime 4 settimane.</p>
+    <h3>Cambiare il PIN</h3>
+    <ol>
+      <li>Apri «Cambia PIN».</li>
+      <li>Scrivi il «PIN attuale».</li>
+      <li>Scrivi il «Nuovo PIN» di 6 cifre (valgono le regole della sezione 1).</li>
+      <li>Scrivi «Conferma il nuovo PIN».</li>
+      <li>Vedi «PIN cambiato. Dal prossimo accesso usa il nuovo PIN.»</li>
+    </ol>
+    <h3>Tema chiaro o scuro</h3>
+    <p>Nel menu, sotto «Aspetto», scegli «Chiaro», «Scuro» o «Automatico».</p>
+    <h3>Errori comuni</h3>
+    <ul class="errori">
+      <li>«PIN attuale errato».</li>
+      <li>«Serve la connessione a internet» quando salvi i dati.</li>
+      <li>Richiesta rifiutata per poco anticipo: l'app indica il preavviso minimo.</li>
+      <li>«Nota troppo lunga (massimo 300 caratteri)».</li>
+    </ul>
+  </section>
+
+  <!-- 10 -->
+  <section id="s10">
+    <h2>10. Senza rete</h2>
+    <p class="serve">Se il telefono perde internet, puoi continuare a vedere l'ultimo piano e a completare le fasi. Il lavoro si invia quando torna la rete.</p>
+    <figure>
+      <img src="guida/img/IMG-12.webp" width="780" alt="Pagina «Oggi» con la banda gialla in alto «Offline — le azioni verranno sincronizzate alla riconnessione»" loading="lazy">
+      <figcaption>Senza rete l'app salva il lavoro e lo invia dopo.</figcaption>
+    </figure>
+    <h3>Cosa succede</h3>
+    <ul>
+      <li>In alto compare una banda gialla: «Offline — le azioni verranno sincronizzate alla riconnessione».</li>
+      <li>In «Oggi» vedi l'ultimo piano ricevuto.</li>
+    </ul>
+    <h3>Cosa funziona</h3>
+    <ul>
+      <li>Vedere l'ultimo piano e l'ultimo elenco ordini.</li>
+      <li>Completare una fase con «✓ Completata». Vedi «Salvato offline — sarà sincronizzato alla riconnessione».</li>
+      <li>In Home compare il numero delle «azioni in coda offline».</li>
+    </ul>
+    <h3>Cosa non funziona</h3>
+    <ul>
+      <li>«+1 pezzo», «Annulla», completare più voci insieme.</li>
+      <li>Segnare spedita, spedito o ritirato un ordine.</li>
+      <li>Confermare un arrivo di materiale.</li>
+      <li>Allegare foto e inviare richieste.</li>
+    </ul>
+    <h3>Quando torna la rete</h3>
+    <p>L'app invia da sola il lavoro in coda. Vedi «Sincronizzazione 2 azione(i)…» e poi «Sincronizzazione completata».</p>
+    <div class="nota">Se resti senza rete a lungo, avvisa il responsabile.</div>
+    <h3>Errori comuni</h3>
+    <ul class="errori">
+      <li>«Impossibile verificare il PIN offline. Connettiti per il primo accesso.»: serve internet almeno una volta.</li>
+      <li>«Azione NON salvata: la memoria del telefono non risponde. Riprova tra un momento.»: riprova.</li>
+    </ul>
+  </section>
+
+  <!-- 11 -->
+  <section id="s11">
+    <h2>11. Messaggi speciali</h2>
+    <h3>«Aggiorna l'app»</h3>
+    <ol>
+      <li>A tutto schermo vedi «Aggiorna l'app» e «Questa versione non è più supportata. Tocca il pulsante per caricare quella nuova.»</li>
+      <li>Tocca «Aggiorna ora».</li>
+      <li>Se il messaggio torna, avvisa il responsabile.</li>
+    </ol>
+    <figure>
+      <img src="guida/img/IMG-14.webp" width="780" alt="Schermata a tutto schermo «Aggiorna l'app» con il pulsante «Aggiorna ora»" loading="lazy">
+      <figcaption>Tocca «Aggiorna ora» per caricare la nuova versione.</figcaption>
+    </figure>
+    <h3>Banda rossa «AMBIENTE DI TEST»</h3>
+    <p>In alto vedi una banda rossa con la scritta «AMBIENTE DI TEST — NON È PRODUZIONE». A volte aggiunge l'ora in cui scade. Se la vedi, avvisa il responsabile e non usare l'app.</p>
+    <figure>
+      <img src="guida/img/IMG-13.webp" width="780" alt="Home con la banda rossa «AMBIENTE DI TEST — NON È PRODUZIONE» in alto" loading="lazy">
+      <figcaption>Se vedi la banda rossa, avvisa il responsabile.</figcaption>
+    </figure>
+    <h3>Sessione scaduta</h3>
+    <p>Vedi «Sessione scaduta — effettua di nuovo l'accesso». Dopo poco torni alla schermata di accesso: scegli il nome e scrivi il PIN. Può succedere anche se il responsabile ti ha fatto uscire: entra di nuovo.</p>
+    <h3>Altri messaggi</h3>
+    <ul>
+      <li>«Telefono da autorizzare», «Telefono non più autorizzato»: vedi sezione 1.</li>
+      <li>«Non aggiornato — ultimo piano ricevuto.» in «Oggi»: il piano mostrato è l'ultimo ricevuto. Controlla internet.</li>
+      <li>«Non sono riuscito a salvare, riprova.»: riprova tra poco.</li>
+    </ul>
+  </section>
+
+  <!-- 12 -->
+  <section id="s12">
+    <h2>12. Altre voci che puoi trovare</h2>
+    <p class="serve">Alcune cose compaiono solo su certi ordini. Qui trovi cosa vuol dire ciascuna e cosa devi fare.</p>
+    <ul>
+      <li><b>Fase abbinata.</b> Due fasi dello stesso ordine possono comparire insieme in «Oggi». Restano due fasi: le completi una per una, nell'ordine che vuoi.</li>
+      <li><b>Ordine extra.</b> Nella Home l'ordine ha la scritta «Ordine Extra». Apri l'ordine e completa le sue fasi come le altre.</li>
+      <li><b>Lavorazioni aggiuntive.</b> Nel dettaglio dell'ordine, sotto le fasi, può esserci l'elenco «Lavorazioni aggiuntive», con il segno «AGG». Si aprono e si completano come le altre fasi.</li>
+      <li><b>Consegna.</b> Nel dettaglio dell'ordine, sotto «Consegna», leggi come parte l'ordine: «Da spedire», «Ritira il cliente», «Cliente da avvisare», «Pedana richiesta dal cliente» o «Ritira il cliente (senza pedana)». Se è «Ritira il cliente», alla fine tocchi «Segna come ritirato».</li>
+      <li><b>Note.</b> Se l'ordine ha una nota, la trovi nel dettaglio dell'ordine («Note») e dentro ogni fase («Note ordine»). Se è lunga, tocca «Mostra tutto» per leggerla.</li>
+    </ul>
+  </section>
+
+  <!-- 13 -->
+  <section id="s13">
+    <h2>13. Domande frequenti</h2>
+    <h3>Ho dimenticato il PIN.</h3>
+    <p>Chiedi al responsabile. Poi scegli un PIN nuovo con le regole della sezione 1.</p>
+    <h3>Ho perso il telefono o ne ho uno nuovo.</h3>
+    <p>Chiedi al responsabile. Il nuovo telefono deve essere approvato da lui (sezione 1).</p>
+    <h3>Ho completato la fase sbagliata.</h3>
+    <p>Subito dopo, in «Oggi», tocca «↩ Annulla» sulla voce. Se «Annulla» non c'è più, chiedi al responsabile: solo lui può riaprire la fase.</p>
+    <h3>Non vedo una fase.</h3>
+    <ul>
+      <li>Se la voce è in «In arrivo» con «dopo: …», aspetta la fase indicata.</li>
+      <li>Se la fase aspetta il materiale, guarda «Ricevi materiale».</li>
+      <li>Se l'ordine è «SOSPESO», chiedi al responsabile.</li>
+      <li>Se non c'è proprio, può non essere nel piano di oggi: apri l'ordine dalla Home e guarda le sue fasi.</li>
+    </ul>
+    <h3>Il piano di oggi non c'è.</h3>
+    <p>Leggi il messaggio in «Oggi»: «Il piano di oggi non è ancora pronto: viene creato all'inizio del turno.» oppure «Oggi non è un giorno lavorativo.»</p>
+    <h3>L'app non si apre.</h3>
+    <ol>
+      <li>Controlla internet.</li>
+      <li>Chiudi l'app e riaprila.</li>
+      <li>Se vedi «Aggiorna l'app», tocca «Aggiorna ora».</li>
+      <li>Se non funziona, chiedi al responsabile.</li>
+    </ol>
+  </section>
+
+  <div class="tema-pie">
+    <div>Aspetto della pagina</div>
+    <div id="tema-guida"></div>
+  </div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  // «← Torna all'app»: se la pagina è stata aperta dall'app, torna alla schermata precedente (la sessione resta);
+  // altrimenti apre l'app.
+  var torna = document.getElementById('torna');
+  torna.addEventListener('click', function (e) {
+    var dallApp = false;
+    try {
+      var u = new URL(document.referrer);
+      dallApp = u.origin === location.origin && /(^|\/)operatore\.html$/.test(u.pathname);
+    } catch (err) { dallApp = false; }
+    if (dallApp && history.length > 1) { e.preventDefault(); history.back(); }
+  });
+  // Il sommario scorre fino alla sezione senza aggiungere voci alla cronologia: «Torna all'app» resta affidabile.
+  Array.prototype.forEach.call(document.querySelectorAll('[data-vai]'), function (a) {
+    a.addEventListener('click', function (e) {
+      var s = document.getElementById(a.getAttribute('data-vai'));
+      if (!s) return;
+      e.preventDefault();
+      s.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+  if (window.MangoTema && window.MangoTema.montaSelettore) window.MangoTema.montaSelettore(document.getElementById('tema-guida'));
+})();
+</script>
 </body>
 </html>
