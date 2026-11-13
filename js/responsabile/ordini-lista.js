@@ -352,7 +352,7 @@ async function loadAvanzamenti(ids) {
     toast('Avanzamento ordini non caricato: ' + (av?.errore || avErr?.message || 'errore'), 'err');
     return;
   }
-  const stdSet = new Set(stdIds), extraSet = new Set(extraIds);
+  const stdSet = new Set(stdIds), idSet = new Set(ids);
 
   // Ordini standard → ordine_fasi
   if (stdIds.length) {
@@ -372,15 +372,14 @@ async function loadAvanzamenti(ids) {
     });
   }
 
-  // Ordini extra → fasi_ordine_extra
-  if (extraIds.length) {
-    (av.dati?.fasi_extra || []).filter(f => extraSet.has(f.ordine_id)).forEach(f => {
-      if (!map[f.ordine_id]) map[f.ordine_id] = { tot: 0, done: 0, inCorso: 0, fasiRim: [] };
-      map[f.ordine_id].tot++;
-      if (f.stato === 'completata') map[f.ordine_id].done++;
-      if (f.stato === 'in_corso') map[f.ordine_id].inCorso++;
-    });
-  }
+  // Fasi extra (fasi_ordine_extra) di ogni ordine, standard o extra: contano nell'avanzamento
+  (av.dati?.fasi_extra || []).filter(f => idSet.has(f.ordine_id)).forEach(f => {
+    if (!map[f.ordine_id]) map[f.ordine_id] = { tot: 0, done: 0, inCorso: 0, fasiRim: [] };
+    if (f.stato === 'non_applicabile') return;
+    map[f.ordine_id].tot++;
+    if (f.stato === 'completata') map[f.ordine_id].done++;
+    if (f.stato === 'in_corso') map[f.ordine_id].inCorso++;
+  });
 
   await caricaStimeServer();   // stima unica: la simulazione del server
 

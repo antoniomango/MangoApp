@@ -167,22 +167,28 @@ async function renderDettaglioOrdine(id) {
   // aggregabili (vedi nota nella galleria).
   const mappaNomiFasi = new Map();
 
-  if (ordine.tipo === 'extra') {
+  // Fasi extra dell'ordine (fasi_ordine_extra): card unica per ordini extra e standard
+  const leggiFasiExtra = async () => {
     const { data: fasiExt } = await sb.from('fasi_ordine_extra')
       .select('*, users!operatore_id(nome, cognome)')
       .eq('ordine_id', id)
       .order('numero');
-    (fasiExt || []).forEach(f => mappaNomiFasi.set(f.id, f.nome));
-    fasiEl.innerHTML = (fasiExt || []).map(f => {
-      const opNome = f['users'] ? `${escapeHtml(f['users'].nome)} ${escapeHtml(f['users'].cognome)}` : '';
-      return `<div class="fase-card ${f.stato}" onclick="openFaseExtraDetail('${f.id}', '${id}', ${readonly})">
+    return fasiExt || [];
+  };
+  const cardFaseExtraHtml = f => {
+    mappaNomiFasi.set(f.id, f.nome);
+    const opNome = f['users'] ? `${escapeHtml(f['users'].nome)} ${escapeHtml(f['users'].cognome)}` : '';
+    return `<div class="fase-card ${f.stato}" onclick="openFaseExtraDetail('${f.id}', '${id}', ${readonly})">
         <div class="fase-num">${f.numero}. ${f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '<i data-ic="play"></i>' : '○'}</div>
         <div class="fase-nome">${escapeHtml(f.nome)}</div>
         <div class="fase-op">${opNome || (f.stato === 'disponibile' ? 'Disponibile' : '')}</div>
         ${f.piu_pressate ? `<div class="fase-op" style="margin-top:4px">${escapeHtml(Etichette.pressate.fatteResp(f.pressate_fatte || 0, f.pressate_previste))}</div>` : ''}
         ${f.completata_il ? `<div class="fase-op" style="margin-top:4px;font-size:10px">${formatDateTime(f.completata_il)}</div>` : ''}
       </div>`;
-    }).join('');
+  };
+
+  if (ordine.tipo === 'extra') {
+    fasiEl.innerHTML = (await leggiFasiExtra()).map(cardFaseExtraHtml).join('');
   } else {
     const { data: ordFasiRaw } = await sb.from('ordine_fasi')
       .select('*, users!operatore_id(nome, cognome)')
@@ -211,6 +217,12 @@ async function renderDettaglioOrdine(id) {
         ${f.completata_il ? `<div class="fase-op" style="margin-top:4px;font-size:10px">${formatDateTime(f.completata_il)}</div>` : ''}
       </div>`;
     }).join('');
+    const fasiExtOrd = (await leggiFasiExtra()).filter(f => f.stato !== 'non_applicabile');
+    if (fasiExtOrd.length) {
+      fasiEl.insertAdjacentHTML('beforeend',
+        `<div style="grid-column:1/-1;width:100%;flex-basis:100%;font-size:12px;font-weight:700;color:var(--muted);margin:8px 0 2px">Fasi extra</div>` +
+        fasiExtOrd.map(cardFaseExtraHtml).join(''));
+    }
   }
 
   // Galleria foto aggregate di tutte le fasi dell'ordine, sopra l'elenco fasi (richiesta del

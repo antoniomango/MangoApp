@@ -626,8 +626,9 @@ function cardHtml(o, fasiMap, fasiExtraMap, oggi) {
       : '<div style="font-size:12px;color:var(--muted)">Nessuna fase inserita</div>';
   } else {
     const appl = fasiMap[o.id] || [];
-    const comp = appl.filter(f => f.stato === 'completata').length;
-    const tot  = appl.length || 1;
+    const feStd = (fasiExtraMap[o.id] || []).filter(f => f.stato !== 'non_applicabile');
+    const comp = appl.filter(f => f.stato === 'completata').length + feStd.filter(f => f.stato === 'completata').length;
+    const tot  = (appl.length + feStd.length) || 1;
     pct  = Math.round(comp / tot * 100);
     bars = macroFasi.length ? macroFasi.map(m => {
       const mAppl = appl.filter(f => f.fase_id && m.fasi.has(f.fase_id));
@@ -763,11 +764,10 @@ async function apriDettaglio(ordineId) {
   // le fasi filtrando esplicitamente per questo singolo ordine, come fa già lo storico.
   const { data: detResp } = await sb.rpc('dettaglio_ordine_fasi', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_id: ordineId });
   const ordFasi = detResp?.ok ? detResp.dati.ordine_fasi : [];
-  // Solo per ordini extra, come nella query originale — su un ordine standard le
-  // "lavorazioni aggiuntive" non fanno parte di questa vista.
-  const fasiExtra = (detResp?.ok && o.tipo === 'extra') ? detResp.dati.fasi_extra : [];
+  // Le fasi extra si mostrano per ogni tipo di ordine (standard ed extra).
+  const fasiExtra = detResp?.ok ? detResp.dati.fasi_extra : [];
 
-  renderDettaglio(o, (ordFasi || []).filter(x => x.stato !== 'non_applicabile'), fasiExtra || []);
+  renderDettaglio(o,(ordFasi || []).filter(x => x.stato !== 'non_applicabile'), fasiExtra || []);
 }
 
 async function apriDettaglioStorico(ordineId) {
@@ -780,7 +780,7 @@ async function apriDettaglioStorico(ordineId) {
     sb.rpc('statistiche_lavoro_ordini', { p_ordine_ids: [ordineId], p_operatore_id: currentUser.id, p_session_token: sessionToken }),
   ]);
   const ordFasi = detResp?.ok ? detResp.dati.ordine_fasi : [];
-  const fasiExtra = (detResp?.ok && o.tipo === 'extra') ? detResp.dati.fasi_extra : [];
+  const fasiExtra = detResp?.ok ? detResp.dati.fasi_extra : [];
 
   const stats = statsArr?.[0] || null;
   renderDettaglio(o, (ordFasi || []).filter(x => x.stato !== 'non_applicabile'), fasiExtra || [], stats);
@@ -869,7 +869,14 @@ function renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine, stats) {
         ${sorted.map(f => faseRowHtml(f)).join('')}
       </div>`;
     }
-    const appl   = ordFasiPerOrdine;
+    const feStd = (fasiExtraPerOrdine || []).filter(f => f.stato !== 'non_applicabile');
+    if (feStd.length) {
+      fasiHtml += `<div class="detail-card">
+        <div class="detail-section-title">Fasi extra</div>
+        ${feStd.map(f => fasextraRowHtml(f)).join('')}
+      </div>`;
+    }
+    const appl   = [...ordFasiPerOrdine, ...feStd];
     const comp   = appl.filter(f => f.stato === 'completata').length;
     const totPct = appl.length ? Math.round(comp / appl.length * 100) : 0;
     fasiHtml += `<div style="padding:0 4px 8px">
