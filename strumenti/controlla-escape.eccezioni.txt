@@ -1,0 +1,19 @@
+# file<TAB>espressione<TAB>motivo — punti D/E verificati a mano come non pericolosi (trattati come C). Non modificare le espressioni: devono coincidere con l'output dello strumento.
+js/responsabile/anagrafiche.js	titolo	parametro di campoNum(), sempre letterale (Minimo/Massimo/...)
+js/responsabile/anagrafiche.js	campo	parametro di campoNum(), sempre letterale: nome di colonna fisso
+js/responsabile/anagrafiche.js	a[campo]	colonna numerica (numero_min/numero_max/numero_default)
+js/responsabile/fasi-config.js	fnNome	nome di funzione scritto nel codice
+js/responsabile/fasi-config.js	v	valore dell'elenco fisso Etichette.quandoSiFa (costanti)
+js/responsabile/fasi-config.js	g.titolo	letterale dell'array locale dei gruppi
+js/responsabile/fasi-config.js	g.nota	letterale dell'array locale dei gruppi
+js/responsabile/oggi.js	titolo	cella() chiamata solo con testi fissi
+js/responsabile/oggi.js	nota || ''	cella() chiamata solo con testi fissi o numeri
+js/responsabile/orario.js	titolo	cella() chiamata solo con testi fissi
+js/responsabile/ordine-dettaglio.js	opNome	dichiarata con escapeHtml su nome e cognome
+js/responsabile/ordini-lista.js	T.nomeEtichetta	testo fisso Etichette.spedizioneUnica
+js/responsabile/ordini-lista.js	statoLabel	solo numeri e testo fisso
+js/responsabile/pianificazione.js	etichetta	riga() chiamata con letterali
+js/responsabile/sistema.js	titolo	riga() chiamata con letterali
+js/responsabile/stato.js	idLabel ? `id="${idLabel}" ` : ''	idLabel: id letterale scritto nel codice (nef-pp-num)
+operatore.html	subLabel	nomi fase escapati con escapeHtml prima del join; resto testo fisso
+js/responsabile/pianificazione.js	(cluster.ordini || []).map(ord => { const hasConflitto = !!ord.conflitto; const bg = hasConflitto ? 'var(--alert-bg)' : ''; const riassId...	nome operatore dentro opNome: usato solo con escapeHtml (riga 462); il return interno è una funzione annidata
