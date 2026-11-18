@@ -738,3 +738,7 @@ svg.fs-archi path.dim { opacity: .25; }
 .presa-box .presa-nota { flex: 1 1 100%; color: var(--muted); font-size: 11px; }
 .fm-fatt { font-size: 11.5px; padding: 2px 4px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg); color: var(--ink); }
 @media (max-width: 760px) { .fm-manut { grid-template-columns: auto minmax(0, 1fr) auto; } .fm-manut .al { display: none; } }
+
+.cliente-sugg { position: absolute; left: 0; right: 0; top: 100%; z-index: 50; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-lg); overflow: hidden; }
+.cliente-sugg-voce { padding: 10px 12px; cursor: pointer; font-size: 14px; }
+.cliente-sugg-voce:hover, .cliente-sugg-voce.attiva { background: var(--border); }

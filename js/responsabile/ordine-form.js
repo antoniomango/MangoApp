@@ -187,11 +187,100 @@ function renumberExtraFasi() {
   });
 }
 
+let _clientiElenco = [];
+let _clienteSugg = { box: null, voci: [], attiva: -1, scelto: false, pronto: false };
+
 async function caricaClienti() {
-  const { data } = await sb.from('ordini').select('cliente').neq('eliminato', true).order('cliente');
-  const nomi = [...new Set((data || []).map(o => o.cliente).filter(Boolean))];
-  const dl = document.getElementById('clienti-list');
-  if (dl) dl.innerHTML = nomi.map(n => `<option value="${n}">`).join('');
+  try {
+    const { data } = await sb.from('ordini').select('cliente').neq('eliminato', true).order('cliente');
+    _clientiElenco = [...new Set((data || []).map(o => o.cliente).filter(Boolean))]
+      .map(n => ({ nome: n, chiave: clienteNormalizza(n) }));
+  } catch (e) { _clientiElenco = []; }
+  clienteSuggInit();
+}
+
+function clienteNormalizza(t) {
+  return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+}
+
+function clienteSuggChiudi() {
+  _clienteSugg.voci = [];
+  _clienteSugg.attiva = -1;
+  if (_clienteSugg.box) { _clienteSugg.box.style.display = 'none'; _clienteSugg.box.textContent = ''; }
+}
+
+function clienteSuggEvidenzia() {
+  if (!_clienteSugg.box) return;
+  [..._clienteSugg.box.children].forEach((el, i) => el.classList.toggle('attiva', i === _clienteSugg.attiva));
+}
+
+function clienteSuggScegli(nome) {
+  const inp = document.getElementById('ord-cliente');
+  if (!inp) return;
+  inp.value = nome;
+  _clienteSugg.scelto = true;
+  clienteSuggChiudi();
+  checkClientiApertiSuggerimento();
+}
+
+function clienteSuggAggiorna() {
+  const inp = document.getElementById('ord-cliente');
+  if (!inp || !_clienteSugg.box) return;
+  const q = clienteNormalizza(inp.value.trim());
+  if (!q || document.activeElement !== inp) { clienteSuggChiudi(); return; }
+  const inizio = [], altri = [];
+  for (const c of _clientiElenco) {
+    const i = c.chiave.indexOf(q);
+    if (i === 0) inizio.push(c); else if (i > 0) altri.push(c);
+  }
+  const voci = inizio.concat(altri).slice(0, 8);
+  const box = _clienteSugg.box;
+  box.textContent = '';
+  _clienteSugg.voci = voci;
+  _clienteSugg.attiva = -1;
+  if (!voci.length) { box.style.display = 'none'; return; }
+  voci.forEach(c => {
+    const el = document.createElement('div');
+    el.className = 'cliente-sugg-voce';
+    el.textContent = c.nome;
+    el.addEventListener('mousedown', ev => { ev.preventDefault(); clienteSuggScegli(c.nome); });
+    box.appendChild(el);
+  });
+  box.style.display = 'block';
+}
+
+function clienteSuggBlur() {
+  clienteSuggChiudi();
+  if (_clienteSugg.scelto) { _clienteSugg.scelto = false; return; }
+  checkClientiApertiSuggerimento();
+}
+
+// Collega la tendina al campo cliente una sola volta (il campo resta nella pagina).
+function clienteSuggInit() {
+  if (_clienteSugg.pronto) return;
+  const inp = document.getElementById('ord-cliente');
+  if (!inp) return;
+  _clienteSugg.pronto = true;
+  const box = document.createElement('div');
+  box.className = 'cliente-sugg';
+  box.style.display = 'none';
+  inp.parentNode.style.position = 'relative';
+  inp.parentNode.appendChild(box);
+  _clienteSugg.box = box;
+  inp.addEventListener('input', () => { _clienteSugg.scelto = false; clienteSuggAggiorna(); });
+  inp.addEventListener('focus', clienteSuggAggiorna);
+  inp.addEventListener('keydown', ev => {
+    const n = _clienteSugg.voci.length;
+    if (!n) return;
+    if (ev.key === 'ArrowDown') { ev.preventDefault(); _clienteSugg.attiva = (_clienteSugg.attiva + 1) % n; clienteSuggEvidenzia(); }
+    else if (ev.key === 'ArrowUp') { ev.preventDefault(); _clienteSugg.attiva = (_clienteSugg.attiva - 1 + n) % n; clienteSuggEvidenzia(); }
+    else if (ev.key === 'Enter') {
+      ev.preventDefault();
+      const c = _clienteSugg.voci[_clienteSugg.attiva >= 0 ? _clienteSugg.attiva : 0];
+      if (c && _clienteSugg.attiva >= 0) clienteSuggScegli(c.nome);
+    }
+    else if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); clienteSuggChiudi(); }
+  });
 }
 
 // Spedizione unica: suggerimento in fase di creazione ordine, popolato da
@@ -273,6 +362,7 @@ async function checkClientiApertiSuggerimento() {
 }
 
 function openModalNuovoOrdine() {
+  clienteSuggChiudi();
   caricaClienti();
   document.getElementById('ord-cliente').value = '';
   document.getElementById('ord-codice').value = '';
