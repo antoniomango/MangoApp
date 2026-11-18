@@ -1466,7 +1466,7 @@ function filtraOrdini() {
           <div class="row-title">${escapeHtml(o.cliente)} — ${escapeHtml(o.codice || '')}</div>
           <span style="margin-left:8px">${Etichette.badgePriorita(o.priorita)}</span>
         </div>
-        <div class="row-sub">${o.tipo === 'extra' ? 'Ordine Extra' : `${strutturaLabel(o.struttura)} · ${tipoProdLabel(o.tipo_prodotto)}`}</div>
+        <div class="row-sub">${o.tipo === 'extra' ? 'Ordine Extra' : `${escapeHtml(strutturaLabel(o.struttura))} · ${escapeHtml(tipoProdLabel(o.tipo_prodotto))}`}</div>
         ${isAttesa ? '<div style="margin-top:3px;font-size:12px;font-weight:600;color:var(--ok)">✓ In attesa corriere</div>'
           : isSosp ? '<div style="margin-top:3px;font-size:12px;font-weight:700;color:var(--warn-ink)"><i data-ic="pausa"></i> SOSPESO</div>'
           : (o.scadenza ? `<div style="margin-top:3px">${scadenzaLabel(o.scadenza)}</div>` : '')}
@@ -1504,8 +1504,8 @@ async function renderOrdineDetail(ordineId) {
   const isLate = ordine.scadenza && ordine.scadenza < oggi;
   const fratelliGruppoDet = codiciFratelliGruppo(ordine, ordiniCache);
   document.getElementById('ord-det-meta').innerHTML = `
-    <div class="meta-item"><label>Struttura</label><span>${strutturaLabel(ordine.struttura)}</span></div>
-    <div class="meta-item"><label>Tipo</label><span>${tipoProdLabel(ordine.tipo_prodotto)}</span></div>
+    <div class="meta-item"><label>Struttura</label><span>${escapeHtml(strutturaLabel(ordine.struttura))}</span></div>
+    <div class="meta-item"><label>Tipo</label><span>${escapeHtml(tipoProdLabel(ordine.tipo_prodotto))}</span></div>
     ${ordine.tipo === 'extra' ? '' : metaLatiLavorazioniHtml(ordine) + Etichette.attributiOrdine(ordine).map(a => `<div class="meta-item"><label>${escapeHtml(a.etichetta)}</label><span>${escapeHtml(a.valore)}</span></div>`).join('')}
     <div class="meta-item"><label>Priorità</label>${Etichette.badgePriorita(ordine.priorita)}</div>
     <div class="meta-item"><label>Stato</label><span class="badge badge-${ordine.stato}">${Etichette.statoOrdine(ordine.stato, ordine)}</span></div>
@@ -2092,14 +2092,10 @@ async function completaFase(ordFaseId, ordineId) {
 // REST key gestita da Supabase Edge Function (non nel codice client)
 
 function _debug(msg) {
-  const el = document.getElementById('onesignal-debug');
-  if (el) el.innerHTML += '<br>' + msg;
   console.log('[OneSignal]', msg);
 }
 
 async function richiediPermessoNotifiche() {
-  const el = document.getElementById('onesignal-debug');
-  if (el) el.innerHTML = '';
   _debug('OneSignal disponibile: ' + !!window.OneSignal);
   if (!window.OneSignal) return;
   try {

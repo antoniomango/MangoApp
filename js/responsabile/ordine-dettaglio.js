@@ -101,8 +101,8 @@ async function renderDettaglioOrdine(id) {
     <div class="detail-field"><label>N° Ordine</label><span style="font-family:var(--font-mono)">${escapeHtml(ordine.codice||'—')}</span></div>
     ${ordine.tipo === 'extra'
       ? `<div class="detail-field"><label>Tipo</label><span style="color:var(--extra);font-weight:600">Ordine Extra</span></div>`
-      : `<div class="detail-field"><label>Struttura</label><span>${strutturaLabel(ordine.struttura)}</span></div>
-    <div class="detail-field"><label>Tipo Prodotto</label><span>${tipoProdLabel(ordine.tipo_prodotto)}</span></div>
+      : `<div class="detail-field"><label>Struttura</label><span>${escapeHtml(strutturaLabel(ordine.struttura))}</span></div>
+    <div class="detail-field"><label>Tipo Prodotto</label><span>${escapeHtml(tipoProdLabel(ordine.tipo_prodotto))}</span></div>
     ${ordine.tipo === 'extra' ? '' : Etichette.attributiOrdine(ordine).map(a => `<div class="detail-field"><label>${escapeHtml(a.etichetta)}</label><span>${escapeHtml(a.valore)}</span></div>`).join('')}
     ${latiLavorazioniDettaglioHtml(ordine)}`}
     <div class="detail-field"><label>Priorità</label>${Etichette.badgePriorita(ordine.priorita)}</div>

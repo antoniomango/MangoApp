@@ -124,7 +124,7 @@ async function loadTipiProdotto() {
 }
 
 function popolaTipiProdottoSelects() {
-  const opts = tipiProdotto.map(t => `<option value="${t.id}">${t.label}</option>`).join('');
+  const opts = tipiProdotto.map(t => `<option value="${escapeHtml(t.id)}">${escapeHtml(t.label)}</option>`).join('');
   const optsConTutti = `<option value="">Tutti i tipi</option>` + opts;
   const flt = document.getElementById('flt-tipo-prodotto');
   const crea = document.getElementById('ord-tipo-prodotto');

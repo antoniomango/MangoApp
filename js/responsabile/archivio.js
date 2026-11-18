@@ -58,7 +58,7 @@ function renderArchivioTable() {
     return `
     <tr class="clickable" onclick="openDettaglioOrdine('${o.id}')">
       <td><div style="font-weight:600">${escapeHtml(o.cliente)}</div><div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div></td>
-      <td>${o.tipo === 'extra' ? '<span style="color:var(--extra);font-weight:600">Ordine Extra</span>' : `${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}`}</td>
+      <td>${o.tipo === 'extra' ? '<span style="color:var(--extra);font-weight:600">Ordine Extra</span>' : `${escapeHtml(strutturaLabel(o.struttura))} / ${escapeHtml(tipoProdLabel(o.tipo_prodotto))}`}</td>
       <td>${Etichette.badgePriorita(o.priorita)}</td>
       <td>${formatDate(o.creato_il)}</td>
       <td>${o.spedito_il ? formatDate(o.spedito_il) : '—'}</td>

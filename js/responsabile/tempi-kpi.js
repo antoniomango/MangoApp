@@ -493,7 +493,7 @@ async function loadKpi() {
       const ref = strArr[strArr.length-1]?.media || r.media;
       const pct = Math.round((r.media / ref - 1) * 100);
       const badge = i === 0 ? '' : pct > 0 ? `<span style="color:var(--alert);font-size:10px">+${pct}%</span>` : `<span style="color:var(--ok);font-size:10px">${pct}%</span>`;
-      return `<tr><td>${strutturaLabel(r.s)}</td><td style="text-align:center">${r.count}</td><td style="font-family:var(--font-mono)">${formatOre(r.media)}</td><td>${badge}</td></tr>`;
+      return `<tr><td>${escapeHtml(strutturaLabel(r.s))}</td><td style="text-align:center">${r.count}</td><td style="font-family:var(--font-mono)">${formatOre(r.media)}</td><td>${badge}</td></tr>`;
     }).join('') + `</tbody></table>` : '<div class="kpi-empty">Nessun dato</div>';
 
   // ── ORDINI IN RITARDO ──

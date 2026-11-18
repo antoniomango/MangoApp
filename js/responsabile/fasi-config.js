@@ -32,7 +32,7 @@ function renderMacroConfig() {
     return `
     <div class="macro-cfg-card" id="macro-card-${m.id}">
       <div class="macro-cfg-hdr">
-        <input type="color" value="${m.colore || '#6B7280'}" id="macro-col-${m.id}" onchange="macroSet(${m.id}, 'colore', this.value)"
+        <input type="color" value="${escapeHtml(m.colore || '#6B7280')}" id="macro-col-${m.id}" onchange="macroSet(${m.id}, 'colore', this.value)"
           style="width:32px;height:32px;border:none;border-radius:8px;cursor:pointer;padding:0">
         <input type="text" value="${escapeHtml(m.nome)}" id="macro-nome-${m.id}" oninput="macroSet(${m.id}, 'nome', this.value)"
           style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-weight:600;background:var(--bg);color:var(--ink)">

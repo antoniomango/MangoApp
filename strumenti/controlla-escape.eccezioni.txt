@@ -17,3 +17,126 @@ js/responsabile/sistema.js	titolo	riga() chiamata con letterali
 js/responsabile/stato.js	idLabel ? `id="${idLabel}" ` : ''	idLabel: id letterale scritto nel codice (nef-pp-num)
 operatore.html	subLabel	nomi fase escapati con escapeHtml prima del join; resto testo fisso
 js/responsabile/pianificazione.js	(cluster.ordini || []).map(ord => { const hasConflitto = !!ord.conflitto; const bg = hasConflitto ? 'var(--alert-bg)' : ''; const riassId...	nome operatore dentro opNome: usato solo con escapeHtml (riga 462); il return interno è una funzione annidata
+
+js/config.js	a.signedUrl || ''	URL firmato generato da Supabase Storage
+js/config.js	st.urls[i]	URL blob locale (createObjectURL)
+js/etichette.js	c.bg	colore della palette fissa nel codice (Etichette)
+js/etichette.js	c.ink	colore della palette fissa nel codice (Etichette)
+js/responsabile/anagrafiche.js	chiave	chiave slug (vincolo attributi_chiave_slug) o prefisso letterale del codice
+js/responsabile/archivio.js	ultimaCol	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+js/responsabile/archivio.js	data.db_leggibile	dimensione/limite numerico restituito da RPC (pg_size_pretty o numero)
+js/responsabile/archivio.js	limiteMb	dimensione/limite numerico restituito da RPC (pg_size_pretty o numero)
+js/responsabile/archivio.js	limiteAttualeVal	dimensione/limite numerico restituito da RPC (pg_size_pretty o numero)
+js/responsabile/assenze.js	v.dal	data ISO restituita dal database
+js/responsabile/assenze.js	v.al	data ISO restituita dal database
+js/responsabile/assenze.js	oltre ? ` (oltre il massimo di ${massimo})` : ''	numero restituito dal database o contatore
+js/responsabile/assenze.js	g.altri_assenti	numero restituito dal database o contatore
+js/responsabile/fasi-config.js	mTot	numero restituito dal database o contatore
+js/responsabile/fasi-config.js	scadenzaHtml	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+js/responsabile/fasi-config.js	t	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/fasi-config.js	meta.join('<span aria-hidden="true">·</span>')	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+js/responsabile/fasi-config.js	lv	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/fasi-config.js	onchange	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/fasi-config.js	guard	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+js/responsabile/fasi-config.js	a[0]	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/fasi-config.js	poiNuovaHtml	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+js/responsabile/fasi-config.js	x[0]	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/fasi-config.js	posNuovaHtml	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+js/responsabile/fasi-config.js	fsEster(m) ? Etichette.flusso.esterna(m.tipo_gestione, m.opzionale) : (mm.length ? escapeHtml(mm.map(x => x.nome).join(', ')) + (ko ? ' ·...	formattatore del codice (numeri, date o mappa di costanti)
+js/responsabile/fasi-config.js	x.d	percorso SVG calcolato dal codice (numeri)
+js/responsabile/lavorazioni.js	campo	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/lavorazioni.js	v	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/lavorazioni.js	t	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/lavorazioni.js	prefix	chiave slug (vincolo attributi_chiave_slug) o prefisso letterale del codice
+js/responsabile/macchine.js	t	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/macchine.js	fmFmtMin(pm)	formattatore del codice (numeri, date o mappa di costanti)
+js/responsabile/macchine.js	pm ? fmFmtMin(pm) : '—'	formattatore del codice (numeri, date o mappa di costanti)
+js/responsabile/macchine.js	cls	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/macchine.js	ico	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/macchine.js	txt	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/macchine.js	v	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/macchine.js	guard	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+js/responsabile/macchine.js	avvisi	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+js/responsabile/macchine.js	pm ? fmFmtMin(pm) : 'Niente'	formattatore del codice (numeri, date o mappa di costanti)
+js/responsabile/notifiche.js	map[r]||'var(--neutral-solid)'	ruolo enum di sistema / colore da mappa fissa
+js/responsabile/notifiche.js	r	ruolo enum di sistema / colore da mappa fissa
+js/responsabile/notifiche.js	ev.chiave	chiave di evento notifica definita dal sistema
+js/responsabile/oggi.js	esito	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/oggi.js	giorni(r.giorni_attesa || 0)	numero restituito dal database o contatore
+js/responsabile/oggi.js	stile	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/oggi.js	destra	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/oggi.js	corpo	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/oggi.js	valore	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/oggi.js	sez	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/oggi.js	aperta	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/oggi.js	titoloExtra	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/oggi.js	conteggio	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/operatori.js	st.inAttesa	numero restituito dal database o contatore
+js/responsabile/operatori.js	c	colore costante del codice
+js/responsabile/orario.js	extra	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/orario.js	valore	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/orario.js	_dIt(s.data_inizio)	formattatore del codice (numeri, date o mappa di costanti)
+js/responsabile/orario.js	s.data_fine !== s.data_inizio ? ' → ' + _dIt(s.data_fine) : ''	formattatore del codice (numeri, date o mappa di costanti)
+js/responsabile/ordine-dettaglio.js	contenuto	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+js/responsabile/ordine-dettaglio.js	logLabel(l.azione)	formattatore del codice (numeri, date o mappa di costanti)
+js/responsabile/ordine-dettaglio.js	x.signedUrl	URL firmato generato da Supabase Storage
+js/responsabile/ordine-form.js	m.fasi_extra_aperte	numero restituito dal database o contatore
+js/responsabile/ordine-form.js	prefisso	chiave slug (vincolo attributi_chiave_slug) o prefisso letterale del codice
+js/responsabile/ordine-form.js	v	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/ordine-form.js	delBtn	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+js/responsabile/ordine-form.js	sceltaHtml	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+js/responsabile/ordini-lista.js	T.clientiDelGruppo	testo fisso di Etichette (alias T)
+js/responsabile/ordini-lista.js	T.aggiungi	testo fisso di Etichette (alias T)
+js/responsabile/ordini-lista.js	T.aggiungiScegli	testo fisso di Etichette (alias T)
+js/responsabile/ordini-lista.js	T.aggiungiBottone	testo fisso di Etichette (alias T)
+js/responsabile/ordini-lista.js	T.nessunoDaAggiungere	testo fisso di Etichette (alias T)
+js/responsabile/ordini-lista.js	noteRiservateConteggi[o.id]	uuid generato dal database
+js/responsabile/ordini-lista.js	scad	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+js/responsabile/ordini-lista.js	s.inCorso	numero restituito dal database o contatore
+js/responsabile/ordini-lista.js	s.done	numero restituito dal database o contatore
+js/responsabile/pianificazione.js	p.min_valore	numero restituito dal database o contatore
+js/responsabile/pianificazione.js	p.max_valore	numero restituito dal database o contatore
+js/responsabile/pianificazione.js	limiti	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+js/responsabile/pianificazione.js	f.fuori_piano	numero restituito dal database o contatore
+js/responsabile/pianificazione.js	st.finestra_giorni	numero restituito dal database o contatore
+js/responsabile/pianificazione.js	classe[g.classe] || escapeHtml(g.classe)	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+js/responsabile/sistema.js	sotto	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/sistema.js	campo	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/sistema.js	compatto(r.valori_prima)	formattatore del codice (numeri, date o mappa di costanti)
+js/responsabile/sistema.js	compatto(r.valori_dopo)	formattatore del codice (numeri, date o mappa di costanti)
+js/responsabile/stato.js	fnToggle	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/stato.js	idArg	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/stato.js	val(minuti)	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/stato.js	fnCampo	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/stato.js	val(ordini)	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/stato.js	cls	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/stato.js	valore ?? 1	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/stato.js	extra	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/tempi-kpi.js	v	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/tempi-kpi.js	t	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+js/responsabile/tempi-kpi.js	righe.map(r => { let sep = ''; if (r.tipo_prodotto !== tipoCorrente) { tipoCorrente = r.tipo_prodotto; sep = `<tr><td colspan="7" style="...	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+js/responsabile/tempi-kpi.js	coda	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+js/responsabile/tempi-kpi.js	Etichette.colorePriorita(o.priorita).ink	colore della palette fissa nel codice (Etichette)
+js/responsabile/tempi-kpi.js	o.giorni_stima_consegna != null ? o.giorni_stima_consegna + 'gg' : '—'	numero restituito dal database o contatore
+js/responsabile/tempi-kpi.js	s.giorni_calendario_correnti != null ? s.giorni_calendario_correnti + 'gg' : '—'	numero restituito dal database o contatore
+js/responsabile/tempi-kpi.js	s.giorni_calendario_iniziali != null ? s.giorni_calendario_iniziali + 'gg' : '—'	numero restituito dal database o contatore
+operatore.html	extraBadges	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+operatore.html	bloccoPezzi	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+operatore.html	oggiDati.lavorativo ? (oggiDati.creazione_prevista ? 'Il piano di oggi viene creato alle ' + oggiDati.creazione_prevista : 'Il piano di o...	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+operatore.html	g.parte	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+operatore.html	barraSel	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+operatore.html	occ	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+operatore.html	E.gruppoUrgenti	testo fisso di Etichette (alias E)
+operatore.html	E.gruppoAltro	testo fisso di Etichette (alias E)
+operatore.html	contenuto	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+operatore.html	icone[n.tipo] || '<i data-ic="campana"></i>'	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+ufficio.html	esito	valore letterale o costante scritto nel codice (verificato nei chiamanti)
+ufficio.html	x.scadenza ? formatData(x.scadenza) : '—'	formattatore del codice (numeri, date o mappa di costanti)
+ufficio.html	formatData(o.scadenza)	formattatore del codice (numeri, date o mappa di costanti)
+ufficio.html	bars	markup costruito dal codice: testi liberi già passati da escapeHtml/escapeJsAttr (verificato)
+js/responsabile/operatori.js	etichette || ''	markup costruito da _etichetteOperatore/_etichettaPin: testi liberi con escapeHtml/escapeJsAttr
+js/responsabile/ordine-form.js	classeSelect	parametro di mostraMacchinaExtra, sempre letterale (nef-macchina/extra-fase-macchina)
+js/responsabile/pianificazione.js	x	voci di statoRiga: testi liberi con escapeHtml, resto numeri e testo fisso
+js/responsabile/pianificazione.js	st.campioni_minimi	numero restituito dal database
+js/responsabile/pianificazione.js	colore[g.classe]	mappa di colori costanti nel codice
+js/responsabile/tempi-kpi.js	color	colore da costanti del codice o palette Etichette

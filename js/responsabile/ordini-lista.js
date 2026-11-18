@@ -296,7 +296,7 @@ function ordineRow(o, mini = false) {
   const badgeGruppo = badgeGruppoSolo + badgeNonPronta + badgeConsegnaHtml(o);
   return `<tr class="clickable ${isSosp ? '' : scadenzaClass(o.scadenza)}" data-scad="${isSosp ? '' : scadenzaClass(o.scadenza)}" ${rowClass} onclick="${rowOnclick}">
     <td class="c-cliente"><div style="display:flex;align-items:flex-start;gap:8px">${checkbox}<div><div style="font-weight:600">${escapeHtml(o.cliente)}${noteRiservateConteggi[o.id] ? ` <span class="segno-note-riservate" title="Note riservate (${noteRiservateConteggi[o.id]})" aria-label="Note riservate (${noteRiservateConteggi[o.id]})"><i data-ic="lucchetto"></i></span>` : ''}</div><div style="font-family:var(--font-mono);font-size:11px;color:var(--muted)">${escapeHtml(o.codice||'—')}</div>${badgeGruppo}</div></div></td>
-    <td class="c-tipo">${o.tipo === 'extra' ? '<span style="font-weight:600;color:var(--accent)">Ordine Extra</span>' : `${strutturaLabel(o.struttura)} / ${tipoProdLabel(o.tipo_prodotto)}`}</td>
+    <td class="c-tipo">${o.tipo === 'extra' ? '<span style="font-weight:600;color:var(--accent)">Ordine Extra</span>' : `${escapeHtml(strutturaLabel(o.struttura))} / ${escapeHtml(tipoProdLabel(o.tipo_prodotto))}`}</td>
     <td class="c-prio">${Etichette.badgePriorita(o.priorita)}</td>
     <td class="c-qta" style="text-align:center;font-weight:600">${o.quantita || 1}</td>
     <td class="c-scad"><div style="color:${isLate ? 'var(--alert-strong)' : 'inherit'};font-weight:${isLate ? '700' : 'normal'}">${scad}${isLate ? ' <i data-ic="avviso"></i>' : ''}</div><div id="scad-stima-${o.id}" style="font-size:10px;margin-top:2px"></div></td>
