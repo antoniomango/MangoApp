@@ -26,7 +26,8 @@ const Etichette = (() => {
                        non_applicabile: 'Non applicabile', bloccata: 'Bloccata', assente: 'Assente', in_attesa_cliente: 'Attende il cliente' };
   // Piano del giorno: motivi per cui una voce esce dal piano e origine delle voci (enumerazioni chiuse del database)
   const MOTIVI_USCITA_PIANO = { responsabile: 'Tolta da te', non_piu_applicabile: 'Non più applicabile', ordine_non_attivo: 'Ordine non più attivo',
-                                macchina_non_disponibile: 'Macchina non disponibile', dipendenza_non_soddisfatta: 'In attesa di una fase precedente' };
+                                macchina_non_disponibile: 'Macchina non disponibile', dipendenza_non_soddisfatta: 'In attesa di una fase precedente',
+                                sostituita_arrivo: 'Lasciato il posto a una fase sbloccata da un arrivo' };
   const ORIGINI_VOCE_PIANO = { riempimento: 'riempimento', ricalcolo: 'aggiunta in giornata', responsabile: 'aggiunta a mano' };
   // Motivo per cui una voce è entrata nel piano oltre la capacità (valori del database: piano_giorno_voci.motivo_ingresso)
   const MOTIVI_INGRESSO_PIANO = { stessa_fase: 'Aggiunta perché si sta già facendo la stessa fase' };
