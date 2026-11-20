@@ -158,3 +158,13 @@ function raggruppaRicezioni(lista, nomeDi, nomeVuoto) {
   }
   return [...gruppi.values()];
 }
+
+// Ordine di «In attesa esterna» (riquadro e PDF solleciti): gruppi → più in ritardo, più in scadenza, più urgenti, poi alfabetico;
+// righe di un gruppo → in ritardo, in scadenza, urgenti, resto (a parità, l'ordine ricevuto).
+function ordinaGruppiRicezioni(gruppi) {
+  return gruppi.sort((a, b) => (b.in_ritardo - a.in_ritardo) || (b.in_scadenza - a.in_scadenza) || (b.urgenti - a.urgenti) || a.nome.localeCompare(b.nome, 'it'));
+}
+function ordinaRigheRicezione(righe) {
+  const rango = r => r.stato_limite === 'in_ritardo' ? 0 : r.stato_limite === 'in_scadenza' ? 1 : r.urgente ? 2 : 3;
+  return righe.map((r, i) => ({ r, i })).sort((x, y) => (rango(x.r) - rango(y.r)) || (x.i - y.i)).map(x => x.r);
+}

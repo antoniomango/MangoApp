@@ -63,17 +63,26 @@ async function registraAvvisoResp(ordineId, esito) {
   await Promise.all([loadAvvisiResp(), loadOrdini().then(() => { try { renderOrdiniTable(); } catch (e) {} })]);
   loadOggiResp();
 }
-async function loadRicezioniResp() {
+async function _chiamaRicezioniResp() {
   const { data, error } = await sb.rpc('ricezioni_in_attesa', { p_operatore_id: currentUserRow.id, p_session_token: null });
-  ricezioniR = (!error && data?.ok) ? data : null;
+  return (!error && data?.ok) ? data : null;
+}
+async function loadRicezioniResp() {
+  ricezioniR = await _chiamaRicezioniResp();
   renderOggiResp();
+}
+// giorno di oggi (aaaa-mm-gg): quello del piano, altrimenti il giorno locale
+function oggiIsoResp() {
+  if (oggiR?.data) return oggiR.data;
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 // riquadro "In attesa dai fornitori": arrivi di materiale e rientri da lavorazione esterna, con i giorni di attesa e cosa bloccano
 function riquadroFornitori(richiudibile) {
   if (!ricezioniR) return '';
   const lista = ricezioniR.ricezioni || [];
   const giorni = (n) => n === 1 ? '1 giorno' : n + ' giorni';
-  const oggiIso = oggiR?.data || new Date().toISOString().slice(0, 10);
+  const oggiIso = oggiIsoResp();
   const riga = (r) => {
     const k = r.ordine_fase_id || r.fase_extra_id;
     const t = Etichette.limiteArrivoTesti(r, oggiIso);
@@ -98,24 +107,117 @@ function riquadroFornitori(richiudibile) {
   const conta = lista.length ? lista.length + (lista.length === 1 ? ' ricezione' : ' ricezioni') + (urgenti ? ' · ' + urgenti + (urgenti === 1 ? ' blocca lavoro' : ' bloccano lavoro') : '') : '';
   const corpo = `${riassunto ? `<div style="font-size:13px;font-weight:700;color:var(--${nRitardo ? 'alert' : 'warn'}-ink);margin:2px 0 8px">${escapeHtml(riassunto)}</div>` : ''}
     ${lista.length ? gruppiFornitori(lista, riga) : '<div style="color:var(--muted);font-size:13px;padding:8px 0">Nessuna ricezione in attesa.</div>'}`;
-  if (!richiudibile) return `<div class="card"><div class="card-hdr"><h3>${Etichette.attesaEsterna.titolo}</h3><span style="font-size:12px;color:var(--muted)">${conta}</span></div>${corpo}</div>`;
-  return riquadroOggi('fornitori', '', Etichette.attesaEsterna.titolo, `<span style="font-size:12px;color:var(--muted)">${conta}</span>`, corpo);
+  const S = Etichette.sollecitiPdf;
+  const daSoll = lista.some(_daSollecitare);
+  const pulsante = `<button type="button" class="btn btn-secondary" data-solleciti-pdf style="padding:4px 10px;font-size:12px;margin-left:10px" ${daSoll && !_sollecitiInCorso ? '' : 'disabled'} title="${escapeHtml(daSoll ? S.pulsante : S.nienteDaSollecitare)}" onclick="event.stopPropagation(); scaricaPdfSolleciti()" onkeydown="event.stopPropagation()">${escapeHtml(S.pulsante)}</button>`;
+  const destra = `<span style="font-size:12px;color:var(--muted)">${conta}</span>${pulsante}`;
+  if (!richiudibile) return `<div class="card"><div class="card-hdr"><h3>${Etichette.attesaEsterna.titolo}</h3><span>${destra}</span></div>${corpo}</div>`;
+  return riquadroOggi('fornitori', '', Etichette.attesaEsterna.titolo, `<span>${destra}</span>`, corpo);
 }
 // sottosezioni per materiale; ordine: più in ritardo, più in scadenza, più urgenti, poi alfabetico
 function gruppiFornitori(lista, riga) {
   const E = Etichette.ricezione;
-  const rango = r => r.stato_limite === 'in_ritardo' ? 0 : r.stato_limite === 'in_scadenza' ? 1 : r.urgente ? 2 : 3;
-  const gruppi = raggruppaRicezioni(lista, E.materiale, E.gruppoSenzaNome)
-    .sort((a, b) => (b.in_ritardo - a.in_ritardo) || (b.in_scadenza - a.in_scadenza) || (b.urgenti - a.urgenti) || a.nome.localeCompare(b.nome, 'it'));
+  const gruppi = ordinaGruppiRicezioni(raggruppaRicezioni(lista, E.materiale, E.gruppoSenzaNome));
   return gruppi.map(g => {
     const aperto = _fornitoriAperti.has(g.chiave);
     const soll = g.in_ritardo + g.in_scadenza;
-    const righe = g.righe.map((r, i) => ({ r, i })).sort((x, y) => (rango(x.r) - rango(y.r)) || (x.i - y.i)).map(x => x.r);
+    const righe = ordinaRigheRicezione(g.righe);
     const ev = (g.urgenti ? `<span style="font-size:12px;font-weight:700;color:var(--warn-ink);margin-left:8px">${escapeHtml(E.nBloccanoLavoro(g.urgenti))}</span>` : '')
       + (soll ? `<span style="font-size:12px;font-weight:700;color:var(--${g.in_ritardo ? 'alert' : 'warn'}-ink);margin-left:8px">${escapeHtml(E.nDaSollecitare(soll))}</span>` : '');
     return `<div style="margin-top:8px"><button type="button" aria-expanded="${aperto ? 'true' : 'false'}" onclick="fornitoriGruppoApri('${escapeJsAttr(g.chiave)}')" style="width:100%;text-align:left;background:var(--phase-bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font:inherit;font-weight:700;color:var(--ink);cursor:pointer"><span>${aperto ? '▾' : '▸'}</span> ${escapeHtml(E.intestazioneGruppo(g))}${ev}</button>`
       + (aperto ? `<div style="overflow-x:auto"><table><thead><tr><th>Ordine</th><th>Cosa si aspetta</th><th>Attesa</th><th>Cosa fare</th><th></th></tr></thead><tbody>${righe.map(riga).join('')}</tbody></table></div>` : '') + '</div>';
   }).join('');
+}
+// ── PDF «Materiali da sollecitare» ──
+let _sollecitiInCorso = false;
+const _daSollecitare = r => r.stato_limite === 'in_ritardo' || r.stato_limite === 'in_scadenza';
+// Helvetica di jsPDF = solo WinAnsi: sostituisce o toglie i caratteri che non esistono (⚠, ▸, ≥, emoji…); accenti italiani e «—» restano
+const _PDF_SOSTITUZIONI = { '≥': '>=', '≤': '<=', '→': '->', '←': '<-', '×': 'x', ' ': ' ', ' ': ' ', ' ': ' ' };
+const _PDF_WINANSI_EXTRA = '€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ';
+function pulisciTestoPdf(t) {
+  let o = '';
+  for (const ch of String(t ?? '')) {
+    if (ch in _PDF_SOSTITUZIONI) o += _PDF_SOSTITUZIONI[ch];
+    else if (ch.codePointAt(0) <= 0xFF || _PDF_WINANSI_EXTRA.includes(ch)) o += ch;
+  }
+  return o.replace(/ {2,}/g, ' ').trim();
+}
+// Costruisce il PDF con le sole righe da sollecitare (lista = tutte le ricezioni), divise per materiale come nel riquadro; ritorna il documento jsPDF.
+function generaPDFSolleciti(lista, oggiIso) {
+  const { jsPDF } = window.jspdf;
+  const S = Etichette.sollecitiPdf, E = Etichette.ricezione;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const L = 10, W = 190, FONDO = 272, CORPO = 4.3;
+  const ROSSO = [153, 27, 27];
+  let y = 15;
+  const t = s => pulisciTestoPdf(s);
+  const nuovaPagina = () => { doc.addPage(); y = 15; };
+  const titoloGruppo = (g, n, segue) => {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(0);
+    doc.text(doc.splitTextToSize(t(S.titoloGruppo(g.nome, n) + (segue ? ' ' + S.segue : '')), W), L, y);
+    y += 6;
+  };
+  // righe di testo di una ricezione: [testo, grassetto, colore]
+  const righeTesto = (r) => {
+    const tt = Etichette.limiteArrivoTesti(r, oggiIso);
+    const v = [[(r.cliente || '') + ' — ' + (r.codice || ''), true, null],
+      [r.tipo === 'rientro' ? S.tipoRientro : S.tipoArrivo, false, null],
+      [tt.badge, true, r.stato_limite === 'in_ritardo' ? ROSSO : null]];
+    if (r.data_limite) v.push([S.entro + ': ' + S.dataEstesa(r.data_limite), false, null]);
+    v.push([S.attesaDa + ': ' + S.nGiorni(r.giorni_attesa || 0), false, null]);
+    if (r.urgente && (r.sblocca || []).length) v.push([S.blocca + ': ' + r.sblocca.join(', '), true, null]);
+    if (tt.esito) v.push([tt.esito, false, null]);
+    return v;
+  };
+  // intestazione
+  const soll = lista.filter(_daSollecitare);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(0);
+  doc.text(t(S.titolo), L, y); y += 7;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+  doc.text(t(S.generatoIl + ' ' + new Date().toLocaleString('it-IT') + ' · ' + Etichette.riepilogoSolleciti(soll)), L, y); y += 8;
+  // gruppi ordinati come nel riquadro (sull'elenco intero), poi solo le righe da sollecitare
+  const gruppi = ordinaGruppiRicezioni(raggruppaRicezioni(lista, E.materiale, E.gruppoSenzaNome));
+  for (const g of gruppi) {
+    const mie = ordinaRigheRicezione(g.righe).filter(_daSollecitare);
+    if (!mie.length) continue;
+    if (y > FONDO - 24) nuovaPagina();
+    titoloGruppo(g, mie.length, false);
+    for (const r of mie) {
+      const blocco = righeTesto(r).map(([tx, b, c]) => { doc.setFont('helvetica', b ? 'bold' : 'normal'); doc.setFontSize(9); return [doc.splitTextToSize(t(tx), W - 6), b, c]; });
+      const h = blocco.reduce((a, x) => a + x[0].length * CORPO, 0) + 3;
+      if (y + h > FONDO) { nuovaPagina(); titoloGruppo(g, mie.length, true); }
+      for (const [linee, b, c] of blocco) {
+        doc.setFont('helvetica', b ? 'bold' : 'normal'); doc.setFontSize(9); doc.setTextColor(...(c || [0, 0, 0]));
+        doc.text(linee, L + 3, y); y += linee.length * CORPO;
+      }
+      doc.setTextColor(0); y += 3;
+    }
+    y += 2;
+  }
+  // piè di pagina, scritto alla fine per avere il totale
+  const N = doc.getNumberOfPages();
+  for (let p = 1; p <= N; p++) {
+    doc.setPage(p); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(120);
+    doc.text(t(S.piede(S.dataEstesa(oggiIso), p, N)), 105, 287, { align: 'center' });
+  }
+  doc.setTextColor(0);
+  return doc;
+}
+async function scaricaPdfSolleciti() {
+  if (_sollecitiInCorso) return;
+  const S = Etichette.sollecitiPdf;
+  if (!window.jspdf?.jsPDF) { toast(S.toastNonDisponibile, 'err'); return; }
+  _sollecitiInCorso = true; renderOggiResp();
+  try {
+    const dati = await _chiamaRicezioniResp();
+    if (!dati) { toast(S.toastErrore, 'err'); return; }
+    ricezioniR = dati;
+    if (!(dati.ricezioni || []).some(_daSollecitare)) { toast(S.nienteDaSollecitare, 'err'); return; }
+    const oggiIso = oggiIsoResp();
+    generaPDFSolleciti(dati.ricezioni, oggiIso).save(S.prefissoFile + oggiIso + '.pdf');
+    toast(S.toastOk, 'ok');
+  } catch (e) { toast(S.toastErrore, 'err'); }
+  finally { _sollecitiInCorso = false; renderOggiResp(); }
 }
 function fornitoriGruppoApri(chiave) {
   if (_fornitoriAperti.has(chiave)) _fornitoriAperti.delete(chiave); else _fornitoriAperti.add(chiave);

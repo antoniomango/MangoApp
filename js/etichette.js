@@ -334,6 +334,20 @@ const Etichette = (() => {
     cercabile: r => [r.cliente, r.codice, r.materiale, r.fase_nome].filter(Boolean).join(' ').toLowerCase(),
   };
 
+  // ── PDF «Materiali da sollecitare» (pagina responsabile, riquadro «In attesa esterna») ──
+  const SOLLECITI_PDF = {
+    pulsante: 'Scarica PDF solleciti', nienteDaSollecitare: 'Niente da sollecitare',
+    titolo: 'Materiali da sollecitare', generatoIl: 'Generato il', prefissoFile: 'solleciti-',
+    tipoArrivo: 'Arrivo di materiale', tipoRientro: 'Rientro da lavorazione esterna',
+    entro: 'Deve arrivare entro', attesaDa: 'In attesa da', blocca: 'Blocca', segue: '(segue)',
+    nGiorni: n => n + (n === 1 ? ' giorno' : ' giorni'),
+    titoloGruppo: (nome, n) => nome + ' · ' + n,
+    piede: (data, p, n) => 'MangoApp — Solleciti del ' + data + ' — Pagina ' + p + '/' + n,
+    dataEstesa: iso => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); return m ? m[3] + '/' + m[2] + '/' + m[1] : '—'; },
+    toastErrore: 'Impossibile scaricare i solleciti: controlla la connessione e riprova.',
+    toastNonDisponibile: 'PDF non disponibile', toastOk: 'PDF dei solleciti scaricato',
+  };
+
   // ── Pagina responsabile: riquadro "In attesa esterna" ──
   // Verdetto (cosa fare) → perché → avvertenze. oggiIso = giorno di oggi (yyyy-mm-dd).
   function limiteArrivoTesti(r, oggiIso) {
@@ -457,7 +471,7 @@ const Etichette = (() => {
   };
 
   return {
-    linkViste: LINK_VISTE, daChiudere: DA_CHIUDERE, flusso: FLUSSO, attesaEsterna: ATTESA_ESTERNA, ricezione: RICEZIONE, limiteArrivoTesti, riepilogoSolleciti, rischioTesto, dataBreve, minutiTesto,
+    linkViste: LINK_VISTE, daChiudere: DA_CHIUDERE, flusso: FLUSSO, attesaEsterna: ATTESA_ESTERNA, sollecitiPdf: SOLLECITI_PDF, ricezione: RICEZIONE, limiteArrivoTesti, riepilogoSolleciti, rischioTesto, dataBreve, minutiTesto,
     PALETTE, imposta, esporta, carica,
     tipoProdotto, attributo, opzione, struttura, materiale, attributiCustom, attributiLato, latoEtichetta, latiAttivi, valoriLatoOrdine, riepilogoLato, lavorazioniCncOrdine, valoreAttributoCustom, attributiOrdine,
     priorita: () => priorita, lati: () => lati, tipi: () => tipi, attributi: () => attributi,
