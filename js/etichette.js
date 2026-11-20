@@ -334,18 +334,19 @@ const Etichette = (() => {
     cercabile: r => [r.cliente, r.codice, r.materiale, r.fase_nome].filter(Boolean).join(' ').toLowerCase(),
   };
 
-  // ── PDF «Materiali da sollecitare» (pagina responsabile, riquadro «In attesa esterna») ──
+  // ── PDF «Materiali in arrivo» (pagina responsabile, riquadro «In attesa esterna»): tutte le ricezioni in attesa, con lo stato di ciascuna ──
   const SOLLECITI_PDF = {
-    pulsante: 'Scarica PDF solleciti', nienteDaSollecitare: 'Niente da sollecitare',
-    titolo: 'Materiali da sollecitare', generatoIl: 'Generato il', prefissoFile: 'solleciti-',
+    pulsante: 'Scarica PDF materiali in arrivo', nienteInArrivo: 'Nessun materiale in arrivo',
+    titolo: 'Materiali in arrivo da fuori', generatoIl: 'Generato il', prefissoFile: 'materiali-in-arrivo-',
     tipoArrivo: 'Arrivo di materiale', tipoRientro: 'Rientro da lavorazione esterna',
     entro: 'Deve arrivare entro', attesaDa: 'In attesa da', blocca: 'Blocca', segue: '(segue)',
+    nInAttesa: n => n + ' in attesa', nessunSollecito: 'Nessun sollecito',
     nGiorni: n => n + (n === 1 ? ' giorno' : ' giorni'),
     titoloGruppo: (nome, n) => nome + ' · ' + n,
-    piede: (data, p, n) => 'MangoApp — Solleciti del ' + data + ' — Pagina ' + p + '/' + n,
+    piede: (data, p, n) => 'MangoApp — Materiali in arrivo del ' + data + ' — Pagina ' + p + '/' + n,
     dataEstesa: iso => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '')); return m ? m[3] + '/' + m[2] + '/' + m[1] : '—'; },
-    toastErrore: 'Impossibile scaricare i solleciti: controlla la connessione e riprova.',
-    toastNonDisponibile: 'PDF non disponibile', toastOk: 'PDF dei solleciti scaricato',
+    toastErrore: 'Impossibile scaricare il PDF: controlla la connessione e riprova.',
+    toastNonDisponibile: 'PDF non disponibile', toastOk: 'PDF dei materiali in arrivo scaricato',
   };
 
   // ── Pagina responsabile: riquadro "In attesa esterna" ──

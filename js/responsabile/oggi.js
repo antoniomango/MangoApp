@@ -108,8 +108,8 @@ function riquadroFornitori(richiudibile) {
   const corpo = `${riassunto ? `<div style="font-size:13px;font-weight:700;color:var(--${nRitardo ? 'alert' : 'warn'}-ink);margin:2px 0 8px">${escapeHtml(riassunto)}</div>` : ''}
     ${lista.length ? gruppiFornitori(lista, riga) : '<div style="color:var(--muted);font-size:13px;padding:8px 0">Nessuna ricezione in attesa.</div>'}`;
   const S = Etichette.sollecitiPdf;
-  const daSoll = lista.some(_daSollecitare);
-  const pulsante = `<button type="button" class="btn btn-secondary" data-solleciti-pdf style="padding:4px 10px;font-size:12px;margin-left:10px" ${daSoll && !_sollecitiInCorso ? '' : 'disabled'} title="${escapeHtml(daSoll ? S.pulsante : S.nienteDaSollecitare)}" onclick="event.stopPropagation(); scaricaPdfSolleciti()" onkeydown="event.stopPropagation()">${escapeHtml(S.pulsante)}</button>`;
+  const haRicezioni = lista.length > 0;
+  const pulsante = `<button type="button" class="btn btn-secondary" data-solleciti-pdf style="padding:4px 10px;font-size:12px;margin-left:10px" ${haRicezioni && !_sollecitiInCorso ? '' : 'disabled'} title="${escapeHtml(haRicezioni ? S.pulsante : S.nienteInArrivo)}" onclick="event.stopPropagation(); scaricaPdfSolleciti()" onkeydown="event.stopPropagation()">${escapeHtml(S.pulsante)}</button>`;
   const destra = `<span style="font-size:12px;color:var(--muted)">${conta}</span>${pulsante}`;
   if (!richiudibile) return `<div class="card"><div class="card-hdr"><h3>${Etichette.attesaEsterna.titolo}</h3><span>${destra}</span></div>${corpo}</div>`;
   return riquadroOggi('fornitori', '', Etichette.attesaEsterna.titolo, `<span>${destra}</span>`, corpo);
@@ -128,7 +128,7 @@ function gruppiFornitori(lista, riga) {
       + (aperto ? `<div style="overflow-x:auto"><table><thead><tr><th>Ordine</th><th>Cosa si aspetta</th><th>Attesa</th><th>Cosa fare</th><th></th></tr></thead><tbody>${righe.map(riga).join('')}</tbody></table></div>` : '') + '</div>';
   }).join('');
 }
-// ── PDF «Materiali da sollecitare» ──
+// ── PDF «Materiali in arrivo» ──
 let _sollecitiInCorso = false;
 const _daSollecitare = r => r.stato_limite === 'in_ritardo' || r.stato_limite === 'in_scadenza';
 // Helvetica di jsPDF = solo WinAnsi: sostituisce o toglie i caratteri che non esistono (⚠, ▸, ≥, emoji…); accenti italiani e «—» restano
@@ -142,7 +142,7 @@ function pulisciTestoPdf(t) {
   }
   return o.replace(/ {2,}/g, ' ').trim();
 }
-// Costruisce il PDF con le sole righe da sollecitare (lista = tutte le ricezioni), divise per materiale come nel riquadro; ritorna il documento jsPDF.
+// Costruisce il PDF con tutte le ricezioni in attesa (lista), divise per materiale come nel riquadro, ciascuna con il suo stato; ritorna il documento jsPDF.
 function generaPDFSolleciti(lista, oggiIso) {
   const { jsPDF } = window.jspdf;
   const S = Etichette.sollecitiPdf, E = Etichette.ricezione;
@@ -163,10 +163,11 @@ function generaPDFSolleciti(lista, oggiIso) {
     const v = [[(r.cliente || '') + ' — ' + (r.codice || ''), true, null],
       [r.tipo === 'rientro' ? S.tipoRientro : S.tipoArrivo, false, null],
       [tt.badge, true, r.stato_limite === 'in_ritardo' ? ROSSO : null]];
-    if (r.data_limite) v.push([S.entro + ': ' + S.dataEstesa(r.data_limite), false, null]);
+    v.push([S.entro + ': ' + S.dataEstesa(r.data_limite), false, null]);
     v.push([S.attesaDa + ': ' + S.nGiorni(r.giorni_attesa || 0), false, null]);
     if (r.urgente && (r.sblocca || []).length) v.push([S.blocca + ': ' + r.sblocca.join(', '), true, null]);
-    if (tt.esito) v.push([tt.esito, false, null]);
+    const nota = tt.esito || ((r.stato_limite === 'non_stimabile' || r.stato_limite === 'senza_scadenza') ? tt.principale : '');
+    if (nota) v.push([nota, false, null]);
     return v;
   };
   // intestazione
@@ -174,12 +175,13 @@ function generaPDFSolleciti(lista, oggiIso) {
   doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(0);
   doc.text(t(S.titolo), L, y); y += 7;
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-  doc.text(t(S.generatoIl + ' ' + new Date().toLocaleString('it-IT') + ' · ' + Etichette.riepilogoSolleciti(soll)), L, y); y += 8;
-  // gruppi ordinati come nel riquadro (sull'elenco intero), poi solo le righe da sollecitare
+  // giorno da oggiIso (stessa fonte di piè di pagina e nome file), solo l'orario dall'orologio locale
+  const ora = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  doc.text(t(S.generatoIl + ' ' + S.dataEstesa(oggiIso) + ', ' + ora + ' · ' + S.nInAttesa(lista.length) + ' · ' + (Etichette.riepilogoSolleciti(soll) || S.nessunSollecito)), L, y); y += 8;
+  // gruppi e righe come nel riquadro, senza filtri
   const gruppi = ordinaGruppiRicezioni(raggruppaRicezioni(lista, E.materiale, E.gruppoSenzaNome));
   for (const g of gruppi) {
-    const mie = ordinaRigheRicezione(g.righe).filter(_daSollecitare);
-    if (!mie.length) continue;
+    const mie = ordinaRigheRicezione(g.righe);
     if (y > FONDO - 24) nuovaPagina();
     titoloGruppo(g, mie.length, false);
     for (const r of mie) {
@@ -212,7 +214,7 @@ async function scaricaPdfSolleciti() {
     const dati = await _chiamaRicezioniResp();
     if (!dati) { toast(S.toastErrore, 'err'); return; }
     ricezioniR = dati;
-    if (!(dati.ricezioni || []).some(_daSollecitare)) { toast(S.nienteDaSollecitare, 'err'); return; }
+    if (!(dati.ricezioni || []).length) { toast(S.nienteInArrivo, 'err'); return; }
     const oggiIso = oggiIsoResp();
     generaPDFSolleciti(dati.ricezioni, oggiIso).save(S.prefissoFile + oggiIso + '.pdf');
     toast(S.toastOk, 'ok');
