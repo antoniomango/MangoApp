@@ -27,6 +27,7 @@ async function loadOggiResp() {
 }
 // riquadro "Clienti da avvisare": ordini con consegna «Da avvisare» pronti (una riga per spedizione unica) e risposte ancora correggibili
 let avvisiR = null, _avvisiInCorso = false;
+let _fornitoriAperti = new Set();   // chiavi dei gruppi di materiale aperti in «In attesa esterna» (in memoria, chiusi a ogni caricamento pagina)
 async function loadAvvisiResp() {
   const { data, error } = await sb.rpc('clienti_da_avvisare', { p_utente_id: currentUserRow.id, p_session_token: null });
   avvisiR = (!error && data?.ok) ? data : null;
@@ -96,9 +97,29 @@ function riquadroFornitori(richiudibile) {
   const nRitardo = lista.filter(r => r.stato_limite === 'in_ritardo').length;
   const conta = lista.length ? lista.length + (lista.length === 1 ? ' ricezione' : ' ricezioni') + (urgenti ? ' · ' + urgenti + (urgenti === 1 ? ' blocca lavoro' : ' bloccano lavoro') : '') : '';
   const corpo = `${riassunto ? `<div style="font-size:13px;font-weight:700;color:var(--${nRitardo ? 'alert' : 'warn'}-ink);margin:2px 0 8px">${escapeHtml(riassunto)}</div>` : ''}
-    ${lista.length ? `<div style="overflow-x:auto"><table><thead><tr><th>Ordine</th><th>Cosa si aspetta</th><th>Attesa</th><th>Cosa fare</th><th></th></tr></thead><tbody>${lista.map(riga).join('')}</tbody></table></div>` : '<div style="color:var(--muted);font-size:13px;padding:8px 0">Nessuna ricezione in attesa.</div>'}`;
+    ${lista.length ? gruppiFornitori(lista, riga) : '<div style="color:var(--muted);font-size:13px;padding:8px 0">Nessuna ricezione in attesa.</div>'}`;
   if (!richiudibile) return `<div class="card"><div class="card-hdr"><h3>${Etichette.attesaEsterna.titolo}</h3><span style="font-size:12px;color:var(--muted)">${conta}</span></div>${corpo}</div>`;
   return riquadroOggi('fornitori', '', Etichette.attesaEsterna.titolo, `<span style="font-size:12px;color:var(--muted)">${conta}</span>`, corpo);
+}
+// sottosezioni per materiale; ordine: più in ritardo, più in scadenza, più urgenti, poi alfabetico
+function gruppiFornitori(lista, riga) {
+  const E = Etichette.ricezione;
+  const rango = r => r.stato_limite === 'in_ritardo' ? 0 : r.stato_limite === 'in_scadenza' ? 1 : r.urgente ? 2 : 3;
+  const gruppi = raggruppaRicezioni(lista, E.materiale, E.gruppoSenzaNome)
+    .sort((a, b) => (b.in_ritardo - a.in_ritardo) || (b.in_scadenza - a.in_scadenza) || (b.urgenti - a.urgenti) || a.nome.localeCompare(b.nome, 'it'));
+  return gruppi.map(g => {
+    const aperto = _fornitoriAperti.has(g.chiave);
+    const soll = g.in_ritardo + g.in_scadenza;
+    const righe = g.righe.map((r, i) => ({ r, i })).sort((x, y) => (rango(x.r) - rango(y.r)) || (x.i - y.i)).map(x => x.r);
+    const ev = (g.urgenti ? `<span style="font-size:12px;font-weight:700;color:var(--warn-ink);margin-left:8px">${escapeHtml(E.nBloccanoLavoro(g.urgenti))}</span>` : '')
+      + (soll ? `<span style="font-size:12px;font-weight:700;color:var(--${g.in_ritardo ? 'alert' : 'warn'}-ink);margin-left:8px">${escapeHtml(E.nDaSollecitare(soll))}</span>` : '');
+    return `<div style="margin-top:8px"><button type="button" aria-expanded="${aperto ? 'true' : 'false'}" onclick="fornitoriGruppoApri('${escapeJsAttr(g.chiave)}')" style="width:100%;text-align:left;background:var(--phase-bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font:inherit;font-weight:700;color:var(--ink);cursor:pointer"><span>${aperto ? '▾' : '▸'}</span> ${escapeHtml(E.intestazioneGruppo(g))}${ev}</button>`
+      + (aperto ? `<div style="overflow-x:auto"><table><thead><tr><th>Ordine</th><th>Cosa si aspetta</th><th>Attesa</th><th>Cosa fare</th><th></th></tr></thead><tbody>${righe.map(riga).join('')}</tbody></table></div>` : '') + '</div>';
+  }).join('');
+}
+function fornitoriGruppoApri(chiave) {
+  if (_fornitoriAperti.has(chiave)) _fornitoriAperti.delete(chiave); else _fornitoriAperti.add(chiave);
+  renderOggiResp();
 }
 async function confermaRicezioneResp(chiave) {
   const r = (ricezioniR?.ricezioni || []).find(x => (x.ordine_fase_id || x.fase_extra_id) === chiave); if (!r) return;

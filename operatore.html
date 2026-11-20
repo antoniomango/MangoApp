@@ -258,6 +258,9 @@ textarea:focus { border-color: var(--accent); }
 .oggi-urgente { font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--urgente-ink); background: var(--urgente-bg); border-radius: 20px; padding: 2px 7px; white-space: nowrap; }
 .ricevi-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin-bottom: 12px; padding: 12px 14px; font-size: 15px; font-weight: 600; }
 .ricevi-conta { font-size: 11px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--warn-ink); background: var(--warn-soft); border-radius: 20px; padding: 3px 9px; white-space: nowrap; }
+.ricevi-gr-t { margin-top: 10px; }
+.ricevi-gr { width: 100%; text-align: left; background: none; border: none; padding: 8px 0; font: inherit; font-weight: 700; color: var(--ink); cursor: pointer; }
+.ricevi-gr-warn { color: var(--warn-ink); font-weight: 700; font-size: 12px; margin-left: 6px; }
 .ricevi-cerca { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; font-size: 15px; background: var(--surface); color: var(--ink); outline: none; margin-bottom: 12px; }
 .ricevi-sotto { font-size: 12px; color: var(--muted); margin-top: 3px; }
 .oggi-voce .ricevi-titolo { font-size: 17px; font-weight: 700; }
@@ -1223,7 +1226,7 @@ function showScreen(name) {
   if (name !== 'oggi') oggiFermaAggiornamento();
   if (name === 'home') { loadOrdini().then(() => renderHome()); }
 
-  else if (name === 'oggi') { oggiFaseAperta = null; riceviAperto = false; oggiSelezione.clear(); oggiAvviaAggiornamento(); loadOggi(); }
+  else if (name === 'oggi') { oggiFaseAperta = null; riceviAperto = false; riceviAperte.clear(); oggiSelezione.clear(); oggiAvviaAggiornamento(); loadOggi(); }
   else if (name === 'notifiche') {
     // Richiedi permesso notifiche push (richiede gesto utente su iOS)
     richiediPermessoNotifiche();
@@ -2482,6 +2485,7 @@ async function _oggiUnGiro() {
 let ricezioniDati = null;        // ultima risposta di ricezioni_in_attesa (anche dalla cache offline)
 let ricezioniDaCache = false;
 let riceviAperto = false;        // il pannello è aperto dentro la schermata Oggi
+let riceviAperte = new Set();     // chiavi dei gruppi di materiale aperti (in memoria, azzerata a ogni apertura/chiusura del pannello)
 let riceviCerca = '';            // testo di ricerca (tenuto in memoria a ogni digitazione)
 let ricezioniInCorso = new Set(); // chiavi delle ricezioni con una conferma in corso
 let ricezioniRicarica = false;
@@ -2510,8 +2514,8 @@ async function _ricezioniUnGiro() {
   } catch (e) { console.warn('loadRicezioni', e); }
   _oggiRender();
 }
-function riceviApri() { riceviAperto = true; riceviCerca = ''; oggiFaseAperta = null; oggiSelezione.clear(); oggiModoMultiplo = false; renderOggi(); window.scrollTo?.(0, 0); document.querySelector('.app-content')?.scrollTo?.(0, 0); loadRicezioni().catch(() => {}); }
-function riceviChiudi() { riceviAperto = false; renderOggi(); }
+function riceviApri() { riceviAperto = true; riceviCerca = ''; riceviAperte.clear(); oggiFaseAperta = null; oggiSelezione.clear(); oggiModoMultiplo = false; renderOggi(); window.scrollTo?.(0, 0); document.querySelector('.app-content')?.scrollTo?.(0, 0); loadRicezioni().catch(() => {}); }
+function riceviChiudi() { riceviAperto = false; riceviAperte.clear(); renderOggi(); }
 function riceviBottone() {
   const n = ricezioniDati?.n_urgenti || 0;
   return `<button type="button" class="btn btn-secondary ricevi-btn" onclick="riceviApri()"><i data-ic="pacco"></i> Ricevi materiale${n ? `<span class="ricevi-conta">${n} ${n === 1 ? 'serve' : 'servono'}</span>` : ''}</button>`;
@@ -2897,7 +2901,7 @@ function renderRicevi(solaLettura) {
   return `<button class="back-btn" onclick="riceviChiudi()">← Oggi</button>
     <div class="page-title">Ricevi materiale</div>
     ${offline}
-    <input type="search" id="ricevi-cerca" class="ricevi-cerca" placeholder="Cerca cliente o codice ordine…" value="${escapeHtml(riceviCerca)}" oninput="riceviFiltra(this.value)" autocomplete="off">
+    <input type="search" id="ricevi-cerca" class="ricevi-cerca" placeholder="${escapeHtml(Etichette.ricezione.cercaPlaceholder)}" value="${escapeHtml(riceviCerca)}" oninput="riceviFiltra(this.value)" autocomplete="off">
     <div id="ricevi-lista">${renderRiceviLista(solaLettura)}</div>`;
 }
 // ridisegna solo l'elenco, così il campo di ricerca non perde il focus
@@ -2918,14 +2922,22 @@ function renderRiceviLista(solaLettura) {
     const k = riceviChiave(r), occ = ricezioniInCorso.has(k) ? ' disabled' : '';
     const quando = E.quandoArriva(r);
     const azione = solaLettura ? '' : `<div class="ov-azioni"><button class="btn btn-ok"${occ}${isOnline ? '' : ' disabled'} onclick="riceviConferma('${escapeJsAttr(k)}')">${occ ? '…' : escapeHtml(E.pulsante(r))}</button></div>`;
-    return `<div class="oggi-voce"><div class="ov-testa"><div class="ov-titolo ricevi-titolo">${escapeHtml(E.materiale(r))}</div></div>
+    return `<div class="oggi-voce"><div class="ov-testa"><div class="ov-titolo ricevi-titolo">${escapeHtml(E.materiale(r))}</div>${r.urgente ? `<span class="ricevi-gr-warn">${escapeHtml(E.serveLavorare)}</span>` : ''}</div>
       <div class="ov-titolo" style="margin-top:2px">${escapeHtml(E.sotto(r))}</div>${quando ? `<div class="ricevi-sotto">${escapeHtml(quando)}</div>` : ''}${azione}</div>`;
   };
-  const urg = lista.filter(r => r.urgente), altre = lista.filter(r => !r.urgente);
-  let html = '';
-  if (urg.length) html += `<div class="section-title">${E.gruppoUrgenti}</div><div class="card">` + urg.map(voce).join('') + '</div>';
-  if (altre.length) html += `<div class="section-title">${E.gruppoAltro}</div><div class="card">` + altre.map(voce).join('') + '</div>';
-  return html;
+  const gruppi = raggruppaRicezioni(lista, E.materiale, E.gruppoSenzaNome)
+    .sort((a, b) => (b.urgenti - a.urgenti) || a.nome.localeCompare(b.nome, 'it'));
+  return gruppi.map(g => {
+    const aperto = q ? true : riceviAperte.has(g.chiave);
+    const righe = g.righe.filter(r => r.urgente).concat(g.righe.filter(r => !r.urgente));
+    const evid = g.urgenti ? `<span class="ricevi-gr-warn">${escapeHtml(E.nServonoLavorare(g.urgenti))}</span>` : '';
+    return `<div class="section-title ricevi-gr-t"><button type="button" class="ricevi-gr" aria-expanded="${aperto ? 'true' : 'false'}" onclick="riceviGruppoApri('${escapeJsAttr(g.chiave)}')"><span>${aperto ? '▾' : '▸'}</span> ${escapeHtml(E.intestazioneGruppo(g))} ${evid}</button></div>`
+      + (aperto ? `<div class="card">${righe.map(voce).join('')}</div>` : '');
+  }).join('');
+}
+function riceviGruppoApri(chiave) {
+  if (riceviAperte.has(chiave)) riceviAperte.delete(chiave); else riceviAperte.add(chiave);
+  riceviFiltra(riceviCerca);
 }
 async function riceviConferma(chiave) {
   const r = (ricezioniDati?.ricezioni || []).find(x => riceviChiave(x) === chiave); if (!r) return;

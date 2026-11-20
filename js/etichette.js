@@ -319,7 +319,12 @@ const Etichette = (() => {
 
   // ── App operatore: pannello "Ricevi materiale" ──
   const RICEZIONE = {
-    gruppoUrgenti: 'Serve per lavorare', gruppoAltro: 'Altro in arrivo',
+    gruppoSenzaNome: 'Altro', serveLavorare: 'Serve per lavorare',
+    intestazioneGruppo: g => g.nome + ' · ' + g.totale,
+    nServonoLavorare: n => n + (n === 1 ? ' serve per lavorare' : ' servono per lavorare'),
+    nBloccanoLavoro: n => n + (n === 1 ? ' blocca lavoro' : ' bloccano lavoro'),
+    nDaSollecitare: n => n + ' da sollecitare',
+    cercaPlaceholder: 'Cerca materiale, cliente o codice ordine…',
     materiale: r => r.materiale || r.fase_nome || '',
     sotto: r => (r.cliente || '') + ' — ' + (r.codice || ''),
     quandoArriva: r => (r.urgente && (r.sblocca || []).length) ? 'Quando arriva si potrà fare: ' + r.sblocca.join(', ') : '',

@@ -140,3 +140,21 @@ async function segnaSpeditoConGruppo({ ordineId, ritira, anteprima, chiama, conf
   if (!confermaSingolo()) return null;
   return { tutti: false, data: await chiama(false) };
 }
+
+// Ricezioni in attesa raggruppate per materiale. nomeDi(r) dà il nome mostrato; nomeVuoto è il gruppo per le righe senza nome.
+// Chiave = nome senza spazi ai bordi e in minuscolo (grafie diverse → stesso gruppo, nome della prima riga).
+// Ogni gruppo: { chiave, nome, righe, totale, urgenti, in_ritardo, in_scadenza } (righe nell'ordine ricevuto).
+function raggruppaRicezioni(lista, nomeDi, nomeVuoto) {
+  const gruppi = new Map();
+  for (const r of (lista || [])) {
+    const nome = String(nomeDi(r) || '').trim();
+    const chiave = nome.toLowerCase();
+    let g = gruppi.get(chiave);
+    if (!g) { g = { chiave, nome: nome || nomeVuoto, righe: [], totale: 0, urgenti: 0, in_ritardo: 0, in_scadenza: 0 }; gruppi.set(chiave, g); }
+    g.righe.push(r); g.totale++;
+    if (r.urgente) g.urgenti++;
+    if (r.stato_limite === 'in_ritardo') g.in_ritardo++;
+    else if (r.stato_limite === 'in_scadenza') g.in_scadenza++;
+  }
+  return [...gruppi.values()];
+}
