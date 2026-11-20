@@ -345,7 +345,7 @@ const Etichette = (() => {
       if (r.fine_prevista_se_arriva_oggi) {
         t.esito = 'Anche arrivando oggi, ' + (r.codice || "l'ordine") + ' sarebbe pronto ' + dataBreve(r.fine_prevista_se_arriva_oggi)
           + (r.esito_spedizione === 'dopo_spedizione' ? ', dopo la spedizione del ' + dataBreve(r.scadenza)
-             : r.esito_spedizione === 'appena_in_tempo' ? ', appena in tempo per la spedizione del ' + dataBreve(r.scadenza)
+             : r.esito_spedizione === 'appena_in_tempo' ? ', troppo a ridosso della spedizione del ' + dataBreve(r.scadenza) + ': va finito il giorno lavorativo prima'
              : r.esito_spedizione === 'in_tempo' ? ', in tempo per la spedizione del ' + dataBreve(r.scadenza) : '');
       }
     } else if (r.stato_limite === 'in_scadenza' || r.stato_limite === 'ok') {
