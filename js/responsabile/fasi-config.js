@@ -246,6 +246,10 @@ function fasiOrig(f, campo) {
 // ── modello della fase (stato salvato) e bozza ───────────────────────────────────────────────────────────
 const fsClone = o => JSON.parse(JSON.stringify(o));
 const fsEster = m => (m.tipo_gestione || 'standard') !== 'standard' || !!m.e_attesa_esterna;
+const fsAuto = m => m.tipo_gestione === Etichette.faseAutomatica.tipo;   // fase automatica da dispositivo (conta come "esterna" per tempo, macchine e piano, ma ha il suo tag)
+const fsDispositivo = id => (FS.dispositivi || []).find(d => d.id === id) || null;
+// fase che apre la finestra di una fase automatica (qualsiasi fase del modello, bozza compresa)
+const fsAutomaticaDi = faseId => fasiAttive().map(f => fsMod(f.id)).find(x => x && fsAuto(x) && x.fase_apertura_finestra_id === faseId) || null;
 const fsRigheTempo = faseId => FS.tempi.filter(t => t.fase_id === faseId);
 // Fase abbinata: il legame è salvato una volta sola (sulla fase con id maggiore), ma si legge e si imposta da entrambe le schede
 const faseAbbinataId = (id) => { const f = fasi.find(x => x.id === id); if (!f) return null; if (f.abbinata_a_fase_id != null) return f.abbinata_a_fase_id; return fasi.find(x => x.abbinata_a_fase_id === id)?.id ?? null; };
@@ -254,6 +258,27 @@ function fsAbbinabili(m) {
   return fasiAttive().filter(f => f.id !== m.id && (f.tipo_gestione || 'standard') === 'standard' && !f.e_attesa_esterna && !f.piu_pressate && !f.gruppo_spedizione
     && (faseAbbinataId(f.id) == null || faseAbbinataId(f.id) === m.id)
     && (() => { const sue = macchineList.filter(x => (x.fase_ids || []).includes(f.id)).map(x => x.id); return (!mie.size && !sue.length) || sue.some(id => mie.has(id)); })());
+}
+// Campi della fase automatica da dispositivo: tutto da configurazione, nessun id o soglia nel codice
+function fsAutoHtml(m) {
+  if (!fsAuto(m)) return '';
+  const C = Etichette.faseAutomatica.config;
+  const disp = (FS.dispositivi || []).filter(x => x.attivo || x.id === m.dispositivo_id);
+  const usate = new Set(fasiAttive().map(f => fsMod(f.id)).filter(x => x && fsAuto(x) && x.id !== m.id).map(x => x.fase_apertura_finestra_id));
+  const aperture = fasiAttive().filter(f => { const x = fsMod(f.id); return x && x.id !== m.id && (x.tipo_gestione || 'standard') === 'standard' && !x.e_attesa_esterna && !usate.has(x.id); });
+  const dSel = fsDispositivo(m.dispositivo_id);
+  return `<div class="fs-row"><label class="fs-lbl" for="fs-a-disp">${escapeHtml(C.dispositivo)}</label>
+      <select class="fs-inp" id="fs-a-disp" onchange="fsSet('dispositivo_id', this.value || null)"><option value="">${escapeHtml(C.dispositivoScegli)}</option>${disp.map(x => `<option value="${escapeHtml(x.id)}" ${x.id === m.dispositivo_id ? 'selected' : ''}>${escapeHtml(x.nome)}${x.attivo ? '' : ' (' + escapeHtml(Etichette.faseAutomatica.dispositivoDisattivato) + ')'}</option>`).join('')}</select>
+      ${disp.length ? '' : `<div class="fs-desc">${escapeHtml(C.nessunDispositivo)}</div>`}
+      ${dSel && !dSel.attivo ? `<div class="fs-desc" style="color:var(--alert-ink)">${escapeHtml(Etichette.faseAutomatica.dispositivoDisattivato)}</div>` : ''}</div>
+    <div class="fs-row"><label class="fs-lbl" for="fs-a-ap">${escapeHtml(C.faseApertura)}</label>
+      <select class="fs-inp" id="fs-a-ap" onchange="fsSet('fase_apertura_finestra_id', this.value ? Number(this.value) : null)"><option value="">${escapeHtml(C.faseAperturaScegli)}</option>${aperture.map(f => `<option value="${f.id}" ${f.id === m.fase_apertura_finestra_id ? 'selected' : ''}>${fsIdx(f.id) + 1}. ${escapeHtml(f.nome)}</option>`).join('')}</select>
+      <div class="fs-desc">${escapeHtml(C.faseAperturaSpiega)}</div></div>
+    <div class="fs-row fs-two">
+      <div><label class="fs-lbl" for="fs-a-fin">${escapeHtml(C.finestra)}</label><input class="fs-inp num" id="fs-a-fin" type="number" min="1" max="120" step="1" inputmode="numeric" value="${escapeHtml(m.finestra_minuti)}" oninput="fsSetTesto('finestra_minuti', this.value)" style="width:100px"></div>
+      <div><label class="fs-lbl" for="fs-a-kg">${escapeHtml(C.carico)}</label><input class="fs-inp num" id="fs-a-kg" type="number" min="0" max="1000" step="any" inputmode="decimal" value="${escapeHtml(m.carico_minimo_kg)}" oninput="fsSetTesto('carico_minimo_kg', this.value)" style="width:100px"><div class="fs-desc">${escapeHtml(C.caricoSpiega)}</div></div>
+    </div>
+    <div class="fs-row inline"><div><div class="fs-crit-t">${escapeHtml(C.blocca)}</div><div class="fs-desc">${escapeHtml(C.bloccaSpiega)}</div></div>${fsSwitch('fs-a-blocca', m.blocca_chiusura_ordine, "fsSet('blocca_chiusura_ordine',this.checked,false)")}</div>`;
 }
 function fsAbbinataHtml(m) {
   const E = Etichette.fasiAbbinate;
@@ -277,6 +302,8 @@ function fsModello(f) {
     e_cnc: !!f.e_cnc, opzionale: !!f.opzionale, gruppo_spedizione: !!f.gruppo_spedizione, piu_pressate: !!f.piu_pressate, riempitivo: !!f.riempitivo, pressate_previste: f.pressate_previste ?? null, abbinata_a_fase_id: faseAbbinataId(f.id), ambito_tempo: f.ambito_tempo || 'anta',
     tempo_da_lavorazioni_cnc: !!f.tempo_da_lavorazioni_cnc, materiale_ricezione: f.materiale_ricezione || '',
     solo_per_consegna: f.solo_per_consegna ? [...f.solo_per_consegna].sort() : null,   // null = sempre
+    dispositivo_id: f.dispositivo_id ?? null, fase_apertura_finestra_id: f.fase_apertura_finestra_id ?? null,
+    finestra_minuti: f.finestra_minuti != null ? String(f.finestra_minuti) : '', carico_minimo_kg: f.carico_minimo_kg != null ? String(f.carico_minimo_kg) : '', blocca_chiusura_ordine: !!f.blocca_chiusura_ordine,
     dipendenze: [...(f.dipendenze || [])].sort((a, b) => a - b),
     macchine: macchineList.filter(x => (x.fase_ids || []).includes(f.id)).map(x => ({ id: x.id, fattore: Number((x.fattori || {})[f.id] ?? 1), presa_attiva: !!(x.prese || {})[f.id], presa_minuti: (x.prese || {})[f.id]?.minuti ?? null, ante_per_pressata: (x.prese || {})[f.id]?.ordini ?? null })).sort((a, b) => a.id < b.id ? -1 : 1),
     competenze: [...(f.competenze || [])],
@@ -301,6 +328,7 @@ function fsModelloVuoto() {
   const lista = fasiAttive();
   const m = { id: 0, nome: '', descrizione: '', macro_fase_id: null, tipo_gestione: 'standard', e_attesa_esterna: false, avvio_automatico: false, e_cnc: false, opzionale: false,
     gruppo_spedizione: false, piu_pressate: false, riempitivo: false, pressate_previste: null, abbinata_a_fase_id: null, ambito_tempo: 'anta', tempo_da_lavorazioni_cnc: false, materiale_ricezione: '', solo_per_consegna: null,
+    dispositivo_id: null, fase_apertura_finestra_id: null, finestra_minuti: '', carico_minimo_kg: '', blocca_chiusura_ordine: false,
     dipendenze: [], dipendenti: [], dopo: lista.length ? String(lista[lista.length - 1].id) : 'top', macchine: [], competenze: [], tempo: { tipico: '', massimo: '' } };
   fasiCriteriDef().forEach(def => { m[def.campo] = []; m[def.modo] = 'solo'; });
   return m;
@@ -355,7 +383,13 @@ function fsAvvisi(m) {
   return out;
 }
 const fsLivello = m => { const a = fsAvvisi(m).map(x => x[0]); return a.includes('alert') ? 'alert' : a.includes('warn') ? 'warn' : a.length ? 'info' : null; };
-function fsTagEsterna(m) { return fsEster(m) ? `<span class="fs-tag fs-tag-ext">${m.tipo_gestione === 'conferma_ricezione' ? 'Arrivo da fuori' : 'Esterna'}</span>` : ''; }
+function fsTagEsterna(m) {
+  const A = Etichette.faseAutomatica;
+  if (fsAuto(m)) return `<span class="fs-tag fs-tag-ext">${escapeHtml(A.tag)}</span>`;
+  const apre = fsAutomaticaDi(m.id) ? `<span class="fs-tag fs-tag-cnc">${escapeHtml(A.apreFinestra)}</span>` : '';
+  return (fsEster(m) ? `<span class="fs-tag fs-tag-ext">${m.tipo_gestione === 'conferma_ricezione' ? 'Arrivo da fuori' : 'Esterna'}</span>` : '') + apre;
+}
+const fsNomeDispositivo = m => { const d = fsDispositivo(m.dispositivo_id); return d ? d.nome : '—'; };
 
 // ── caricamento ────────────────────────────────────────────────────────────────────────────────────────────
 async function fsCaricaDati() {
@@ -365,6 +399,8 @@ async function fsCaricaDati() {
     sb.from('kpi_config').select('valore, default_valore').eq('chiave', 'soglia_quantita_svincolo_dipendenze').maybeSingle(),
   ]);
   FS.tempi = tRes.data || [];
+  try { const { data: dl } = await sb.rpc('dispositivi_campo_lista', { p_responsabile_id: currentUserRow.id, p_session_token: null }); FS.dispositivi = dl?.ok ? dl.dispositivi : (FS.dispositivi || []); }
+  catch (e) { console.warn('dispositivi_campo_lista', e); }
   FS.soglia = kRes.data ? Number(kRes.data.valore ?? kRes.data.default_valore) : null;
   const bozzaSporca = fsSporca();
   const bozza = bozzaSporca ? FS.draft : null;
@@ -400,7 +436,8 @@ function fsRender() {
 const FS_FILTRI = [
   ['tutte', 'Tutte', () => true],
   ['avvisi', 'Da controllare', m => ['alert', 'warn'].includes(fsLivello(m))],
-  ['esterne', 'Esterne', m => fsEster(m)],
+  ['esterne', 'Esterne', m => fsEster(m) && !fsAuto(m)],
+  ['automatiche', 'Automatiche', m => fsAuto(m)],
   ['cnc', 'CNC', m => m.e_cnc],
 ];
 function fsRenderLista() {
@@ -414,7 +451,8 @@ function fsRenderLista() {
   document.getElementById('fs-righe').innerHTML = fsRigaNuova() + (righe.length ? righe.map(([m, i]) => {
     const lv = fsLivello(m), mac = fsMacro(m.macro_fase_id);
     const meta = [];
-    if (fsEster(m)) meta.push(fsTagEsterna(m));
+    if (fsEster(m) || fsAutomaticaDi(m.id)) meta.push(fsTagEsterna(m));
+    if (fsAuto(m)) meta.push(escapeHtml(Etichette.faseAutomatica.daDispositivo(fsNomeDispositivo(m))));
     if (m.e_cnc) meta.push('<span class="fs-tag fs-tag-cnc">CNC</span>');
     if (m.opzionale) meta.push('<span class="fs-tag fs-tag-opz">Opzionale</span>');
     if (m.macchine.length) meta.push(escapeHtml(m.macchine.map(x => fsMacchina(x.id)?.nome || '').filter(Boolean).join(', ')));
@@ -466,8 +504,14 @@ function fsAggiornaStato() {
 function fsSet(campo, valore, rerender = true) {
   FS.draft[campo] = valore;
   if (campo === 'tipo_gestione') {
-    FS.draft.e_attesa_esterna = valore !== 'standard';   // impostata dal tipo di fase
+    FS.draft.e_attesa_esterna = valore !== 'standard' && valore !== Etichette.faseAutomatica.tipo;   // impostata dal tipo di fase (l'automatica non è un'attesa da fuori)
     if (valore !== 'standard') { FS.draft.piu_pressate = false; FS.draft.pressate_previste = null; FS.draft.riempitivo = false; }   // la domanda sulle pressate non vale per le fasi esterne
+    if (valore === Etichette.faseAutomatica.tipo) {   // nessuna macchina, nessuna spedizione unica, nessuna fase abbinata
+      FS.draft.macchine = []; FS.draft.gruppo_spedizione = false; FS.draft.abbinata_a_fase_id = null; FS.draft.tempo_da_lavorazioni_cnc = false;
+      if (!FS.draft.dispositivo_id) { const att = (FS.dispositivi || []).filter(x => x.attivo); if (att.length === 1) FS.draft.dispositivo_id = att[0].id; }
+    } else {   // fuori dal tipo automatico i campi del dispositivo si azzerano (il database li vuole vuoti)
+      FS.draft.dispositivo_id = null; FS.draft.fase_apertura_finestra_id = null; FS.draft.finestra_minuti = ''; FS.draft.carico_minimo_kg = ''; FS.draft.blocca_chiusura_ordine = false;
+    }
   }
   if (campo === 'piu_pressate') FS.draft.pressate_previste = valore ? (FS.draft.pressate_previste ?? 1) : null;
   if (campo === 'tempo_da_lavorazioni_cnc' && valore) FS.draft.ambito_tempo = 'anta';
@@ -551,8 +595,8 @@ function fsTempoModificabile(id) {
 }
 function fsPayload() {
   const d = FS.draft, o = FS.mod[d.id], p = {};
-  ['nome', 'descrizione', 'macro_fase_id', 'tipo_gestione', 'e_attesa_esterna', 'avvio_automatico', 'e_cnc', 'opzionale', 'gruppo_spedizione', 'piu_pressate', 'riempitivo', 'pressate_previste', 'abbinata_a_fase_id', 'ambito_tempo', 'tempo_da_lavorazioni_cnc', 'materiale_ricezione', 'solo_per_consegna'].forEach(k => {
-    if (JSON.stringify(d[k]) !== JSON.stringify(o[k])) p[k] = k === 'nome' ? d.nome.trim() : k === 'materiale_ricezione' ? String(d[k] || '').trim() : d[k];
+  ['nome', 'descrizione', 'macro_fase_id', 'tipo_gestione', 'dispositivo_id', 'fase_apertura_finestra_id', 'finestra_minuti', 'carico_minimo_kg', 'blocca_chiusura_ordine', 'e_attesa_esterna', 'avvio_automatico', 'e_cnc', 'opzionale', 'gruppo_spedizione', 'piu_pressate', 'riempitivo', 'pressate_previste', 'abbinata_a_fase_id', 'ambito_tempo', 'tempo_da_lavorazioni_cnc', 'materiale_ricezione', 'solo_per_consegna'].forEach(k => {
+    if (JSON.stringify(d[k]) !== JSON.stringify(o[k])) p[k] = k === 'nome' ? d.nome.trim() : k === 'materiale_ricezione' ? String(d[k] || '').trim() : (k === 'finestra_minuti' || k === 'carico_minimo_kg') ? (d[k] === '' ? null : Number(d[k])) : d[k];
   });
   const crit = {};
   fasiCriteriDef().forEach(def => [def.campo, def.modo].forEach(k => { if (JSON.stringify(d[k]) !== JSON.stringify(o[k])) crit[k] = d[k]; }));
@@ -573,6 +617,13 @@ function fsPayload() {
 function fsValida() {
   const d = FS.draft;
   if (!d.nome.trim()) return 'Inserisci il nome della fase.';
+  if (fsAuto(d)) {
+    const E = Etichette.faseAutomatica.config.errori;
+    if (!d.dispositivo_id || !d.fase_apertura_finestra_id) return E.automatica_dati_mancanti;
+    const fm = Number(d.finestra_minuti), ck = Number(d.carico_minimo_kg);
+    if (d.finestra_minuti === '' || !Number.isInteger(fm) || fm < 1 || fm > 120) return E.finestra_minuti_non_valida;
+    if (d.carico_minimo_kg === '' || !(ck >= 0 && ck <= 1000)) return E.carico_minimo_non_valido;
+  }
   if (d.piu_pressate && !fsEster(d) && !d.macchine.length) return Etichette.pressate.config.serveMacchina;
   if (d.piu_pressate && !fsEster(d) && pressateNumeroValido(d.pressate_previste) == null) return Etichette.pressate.config.errori.pressate_previste_non_valide;
   if (fsTempoModificabile(d.id)) {
@@ -586,7 +637,7 @@ function fsValida() {
   if (d.abbinata_a_fase_id != null && (d.piu_pressate || d.gruppo_spedizione || fsEster(d))) return Etichette.fasiAbbinate.nonCompatibile;
   return null;
 }
-const FS_ERRORI = { ...Etichette.pressate.config.errori, ...Etichette.fasiAbbinate.errori, presa_non_valida: Etichette.presa.config.errore, dipendenza_circolare: 'La sequenza crea un giro chiuso tra le fasi.', nome_obbligatorio: 'Il nome è obbligatorio.', minuti_non_validi: 'Minuti del tempo non validi.',
+const FS_ERRORI = { ...Etichette.pressate.config.errori, ...Etichette.faseAutomatica.config.errori, ...Etichette.fasiAbbinate.errori, presa_non_valida: Etichette.presa.config.errore, dipendenza_circolare: 'La sequenza crea un giro chiuso tra le fasi.', nome_obbligatorio: 'Il nome è obbligatorio.', minuti_non_validi: 'Minuti del tempo non validi.',
   fase_tempo_da_lavorazioni_cnc: 'Il tempo di questa fase è la somma delle lavorazioni CNC: si imposta nel Catalogo lavorazioni CNC.', macchina_non_trovata: 'Una macchina scelta non esiste più.',
   operatore_non_trovato: 'Un operatore scelto non esiste più.', ambito_tempo_incompatibile: 'Il tempo «ogni lato» non vale per le fasi che sommano le lavorazioni CNC.' };
 
@@ -690,7 +741,7 @@ function fsRenderDettaglio() {
   let tempo;
   const righe = fsRigheTempo(m.id);
   if (est) {
-    tempo = `<div class="fs-row"><div class="fs-desc" style="margin:0">Fase esterna: non occupa tempo in officina e non conta nella capacità del giorno.</div></div>`;
+    tempo = `<div class="fs-row"><div class="fs-desc" style="margin:0">${fsAuto(m) ? escapeHtml(Etichette.faseAutomatica.config.tempoSpiega) : 'Fase esterna: non occupa tempo in officina e non conta nella capacità del giorno.'}</div></div>`;
   } else if (m.tempo_da_lavorazioni_cnc) {
     const base = righe.filter(t => t.lavorazione_cnc_id == null && t.tipo_prodotto != null);
     tempo = `<div class="fs-row inline"><div><div class="fs-crit-t">Il tempo è la somma delle lavorazioni CNC dell'ordine</div>
@@ -790,7 +841,7 @@ function fsRenderDettaglio() {
     <div class="fs-blocco">
       <div class="fs-blocco-h"><h3>Macchine</h3><span class="hint">Il piano usa prima quella dove la fase è più veloce</span></div>
       <div class="fs-card"><div class="fs-row">
-        <div class="fs-chips">${est ? '<span class="fs-desc" style="margin:0">Fase esterna: nessuna macchina.</span>' : (m.macchine.length ? m.macchine.map(x => { const mm = fsMacchina(x.id); if (!mm) return ''; const ok = fsMacchinaOk(mm); const opz = Etichette.fattoriTempoMacchina().map(y => y[0]); const opzioni = (opz.includes(x.fattore) ? opz : [...opz, x.fattore].sort((p, q) => p - q)).map(v => `<option value="${v}" ${v === x.fattore ? 'selected' : ''}>${escapeHtml(Etichette.fattoreTempoEtichetta(v))}</option>`).join('');
+        <div class="fs-chips">${est ? `<span class="fs-desc" style="margin:0">${fsAuto(m) ? escapeHtml(Etichette.faseAutomatica.config.macchineSpiega) : 'Fase esterna: nessuna macchina.'}</span>` : (m.macchine.length ? m.macchine.map(x => { const mm = fsMacchina(x.id); if (!mm) return ''; const ok = fsMacchinaOk(mm); const opz = Etichette.fattoriTempoMacchina().map(y => y[0]); const opzioni = (opz.includes(x.fattore) ? opz : [...opz, x.fattore].sort((p, q) => p - q)).map(v => `<option value="${v}" ${v === x.fattore ? 'selected' : ''}>${escapeHtml(Etichette.fattoreTempoEtichetta(v))}</option>`).join('');
           return `<span class="fs-chip" style="flex-wrap:wrap"><span class="${ok ? 'ok' : 'ko'}"></span>${escapeHtml(mm.nome)}${ok ? '' : '<span class="stato">fuori uso</span>'}${x.presa_attiva ? '' : `<select class="fm-fatt" aria-label="Tempo macchina su ${escapeHtml(mm.nome)}" onchange="fsSetFattoreMacchina('${escapeJsAttr(x.id)}', this.value)">${opzioni}</select>`}<button class="fs-chip-x" aria-label="Togli ${escapeHtml(mm.nome)}" onclick="fsTogliMacchina('${escapeJsAttr(x.id)}')">×</button>
           <div class="presa-box" style="flex:1 1 100%">${presaBloccoHtml(x.presa_attiva, x.presa_minuti, x.ante_per_pressata, 'fsSetPresaMacchina', 'fsPresaCampoMacchina', "'" + escapeJsAttr(x.id) + "'")}</div></span>`; }).join('') : '<span class="fs-desc" style="margin:0">Nessuna macchina assegnata.</span>')}</div>
         ${est ? '' : `<div class="fs-add" style="margin-top:10px"><select class="fs-inp" id="fs-add-mac" onchange="fsAggiungiMacchina(this.value)"><option value="">+ Aggiungi macchina…</option>${macchineList.filter(x => !m.macchine.some(y => y.id === x.id)).map(x => `<option value="${escapeHtml(x.id)}">${escapeHtml(x.nome)}${fsMacchinaOk(x) ? '' : ' (fuori uso)'}</option>`).join('')}</select></div>`}
@@ -809,11 +860,12 @@ function fsRenderDettaglio() {
           <div class="fs-seg" style="flex-wrap:wrap">${Etichette.tipiGestioneFase().map(x => `<button class="${m.tipo_gestione === x[0] ? 'on' : ''}" onclick="fsSet('tipo_gestione','${x[0]}')">${escapeHtml(x[1])}</button>`).join('')}</div>
           <div class="fs-desc">${escapeHtml((Etichette.tipiGestioneFase().find(x => x[0] === m.tipo_gestione) || [])[2] || '')}</div>
         </div>
-        ${m.tipo_gestione !== 'standard' ? `<div class="fs-row"><label class="fs-lbl" for="fs-g-mat">Cosa si riceve</label><input class="fs-inp" id="fs-g-mat" maxlength="40" value="${escapeHtml(m.materiale_ricezione)}" placeholder="es. Struttura" oninput="fsSetTesto('materiale_ricezione', this.value)"><div class="fs-desc">Nome breve di cosa arriva o rientra: lo leggono gli operatori nel pannello «Ricevi materiale». Se lo lasci vuoto si usa il nome della fase.</div></div>` : ''}
+        ${fsAutoHtml(m)}
+        ${m.tipo_gestione !== 'standard' && !fsAuto(m) ? `<div class="fs-row"><label class="fs-lbl" for="fs-g-mat">Cosa si riceve</label><input class="fs-inp" id="fs-g-mat" maxlength="40" value="${escapeHtml(m.materiale_ricezione)}" placeholder="es. Struttura" oninput="fsSetTesto('materiale_ricezione', this.value)"><div class="fs-desc">Nome breve di cosa arriva o rientra: lo leggono gli operatori nel pannello «Ricevi materiale». Se lo lasci vuoto si usa il nome della fase.</div></div>` : ''}
         <div class="fs-row inline"><div><div class="fs-crit-t">Parte da sola alla creazione dell'ordine</div><div class="fs-desc">Utile per le attese di materiale da fuori.</div></div>${fsSwitch('fs-o-auto', m.avvio_automatico, "fsSet('avvio_automatico',this.checked,false)")}</div>
         <div class="fs-row inline"><div><div class="fs-crit-t">Fase CNC</div><div class="fs-desc">Mostra il badge CNC sull'ordine e nell'app.</div></div>${fsSwitch('fs-o-cnc', m.e_cnc, "fsSet('e_cnc',this.checked)")}</div>
         <div class="fs-row inline"><div><div class="fs-crit-t">Opzionale</div><div class="fs-desc">Non si crea da sola: la abiliti tu dall'ordine.</div></div>${fsSwitch('fs-o-opz', m.opzionale, "fsSet('opzionale',this.checked)")}</div>
-        <div class="fs-row inline"><div><div class="fs-crit-t">Spedizione unica</div><div class="fs-desc">Per gli ordini della stessa spedizione la fase è una sola: compare una volta nel piano (con il tempo di un ordine) e, quando la si completa, si chiude per tutti.</div></div>${fsSwitch('fs-o-gs', m.gruppo_spedizione, "fsSet('gruppo_spedizione',this.checked,false)")}</div>
+        ${fsAuto(m) ? '' : `<div class="fs-row inline"><div><div class="fs-crit-t">Spedizione unica</div><div class="fs-desc">Per gli ordini della stessa spedizione la fase è una sola: compare una volta nel piano (con il tempo di un ordine) e, quando la si completa, si chiude per tutti.</div></div>${fsSwitch('fs-o-gs', m.gruppo_spedizione, "fsSet('gruppo_spedizione',this.checked,false)")}</div>`}
         ${fsEster(m) ? '' : `<div class="fs-row inline"><div><div class="fs-crit-t">Fase riempitiva</div><div class="fs-desc">Si può fare in qualunque momento: entra nel piano solo se avanza capacità e non occupa posti dell'ordine.</div></div>${fsSwitch('fs-o-riemp', m.riempitivo, "fsSet('riempitivo',this.checked,false)")}</div>`}
         ${fsEster(m) || !(m.macchine.length || m.piu_pressate) ? '' : `<div class="fs-row inline"><div><div class="fs-crit-t">${escapeHtml(Etichette.pressate.config.casella)}</div><div class="fs-desc">${escapeHtml(Etichette.pressate.config.spiega)}</div>${m.macchine.length ? '' : `<div class="fs-desc" style="color:var(--alert-ink)">${escapeHtml(Etichette.pressate.config.serveMacchina)}</div>`}</div>${fsSwitch('fs-o-pp', m.piu_pressate, "fsSet('piu_pressate',this.checked)")}</div>`}
         ${!fsEster(m) && m.piu_pressate && m.macchine.length ? `<div class="fs-row"><label class="fs-lbl" for="fs-g-pv">${escapeHtml(Etichette.pressate.config.previste)}</label><input class="fs-inp num" id="fs-g-pv" type="number" min="1" max="20" step="1" inputmode="numeric" value="${m.pressate_previste ?? ''}" oninput="fsSetPrevisteNum(this.value)" style="width:100px"><div class="fs-desc">${escapeHtml(Etichette.pressate.config.previsteSpiega)}</div></div>` : ''}
@@ -874,7 +926,7 @@ function fsRenderFlusso() {
             const ko = !fsEster(m) && mm.length && mm.every(x => !fsMacchinaOk(x));
             return `<button class="fs-fnodo ${fsEster(m) ? 'ext' : ''} ${f.id === sel ? 'sel' : ''} ${!vicini || vicini.has(f.id) ? '' : 'dim'}" data-id="${f.id}" onclick="fsEvidenzia(${f.id})" ondblclick="fsApri(${f.id})">
               <span class="t"><span class="fs-mdot ${mc ? '' : 'vuoto'}" style="${mc ? `background:${escapeHtml(mc.colore || '')}` : ''}"></span><span>${fsIdx(f.id) + 1}. ${escapeHtml(m.nome)}</span></span>
-              <span class="m ${ko ? 'ko' : ''}">${fsEster(m) ? Etichette.flusso.esterna(m.tipo_gestione, m.opzionale) : (mm.length ? escapeHtml(mm.map(x => x.nome).join(', ')) + (ko ? ' · fuori uso' : '') : 'Nessuna macchina')}</span>
+              <span class="m ${ko ? 'ko' : ''}">${fsAuto(m) ? escapeHtml(Etichette.faseAutomatica.daDispositivo(fsNomeDispositivo(m))) : fsEster(m) ? escapeHtml(Etichette.flusso.esterna(m.tipo_gestione, m.opzionale)) : (mm.length ? escapeHtml(mm.map(x => x.nome).join(', ')) + (ko ? ' · fuori uso' : '') : 'Nessuna macchina')}${!fsAuto(m) && fsAutomaticaDi(m.id) ? ' · ' + escapeHtml(Etichette.faseAutomatica.apreFinestra) : ''}</span>
             </button>`; }).join('')}</div>`).join('')}
       </div></div>
     </div>`;

@@ -1,4 +1,4 @@
-const CACHE = 'mango-v118';
+const CACHE = 'mango-v119';
 const ASSETS = [
   '/MangoApp/operatore.html',
   '/MangoApp/guida_operatori.html',
@@ -40,6 +40,7 @@ const ASSETS = [
   '/MangoApp/js/responsabile/operatori.js',
   '/MangoApp/js/responsabile/fasi-config.js',
   '/MangoApp/js/responsabile/macchine.js',
+  '/MangoApp/js/responsabile/dispositivi-campo.js',
   '/MangoApp/js/responsabile/ordini-lista.js',
   '/MangoApp/js/responsabile/ordine-dettaglio.js',
   '/MangoApp/js/responsabile/ordine-form.js',

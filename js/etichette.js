@@ -32,8 +32,78 @@ const Etichette = (() => {
   // Motivo per cui una voce è entrata nel piano oltre la capacità (valori del database: piano_giorno_voci.motivo_ingresso)
   const MOTIVI_INGRESSO_PIANO = { stessa_fase: 'Aggiunta perché si sta già facendo la stessa fase' };
   // Tipo di fase (valori del database: standard / conferma_ricezione / spedizione_esterna): [valore, etichetta, spiegazione]
+  // Fase automatica da dispositivo (manipolatore): testi per responsabile, operatore e ufficio
+  const FASE_AUTOMATICA = {
+    tipo: 'automatica_dispositivo', tag: 'Automatica', apreFinestra: 'apre finestra',
+    daDispositivo: nome => 'da dispositivo: ' + nome,
+    dispositivoDisattivato: 'dispositivo disattivato',
+    config: {
+      dispositivo: 'Dispositivo', dispositivoScegli: 'Scegli il dispositivo…', faseApertura: 'Fase che apre la finestra', faseAperturaScegli: 'Scegli la fase…',
+      faseAperturaSpiega: 'Quando l’operatore preme «Inizia» su questa fase si apre la finestra in cui il dispositivo può completare la fase automatica.',
+      finestra: 'Durata della finestra (minuti)', carico: 'Carico minimo (kg)', caricoSpiega: 'Sotto questo carico il sollevamento viene registrato ma non completa la fase.',
+      blocca: 'Blocca la chiusura dell’ordine', bloccaSpiega: 'Spento: se il sollevamento non viene rilevato l’ordine si chiude lo stesso (la fase resta «non rilevata»). Acceso: l’ordine aspetta che la fase sia completata dal dispositivo o dal responsabile.',
+      nessunDispositivo: 'Nessun dispositivo di campo: creane uno in Macchine ▸ Dispositivi di campo.',
+      tempoSpiega: 'Fase automatica: non occupa tempo in officina e non conta nella capacità del giorno.',
+      macchineSpiega: 'Fase automatica: nessuna macchina.',
+      errori: {
+        automatica_dati_mancanti: 'Scegli il dispositivo, la fase che apre la finestra, la durata e il carico minimo.',
+        automatica_apertura_duplicata: 'Questa fase apre già la finestra di un’altra fase automatica.',
+        automatica_apertura_non_standard: 'La fase che apre la finestra deve essere una fase interna normale (né automatica né esterna).',
+        automatica_e_fase_di_apertura: 'Questa fase apre la finestra di un’altra fase automatica: non può diventare automatica.',
+        fase_apertura_non_standard: 'Questa fase apre la finestra di una fase automatica: deve restare una fase interna.',
+        fase_apertura_non_valida: 'La fase che apre la finestra non è valida.',
+        dispositivo_non_valido: 'Il dispositivo scelto non è valido.',
+        automatica_gruppo_non_ammesso: 'Una fase automatica non può avere la spedizione unica.',
+        automatica_opzione_non_ammessa: 'Una fase automatica non può essere riempitiva, a più pressate, abbinata o avere il tempo dalle lavorazioni CNC.',
+        dipendenza_da_fase_automatica: 'Nessuna fase può aspettare una fase automatica che non blocca la chiusura dell’ordine: accendi «Blocca la chiusura dell’ordine» o togli la dipendenza.',
+        blocca_chiusura_non_valido: 'Il blocco della chiusura si imposta solo sulle fasi automatiche.',
+        finestra_minuti_non_valida: 'La durata della finestra deve essere tra 1 e 120 minuti.',
+        carico_minimo_non_valido: 'Il carico minimo deve essere tra 0 e 1000 kg.',
+      },
+    },
+    // Fase automatica nel dettaglio ordine del responsabile
+    origine: { dispositivo: 'dal manipolatore', manuale_responsabile: 'chiusa a mano', non_rilevato: 'non rilevata' },
+    chiudiAMano: 'Chiudi a mano', chiudiAManoConferma: 'Chiudere a mano questa fase? Verrà segnata come completata dal responsabile, senza il dato del manipolatore.',
+    // Operatore: card e messaggi (mai tempi, durate, scadenze)
+    operatore: {
+      siCompleta: 'Si completa dal manipolatore', inAttesa: 'In attesa del sollevamento', premiInizia: nome => 'Premi Inizia su ' + nome,
+      rilevata: kg => 'Rilevata' + (kg != null && kg !== '' ? ' · ' + kg + ' kg' : ''), chiusaResp: 'Chiusa dal responsabile', nonRilevata: 'Non rilevata',
+      nonRilevataFinora: 'Non rilevata finora: la chiude il responsabile', dispositivoOff: 'Il manipolatore è disattivato: la fase la chiude il responsabile',
+      inizia: 'Inizia', riapri: 'Riapri finestra', annulla: 'Annulla inizio', completata: '✓ Completata',
+      annullaConferma: 'Annullare l’inizio? La finestra del manipolatore si chiude.',
+      serveConnessione: 'Serve la connessione: la finestra del manipolatore parte dal server',
+      iniziata: 'Finestra del manipolatore aperta', annullata: 'Inizio annullato', segnoApre: 'Apre la finestra del manipolatore',
+      errori: {
+        sessione_non_valida: 'Sessione scaduta, effettua di nuovo l’accesso', accesso_sola_lettura: 'Account in sola lettura, operazione non consentita',
+        fase_non_trovata: 'Fase non trovata', ordine_non_trovato: 'Ordine non trovato', ordine_non_aperto: 'L’ordine non è aperto',
+        stato_non_valido: 'La fase non è nello stato giusto',
+        inizio_non_previsto: 'Questa fase non apre nessuna finestra, oppure il sollevamento è già stato chiuso',
+        dispositivo_non_attivo: 'Il manipolatore è disattivato: contatta il responsabile',
+        si_completa_dal_manipolatore: 'Questa fase si completa dal manipolatore',
+      },
+    },
+    // Dispositivi di campo (responsabile)
+    dispositivi: {
+      titolo: 'Dispositivi di campo', spiega: 'Macchine che comunicano da sole con l’app, come il manipolatore. Ognuno ha un codice (non è un PIN) che si copia nello script del dispositivo.',
+      nuovo: 'Nuovo dispositivo', modifica: 'Modifica', salva: 'Salva', annulla: 'Annulla', nessuno: 'Nessun dispositivo di campo.',
+      mai: 'mai', contatto: 'ultimo contatto', contatore: 'ultimo contatore', finestra: 'finestra aperta', nessunaFinestra: 'nessuna finestra aperta',
+      silenzio: min => 'Attivo ma senza contatti da più di ' + min + ' minuti', attivo: 'Attivo', disattivo: 'Disattivato',
+      nome: 'Nome', tolleranza: 'Tolleranza (secondi)', soglia: 'Soglia di azzeramento del contatore', soglia2: 'Quando il contatore scende di più di questo valore si considera azzerato.',
+      generaCodice: 'Genera codice', codicePresente: 'Codice generato il ', codiceAssente: 'Nessun codice generato',
+      generaConferma: 'Generare un nuovo codice? Il codice attuale smette di funzionare subito e lo script del dispositivo va aggiornato.',
+      codiceTitolo: 'Codice del dispositivo', codiceAvviso: 'Copialo ora: non sarà più mostrato.', copia: 'Copia', copiato: 'Codice copiato', chiudi: 'Chiudi',
+      log: 'Eventi del dispositivo', logQuanti: 'Ultimi', logEsito: 'Esito', logTutti: 'Tutti gli esiti', logVuoto: 'Nessun evento.',
+      colonne: { quando: 'Data e ora', contatore: 'Contatore', carico: 'Carico (kg)', esito: 'Esito', ordine: 'Ordine', fase: 'Fase' },
+      esiti: { assegnato: 'Assegnato', assegnato_multiplo: 'Assegnato (più sollevamenti)', sotto_soglia: 'Sotto soglia', nessuna_finestra: 'Nessuna finestra aperta',
+               duplicato: 'Duplicato', fuori_ordine: 'Fuori ordine', contatore_indietro: 'Contatore azzerato', fase_gia_chiusa: 'Fase già chiusa', non_completabile: 'Non completabile' },
+      errori: { nome_duplicato: 'Esiste già un dispositivo con questo nome.', nome_obbligatorio: 'Il nome è obbligatorio.', nome_non_valido: 'Il nome deve avere da 1 a 60 caratteri.', soglia_non_valida: 'La soglia di azzeramento deve essere un numero intero da 1 a 100000.', tolleranza_non_valida: 'La tolleranza deve essere un numero intero di secondi da 0 a 120.', dispositivo_non_trovato: 'Dispositivo non trovato.', dati_non_validi: 'Dati non validi.', non_autorizzato: 'Operazione non consentita.' },
+    },
+    // Tempi delle fasi che aprono una finestra (KPI)
+    kpi: { titolo: 'Fasi con avvio', spiega: 'Tempo tra «Inizia» e il completamento, per fase e macchina. Solo le fasi con un Inizia registrato; mai per persona.', fase: 'Fase', macchina: 'Macchina', numero: 'Numero', mediana: 'Mediana (min)', media: 'Media (min)', vuoto: 'Nessun dato nel periodo.' },
+  };
   const TIPI_GESTIONE_FASE = [
     ['standard', 'Interna', 'Lavorata in officina. Usa tempo e macchine.'],
+    ['automatica_dispositivo', 'Automatica (dispositivo)', 'Si completa da sola quando il dispositivo rileva un sollevamento nella finestra aperta da un’altra fase.'],
     ['conferma_ricezione', 'Arrivo da fuori', 'Si chiude confermando che il materiale è arrivato.'],
     ['spedizione_esterna', 'Lavorazione esterna', 'Si spedisce e si conferma il rientro. Non usa tempo interno.'],
   ];
@@ -479,7 +549,7 @@ const Etichette = (() => {
     prioritaEtichetta, prioritaPeso, confrontaPriorita, colorePriorita, badgePriorita,
     statoOrdine: (s, o) => o ? statoOrdineConsegna(s, o) : (STATI_ORDINE[s] || vuoto(s)),
     modalitaConsegna, modalitaConsegnaElenco: () => MODALITA_CONSEGNA, quandoSiFa: () => QUANDO_SI_FA, quandoSiFaTesti: QUANDO_SI_FA_TESTI, ritiraOrdine, attesaSpedizione, statoAvviso, consegnaOperatore,
-    erroreSalvataggio: ERRORE_SALVATAGGIO, presa: PRESA, pressate: PRESSATE, fasiAbbinate: FASI_ABBINATE, azioneSpedito, suggerimentoConsegna: SUGGERIMENTO_CONSEGNA, consegnaTesti: CONSEGNA_TESTI, spedizioneUnica: SPEDIZIONE_UNICA, avvisi: AVVISI, dataOraBreve: _dataOra,
+    erroreSalvataggio: ERRORE_SALVATAGGIO, presa: PRESA, pressate: PRESSATE, fasiAbbinate: FASI_ABBINATE, faseAutomatica: FASE_AUTOMATICA, azioneSpedito, suggerimentoConsegna: SUGGERIMENTO_CONSEGNA, consegnaTesti: CONSEGNA_TESTI, spedizioneUnica: SPEDIZIONE_UNICA, avvisi: AVVISI, dataOraBreve: _dataOra,
     statoFase: s => STATI_FASE[s] || vuoto(s),
     statoRichiesta: s => STATI_RICHIESTA[s] || vuoto(s),
     azioneLog: a => AZIONI_LOG[a] || a,

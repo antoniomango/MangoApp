@@ -15,6 +15,7 @@ assenze.js
 operatori.js
 fasi-config.js
 macchine.js
+dispositivi-campo.js
 ordini-lista.js
 ordine-dettaglio.js
 ordine-form.js

@@ -182,6 +182,7 @@ async function renderDettaglioOrdine(id) {
         <div class="fase-num">${f.numero}. ${f.stato === 'completata' ? '✓' : f.stato === 'in_corso' ? '<i data-ic="play"></i>' : '○'}</div>
         <div class="fase-nome">${escapeHtml(f.nome)}</div>
         <div class="fase-op">${opNome || (f.stato === 'disponibile' ? 'Disponibile' : '')}</div>
+        ${faseAutomaticaRiga(f) ? `<div class="fase-op" style="margin-top:4px">${escapeHtml(faseAutomaticaRiga(f))}</div>` : ''}
         ${f.piu_pressate ? `<div class="fase-op" style="margin-top:4px">${escapeHtml(Etichette.pressate.fatteResp(f.pressate_fatte || 0, f.pressate_previste))}</div>` : ''}
         ${f.completata_il ? `<div class="fase-op" style="margin-top:4px;font-size:10px">${formatDateTime(f.completata_il)}</div>` : ''}
       </div>`;
@@ -322,6 +323,17 @@ async function caricaGalleriaOrdineDettaglio(ordineId, mappaNomiFasi) {
     </div>`).join('')}</div>`;
 }
 
+// Fase automatica da dispositivo: stato, carico rilevato e origine del completamento (solo responsabile)
+function faseAutomaticaRiga(f) {
+  const fm = f.fase_id ? fasi.find(x => x.id === f.fase_id) : null;
+  if (!fm || fm.tipo_gestione !== Etichette.faseAutomatica.tipo) return '';
+  const A = Etichette.faseAutomatica;
+  const parti = [A.tag];
+  if (f.carico_kg != null) parti.push(f.carico_kg + ' kg');
+  if (f.completamento_origine) parti.push(A.origine[f.completamento_origine] || f.completamento_origine);
+  return parti.join(' · ');
+}
+
 async function openFaseDetail(ordFaseId, ordineId, readonly) {
   const [{ data: f }, { data: opMulti }] = await Promise.all([
     sb.from('ordine_fasi').select('*, users!operatore_id(nome, cognome)').eq('id', ordFaseId).single(),
@@ -345,6 +357,7 @@ async function openFaseDetail(ordFaseId, ordineId, readonly) {
   document.getElementById('modal-fase-body').innerHTML = `
     <div class="fase-detail">
       <span class="badge badge-${f.stato}">${statoFaseLabel(f.stato)}</span>
+      ${faseAutomaticaRiga(f) ? `<div class="fs-desc" style="margin:8px 0">${escapeHtml(faseAutomaticaRiga(f))}</div>` : ''}
       ${f.note_responsabile ? `<div class="note-box"><strong>Note Responsabile</strong>${escapeHtml(f.note_responsabile)}</div>` : ''}
       ${f.note_operatore ? `<div class="note-box"><strong>Note Operatore</strong>${escapeHtml(f.note_operatore)}</div>` : ''}
       <div style="margin-bottom:12px">
@@ -378,7 +391,7 @@ async function openFaseDetail(ordFaseId, ordineId, readonly) {
       <button class="btn btn-secondary" onclick="closeModal('modal-fase')">Annulla</button>
       ${puoRimuovere ? `<button class="btn btn-alert" onclick="eliminaFaseCustomOrdine('${ordFaseId}','${ordineId}','${escapeJsAttr(nomeFase)}')"><i data-ic="cestino"></i> Rimuovi fase</button>` : ''}
       ${f.stato === 'in_corso' ? `<button class="btn btn-secondary" onclick="openRiassegnaModal('${ordFaseId}')">Riassegna</button>` : ''}
-      ${puoCompletare ? `<button class="btn btn-ok" onclick="apriCompletaFase('${ordFaseId}','${ordineId}')">✓ Segna completata</button>` : ''}
+      ${puoCompletare ? `<button class="btn btn-ok" onclick="apriCompletaFase('${ordFaseId}','${ordineId}')">${faseAutomaticaRiga(f) ? escapeHtml(Etichette.faseAutomatica.chiudiAMano) : '✓ Segna completata'}</button>` : ''}
       ${puoRiaprire   ? `<button class="btn btn-secondary" onclick="riaprieFaseResp('${ordFaseId}','${ordineId}')">↩ Riapri fase</button>` : ''}
       ${!puoRimuovere ? `<button class="btn btn-primary" onclick="salvaNoteResp('${ordFaseId}', '${ordineId}')">Salva Note</button>` : ''}
     `;
@@ -435,6 +448,9 @@ async function confermaConclusioneFase() {
   const ordFaseId = m.dataset.ordFaseId;
   const ordineId  = m.dataset.ordineId;
   const note = document.getElementById('cf-note').value.trim() || null;
+  const _of = ordFaseId ? (await sb.from('ordine_fasi').select('fase_id').eq('id', ordFaseId).maybeSingle()).data : null;
+  const _fm = _of?.fase_id ? fasi.find(x => x.id === _of.fase_id) : null;
+  if (_fm && _fm.tipo_gestione === Etichette.faseAutomatica.tipo && !confirm(Etichette.faseAutomatica.chiudiAManoConferma)) return;
 
   const selezionati = [...document.querySelectorAll('#cf-operatori-list input[type=checkbox]:checked')]
     .map(cb => cb.value);

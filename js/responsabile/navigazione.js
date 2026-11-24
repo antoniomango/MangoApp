@@ -151,6 +151,7 @@ function showSection(name) {
   else if (name === 'oggi') loadOggiResp();
   else if (name === 'piano-config') loadPianoConfig();
   else if (name === 'macchine-config') fmApriSezione();
+  else if (name === 'dispositivi-campo') dcApriSezione();
   else if (name === 'fasi-extra-config') { loadCatalogoFasiExtra(); }
   else if (name === 'notif-config') { loadNotifDestinatari(); }
   else if (name === 'sistema-config') { loadSistemaConfig(); }

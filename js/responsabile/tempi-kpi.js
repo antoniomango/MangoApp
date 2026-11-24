@@ -329,8 +329,27 @@ async function fetchAllRows(queryBuilderFn, pageSize = 1000) {
   return rows;
 }
 
+// Fasi che aprono una finestra del dispositivo: mediana e media del tempo tra Inizia e completamento, per fase e macchina (mai per persona)
+async function loadTempiFasiApertura() {
+  const el = document.getElementById('kpi-fasi-avvio'); if (!el) return;
+  const K = Etichette.faseAutomatica.kpi;
+  const giorni = parseInt(document.getElementById('kpi-periodo').value);
+  const iso = d => d.toISOString().slice(0, 10);
+  const a = new Date(), da = giorni > 0 ? new Date(Date.now() - giorni * 86400000) : new Date('2020-01-01');
+  const { data, error } = await sb.rpc('tempi_fasi_apertura', { p_responsabile_id: currentUserRow.id, p_session_token: null, p_da: iso(da), p_a: iso(a) });
+  if (error || !data?.ok) { el.hidden = true; return; }
+  const righe = data.righe || [];
+  if (!righe.length) { el.hidden = true; return; }   // nessuna fase con avvio configurata o nessun dato: la scheda non compare
+  el.hidden = false;
+  el.innerHTML = `<div class="fs-card" style="padding:14px;margin-bottom:16px"><h3 style="margin:0 0 4px">${escapeHtml(K.titolo)}</h3><div class="fs-desc" style="margin:0 0 10px">${escapeHtml(K.spiega)}</div>
+    <div style="overflow-x:auto"><table class="fs-tempi-tab" style="width:100%"><thead><tr><th>${escapeHtml(K.fase)}</th><th>${escapeHtml(K.macchina)}</th><th>${escapeHtml(K.numero)}</th><th>${escapeHtml(K.mediana)}</th><th>${escapeHtml(K.media)}</th></tr></thead><tbody>
+    ${righe.map(r => `<tr><td>${escapeHtml(r.fase_nome)}</td><td>${escapeHtml(r.macchina || '—')}</td><td class="v">${escapeHtml(String(r.numero))}</td><td class="v">${escapeHtml(String(r.mediana_minuti))}</td><td class="v">${escapeHtml(String(r.media_minuti))}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+}
+
 async function loadKpi() {
   mostraNotaTempiKpi();
+  loadTempiFasiApertura();
   loadConfrontoTempiRiferimento();   // indipendente dal periodo selezionato (ha la sua data)
   loadAffidabilitaPrevisioni();      // idem: ha il suo intervallo
   const giorni = parseInt(document.getElementById('kpi-periodo').value);

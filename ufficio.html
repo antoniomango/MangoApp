@@ -461,7 +461,7 @@ async function caricaMeta() {
   // fasi e macro fasi: lette con la sessione (RPC catalogo_operatore)
   const { data: cat } = await sb.rpc('catalogo_operatore', { p_user_id: currentUser?.id, p_session_token: sessionToken });
   const macro = (cat?.ok ? cat.macro_fasi : []) || [];
-  const fasi = (cat?.ok ? cat.fasi : []).map(f => ({ id: f.id, nome: f.nome, posizione: f.posizione, macro_fase_id: f.macro_fase_id })).sort((a, b) => (a.posizione - b.posizione) || (a.id - b.id));
+  const fasi = (cat?.ok ? cat.fasi : []).map(f => ({ id: f.id, nome: f.nome, posizione: f.posizione, macro_fase_id: f.macro_fase_id, tipo_gestione: f.tipo_gestione })).sort((a, b) => (a.posizione - b.posizione) || (a.id - b.id));
 
   fasiNomi = {};
   (fasi || []).forEach(f => { fasiNomi[f.id] = f; });
@@ -925,8 +925,10 @@ function faseRowHtml(f) {
   const nome = info?.nome || `Fase ${f.fase_id}`;
   const badgeClass = `badge badge-fase-${f.stato}`;
   const statoLabel = Etichette.statoFase(f.stato);
+  // fase automatica da dispositivo: solo stato e segno "automatica" (nessun pulsante, nessun tempo)
+  const auto = info?.tipo_gestione === Etichette.faseAutomatica.tipo;
   return `<div class="fase-row">
-    <span class="fase-nome">${escapeHtml(nome)}</span>
+    <span class="fase-nome">${escapeHtml(nome)}${auto ? ` <small style="color:var(--muted)">· ${escapeHtml(Etichette.faseAutomatica.tag.toLowerCase())}</small>` : ''}</span>
     <span class="${badgeClass}">${statoLabel}</span>
   </div>`;
 }

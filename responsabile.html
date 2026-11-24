@@ -131,6 +131,7 @@
         <button type="button" class="nav-gruppo-testa" aria-expanded="false" aria-controls="ng-cfg-risorse" onclick="navToggle('cfg-risorse')"><span>Risorse e calendario</span><span class="nav-chevron"><i data-ic="chevron"></i></span></button>
         <div class="nav-gruppo-corpo" id="ng-cfg-risorse"><div class="nav-gruppo-interno">
           <div class="nav-item" role="link" tabindex="0" onclick="showSection('macchine-config')" id="nav-macchine-config"><span class="icon"><i data-ic="chiave"></i></span> Macchine</div>
+          <div class="nav-item" role="link" tabindex="0" onclick="showSection('dispositivi-campo')" id="nav-dispositivi-campo"><span class="icon"><i data-ic="chiave"></i></span> Dispositivi di campo</div>
           <div class="nav-item" role="link" tabindex="0" onclick="showSection('orario-config')" id="nav-orario-config"><span class="icon"><i data-ic="orologio"></i></span> Orario di lavoro</div>
           <div class="nav-item" role="link" tabindex="0" onclick="showSection('priorita-config')" id="nav-priorita-config"><span class="icon"><i data-ic="fulmine"></i></span> Priorità ordini</div>
           <div class="nav-item" role="link" tabindex="0" onclick="showSection('piano-config')" id="nav-piano-config"><span class="icon"><i data-ic="bersaglio"></i></span> Piano del giorno</div>
@@ -641,6 +642,7 @@
           </div>
 
           <!-- Lista schede salvate -->
+          <div id="kpi-fasi-avvio" hidden></div>
           <div id="kpi-schede"></div>
         </div>
 
@@ -937,6 +939,12 @@
         <div class="card" style="padding:4px 20px 20px">
           <div id="materiali-config-list">Caricamento…</div>
         </div>
+      </section>
+
+      <!-- DISPOSITIVI DI CAMPO -->
+      <section class="section" id="sec-dispositivi-campo">
+        <div class="page-hdr"><div><h1>Dispositivi di campo</h1><div class="sub">Manipolatore e altre macchine che parlano da sole con l'app: stato, codice e eventi ricevuti.</div></div></div>
+        <div id="dc-contenuto"></div>
       </section>
 
       <!-- MACCHINE CONFIG -->
@@ -1849,6 +1857,7 @@
 <script src="js/responsabile/operatori.js"></script>
 <script src="js/responsabile/fasi-config.js"></script>
 <script src="js/responsabile/macchine.js"></script>
+<script src="js/responsabile/dispositivi-campo.js"></script>
 <script src="js/responsabile/ordini-lista.js"></script>
 <script src="js/responsabile/ordine-dettaglio.js"></script>
 <script src="js/responsabile/ordine-form.js"></script>

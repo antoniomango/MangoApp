@@ -1615,7 +1615,8 @@ async function renderOrdineDetail(ordineId) {
     el.innerHTML = ordFasi.map(f => {
       const isCustom = !f.fase_id;
       const nomeFase = escapeHtml(isCustom ? (f.nome_custom || 'Fase extra') : getFaseNome(f.fase_id, fasi));
-      const est = !isCustom && isEsterna(f.fase_id);
+      const auto = !isCustom && faseEAutomatica(f.fase_id);
+      const est = !isCustom && !auto && isEsterna(f.fase_id);
       const cnc = !isCustom && isCNC(f.fase_id);
       // Calcola se fase è bloccata da dipendenze non soddisfatte (tiene conto della soglia quantità)
       const faseMaster = !isCustom && fasi.find(fm => fm.id === f.fase_id);
@@ -1635,7 +1636,8 @@ async function renderOrdineDetail(ordineId) {
           .filter(depId => { const d = ordFasi.find(of => of.fase_id === depId); return d && _depNonSoddisfatta(depId, d); })
           .map(depId => { const fm = fasi.find(fm => fm.id === depId); return escapeHtml(fm ? fm.nome : depId); });
         subLabel = 'Attende: ' + blockantiNomi.join(', ');
-      } else if (f.stato === 'completata') subLabel = 'Completata';
+      } else if (f.stato === 'completata') subLabel = auto ? faseAutomaticaSintesi(f) : 'Completata';
+      else if (auto) subLabel = faseAutomaticaSintesi(f);
       else if (est) subLabel = f.stato === 'in_attesa' ? 'In attesa dal fornitore' : 'Fase esterna';
       else subLabel = 'Da fare';
       return `<div class="fase-row ${f.stato}" onclick="openFaseDetail('${f.id}', '${ordineId}')">
@@ -1902,7 +1904,9 @@ async function renderFaseDetail(ordFaseId, ordineId) {
   }
 
   // AZIONE BOX — gli operatori non prendono in carico, non mettono in pausa, non riprendono: segnano solo "Completata"
-  if (solaLettura) {
+  const faseAuto = !isCustom && tipoGestione === Etichette.faseAutomatica.tipo;
+  if (faseAuto) bodyHtml += await faseAutomaticaBox(f, ordineId);
+  if (solaLettura || (faseAuto && f.stato !== 'completata')) {
     // nessuna azione
   } else if (f.stato === 'disponibile' && !sospeso && tipoGestione === 'spedizione_esterna') {
     bodyHtml += `
@@ -1992,6 +1996,7 @@ const ERRORI_COMPLETAMENTO = {
   tempo_scaduto: 'Non si può più annullare: chiedi al responsabile',
   non_completata: 'La fase non risulta completata',
   ordine_spedito: 'L\'ordine è già spedito',
+  si_completa_dal_manipolatore: Etichette.faseAutomatica.operatore.errori.si_completa_dal_manipolatore,
 };
 const erroreCompletamento = (data, error) => ERRORI_COMPLETAMENTO[data?.errore] || data?.errore || (error ? msgErr(error) : 'Operazione non riuscita');
 
@@ -2007,7 +2012,82 @@ async function pezziFase(ordFaseId, ordineId, azione) {
 
 // Pulsante di completamento: uguale per tutte le fasi. Nessun tempo né ora.
 function bottoniCompleta(f, ordFaseId, ordineId, aPezzi) {
-  return `<button class="btn btn-ok btn-completa-fase" style="margin-top:14px" onclick="completaFase('${ordFaseId}', '${ordineId}')">${escapeHtml('✓ ' + (aPezzi ? 'Completata (tutti i pezzi)' : 'Completata'))}</button>`;
+  const testo = escapeHtml('✓ ' + (aPezzi ? 'Completata (tutti i pezzi)' : 'Completata'));
+  if (!faseApreFinestra(f.fase_id) || !['disponibile', 'in_corso'].includes(f.stato)) {
+    return `<button class="btn btn-ok btn-completa-fase" style="margin-top:14px" onclick="completaFase('${ordFaseId}', '${ordineId}')">${testo}</button>`;
+  }
+  // fase che apre la finestra del manipolatore: Inizia (principale) e Completata; se già iniziata anche Riapri finestra e Annulla inizio
+  const O = Etichette.faseAutomatica.operatore;
+  const bCompleta = (cls) => cls === 'ok'
+    ? `<button class="btn btn-ok btn-completa-fase" onclick="completaFase('${escapeJsAttr(ordFaseId)}', '${escapeJsAttr(ordineId)}')">${testo}</button>`
+    : `<button class="btn btn-secondary btn-completa-fase" onclick="completaFase('${escapeJsAttr(ordFaseId)}', '${escapeJsAttr(ordineId)}')">${testo}</button>`;
+  const bFin = (tipo, etichetta, primario) => `<button class="${primario ? 'btn btn-primary' : 'btn btn-secondary'}" onclick="faseFinestra('${escapeJsAttr(tipo)}','${escapeJsAttr(ordFaseId)}','${escapeJsAttr(ordineId)}')">${escapeHtml(etichetta)}</button>`;
+  return `<div style="display:flex;flex-direction:column;gap:8px;margin-top:14px">
+    ${f.stato === 'disponibile'
+      ? bFin('inizia', O.inizia, true) + bCompleta('secondary')
+      : bCompleta('ok') + bFin('inizia', O.riapri, false) + bFin('annulla', O.annulla, false)}
+  </div>`;
+}
+
+// ── Fase automatica da dispositivo (manipolatore): all'operatore mai tempi, durate, scadenze né nomi ──
+const faseCat = (id) => fasi.find(x => x.id === id);
+const faseEAutomatica = (faseId) => !!faseId && faseCat(faseId)?.tipo_gestione === Etichette.faseAutomatica.tipo;
+const faseApreFinestra = (faseId) => !!faseId && !!faseCat(faseId)?.apre_finestra;
+const erroreFinestra = (data, error) => Etichette.faseAutomatica.operatore.errori[data?.errore] || (error ? msgErr(error) : 'Operazione non riuscita');
+
+// Inizia / Riapri finestra / Annulla inizio: solo online (la finestra parte dal server), niente coda offline. Restituisce true se riuscita.
+async function eseguiFinestra(tipo, ordFaseId) {
+  const O = Etichette.faseAutomatica.operatore;
+  if (!isOnline) { toast(O.serveConnessione, 'err'); return false; }
+  if (tipo === 'annulla' && !confirm(O.annullaConferma)) return false;
+  const par = { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_fase_id: ordFaseId };
+  const { data, error } = tipo === 'annulla' ? await sb.rpc('annulla_inizio_fase', par) : await sb.rpc('inizia_fase', par);
+  if (error || !data?.ok) { toast(erroreFinestra(data, error), 'err'); return false; }
+  toast(tipo === 'annulla' ? O.annullata : O.iniziata, 'ok');
+  return true;
+}
+async function faseFinestra(tipo, ordFaseId, ordineId) {
+  if (!(await eseguiFinestra(tipo, ordFaseId))) return;
+  try { await renderFaseDetail(ordFaseId, ordineId); } catch (e) { console.warn('renderFaseDetail', e); }
+  try { await renderOrdineDetail(ordineId); } catch (e) { console.warn('renderOrdineDetail', e); }
+  loadOggi().catch(() => {});
+}
+async function oggiFinestra(voceId, tipo) {
+  const v = oggiTrovaVoce(voceId); if (!v || !v.ordine_fase_id) return;
+  if (!isOnline) { toast(Etichette.faseAutomatica.operatore.serveConnessione, 'err'); return; }
+  await oggiEsegui(async () => { await eseguiFinestra(tipo, v.ordine_fase_id); }, [voceId]);
+}
+
+// testo di stato sintetico (elenco fasi dell'ordine): nessun tempo
+function faseAutomaticaSintesi(f) {
+  const O = Etichette.faseAutomatica.operatore;
+  if (f.stato === 'completata') {
+    if (f.completamento_origine === 'manuale_responsabile') return O.chiusaResp;
+    if (f.completamento_origine === 'non_rilevato') return O.nonRilevata;
+    return f.completamento_origine === 'dispositivo' ? O.rilevata(f.carico_kg) : 'Completata';
+  }
+  return f.finestra_aperta ? O.inAttesa : O.siCompleta;
+}
+// riquadro del dettaglio fase automatica: stato e testo, mai pulsanti di completamento
+async function faseAutomaticaBox(f, ordineId) {
+  const O = Etichette.faseAutomatica.operatore;
+  let stato;
+  if (f.stato === 'completata') stato = faseAutomaticaSintesi(f);
+  else if (f.finestra_aperta) stato = O.inAttesa;
+  else {
+    const cat = faseCat(f.fase_id) || {};
+    if (cat.dispositivo_attivo === false) stato = O.dispositivoOff;
+    else {
+      let lista = [];
+      try {
+        if (isOnline) { const { data } = await sb.rpc('dettaglio_ordine_fasi', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_id: ordineId }); lista = data?.ok ? (data.dati.ordine_fasi || []) : []; }
+        else lista = await cacheGet('fasi-' + ordineId) || [];
+      } catch (e) { console.warn('fase di apertura', e); }
+      const ap = lista.find(x => x.fase_id === cat.fase_apertura_finestra_id);
+      stato = ap && ['completata', 'non_applicabile'].includes(ap.stato) ? O.nonRilevataFinora : O.premiInizia(cat.fase_apertura_nome || getFaseNome(cat.fase_apertura_finestra_id, fasi));
+    }
+  }
+  return `<div class="azione-box" style="border-color:var(--ok-line)"><h4>${escapeHtml(O.siCompleta)}</h4><p style="font-size:14px;margin:0"><strong>${escapeHtml(stato)}</strong></p></div>`;
 }
 
 // Spedizione unica: la chiusura vale sempre per tutti gli ordini del gruppo (lo garantisce il database).
@@ -2675,7 +2755,7 @@ function oggiApriGruppo(chiave) { oggiFaseAperta = chiave; oggiSelezione.clear()
 function oggiTornaElenco() { oggiFaseAperta = null; oggiSelezione.clear(); oggiModoMultiplo = false; renderOggi(); }
 
 const oggiAzionabile = (v) => !v.fatta && !(v.bloccata_da && v.bloccata_da.length);
-const oggiSelezionabile = (v) => oggiAzionabile(v) && !v.esterna && !v.piu_pressate;     // le spedizioni e le fasi con più pressate (domanda per ognuna) si segnano una per una
+const oggiSelezionabile = (v) => oggiAzionabile(v) && !v.esterna && !v.piu_pressate && !faseEAutomatica(v.fase_id);     // le spedizioni e le fasi con più pressate (domanda per ognuna) si segnano una per una
 
 function renderOggiGruppo(g, solaLettura) {
   const azionabili = g.voci.filter(oggiSelezionabile);
@@ -2707,6 +2787,13 @@ function renderOggiVoce(v, solaLettura) {
       if (v.annullabile) azioni = `<button class="btn btn-secondary"${occ} onclick="oggiAnnulla('${escapeJsAttr(v.voce_id)}')">↩ Annulla</button>`;
     } else if (bloccata) {
       azioni = '';
+    } else if (faseApreFinestra(v.fase_id) && v.ordine_fase_id && ['disponibile', 'in_corso'].includes(v.stato_fase) && !v.pezzi && !v.esterna) {
+      const O = Etichette.faseAutomatica.operatore;
+      const bFin = (tipo, etichetta, primario, mostraPuntini) => `<button class="${primario ? 'btn btn-primary' : 'btn btn-secondary'}"${occ} onclick="oggiFinestra('${escapeJsAttr(v.voce_id)}','${escapeJsAttr(tipo)}')">${mostraPuntini && occ ? '…' : escapeHtml(etichetta)}</button>`;
+      const bCompleta = (primario) => `<button class="${primario ? 'btn btn-ok' : 'btn btn-secondary'}"${occ} onclick="oggiCompleta('${escapeJsAttr(v.voce_id)}')">${escapeHtml(O.completata)}</button>`;
+      azioni = v.stato_fase === 'disponibile'
+        ? bFin('inizia', O.inizia, true, true) + bCompleta(false)
+        : bCompleta(true) + bFin('inizia', O.riapri, false, false) + bFin('annulla', O.annulla, false, false);
     } else if (v.esterna) {
       azioni = `<button class="btn btn-primary"${occ} onclick="oggiEsterna('${escapeJsAttr(v.voce_id)}','spedizione')"><i data-ic="invio"></i> ${occ ? '…' : 'Segna spedita'}</button>`;
     } else if (v.pezzi) {
