@@ -1008,13 +1008,14 @@ function mostraAnteprimaFasi(soggetto, data, conferma) {
   const gruppi = [
     { titolo: 'Attivata', nota: '', sel: c => c.a !== 'non_applicabile' },
     { titolo: 'Saltata', nota: ' (fasi successive già completate)', sel: c => c.motivo === 'fasi_successive_completate' },
+    { titolo: Etichette.faseAutomatica.anteprima.nonRilevabile, nota: Etichette.faseAutomatica.anteprima.notaNonRilevabile, sel: c => c.motivo === 'non_rilevabile_ordine_avanzato' },
     { titolo: 'Disattivata', nota: '', sel: c => c.a === 'non_applicabile' && !c.motivo },
   ].map(g => {
     const codici = [...new Set(cambi.filter(g.sel).map(c => c.codice || ''))];
     return codici.length ? `<li><b>${g.titolo}</b>${g.nota} su <b>${codici.length}</b> ${codici.length === 1 ? 'ordine' : 'ordini'}: ${codici.map(escapeHtml).join(', ')}</li>` : '';
   }).join('');
   const righe = cambi.map(c => `<tr><td>${escapeHtml(c.codice || '')}</td><td>${escapeHtml(c.fase_nome || '')}</td>
-    <td>${escapeHtml(etichettaStatoFase(c.da))} → <b>${escapeHtml(etichettaStatoFase(c.a))}</b>${c.motivo ? ' <em>(saltata)</em>' : ''}</td></tr>`).join('');
+    <td>${escapeHtml(etichettaStatoFase(c.da))} → <b>${escapeHtml(etichettaStatoFase(c.a))}</b>${c.motivo === 'non_rilevabile_ordine_avanzato' ? ` <em>(${escapeHtml(Etichette.faseAutomatica.anteprima.rigaNonRilevabile)})</em>` : c.motivo ? ' <em>(saltata)</em>' : ''}</td></tr>`).join('');
   document.getElementById('anteprima-fasi-body').innerHTML = `
     <p style="font-size:14px;margin-bottom:6px">${escapeHtml(soggetto)} cambia <b>${data.n_cambi}</b> ${data.n_cambi === 1 ? 'fase' : 'fasi'} su <b>${data.n_ordini}</b> ${data.n_ordini === 1 ? 'ordine aperto' : 'ordini aperti'}.
     Le fasi già iniziate o completate e gli ordini spediti non vengono toccati.</p>

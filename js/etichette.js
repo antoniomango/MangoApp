@@ -37,6 +37,7 @@ const Etichette = (() => {
     tipo: 'automatica_dispositivo', tag: 'Automatica', apreFinestra: 'apre finestra',
     daDispositivo: nome => 'da dispositivo: ' + nome,
     dispositivoDisattivato: 'dispositivo disattivato',
+    anteprima: { nonRilevabile: 'Non rilevabile', notaNonRilevabile: ' (ordine già avanzato: la fase nasce «non rilevata»)', rigaNonRilevabile: 'non rilevabile' },
     config: {
       dispositivo: 'Dispositivo', dispositivoScegli: 'Scegli il dispositivo…', faseApertura: 'Fase che apre la finestra', faseAperturaScegli: 'Scegli la fase…',
       faseAperturaSpiega: 'Quando l’operatore preme «Inizia» su questa fase si apre la finestra in cui il dispositivo può completare la fase automatica.',
