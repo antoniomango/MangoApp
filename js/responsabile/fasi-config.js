@@ -260,14 +260,29 @@ function fsAbbinabili(m) {
     && (() => { const sue = macchineList.filter(x => (x.fase_ids || []).includes(f.id)).map(x => x.id); return (!mie.size && !sue.length) || sue.some(id => mie.has(id)); })());
 }
 // Campi della fase automatica da dispositivo: tutto da configurazione, nessun id o soglia nel codice
+const fsDispositiviDelModo = modo => (FS.dispositivi || []).filter(x => (x.tipo || 'manipolatore') === (modo === 'contapezzi' ? 'contapezzi' : 'manipolatore'));
+function fsModoHtml(m) {
+  const K = Etichette.contapezzi; const modo = m.modo_automatico || 'finestra_sollevamento';
+  return `<div class="fs-row"><label class="fs-lbl" for="fs-a-modo">${escapeHtml(K.modo)}</label>
+      <select class="fs-inp" id="fs-a-modo" onchange="fsSet('modo_automatico', this.value)" style="max-width:340px"><option value="finestra_sollevamento" ${modo === 'finestra_sollevamento' ? 'selected' : ''}>${escapeHtml(K.modoFinestra)}</option><option value="contapezzi" ${modo === 'contapezzi' ? 'selected' : ''}>${escapeHtml(K.modoContapezzi)}</option></select>
+      <div class="fs-desc">${escapeHtml(K.modoSpiega[modo])}</div></div>`;
+}
 function fsAutoHtml(m) {
   if (!fsAuto(m)) return '';
   const C = Etichette.faseAutomatica.config;
-  const disp = (FS.dispositivi || []).filter(x => x.attivo || x.id === m.dispositivo_id);
+  const disp = fsDispositiviDelModo(m.modo_automatico).filter(x => x.attivo || x.id === m.dispositivo_id);
+  if (m.modo_automatico === 'contapezzi') {
+    const dSel0 = fsDispositivo(m.dispositivo_id);
+    return fsModoHtml(m) + `<div class="fs-row"><label class="fs-lbl" for="fs-a-disp">${escapeHtml(C.dispositivo)}</label>
+      <select class="fs-inp" id="fs-a-disp" onchange="fsSet('dispositivo_id', this.value || null)"><option value="">${escapeHtml(C.dispositivoScegli)}</option>${disp.map(x => `<option value="${escapeHtml(x.id)}" ${x.id === m.dispositivo_id ? 'selected' : ''}>${escapeHtml(x.nome)}${x.attivo ? '' : ' (' + escapeHtml(Etichette.faseAutomatica.dispositivoDisattivato) + ')'}</option>`).join('')}</select>
+      ${disp.length ? '' : `<div class="fs-desc">${escapeHtml(C.nessunDispositivo)}</div>`}
+      ${dSel0 && !dSel0.attivo ? `<div class="fs-desc" style="color:var(--alert-ink)">${escapeHtml(Etichette.faseAutomatica.dispositivoDisattivato)}</div>` : ''}
+      <div class="fs-desc">${escapeHtml(Etichette.contapezzi.bloccaSempre)}</div></div>`;
+  }
   const usate = new Set(fasiAttive().map(f => fsMod(f.id)).filter(x => x && fsAuto(x) && x.id !== m.id).map(x => x.fase_apertura_finestra_id));
   const aperture = fasiAttive().filter(f => { const x = fsMod(f.id); return x && x.id !== m.id && (x.tipo_gestione || 'standard') === 'standard' && !x.e_attesa_esterna && !usate.has(x.id); });
   const dSel = fsDispositivo(m.dispositivo_id);
-  return `<div class="fs-row"><label class="fs-lbl" for="fs-a-disp">${escapeHtml(C.dispositivo)}</label>
+  return fsModoHtml(m) + `<div class="fs-row"><label class="fs-lbl" for="fs-a-disp">${escapeHtml(C.dispositivo)}</label>
       <select class="fs-inp" id="fs-a-disp" onchange="fsSet('dispositivo_id', this.value || null)"><option value="">${escapeHtml(C.dispositivoScegli)}</option>${disp.map(x => `<option value="${escapeHtml(x.id)}" ${x.id === m.dispositivo_id ? 'selected' : ''}>${escapeHtml(x.nome)}${x.attivo ? '' : ' (' + escapeHtml(Etichette.faseAutomatica.dispositivoDisattivato) + ')'}</option>`).join('')}</select>
       ${disp.length ? '' : `<div class="fs-desc">${escapeHtml(C.nessunDispositivo)}</div>`}
       ${dSel && !dSel.attivo ? `<div class="fs-desc" style="color:var(--alert-ink)">${escapeHtml(Etichette.faseAutomatica.dispositivoDisattivato)}</div>` : ''}</div>
@@ -302,7 +317,7 @@ function fsModello(f) {
     e_cnc: !!f.e_cnc, opzionale: !!f.opzionale, gruppo_spedizione: !!f.gruppo_spedizione, piu_pressate: !!f.piu_pressate, riempitivo: !!f.riempitivo, pressate_previste: f.pressate_previste ?? null, abbinata_a_fase_id: faseAbbinataId(f.id), ambito_tempo: f.ambito_tempo || 'anta',
     tempo_da_lavorazioni_cnc: !!f.tempo_da_lavorazioni_cnc, materiale_ricezione: f.materiale_ricezione || '',
     solo_per_consegna: f.solo_per_consegna ? [...f.solo_per_consegna].sort() : null,   // null = sempre
-    dispositivo_id: f.dispositivo_id ?? null, fase_apertura_finestra_id: f.fase_apertura_finestra_id ?? null,
+    dispositivo_id: f.dispositivo_id ?? null, modo_automatico: f.modo_automatico ?? null, fase_apertura_finestra_id: f.fase_apertura_finestra_id ?? null,
     finestra_minuti: f.finestra_minuti != null ? String(f.finestra_minuti) : '', carico_minimo_kg: f.carico_minimo_kg != null ? String(f.carico_minimo_kg) : '', blocca_chiusura_ordine: !!f.blocca_chiusura_ordine,
     dipendenze: [...(f.dipendenze || [])].sort((a, b) => a - b),
     macchine: macchineList.filter(x => (x.fase_ids || []).includes(f.id)).map(x => ({ id: x.id, fattore: Number((x.fattori || {})[f.id] ?? 1), presa_attiva: !!(x.prese || {})[f.id], presa_minuti: (x.prese || {})[f.id]?.minuti ?? null, ante_per_pressata: (x.prese || {})[f.id]?.ordini ?? null })).sort((a, b) => a.id < b.id ? -1 : 1),
@@ -328,7 +343,7 @@ function fsModelloVuoto() {
   const lista = fasiAttive();
   const m = { id: 0, nome: '', descrizione: '', macro_fase_id: null, tipo_gestione: 'standard', e_attesa_esterna: false, avvio_automatico: false, e_cnc: false, opzionale: false,
     gruppo_spedizione: false, piu_pressate: false, riempitivo: false, pressate_previste: null, abbinata_a_fase_id: null, ambito_tempo: 'anta', tempo_da_lavorazioni_cnc: false, materiale_ricezione: '', solo_per_consegna: null,
-    dispositivo_id: null, fase_apertura_finestra_id: null, finestra_minuti: '', carico_minimo_kg: '', blocca_chiusura_ordine: false,
+    dispositivo_id: null, modo_automatico: null, fase_apertura_finestra_id: null, finestra_minuti: '', carico_minimo_kg: '', blocca_chiusura_ordine: false,
     dipendenze: [], dipendenti: [], dopo: lista.length ? String(lista[lista.length - 1].id) : 'top', macchine: [], competenze: [], tempo: { tipico: '', massimo: '' } };
   fasiCriteriDef().forEach(def => { m[def.campo] = []; m[def.modo] = 'solo'; });
   return m;
@@ -508,10 +523,15 @@ function fsSet(campo, valore, rerender = true) {
     if (valore !== 'standard') { FS.draft.piu_pressate = false; FS.draft.pressate_previste = null; FS.draft.riempitivo = false; }   // la domanda sulle pressate non vale per le fasi esterne
     if (valore === Etichette.faseAutomatica.tipo) {   // nessuna macchina, nessuna spedizione unica, nessuna fase abbinata
       FS.draft.macchine = []; FS.draft.gruppo_spedizione = false; FS.draft.abbinata_a_fase_id = null; FS.draft.tempo_da_lavorazioni_cnc = false;
-      if (!FS.draft.dispositivo_id) { const att = (FS.dispositivi || []).filter(x => x.attivo); if (att.length === 1) FS.draft.dispositivo_id = att[0].id; }
+      if (!FS.draft.modo_automatico) FS.draft.modo_automatico = 'finestra_sollevamento';
+      if (!FS.draft.dispositivo_id) { const att = fsDispositiviDelModo(FS.draft.modo_automatico).filter(x => x.attivo); if (att.length === 1) FS.draft.dispositivo_id = att[0].id; }
     } else {   // fuori dal tipo automatico i campi del dispositivo si azzerano (il database li vuole vuoti)
-      FS.draft.dispositivo_id = null; FS.draft.fase_apertura_finestra_id = null; FS.draft.finestra_minuti = ''; FS.draft.carico_minimo_kg = ''; FS.draft.blocca_chiusura_ordine = false;
+      FS.draft.dispositivo_id = null; FS.draft.modo_automatico = null; FS.draft.fase_apertura_finestra_id = null; FS.draft.finestra_minuti = ''; FS.draft.carico_minimo_kg = ''; FS.draft.blocca_chiusura_ordine = false;
     }
+  }
+  if (campo === 'modo_automatico') {   // il dispositivo deve essere del tipo del modo; il conta pezzi blocca sempre la chiusura e non ha finestra
+    if (valore === 'contapezzi') { FS.draft.fase_apertura_finestra_id = null; FS.draft.finestra_minuti = ''; FS.draft.carico_minimo_kg = ''; FS.draft.blocca_chiusura_ordine = true; }
+    if (!fsDispositiviDelModo(valore).some(x => x.id === FS.draft.dispositivo_id)) FS.draft.dispositivo_id = null;
   }
   if (campo === 'piu_pressate') FS.draft.pressate_previste = valore ? (FS.draft.pressate_previste ?? 1) : null;
   if (campo === 'tempo_da_lavorazioni_cnc' && valore) FS.draft.ambito_tempo = 'anta';
@@ -595,7 +615,7 @@ function fsTempoModificabile(id) {
 }
 function fsPayload() {
   const d = FS.draft, o = FS.mod[d.id], p = {};
-  ['nome', 'descrizione', 'macro_fase_id', 'tipo_gestione', 'dispositivo_id', 'fase_apertura_finestra_id', 'finestra_minuti', 'carico_minimo_kg', 'blocca_chiusura_ordine', 'e_attesa_esterna', 'avvio_automatico', 'e_cnc', 'opzionale', 'gruppo_spedizione', 'piu_pressate', 'riempitivo', 'pressate_previste', 'abbinata_a_fase_id', 'ambito_tempo', 'tempo_da_lavorazioni_cnc', 'materiale_ricezione', 'solo_per_consegna'].forEach(k => {
+  ['nome', 'descrizione', 'macro_fase_id', 'tipo_gestione', 'dispositivo_id', 'modo_automatico', 'fase_apertura_finestra_id', 'finestra_minuti', 'carico_minimo_kg', 'blocca_chiusura_ordine', 'e_attesa_esterna', 'avvio_automatico', 'e_cnc', 'opzionale', 'gruppo_spedizione', 'piu_pressate', 'riempitivo', 'pressate_previste', 'abbinata_a_fase_id', 'ambito_tempo', 'tempo_da_lavorazioni_cnc', 'materiale_ricezione', 'solo_per_consegna'].forEach(k => {
     if (JSON.stringify(d[k]) !== JSON.stringify(o[k])) p[k] = k === 'nome' ? d.nome.trim() : k === 'materiale_ricezione' ? String(d[k] || '').trim() : (k === 'finestra_minuti' || k === 'carico_minimo_kg') ? (d[k] === '' ? null : Number(d[k])) : d[k];
   });
   const crit = {};
@@ -619,10 +639,13 @@ function fsValida() {
   if (!d.nome.trim()) return 'Inserisci il nome della fase.';
   if (fsAuto(d)) {
     const E = Etichette.faseAutomatica.config.errori;
+    if (d.modo_automatico === 'contapezzi') { if (!d.dispositivo_id) return E.automatica_dati_mancanti; }
+    else {
     if (!d.dispositivo_id || !d.fase_apertura_finestra_id) return E.automatica_dati_mancanti;
     const fm = Number(d.finestra_minuti), ck = Number(d.carico_minimo_kg);
     if (d.finestra_minuti === '' || !Number.isInteger(fm) || fm < 1 || fm > 120) return E.finestra_minuti_non_valida;
     if (d.carico_minimo_kg === '' || !(ck >= 0 && ck <= 1000)) return E.carico_minimo_non_valido;
+    }
   }
   if (d.piu_pressate && !fsEster(d) && !d.macchine.length) return Etichette.pressate.config.serveMacchina;
   if (d.piu_pressate && !fsEster(d) && pressateNumeroValido(d.pressate_previste) == null) return Etichette.pressate.config.errori.pressate_previste_non_valide;

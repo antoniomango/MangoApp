@@ -82,7 +82,7 @@ body { font-family: var(--font-sans); background: var(--bg); color: var(--ink); 
 /* ── BOTTOM NAV ── */
 .bottom-nav {
   height: var(--navh-tot); background: var(--chrome-bg); position: fixed; bottom: 0; left: 0; right: 0;
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); z-index: 100;
+  display: grid; grid-template-columns: repeat(var(--n-tab, 3), minmax(0, 1fr)); z-index: 100;
   border-top: 1px solid var(--border);
   padding: 0 0 var(--nav-sollevamento);
 }
@@ -480,6 +480,15 @@ textarea:focus { border-color: var(--accent); }
       </div>
     </div>
 
+    <!-- MACCHINA (dispositivo conta pezzi): commesse da inviare alla macchina e avanzamento pezzi -->
+    <div class="screen" id="screen-macchina">
+      <div style="padding:16px">
+        <div id="macchina-corpo">
+          <div class="empty-state"><p>Caricamento…</p></div>
+        </div>
+      </div>
+    </div>
+
     <!-- NOTIFICHE -->
     <div class="screen" id="screen-notifiche">
       <div style="padding:16px">
@@ -549,6 +558,10 @@ textarea:focus { border-color: var(--accent); }
     <button type="button" class="nav-tab" id="tab-oggi" onclick="showScreen('oggi')">
       <span class="tab-icon"><i data-ic="appunti"></i></span>
       <span class="tab-label">Oggi</span>
+    </button>
+    <button type="button" class="nav-tab" id="tab-macchina" style="display:none" onclick="showScreen('macchina')">
+      <span class="tab-icon"><i data-ic="ingranaggio"></i></span>
+      <span class="tab-label">Macchina</span>
     </button>
     <button type="button" class="nav-tab" id="tab-notifiche" onclick="showScreen('notifiche')">
       <span class="tab-icon"><i data-ic="campana"></i></span>
@@ -1139,6 +1152,7 @@ async function loadFasi() {
         dipendenze: dip.filter(r => r.fase_id === f.id).map(r => r.dipende_da_fase_id),
       }));
       cacheSet('fasi', fasi);
+      macchinaAggiornaTab();
     } else {
       fasi = await cacheGet('fasi') || [];
     }
@@ -1224,9 +1238,11 @@ function showScreen(name) {
   { const tabAttivo = document.getElementById('tab-' + name); if (tabAttivo) { tabAttivo.classList.add('active'); tabAttivo.setAttribute('aria-current', 'page'); } }
 
   if (name !== 'oggi') oggiFermaAggiornamento();
+  if (name !== 'macchina') macchinaFermaAggiornamento();
   if (name === 'home') { loadOrdini().then(() => renderHome()); }
 
   else if (name === 'oggi') { oggiFaseAperta = null; riceviAperto = false; riceviAperte.clear(); oggiSelezione.clear(); oggiAvviaAggiornamento(); loadOggi(); }
+  else if (name === 'macchina') { macchinaAvviaAggiornamento(); loadMacchina(); }
   else if (name === 'notifiche') {
     // Richiedi permesso notifiche push (richiede gesto utente su iOS)
     richiediPermessoNotifiche();
@@ -1636,8 +1652,8 @@ async function renderOrdineDetail(ordineId) {
           .filter(depId => { const d = ordFasi.find(of => of.fase_id === depId); return d && _depNonSoddisfatta(depId, d); })
           .map(depId => { const fm = fasi.find(fm => fm.id === depId); return escapeHtml(fm ? fm.nome : depId); });
         subLabel = 'Attende: ' + blockantiNomi.join(', ');
-      } else if (f.stato === 'completata') subLabel = auto ? faseAutomaticaSintesi(f) : 'Completata';
-      else if (auto) subLabel = faseAutomaticaSintesi(f);
+      } else if (f.stato === 'completata') subLabel = auto ? faseAutomaticaSintesi(f, ordineId) : 'Completata';
+      else if (auto) subLabel = faseAutomaticaSintesi(f, ordineId);
       else if (est) subLabel = f.stato === 'in_attesa' ? 'In attesa dal fornitore' : 'Fase esterna';
       else subLabel = 'Da fare';
       return `<div class="fase-row ${f.stato}" onclick="openFaseDetail('${f.id}', '${ordineId}')">
@@ -2058,9 +2074,105 @@ async function oggiFinestra(voceId, tipo) {
   await oggiEsegui(async () => { await eseguiFinestra(tipo, v.ordine_fase_id); }, [voceId]);
 }
 
+// ── Macchina conta pezzi (es. levigabordi): l'operatore sceglie la commessa e la invia; i pezzi fatti arrivano dalla macchina ──
+// Solo online: il comando parte dal server, nessuna coda offline. All'operatore mai tempi, durate o nomi di persone.
+let macchinaDati = null;
+let macchinaTimer = null;
+let macchinaOperazione = false;
+let _macchinaProm = null;
+const MACCHINA_INTERVALLO_MS = 8000;
+function macchinaEsisteNelCatalogo() { return (fasi || []).some(f => f.tipo_gestione === Etichette.faseAutomatica.tipo && f.modo_automatico === 'contapezzi' && f.attiva !== false); }
+function macchinaAggiornaTab() {
+  const tab = document.getElementById('tab-macchina'); const nav = document.querySelector('.bottom-nav');
+  const visibile = macchinaEsisteNelCatalogo();
+  if (tab) tab.style.display = visibile ? '' : 'none';
+  if (nav) nav.style.setProperty('--n-tab', visibile ? '4' : '3');
+}
+function macchinaAvviaAggiornamento() {
+  if (macchinaTimer) return;
+  macchinaTimer = setInterval(() => {
+    if (!currentUser || !isOnline || document.hidden || macchinaOperazione) return;
+    if (!document.getElementById('screen-macchina')?.classList.contains('active')) { macchinaFermaAggiornamento(); return; }
+    loadMacchina();
+  }, MACCHINA_INTERVALLO_MS);
+}
+function macchinaFermaAggiornamento() { if (macchinaTimer) { clearInterval(macchinaTimer); macchinaTimer = null; } }
+function loadMacchina() {
+  if (!currentUser) return Promise.resolve();
+  if (!isOnline) { renderMacchina(); return Promise.resolve(); }
+  if (_macchinaProm) return _macchinaProm;
+  _macchinaProm = (async () => {
+    try {
+      const { data, error } = await sb.rpc('dispositivo_campo_commesse_operatore', { p_operatore_id: currentUser.id, p_session_token: sessionToken });
+      if (!error && data?.ok) macchinaDati = data.dispositivi || [];
+    } catch (e) { console.warn('loadMacchina', e); }
+    finally { _macchinaProm = null; }
+    renderMacchina();
+  })();
+  return _macchinaProm;
+}
+function macchinaStatoInvio(u) {
+  const C = Etichette.contapezzi;
+  if (!u) return '';
+  const base = C.stati[u.stato] || u.stato;
+  return u.stato === 'errore' && u.esito_testo ? base + ': ' + u.esito_testo : base;
+}
+function renderMacchina() {
+  const el = document.getElementById('macchina-corpo'); if (!el) return;
+  const C = Etichette.contapezzi;
+  if (!isOnline) { el.innerHTML = `<div class="empty-state"><p>${escapeHtml(C.serveConnessione)}</p></div>`; return; }
+  if (macchinaDati === null) { el.innerHTML = `<div class="empty-state"><p>${escapeHtml(C.caricamento)}</p></div>`; return; }
+  if (!macchinaDati.length) { el.innerHTML = `<div class="empty-state"><p>${escapeHtml(C.nessunaCommessa)}</p></div>`; return; }
+  el.innerHTML = macchinaDati.map(d => {
+    const righe = (d.commesse || []).map(c => {
+      const stato = macchinaStatoInvio(c.ultimo_invio);
+      const attivo = c.ultimo_invio && ['in_coda', 'preso'].includes(c.ultimo_invio.stato);
+      const pct = c.pezzi_totali > 0 ? Math.round(100 * c.pezzi_fatti / c.pezzi_totali) : 0;
+      const disabilita = !d.attivo || d.macchina_occupata || c.pezzi_fatti >= c.pezzi_totali;
+      return `<div class="card-row" style="cursor:default;flex-direction:column;align-items:stretch;gap:8px">
+        <div class="row-testa"><strong style="font-size:17px">${escapeHtml(c.codice || '')}</strong><span class="badge badge-${escapeHtml(c.stato_fase)}">${escapeHtml(C.pezzi(c.pezzi_fatti, c.pezzi_totali))}</span></div>
+        <div style="font-size:13px;color:var(--muted)">${escapeHtml(c.cliente || '')}</div>
+        <div style="height:6px;border-radius:3px;background:var(--border);overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--ok)"></div></div>
+        ${stato ? `<div style="font-size:13px;${c.ultimo_invio.stato === 'errore' ? 'color:var(--alert-strong)' : ''}">${escapeHtml(stato)}</div>` : ''}
+        <button type="button" class="btn ${attivo ? 'btn-secondary' : 'btn-primary'}" style="min-height:56px;font-size:17px" ${disabilita ? 'disabled' : ''}
+          onclick="macchinaInvia('${escapeJsAttr(c.ordine_fase_id)}', '${escapeJsAttr(d.id)}')">${escapeHtml(C.invia(d.nome))}</button>
+      </div>`;
+    }).join('');
+    return `<div class="card"><div class="card-hdr"><h3>${escapeHtml(d.nome)}</h3>${!d.attivo ? `<span class="badge">${escapeHtml(C.dispositivoOff)}</span>` : d.macchina_occupata ? `<span class="badge">${escapeHtml(C.macchinaOccupata)}</span>` : ''}</div>
+      ${righe || `<div class="card-body" style="color:var(--muted)">${escapeHtml(C.nessunaCommessa)}</div>`}</div>`;
+  }).join('');
+}
+async function macchinaInvia(ordFaseId, dispId) {
+  const C = Etichette.contapezzi;
+  if (!isOnline) { toast(C.serveConnessione, 'err'); return; }
+  if (macchinaOperazione) return;
+  const d = (macchinaDati || []).find(x => x.id === dispId);
+  const c = d && (d.commesse || []).find(x => x.ordine_fase_id === ordFaseId);
+  if (!d || !c) return;
+  if (!c.lati) { toast(C.oper.errori.lati_non_disponibili, 'err'); return; }
+  const daFare = Math.max(0, (c.pezzi_totali || 0) - (c.pezzi_fatti || 0));
+  if (!confirm(C.inviaConferma(d.nome, c.codice || '', daFare, c.lati))) return;
+  macchinaOperazione = true;
+  try {
+    const { data, error } = await sb.rpc('dispositivo_campo_invia_commessa_operatore', { p_operatore_id: currentUser.id, p_session_token: sessionToken, p_ordine_fase_id: ordFaseId });
+    if (error || !data?.ok) { toast(C.oper.errori[data?.errore] || (error ? msgErr(error) : 'Operazione non riuscita'), 'err'); }
+    else toast(C.inviata + ' · ' + data.codice + ' · ' + data.quantita + ' pezzi · ' + data.lati + ' lati', 'ok');
+  } catch (e) { toast(msgErr(e), 'err'); }
+  finally { macchinaOperazione = false; }
+  await loadMacchina();
+}
+
 // testo di stato sintetico (elenco fasi dell'ordine): nessun tempo
-function faseAutomaticaSintesi(f) {
+function faseEContapezzi(faseId) { return !!faseId && faseCat(faseId)?.tipo_gestione === Etichette.faseAutomatica.tipo && faseCat(faseId)?.modo_automatico === 'contapezzi'; }
+function pezziOrdine(ordineId) { const o = ordiniCache.find(x => x.id === ordineId); return o && o.quantita > 0 ? o.quantita : 0; }
+function faseAutomaticaSintesi(f, ordineId) {
   const O = Etichette.faseAutomatica.operatore;
+  if (faseEContapezzi(f.fase_id)) {
+    const tot = pezziOrdine(ordineId || f.ordine_id);
+    const fatti = f.stato === 'completata' ? tot : Math.min(f.pezzi_completati || 0, tot || 0);
+    if (f.stato === 'completata' && f.completamento_origine === 'manuale_responsabile') return O.chiusaResp;
+    return tot ? Etichette.contapezzi.automaticaPezzi(fatti, tot) : O.siCompleta;
+  }
   if (f.stato === 'completata') {
     if (f.completamento_origine === 'manuale_responsabile') return O.chiusaResp;
     if (f.completamento_origine === 'non_rilevato') return O.nonRilevata;
@@ -2072,6 +2184,10 @@ function faseAutomaticaSintesi(f) {
 async function faseAutomaticaBox(f, ordineId) {
   const O = Etichette.faseAutomatica.operatore;
   let stato;
+  if (faseEContapezzi(f.fase_id)) {
+    stato = faseAutomaticaSintesi(f, ordineId);
+    return `<div class="azione-box" style="border-color:var(--ok-line)"><h4>${escapeHtml(Etichette.contapezzi.tag)}</h4><p style="font-size:14px;margin:0"><strong>${escapeHtml(stato)}</strong></p></div>`;
+  }
   if (f.stato === 'completata') stato = faseAutomaticaSintesi(f);
   else if (f.finestra_aperta) stato = O.inAttesa;
   else {

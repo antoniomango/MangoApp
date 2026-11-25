@@ -329,6 +329,11 @@ function faseAutomaticaRiga(f) {
   if (!fm || fm.tipo_gestione !== Etichette.faseAutomatica.tipo) return '';
   const A = Etichette.faseAutomatica;
   const parti = [A.tag];
+  if (fm.modo_automatico === 'contapezzi') {   // conta pezzi: X / Y pezzi al posto del carico
+    const o = [...ordiniCache, ...ordiniSpeditiCache].find(x => x.id === f.ordine_id);
+    const tot = o && o.quantita > 0 ? o.quantita : 0;
+    if (tot) parti.push(Etichette.contapezzi.pezzi(f.stato === 'completata' ? tot : Math.min(f.pezzi_completati || 0, tot), tot));
+  }
   if (f.carico_kg != null) parti.push(f.carico_kg + ' kg');
   if (f.completamento_origine) parti.push(A.origine[f.completamento_origine] || f.completamento_origine);
   return parti.join(' · ');
@@ -354,9 +359,20 @@ async function openFaseDetail(ordFaseId, ordineId, readonly) {
     ? opList.map(o => `<span style="display:inline-block;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:12px;margin:2px">${escapeHtml(o.users?.nome || '')} ${escapeHtml(o.users?.cognome || '')}</span>`).join('')
     : (f['users'] ? `<span>${escapeHtml(f['users'].nome)} ${escapeHtml(f['users'].cognome)}</span>` : '<span style="color:var(--muted)">—</span>');
 
+  // conta pezzi: stato dell'ultimo invio alla macchina e pulsante di invio (solo online, il comando parte dal server)
+  const fmC = f.fase_id ? fasi.find(x => x.id === f.fase_id) : null;
+  const contapezzi = !!fmC && fmC.tipo_gestione === Etichette.faseAutomatica.tipo && fmC.modo_automatico === 'contapezzi';
+  let invioHtml = '';
+  if (contapezzi) {
+    const K = Etichette.contapezzi;
+    const { data: uc } = await sb.from('comandi_dispositivo').select('stato, esito_testo, quantita, lati, creato_il').eq('ordine_fase_id', ordFaseId).order('creato_il', { ascending: false }).limit(1);
+    const u = (uc || [])[0];
+    invioHtml = `<div class="fs-desc" style="margin:8px 0">${escapeHtml(K.resp.stato)}: <strong>${u ? escapeHtml((K.stati[u.stato] || u.stato) + (u.esito_testo ? ' · ' + u.esito_testo : '') + ' · ' + u.quantita + ' pezzi · ' + u.lati + ' lati · ' + formatDateTime(u.creato_il)) : escapeHtml(K.resp.mai)}</strong></div>`;
+  }
   document.getElementById('modal-fase-body').innerHTML = `
     <div class="fase-detail">
       <span class="badge badge-${f.stato}">${statoFaseLabel(f.stato)}</span>
+      ${invioHtml}
       ${faseAutomaticaRiga(f) ? `<div class="fs-desc" style="margin:8px 0">${escapeHtml(faseAutomaticaRiga(f))}</div>` : ''}
       ${f.note_responsabile ? `<div class="note-box"><strong>Note Responsabile</strong>${escapeHtml(f.note_responsabile)}</div>` : ''}
       ${f.note_operatore ? `<div class="note-box"><strong>Note Operatore</strong>${escapeHtml(f.note_operatore)}</div>` : ''}
@@ -391,6 +407,7 @@ async function openFaseDetail(ordFaseId, ordineId, readonly) {
       <button class="btn btn-secondary" onclick="closeModal('modal-fase')">Annulla</button>
       ${puoRimuovere ? `<button class="btn btn-alert" onclick="eliminaFaseCustomOrdine('${ordFaseId}','${ordineId}','${escapeJsAttr(nomeFase)}')"><i data-ic="cestino"></i> Rimuovi fase</button>` : ''}
       ${f.stato === 'in_corso' ? `<button class="btn btn-secondary" onclick="openRiassegnaModal('${ordFaseId}')">Riassegna</button>` : ''}
+      ${contapezzi && puoCompletare ? `<button class="btn btn-primary" onclick="respInviaCommessa('${escapeJsAttr(ordFaseId)}','${escapeJsAttr(ordineId)}')">${escapeHtml(Etichette.contapezzi.resp.invia((FS && FS.dispositivi || []).find(x => x.id === fmC.dispositivo_id)?.nome || Etichette.contapezzi.dispositivoConta))}</button>` : ''}
       ${puoCompletare ? `<button class="btn btn-ok" onclick="apriCompletaFase('${ordFaseId}','${ordineId}')">${faseAutomaticaRiga(f) ? escapeHtml(Etichette.faseAutomatica.chiudiAMano) : '✓ Segna completata'}</button>` : ''}
       ${puoRiaprire   ? `<button class="btn btn-secondary" onclick="riaprieFaseResp('${ordFaseId}','${ordineId}')">↩ Riapri fase</button>` : ''}
       ${!puoRimuovere ? `<button class="btn btn-primary" onclick="salvaNoteResp('${ordFaseId}', '${ordineId}')">Salva Note</button>` : ''}
@@ -441,6 +458,18 @@ async function apriCompletaFase(ordFaseId, ordineId) {
 
   document.getElementById('cf-note').value = '';
   m.classList.add('open');
+}
+
+// Conta pezzi: invio della commessa alla macchina dal dettaglio ordine (il server controlla fase, codice, lati e macchina libera)
+async function respInviaCommessa(ordFaseId, ordineId) {
+  const K = Etichette.contapezzi;
+  const ordine = [...ordiniCache, ...ordiniSpeditiCache].find(x => x.id === ordineId);
+  if (!confirm([K.resp.invia(K.dispositivoConta) + '?', '', 'Commessa: ' + (ordine?.codice || '')].join('\n'))) return;
+  const { data, error } = await sb.rpc('dispositivo_campo_invia_commessa', { p_ordine_fase_id: ordFaseId, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Invio NON riuscito: ' + (K.oper.errori[data?.errore] || data?.errore || error?.message || 'errore'), 'err'); return; }
+  toast(K.inviata + ' · ' + data.codice + ' · ' + data.quantita + ' pezzi · ' + data.lati + ' lati', 'ok');
+  closeModal('modal-fase');
+  openFaseDetail(ordFaseId, ordineId);
 }
 
 async function confermaConclusioneFase() {

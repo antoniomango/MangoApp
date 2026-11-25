@@ -2,7 +2,7 @@
 // Script classico: stesso ambito globale della pagina; caricato dopo macchine.js (ordine in strumenti/moduli-responsabile.txt).
 // Il codice del dispositivo compare solo in una finestra temporanea: mai in localStorage, sessionStorage, IndexedDB, console o variabili globali.
 
-const DC = { lista: [], silenzio: 30, form: null, evDisp: null, evLimite: 200, evEsito: '', eventi: [], caricato: false, errore: '' };
+const DC = { comandi: {}, lista: [], silenzio: 30, form: null, evDisp: null, evLimite: 200, evEsito: '', eventi: [], caricato: false, errore: '' };
 
 function dcT() { return Etichette.faseAutomatica.dispositivi; }
 
@@ -20,6 +20,11 @@ async function dcCarica() {
   if (e1 || !lista?.ok) { DC.errore = (dcT().errori[lista?.errore] || lista?.errore || e1?.message || 'Elenco non disponibile'); DC.lista = []; }
   else DC.lista = lista.dispositivi || [];
   DC.silenzio = kpi ? Number(kpi.valore ?? kpi.default_valore) || 30 : 30;
+  DC.comandi = {};
+  await Promise.all(DC.lista.filter(d => d.tipo === 'contapezzi').map(async d => {
+    try { const { data } = await sb.rpc('dispositivo_campo_comandi', { p_dispositivo_id: d.id, p_limite: 10, p_responsabile_id: currentUserRow.id, p_session_token: null }); DC.comandi[d.id] = data?.ok ? (data.comandi || []) : []; }
+    catch (e) { DC.comandi[d.id] = []; }
+  }));
   DC.caricato = true;
   if (DC.evDisp && !DC.lista.some(d => d.id === DC.evDisp)) { DC.evDisp = null; DC.eventi = []; }
 }
@@ -52,12 +57,13 @@ function dcRender() {
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <strong style="font-size:16px">${escapeHtml(d.nome)}</strong>
         <span class="fs-tag ${d.attivo ? 'fs-tag-cnc' : 'fs-tag-opz'}">${escapeHtml(d.attivo ? T.attivo : T.disattivo)}</span>
-        <span class="fs-desc" style="margin:0">${escapeHtml(d.tipo || '')}</span>
+        <span class="fs-desc" style="margin:0">${escapeHtml(d.tipo === 'contapezzi' ? Etichette.contapezzi.tipoContapezzi : (d.tipo || ''))}</span>
       </div>
       ${sil ? `<div class="fs-avviso warn" style="margin:8px 0">▲<span>${escapeHtml(d.ultimo_contatto_il ? T.silenzio(DC.silenzio) : T.silenzio(DC.silenzio) + ' (' + T.mai + ')')}</span></div>` : ''}
       <div class="fs-desc" style="margin:8px 0 0">${escapeHtml(T.contatto)}: <strong>${escapeHtml(dcFa(d.ultimo_contatto_il))}</strong> · ${escapeHtml(T.contatore)}: <strong>${d.ultimo_contatore == null ? '—' : escapeHtml(String(d.ultimo_contatore))}</strong></div>
       <div class="fs-desc" style="margin:4px 0 0">${fin}</div>
       ${fasi ? `<div class="fs-desc" style="margin:4px 0 0">${escapeHtml(Etichette.faseAutomatica.tag)}: ${fasi}</div>` : ''}
+      ${d.tipo === 'contapezzi' ? dcComandiHtml(d) : ''}
       <div class="fs-desc" style="margin:4px 0 0">${d.token_presente ? escapeHtml(T.codicePresente) + escapeHtml(dcDataOra(d.token_creato_il)) : escapeHtml(T.codiceAssente)}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
         <button class="btn btn-secondary" onclick="dcModifica('${escapeJsAttr(d.id)}')">${escapeHtml(T.modifica)}</button>
@@ -73,10 +79,36 @@ function dcRender() {
     ${DC.evDisp ? dcEventiHtml() : ''}`;
 }
 
+function dcComandiHtml(d) {
+  const K = Etichette.contapezzi, R = K.resp, C = R.colonne;
+  const righe = (DC.comandi[d.id] || []);
+  const lati = d.attributo_lati_chiave ? ((attributiConfig.find(a => a.chiave === d.attributo_lati_chiave) || {}).etichetta || d.attributo_lati_chiave) : '';
+  return `<div class="fs-desc" style="margin:4px 0 0">${escapeHtml(K.attributoLati)}: <strong>${escapeHtml(lati || '—')}</strong> · ${escapeHtml(K.latiDefault)}: <strong>${d.lati_default == null ? '—' : escapeHtml(String(d.lati_default))}</strong></div>
+    <div class="fs-desc" style="margin:8px 0 4px"><strong>${escapeHtml(R.comandi)}</strong></div>
+    ${righe.length ? `<div style="overflow-x:auto"><table class="fs-tempi-tab" style="width:100%"><thead><tr><th>${escapeHtml(C.quando)}</th><th>${escapeHtml(C.codice)}</th><th>${escapeHtml(C.pezzi)}</th><th>${escapeHtml(C.lati)}</th><th>${escapeHtml(C.stato)}</th><th>${escapeHtml(C.da)}</th><th></th></tr></thead><tbody>
+      ${righe.map(c => `<tr><td>${escapeHtml(dcDataOra(c.creato_il))}</td><td>${escapeHtml(c.codice || '')}</td><td class="v">${escapeHtml(String(c.quantita))}</td><td class="v">${escapeHtml(String(c.lati))}</td><td>${escapeHtml(K.stati[c.stato] || c.stato)}${c.esito_testo ? ' · ' + escapeHtml(c.esito_testo) : ''}</td><td>${escapeHtml(R.da[c.inviato_da_ruolo] || c.inviato_da_ruolo || '')}</td><td>${c.annullabile ? `<button class="btn btn-secondary" onclick="dcAnnullaComando('${escapeJsAttr(c.id)}')">${escapeHtml(R.annulla)}</button>` : ''}</td></tr>`).join('')}
+    </tbody></table></div>` : `<div class="fs-desc">${escapeHtml(R.nessunComando)}</div>`}`;
+}
+async function dcAnnullaComando(id) {
+  const R = Etichette.contapezzi.resp;
+  if (!confirm(R.annullaConferma)) return;
+  const { data, error } = await sb.rpc('dispositivo_campo_annulla_comando', { p_comando_id: id, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) { toast('Annullo NON riuscito: ' + (R.errori[data?.errore] || data?.errore || error?.message || 'errore'), 'err'); return; }
+  toast(R.annullato, 'ok');
+  await dcCarica(); dcRender();
+}
+
 function dcFormHtml() {
   const T = dcT(), f = DC.form;
   return `<div class="fs-card" style="margin-bottom:14px;padding:14px">
     <div class="fs-row"><label class="fs-lbl" for="dc-f-nome">${escapeHtml(T.nome)}</label><input class="fs-inp" id="dc-f-nome" maxlength="60" value="${escapeHtml(f.nome)}" oninput="DC.form.nome=this.value"></div>
+    <div class="fs-row"><label class="fs-lbl" for="dc-f-tipo">${escapeHtml(Etichette.contapezzi.tipoDispositivo)}</label>
+      <select class="fs-inp" id="dc-f-tipo" ${f.id ? 'disabled' : ''} onchange="DC.form.tipo=this.value;dcRender()" style="max-width:340px"><option value="manipolatore" ${f.tipo === 'manipolatore' ? 'selected' : ''}>${escapeHtml(Etichette.contapezzi.tipoManipolatore)}</option><option value="contapezzi" ${f.tipo === 'contapezzi' ? 'selected' : ''}>${escapeHtml(Etichette.contapezzi.tipoContapezzi)}</option></select>
+      ${f.id ? `<div class="fs-desc">${escapeHtml(Etichette.contapezzi.tipoNonModificabile)}</div>` : ''}</div>
+    ${f.tipo === 'contapezzi' ? `<div class="fs-row fs-two">
+      <div><label class="fs-lbl" for="dc-f-attr">${escapeHtml(Etichette.contapezzi.attributoLati)}</label><select class="fs-inp" id="dc-f-attr" onchange="DC.form.attributo_lati_chiave=this.value"><option value="">${escapeHtml(Etichette.contapezzi.attributoLatiNessuno)}</option>${attributiConfig.filter(a => a.tipo === 'numero').map(a => `<option value="${escapeHtml(a.chiave)}" ${a.chiave === f.attributo_lati_chiave ? 'selected' : ''}>${escapeHtml(a.etichetta || a.chiave)}</option>`).join('')}</select></div>
+      <div><label class="fs-lbl" for="dc-f-lati">${escapeHtml(Etichette.contapezzi.latiDefault)}</label><input class="fs-inp num" id="dc-f-lati" type="number" min="1" max="20" step="1" inputmode="numeric" value="${escapeHtml(String(f.lati_default ?? ''))}" oninput="DC.form.lati_default=this.value" style="width:100px"><div class="fs-desc">${escapeHtml(Etichette.contapezzi.latiDefaultSpiega)}</div></div>
+    </div>` : ''}
     <div class="fs-row fs-two">
       <div><label class="fs-lbl" for="dc-f-tol">${escapeHtml(T.tolleranza)}</label><input class="fs-inp num" id="dc-f-tol" type="number" min="0" max="120" step="1" value="${escapeHtml(String(f.tolleranza_secondi))}" oninput="DC.form.tolleranza_secondi=this.value" style="width:110px"></div>
       <div><label class="fs-lbl" for="dc-f-soglia">${escapeHtml(T.soglia)}</label><input class="fs-inp num" id="dc-f-soglia" type="number" min="1" max="100000" step="1" value="${escapeHtml(String(f.soglia_azzeramento))}" oninput="DC.form.soglia_azzeramento=this.value" style="width:110px"><div class="fs-desc">${escapeHtml(T.soglia2)}</div></div>
@@ -85,10 +117,10 @@ function dcFormHtml() {
     <div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-primary" onclick="dcSalva()">${escapeHtml(T.salva)}</button><button class="btn btn-secondary" onclick="DC.form=null;dcRender()">${escapeHtml(T.annulla)}</button></div>
   </div>`;
 }
-function dcNuovo() { DC.form = { id: null, nome: '', attivo: true, tolleranza_secondi: 30, soglia_azzeramento: 10 }; dcRender(); document.getElementById('dc-f-nome')?.focus(); }
+function dcNuovo() { DC.form = { id: null, tipo: 'manipolatore', nome: '', attivo: true, tolleranza_secondi: 30, soglia_azzeramento: 10, attributo_lati_chiave: '', lati_default: '' }; dcRender(); document.getElementById('dc-f-nome')?.focus(); }
 function dcModifica(id) {
   const d = DC.lista.find(x => x.id === id); if (!d) return;
-  DC.form = { id: d.id, nome: d.nome, attivo: !!d.attivo, tolleranza_secondi: d.tolleranza_secondi, soglia_azzeramento: d.soglia_azzeramento };
+  DC.form = { id: d.id, tipo: d.tipo || 'manipolatore', nome: d.nome, attivo: !!d.attivo, tolleranza_secondi: d.tolleranza_secondi, soglia_azzeramento: d.soglia_azzeramento, attributo_lati_chiave: d.attributo_lati_chiave || '', lati_default: d.lati_default == null ? '' : String(d.lati_default) };
   dcRender(); document.getElementById('dc-f-nome')?.focus();
 }
 async function dcSalva() {
@@ -96,9 +128,10 @@ async function dcSalva() {
   const nome = (f.nome || '').trim();
   if (!nome) { toast(dcT().errori.nome_obbligatorio, 'err'); return; }
   const dati = { nome, attivo: !!f.attivo, tolleranza_secondi: Number(f.tolleranza_secondi), soglia_azzeramento: Number(f.soglia_azzeramento) };
-  if (f.id) dati.id = f.id;
+  if (f.id) dati.id = f.id; else dati.tipo = f.tipo || 'manipolatore';
+  if (f.tipo === 'contapezzi') { dati.attributo_lati_chiave = f.attributo_lati_chiave || null; dati.lati_default = f.lati_default === '' || f.lati_default == null ? null : Number(f.lati_default); }
   const { data, error } = await sb.rpc('dispositivo_campo_salva', { p_dati: dati, p_responsabile_id: currentUserRow.id, p_session_token: null });
-  if (error || !data?.ok) { toast('Salvataggio NON riuscito: ' + (dcT().errori[data?.errore] || data?.errore || error?.message || 'errore'), 'err'); return; }
+  if (error || !data?.ok) { toast('Salvataggio NON riuscito: ' + ({ ...dcT().errori, ...Etichette.contapezzi.resp.errori }[data?.errore] || data?.errore || error?.message || 'errore'), 'err'); return; }
   DC.form = null;
   toast('Dispositivo salvato', 'ok');
   await dcApriSezione();

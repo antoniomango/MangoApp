@@ -858,7 +858,7 @@ function renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine, stats) {
           <div class="macro-row" style="margin-bottom:14px">
             <div class="macro-track"><div class="macro-fill" style="width:${mPct}%;background:${escapeHtml(m.colore)}"></div></div>
           </div>
-          ${mFasi.map(f => faseRowHtml(f)).join('')}
+          ${mFasi.map(f => faseRowHtml(f, o)).join('')}
         </div>`;
       }).join('');
     } else {
@@ -866,7 +866,7 @@ function renderDettaglio(o, ordFasiPerOrdine, fasiExtraPerOrdine, stats) {
         (fasiNomi[a.fase_id]?.posizione ?? 999) - (fasiNomi[b.fase_id]?.posizione ?? 999));
       fasiHtml = `<div class="detail-card">
         <div class="detail-section-title">Fasi ordine</div>
-        ${sorted.map(f => faseRowHtml(f)).join('')}
+        ${sorted.map(f => faseRowHtml(f, o)).join('')}
       </div>`;
     }
     const feStd = (fasiExtraPerOrdine || []).filter(f => f.stato !== 'non_applicabile');
@@ -920,15 +920,18 @@ async function caricaNoteRiservateUfficio(ordineId) {
   </div>`;
 }
 
-function faseRowHtml(f) {
+function faseRowHtml(f, ordine) {
   const info = fasiNomi[f.fase_id];
   const nome = info?.nome || `Fase ${f.fase_id}`;
   const badgeClass = `badge badge-fase-${f.stato}`;
   const statoLabel = Etichette.statoFase(f.stato);
   // fase automatica da dispositivo: solo stato e segno "automatica" (nessun pulsante, nessun tempo)
   const auto = info?.tipo_gestione === Etichette.faseAutomatica.tipo;
+  // conta pezzi: stato e «X / Y pezzi», nessun pulsante
+  const tot = ordine && ordine.quantita > 0 ? ordine.quantita : 0;
+  const pezzi = auto && info?.modo_automatico === 'contapezzi' && tot ? ` · ${escapeHtml(Etichette.contapezzi.pezzi(f.stato === 'completata' ? tot : Math.min(f.pezzi_completati || 0, tot), tot))}` : '';
   return `<div class="fase-row">
-    <span class="fase-nome">${escapeHtml(nome)}${auto ? ` <small style="color:var(--muted)">· ${escapeHtml(Etichette.faseAutomatica.tag.toLowerCase())}</small>` : ''}</span>
+    <span class="fase-nome">${escapeHtml(nome)}${auto ? ` <small style="color:var(--muted)">· ${escapeHtml(Etichette.faseAutomatica.tag.toLowerCase())}${pezzi}</small>` : ''}</span>
     <span class="${badgeClass}">${statoLabel}</span>
   </div>`;
 }
