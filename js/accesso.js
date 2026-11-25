@@ -7,7 +7,7 @@
 (function () {
   'use strict';
 
-  var CHIAVE = 'mango-dispositivo';
+  var CHIAVE = chiaveLocale('mango-dispositivo');
   var _timer = null;
 
   function leggi() { try { return JSON.parse(localStorage.getItem(CHIAVE) || 'null'); } catch (e) { return null; } }

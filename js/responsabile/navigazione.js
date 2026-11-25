@@ -111,10 +111,43 @@ function tipiScheda(v) {
   if (v === 'lati') loadLatiConfig().then(renderLatiConfig);
 }
 
+// ── Sezioni nascoste da configurazione (config_sistema.sezioni_responsabile_nascoste) ──
+// Solo interfaccia: i permessi sul server non cambiano. Vuoto o assente = tutte visibili.
+const SEZIONI_NON_NASCONDIBILI = ['dashboard', 'sistema-config', 'aspetto'];   // ripiego e pagina per modificare l'elenco
+let _sezioniNascoste = [];
+function sezioneNascosta(nome) { return _sezioniNascoste.includes(nome); }
+function sezioniNascondibili() {   // gli id vengono dal menu stesso: nessun elenco duplicato nel codice
+  return [...document.querySelectorAll('#menu-laterale .nav-item')].map(i => i.id.replace(/^nav-/, ''))
+    .filter(id => id && !SEZIONI_NON_NASCONDIBILI.includes(id));
+}
+function sezioneEtichetta(id) {
+  const i = document.getElementById('nav-' + id);
+  return i ? [...i.childNodes].filter(n => n.nodeType === 3).map(n => n.textContent).join(' ').replace(/\s+/g, ' ').trim() : id;
+}
+function sezioniNascosteImposta(valore) {
+  let v = [];
+  try { v = JSON.parse(valore || '[]'); } catch (e) { v = []; }
+  const ammessi = sezioniNascondibili();
+  _sezioniNascoste = Array.isArray(v) ? v.filter(id => typeof id === 'string' && ammessi.includes(id)) : [];
+  document.querySelectorAll('#menu-laterale .nav-item').forEach(i => { i.style.display = sezioneNascosta(i.id.replace(/^nav-/, '')) ? 'none' : ''; });
+  [...document.querySelectorAll('#menu-laterale .nav-gruppo')].reverse().forEach(g => {   // dai gruppi interni agli esterni
+    const vuoto = ![...g.querySelectorAll('.nav-item')].some(i => i.style.display !== 'none');
+    g.style.display = vuoto ? 'none' : '';
+  });
+  document.querySelectorAll('.barra-mobile [data-barra]').forEach(b => { b.style.display = sezioneNascosta(b.dataset.barra) ? 'none' : ''; });
+}
+async function loadSezioniNascoste() {
+  try {
+    const { data } = await sb.from('config_sistema').select('valore').eq('chiave', 'sezioni_responsabile_nascoste').maybeSingle();
+    sezioniNascosteImposta(data?.valore);
+  } catch (e) { /* senza configurazione restano tutte visibili */ }
+}
+
 function showSection(name) {
   if (!fsPuoUscire(name) || !fmPuoUscire(name)) return;   // modifiche non salvate in Fasi: barra di scelta nell'intestazione del dettaglio
   // Alias storici: Richieste e Assenze squadra sono ora schede della sezione Operatori
   if (name === 'richieste' || name === 'assenze') { _opsScheda = name; _opsSalvaScheda(name); name = 'operatori'; }
+  if (sezioneNascosta(name)) name = 'dashboard';   // sezione nascosta da configurazione: si torna alla dashboard
   chiudiAltro();
   _barraAttiva(name);
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));

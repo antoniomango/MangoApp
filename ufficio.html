@@ -12,7 +12,7 @@
 <title>Mango — Ufficio</title>
 <!-- CSP via meta: frame-ancestors/report-uri/sandbox non hanno effetto qui (richiedono
      l'header HTTP reale, che GitHub Pages non permette di impostare) -- vedi vault. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co; connect-src 'self' https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co wss://kpdlynvmsoctagwtzrxr.supabase.co wss://mtpzfxnyfkzikzlkomwz.supabase.co; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co https://eznysjpzhkhikknyxgih.supabase.co https://sskmuhfbbyrsuieduejq.supabase.co; connect-src 'self' https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co https://eznysjpzhkhikknyxgih.supabase.co https://sskmuhfbbyrsuieduejq.supabase.co wss://kpdlynvmsoctagwtzrxr.supabase.co wss://mtpzfxnyfkzikzlkomwz.supabase.co wss://eznysjpzhkhikknyxgih.supabase.co wss://sskmuhfbbyrsuieduejq.supabase.co; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'">
 <!-- Audit Round 3, punto 10: X-Frame-Options/X-Content-Type-Options non hanno equivalente
      meta tag (i browser li ignorano fuori da un vero header HTTP, non impostabile su GitHub
      Pages) -- Referrer-Policy invece funziona anche via meta, riduce la fuga di URL interni
@@ -313,8 +313,8 @@ controllaVersioneMinima(sb);
     const result = await _orig(...args);
     if (result.data?.errore === 'sessione_non_valida') {
       currentUser = null; sessionToken = null;
-      localStorage.removeItem('ufficio-user');
-      localStorage.removeItem('ufficio-session-token');
+      localStorage.removeItem(chiaveLocale('ufficio-user'));
+      localStorage.removeItem(chiaveLocale('ufficio-session-token'));
       clearInterval(refreshTimer);
       document.getElementById('app-screen').style.display = 'none';
       document.getElementById('login-screen').style.display = 'flex';
@@ -354,8 +354,8 @@ window.pinPad = MangoPinPad.monta({
 });
 
 async function init() {
-  const saved = localStorage.getItem('ufficio-user');
-  const savedToken = localStorage.getItem('ufficio-session-token');
+  const saved = localStorage.getItem(chiaveLocale('ufficio-user'));
+  const savedToken = localStorage.getItem(chiaveLocale('ufficio-session-token'));
   if (saved && savedToken) {
     try {
       currentUser = JSON.parse(saved);
@@ -365,7 +365,7 @@ async function init() {
       await aggiornaUfficio();
       refreshTimer = setInterval(aggiornaUfficio, 120000);
       return;
-    } catch(e) { localStorage.removeItem('ufficio-user'); localStorage.removeItem('ufficio-session-token'); }
+    } catch(e) { localStorage.removeItem(chiaveLocale('ufficio-user')); localStorage.removeItem(chiaveLocale('ufficio-session-token')); }
   }
   await preparaLoginDispositivo();
 }
@@ -407,8 +407,8 @@ async function concludiLogin(data) {
   // La vista ufficio non gestisce push: l'alias push segreto restituito da verifica_pin non si conserva
   currentUser = MangoAccesso.utenteSenzaAlias(data.user);
   sessionToken = data.session_token || null;
-  localStorage.setItem('ufficio-user', JSON.stringify(currentUser));
-  if (sessionToken) localStorage.setItem('ufficio-session-token', sessionToken);
+  localStorage.setItem(chiaveLocale('ufficio-user'), JSON.stringify(currentUser));
+  if (sessionToken) localStorage.setItem(chiaveLocale('ufficio-session-token'), sessionToken);
   mostraApp();
   await caricaMeta();
   await aggiornaUfficio();
@@ -449,8 +449,8 @@ function doLogout() {
   clearInterval(refreshTimer);
   currentUser = null;
   sessionToken = null;
-  localStorage.removeItem('ufficio-user');
-  localStorage.removeItem('ufficio-session-token');
+  localStorage.removeItem(chiaveLocale('ufficio-user'));
+  localStorage.removeItem(chiaveLocale('ufficio-session-token'));
   window.location.href = 'operatore.html?logout=1';
 }
 

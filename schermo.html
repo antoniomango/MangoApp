@@ -9,7 +9,7 @@
 <link rel="manifest" href="manifest-schermo.json">
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Mango — Schermo di reparto</title>
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co; connect-src 'self' https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co wss://kpdlynvmsoctagwtzrxr.supabase.co wss://mtpzfxnyfkzikzlkomwz.supabase.co; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co; connect-src 'self' https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co https://eznysjpzhkhikknyxgih.supabase.co https://sskmuhfbbyrsuieduejq.supabase.co wss://kpdlynvmsoctagwtzrxr.supabase.co wss://mtpzfxnyfkzikzlkomwz.supabase.co wss://eznysjpzhkhikknyxgih.supabase.co wss://sskmuhfbbyrsuieduejq.supabase.co; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <script src="js/tema.js"></script>
 <script>document.documentElement.setAttribute('data-theme', 'dark');   // lo schermo di reparto è sempre scuro</script>
@@ -65,7 +65,7 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 controllaVersioneMinima(sb);
 
 // Questa pagina chiama SOLO flusso_produzione_schermo (più le funzioni di accesso/dispositivo): nessuna scrittura, nessuna lettura di tabelle.
-const CHIAVE_UTENTE = 'schermo-user', CHIAVE_TOKEN = 'schermo-session-token';
+const CHIAVE_UTENTE = chiaveLocale('schermo-user'), CHIAVE_TOKEN = chiaveLocale('schermo-session-token');
 let currentUser = null, sessionToken = null, flusso = null;
 const T = Etichette.flusso;
 

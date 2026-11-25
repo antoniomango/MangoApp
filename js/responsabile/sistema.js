@@ -2,6 +2,7 @@
 // Script classico: stesso ambito globale della pagina; caricato prima dello script principale (ordine in strumenti/moduli-responsabile.txt).
 
 let _sistema = {};   // chiave -> valore, da config_sistema
+let _sezNascSel = [];   // sezioni spuntate come nascoste (in memoria, mai letto dal DOM al click)
 
 async function loadSistemaConfig() {
   const { data } = await sb.from('config_sistema').select('chiave, valore');
@@ -79,6 +80,24 @@ async function mfaImposta(attiva) {
   renderSicurezzaAccount();
 }
 
+function sezioniNascosteHtml() {
+  let attuali = [];
+  try { attuali = JSON.parse(_sistema.sezioni_responsabile_nascoste || '[]'); } catch (e) { attuali = []; }
+  _sezNascSel = Array.isArray(attuali) ? attuali.filter(id => typeof id === 'string') : [];
+  const caselle = sezioniNascondibili().map(id => `<label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0"><input type="checkbox" ${_sezNascSel.includes(id) ? 'checked' : ''} onchange="sezioneNascostaCambia('${escapeJsAttr(id)}', this.checked)" style="width:18px;height:18px"> ${escapeHtml(sezioneEtichetta(id))}</label>`).join('');
+  return `<div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px"><div style="font-size:13px;font-weight:600">Sezioni nascoste al responsabile</div>
+    <div style="font-size:11px;color:var(--muted);margin:2px 0 8px">Le sezioni spuntate spariscono dal menu di questo stabilimento. Solo interfaccia: i permessi non cambiano. Dashboard, Sistema e Aspetto restano sempre visibili.</div>${caselle}</div>`;
+}
+async function sezioneNascostaCambia(id, nascosta) {
+  _sezNascSel = _sezNascSel.filter(x => x !== id);
+  if (nascosta) _sezNascSel.push(id);
+  const valore = JSON.stringify(sezioniNascondibili().filter(x => _sezNascSel.includes(x)));
+  const { data, error } = await sb.rpc('imposta_config_sistema', { p_chiave: 'sezioni_responsabile_nascoste', p_valore: valore, p_responsabile_id: currentUserRow.id, p_session_token: null });
+  if (error || !data?.ok) toast('Salvataggio NON riuscito: ' + (data?.errore || error?.message || ''), 'err');
+  else { toast('Impostazione salvata', 'ok'); sezioniNascosteImposta(valore); }
+  await loadSistemaConfig();
+}
+
 function renderSistemaConfig() {
   const el = document.getElementById('sistema-config-body');
   if (!el) return;
@@ -112,7 +131,7 @@ function renderSistemaConfig() {
     riga('Uscita degli operatori dopo la fine del turno (minuti)', 'Gli operatori escono da soli ' + escapeHtml(_sistema.sessione_margine_fine_turno_minuti || '30') + ' minuti dopo la fine del turno e rientrano con il PIN (da 0 a 240)',
       `<input type="number" min="0" max="240" step="1" value="${escapeHtml(_sistema.sessione_margine_fine_turno_minuti || '')}" onchange="salvaSistema('sessione_margine_fine_turno_minuti', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) +
     riga('Accesso fuori orario (ore)', 'Chi entra dopo la fine del turno o in un giorno non lavorativo ha una sessione di ' + escapeHtml(_sistema.sessione_fuori_turno_ore || '5') + ' ore (da 1 a 12)',
-      `<input type="number" min="1" max="12" step="1" value="${escapeHtml(_sistema.sessione_fuori_turno_ore || '')}" onchange="salvaSistema('sessione_fuori_turno_ore', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`);
+      `<input type="number" min="1" max="12" step="1" value="${escapeHtml(_sistema.sessione_fuori_turno_ore || '')}" onchange="salvaSistema('sessione_fuori_turno_ore', this.value.trim())" style="width:90px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">`) + sezioniNascosteHtml();
 }
 
 // ── Link delle viste (sezione Sistema): indirizzi da configurazione (app_base_url) o dedotti dalla pagina; mai ?env, token o dati riservati ──

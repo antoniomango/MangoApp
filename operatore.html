@@ -12,7 +12,7 @@
 <title>Mango — Operatore</title>
 <!-- CSP via meta: frame-ancestors/report-uri/sandbox non hanno effetto qui (richiedono
      l'header HTTP reale, che GitHub Pages non permette di impostare) -- vedi vault. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.onesignal.com https://*.onesignal.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co; connect-src 'self' https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co wss://kpdlynvmsoctagwtzrxr.supabase.co wss://mtpzfxnyfkzikzlkomwz.supabase.co https://onesignal.com https://*.onesignal.com; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.onesignal.com https://*.onesignal.com; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co https://eznysjpzhkhikknyxgih.supabase.co https://sskmuhfbbyrsuieduejq.supabase.co; connect-src 'self' https://kpdlynvmsoctagwtzrxr.supabase.co https://mtpzfxnyfkzikzlkomwz.supabase.co https://eznysjpzhkhikknyxgih.supabase.co https://sskmuhfbbyrsuieduejq.supabase.co wss://kpdlynvmsoctagwtzrxr.supabase.co wss://mtpzfxnyfkzikzlkomwz.supabase.co wss://eznysjpzhkhikknyxgih.supabase.co wss://sskmuhfbbyrsuieduejq.supabase.co https://onesignal.com https://*.onesignal.com; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'">
 <!-- Audit Round 3, punto 10: X-Frame-Options/X-Content-Type-Options non hanno equivalente
      meta tag (i browser li ignorano fuori da un vero header HTTP, non impostabile su GitHub
      Pages) -- Referrer-Policy invece funziona anche via meta, riduce la fuga di URL interni
@@ -643,7 +643,7 @@ function initDB() {
   if (_dbApertura) return _dbApertura;
   _dbApertura = new Promise((resolve, reject) => {
     let req;
-    try { req = indexedDB.open('mango-op', 2); } catch (e) { _dbApertura = null; reject(e); return; }
+    try { req = indexedDB.open(nomeDbLocale('mango-op'), 2); } catch (e) { _dbApertura = null; reject(e); return; }
     req.onupgradeneeded = (e) => {
       const d = e.target.result;
       if (!d.objectStoreNames.contains('queue')) d.createObjectStore('queue', { keyPath: 'id', autoIncrement: true });
@@ -967,7 +967,7 @@ function entraNellApp() {
   if (currentUser?.ruolo === 'sola_lettura') {
     // La vista ufficio non gestisce push: l'alias segreto non va salvato
     const utenteUfficio = MangoAccesso.utenteSenzaAlias(currentUser);
-    localStorage.setItem('ufficio-user', JSON.stringify(utenteUfficio));
+    localStorage.setItem(chiaveLocale('ufficio-user'), JSON.stringify(utenteUfficio));
     window.location.href = 'ufficio.html';
     return;
   }
@@ -1244,7 +1244,7 @@ function showScreen(name) {
         });
         if (!error) {
           // Salva timestamp ultimo letto solo se il DB è stato aggiornato davvero
-          localStorage.setItem('notifiche-lette-il', Date.now().toString());
+          localStorage.setItem(chiaveLocale('notifiche-lette-il'), Date.now().toString());
         } else {
           console.warn('segna_notifiche_lette fallita, verrà ritentato al prossimo cambio tab:', error.message);
         }
@@ -2178,9 +2178,12 @@ function _debug(msg) {
   console.log('[OneSignal]', msg);
 }
 
+// Vero solo dopo OneSignal.init: senza ID app sul server (stabilimento senza push) nessuna chiamata all'SDK.
+let _pushConfigurato = false;
+
 async function richiediPermessoNotifiche() {
   _debug('OneSignal disponibile: ' + !!window.OneSignal);
-  if (!window.OneSignal) return;
+  if (!window.OneSignal || !_pushConfigurato) return;
   try {
     _debug('Permission attuale: ' + OneSignal.Notifications.permission);
     if (!OneSignal.Notifications.permission) {
@@ -2191,6 +2194,15 @@ async function richiediPermessoNotifiche() {
     await _salvaOnesignalId();
   } catch(e) { _debug('ERRORE: ' + e.message); }
 }
+
+// Cambio di stabilimento con azioni offline non ancora sincronizzate: restano nello stabilimento d'origine.
+window.avvisoCambioStabilimento = async function () {
+  try {
+    const n = (await getQueue()).length;
+    if (n > 0) return 'Ci sono ' + n + ' azioni non ancora sincronizzate: restano in ' + NOME_STABILIMENTO + ' e ripartono quando ci torni (non vengono inviate all’altro stabilimento).';
+  } catch (e) { /* coda non leggibile */ }
+  return '';
+};
 
 // Avvio di OneSignal una volta sola per pagina, senza login (serve anche all'uscita).
 let _oneSignalAvviato = false;
@@ -2204,6 +2216,7 @@ function _oneSignalAvvia() {
       if (!appId) return;   // push non configurate sul server: l'app funziona senza
       const base = new URL('./', location.href).pathname;   // cartella dell'app (anche fuori da /MangoApp/)
       await OS.init({ appId, notifyButton: { enable: false }, serviceWorkerPath: base + 'OneSignalSDKWorker.js', serviceWorkerParam: { scope: base } });
+      _pushConfigurato = true;
       // Ascolta quando arriva l'ID dalla subscription (può richiedere secondi)
       OS.User.PushSubscription.addEventListener('change', async (event) => {
         const subId = event.current?.id;
@@ -2242,6 +2255,7 @@ async function initOneSignal() {
   _oneSignalAvvia();
   try {
     window.OneSignalDeferred.push(async function(OS) {
+      if (!_pushConfigurato) return;
       const alias = await _aliasPush();
       if (alias && currentUser) { try { await OS.login(alias); } catch (e) { console.warn('OneSignal login non riuscito'); } }
     });
@@ -2254,6 +2268,7 @@ function _oneSignalEsci() {
   try {
     _oneSignalAvvia();   // se non era ancora avviato (es. logout forzato all'apertura), prima l'avvio, mai il login
     window.OneSignalDeferred.push(async function(OS) {
+      if (!_pushConfigurato) return;
       try { await OS.logout(); } catch (e) { console.warn('OneSignal logout:', e); }
     });
   } catch (e) { console.warn('OneSignal logout:', e); }
@@ -2261,7 +2276,7 @@ function _oneSignalEsci() {
 
 async function _salvaOnesignalId() {
   try {
-    if (!window.OneSignal || !currentUser) { _debug('Skip: no OneSignal o no user'); return; }
+    if (!window.OneSignal || !_pushConfigurato || !currentUser) { _debug('Skip: no OneSignal o no user'); return; }
     const alias = await _aliasPush();
     if (!alias) { _debug('Alias push non disponibile: rientra con il PIN'); return; }
     _debug('Login OneSignal con l\'alias push (segreto, non mostrato)');
@@ -3200,7 +3215,7 @@ async function segnaNotificheLetteOp() {
     toast('Errore: notifiche non aggiornate, riprova', 'err');
     return;
   }
-  localStorage.setItem('notifiche-lette-il', Date.now().toString());
+  localStorage.setItem(chiaveLocale('notifiche-lette-il'), Date.now().toString());
   await loadNotificheOp();
   renderNotificheOp();
   toast('Tutte le notifiche segnate come lette', 'ok');

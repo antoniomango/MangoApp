@@ -158,6 +158,7 @@ async function _oneSignalLoginResp(OneSignal) {
 // il permesso si chiede SOLO dal pulsante "Attiva notifiche" (iOS lo concede solo dentro un gesto).
 let _oneSignalAvviatoResp = false;
 let _oneSignalResp = null;          // libreria pronta (dopo init)
+let _pushNonConfigurate = false;    // il server non ha un ID app (stabilimento senza push): nessun avvio, nessun avviso
 let _attivazioneInCorso = false;
 let _avvisoNotificheNascosto = false;
 try { _avvisoNotificheNascosto = localStorage.getItem('mangoapp-avviso-notifiche') === 'nascosto'; } catch (e) { /* storage non disponibile */ }
@@ -170,6 +171,7 @@ function _pushSupportate() { return 'Notification' in window && 'serviceWorker' 
 
 // Stato delle notifiche su QUESTO dispositivo
 function _statoNotifiche() {
+  if (_pushNonConfigurate) return 'non-supportate';
   if (_eIOS() && !_appInstallata()) return 'ios-safari';
   if (!_pushSupportate()) return 'non-supportate';
   if (_attivazioneInCorso) return 'in-corso';
@@ -291,6 +293,7 @@ function riprovaNotificheResp() { location.reload(); }
 
 async function initOneSignalResp() {
   window.OneSignalDeferred = window.OneSignalDeferred || [];
+  if (_pushNonConfigurate) return;
   if (_oneSignalAvviatoResp) {
     // postLogin può ripartire (SIGNED_IN al ritorno in primo piano): solo il login dell'alias
     window.OneSignalDeferred.push(_oneSignalLoginResp);
@@ -310,7 +313,7 @@ async function initOneSignalResp() {
       // dalla v33) e non può controllare "/", lo scope predefinito di OneSignal: senza questo parametro
       // il browser rifiutava la registrazione e l'avvio non si completava mai.
       const appId = (await leggiConfigPubblica(sb))?.onesignal_app_id;
-      if (!appId) throw new Error('onesignal_app_id non configurato');
+      if (!appId) { clearTimeout(timerAvvio); _pushNonConfigurate = true; _aggiornaAvvisoNotifiche(); return; }   // push non configurate: l'app funziona senza
       const base = new URL('./', location.href).pathname;   // cartella dell'app (anche fuori da /MangoApp/)
       await OneSignal.init({ appId, notifyButton: { enable: false }, serviceWorkerPath: base + 'sw.js', serviceWorkerParam: { scope: base } });
     } catch (e) {

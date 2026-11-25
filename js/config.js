@@ -7,25 +7,72 @@
 // come globali senza toccare ogni funzione richiamata da onclick — qui
 // serve la forma meno invasiva possibile rispetto al codice esistente.
 
-const AMBIENTI = {
-  produzione: {
-    url:  'https://mtpzfxnyfkzikzlkomwz.supabase.co',
-    anon: 'sb_publishable_enADFCnzAdVajpilZyd_6Q_JIOZVW2u'
+// Stabilimenti: ognuno ha un proprio database (produzione e test). Sono infrastruttura, come gli ambienti.
+const STABILIMENTI = {
+  via_nazionale: {
+    nome: 'Via Nazionale',
+    ambienti: {
+      produzione: {
+        url:  'https://mtpzfxnyfkzikzlkomwz.supabase.co',
+        anon: 'sb_publishable_enADFCnzAdVajpilZyd_6Q_JIOZVW2u'
+      },
+      test: {
+        url:  'https://kpdlynvmsoctagwtzrxr.supabase.co',
+        anon: 'sb_publishable_SzV089R7GLT6oox2-ZWdXQ_sPzhWcC5'
+      }
+    }
   },
-  test: {
-    url:  'https://kpdlynvmsoctagwtzrxr.supabase.co',
-    anon: 'sb_publishable_SzV089R7GLT6oox2-ZWdXQ_sPzhWcC5'
+  via_palude: {
+    nome: 'Via Palude',
+    ambienti: {
+      produzione: {
+        url:  'https://eznysjpzhkhikknyxgih.supabase.co',
+        anon: 'sb_publishable_2nqMX2JYGe6jvlSXFEpyiw_LJySEVII'
+      },
+      test: {
+        url:  'https://sskmuhfbbyrsuieduejq.supabase.co',
+        anon: 'sb_publishable_fRQ2j7UtpjwW7z_NmZ2E7w_h8ztXn2l'
+      }
+    }
   }
 };
+const STABILIMENTO_DEFAULT = 'via_nazionale';
+const CHIAVE_STABILIMENTO = 'mangoapp-stabilimento';
 
-// Configurazione di deploy facoltativa (js/config.deploy.js → window.MANGO_CONFIG): sovrascrive o
-// aggiunge ambienti senza modificare questo file. Senza di essa valgono i valori predefiniti sopra.
+// Configurazione di deploy facoltativa (js/config.deploy.js → window.MANGO_CONFIG): aggiunge o sovrascrive
+// stabilimenti ({ stabilimenti: { chiave: { nome, ambienti } } }) e, per compatibilità, gli ambienti dello
+// stabilimento predefinito ({ ambienti }) senza modificare questo file.
 (function applicaConfigDeploy() {
   const d = (typeof window !== 'undefined' && window.MANGO_CONFIG) || {};
+  const valido = (a) => a && typeof a.url === 'string' && typeof a.anon === 'string';
+  Object.entries(d.stabilimenti || {}).forEach(([chiave, st]) => {
+    if (!st || typeof st !== 'object') return;
+    const corrente = STABILIMENTI[chiave] || (STABILIMENTI[chiave] = { nome: String(st.nome || chiave), ambienti: {} });
+    if (st.nome) corrente.nome = String(st.nome);
+    Object.entries(st.ambienti || {}).forEach(([nome, a]) => { if (valido(a)) corrente.ambienti[nome] = { url: a.url, anon: a.anon }; });
+  });
   Object.entries(d.ambienti || {}).forEach(([nome, a]) => {
-    if (a && typeof a.url === 'string' && typeof a.anon === 'string') AMBIENTI[nome] = { url: a.url, anon: a.anon };
+    if (valido(a)) STABILIMENTI[STABILIMENTO_DEFAULT].ambienti[nome] = { url: a.url, anon: a.anon };
   });
 })();
+
+// Scelta dello stabilimento: ?stabilimento=<chiave> (ricordato), altrimenti l'ultima scelta sul dispositivo,
+// altrimenti Via Nazionale (chi non ha mai scelto non nota nulla).
+function rilevaStabilimento() {
+  let salvato = null;
+  try { salvato = localStorage.getItem(CHIAVE_STABILIMENTO); } catch (e) { salvato = null; }
+  let daUrl = null;
+  try { daUrl = new URLSearchParams(location.search).get('stabilimento'); } catch (e) { daUrl = null; }
+  if (daUrl && Object.prototype.hasOwnProperty.call(STABILIMENTI, daUrl)) {
+    try { localStorage.setItem(CHIAVE_STABILIMENTO, daUrl); } catch (e) {}
+    return daUrl;
+  }
+  return (salvato && Object.prototype.hasOwnProperty.call(STABILIMENTI, salvato)) ? salvato : STABILIMENTO_DEFAULT;
+}
+const STABILIMENTO = rilevaStabilimento();
+const NOME_STABILIMENTO = STABILIMENTI[STABILIMENTO].nome;
+// Ambienti (produzione/test) dello stabilimento scelto: da qui in poi la logica degli ambienti è invariata.
+const AMBIENTI = STABILIMENTI[STABILIMENTO].ambienti;
 
 const AMBIENTE_DEFAULT = (window.MANGO_CONFIG && AMBIENTI[window.MANGO_CONFIG.ambienteDefault]) ? window.MANGO_CONFIG.ambienteDefault : 'produzione';
 
@@ -118,6 +165,106 @@ const SUPABASE_URL  = AMBIENTI[AMBIENTE].url;
 const SUPABASE_ANON = AMBIENTI[AMBIENTE].anon;
 const IS_PRODUZIONE = AMBIENTE === 'produzione';
 
+// ═══════════════════════════════════════════════
+// DATI SUL DISPOSITIVO SEPARATI PER STABILIMENTO
+// ═══════════════════════════════════════════════
+// Ogni chiave di localStorage / nome di database IndexedDB che contiene identità o dati (sessione, token, segreto del
+// dispositivo, coda delle azioni, cache) passa da qui: Via Nazionale in produzione mantiene i nomi di sempre (nessun
+// nuovo login, nessun telefono da riapprovare, coda offline intatta); ogni altra combinazione stabilimento/ambiente
+// ha il proprio suffisso, quindi uno stabilimento non legge mai i dati dell'altro.
+function suffissoLocale() {
+  if (STABILIMENTO === 'via_nazionale' && IS_PRODUZIONE) return '';
+  return '@' + STABILIMENTO + (IS_PRODUZIONE ? '' : '.' + AMBIENTE);
+}
+const _chiaviMigrate = {};
+function chiaveLocale(base) {
+  const suf = suffissoLocale();
+  if (!suf) return base;
+  const nuova = base + suf;
+  // Via Nazionale in test: le chiavi esistenti (senza suffisso) valgono come sue; si copiano una volta sola.
+  if (STABILIMENTO === 'via_nazionale' && !_chiaviMigrate[base]) {
+    _chiaviMigrate[base] = true;
+    try {
+      if (localStorage.getItem(nuova) === null) {
+        const vecchia = localStorage.getItem(base);
+        if (vecchia !== null) localStorage.setItem(nuova, vecchia);
+      }
+    } catch (e) { /* storage non disponibile */ }
+  }
+  return nuova;
+}
+function nomeDbLocale(base) { return base + suffissoLocale(); }
+
+// ═══════════════════════════════════════════════
+// SCELTA DELLO STABILIMENTO (login) e nome sempre visibile
+// ═══════════════════════════════════════════════
+async function cambiaStabilimento(chiave) {
+  if (!Object.prototype.hasOwnProperty.call(STABILIMENTI, chiave) || chiave === STABILIMENTO) return;
+  let avviso = '';
+  try { if (typeof window.avvisoCambioStabilimento === 'function') avviso = (await window.avvisoCambioStabilimento()) || ''; } catch (e) { avviso = ''; }
+  const testo = (avviso ? avviso + '\n\n' : '') + 'Passare a ' + STABILIMENTI[chiave].nome + '? La pagina si ricarica.';
+  if (typeof window.confirm === 'function' && !window.confirm(testo)) return;
+  try { localStorage.setItem(CHIAVE_STABILIMENTO, chiave); } catch (e) { /* ripiego: il parametro dell'indirizzo */ }
+  location.href = location.pathname + '?stabilimento=' + encodeURIComponent(chiave);
+}
+
+function montaStabilimentoUi() {
+  if (typeof document === 'undefined') return;
+  const stile = document.createElement('style');
+  stile.textContent = '.mango-stab-scelta{margin:0 0 14px;text-align:center}.mango-stab-scelta .mango-stab-et{font-size:12px;opacity:.7;margin-bottom:6px}'
+    + '.mango-stab-scelta .mango-stab-btn{display:flex;gap:8px}.mango-stab-scelta button{flex:1;min-height:48px;padding:10px 8px;font-size:16px;font-weight:600;border-radius:10px;border:2px solid var(--border,#bbb);background:var(--surface,transparent);color:inherit;cursor:pointer}'
+    + '.mango-stab-scelta button[aria-pressed="true"]{border-color:#f59e0b;background:rgba(245,158,11,.15)}'
+    + '.mango-stab-badge{display:inline-block;margin-left:8px;padding:1px 8px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.3px;background:rgba(245,158,11,.2);color:inherit;white-space:nowrap;vertical-align:middle}'
+    + '.mango-stab-fisso{position:fixed;left:8px;bottom:6px;margin:0;z-index:50;opacity:.55;pointer-events:none}';
+  document.head.appendChild(stile);
+
+  // Selettore prima delle credenziali (pulsanti grandi), dopo il logo della schermata di accesso.
+  const logo = document.querySelector('#login-screen .login-logo');
+  if (logo && logo.parentNode) {
+    const box = document.createElement('div');
+    box.className = 'mango-stab-scelta';
+    box.id = 'login-stabilimento';
+    const et = document.createElement('div');
+    et.className = 'mango-stab-et';
+    et.textContent = 'Stabilimento';
+    const riga = document.createElement('div');
+    riga.className = 'mango-stab-btn';
+    Object.keys(STABILIMENTI).forEach((k) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = STABILIMENTI[k].nome;
+      b.setAttribute('aria-pressed', k === STABILIMENTO ? 'true' : 'false');
+      b.onclick = () => cambiaStabilimento(k);
+      riga.appendChild(b);
+    });
+    box.appendChild(et); box.appendChild(riga);
+    logo.parentNode.insertBefore(box, logo.nextSibling);
+  }
+
+  // Nome dello stabilimento nell'intestazione (dopo il login); schermo di reparto: piccola etichetta fissa.
+  const badge = () => { const s = document.createElement('span'); s.className = 'mango-stab-badge'; s.textContent = NOME_STABILIMENTO; return s; };
+  const intest = document.querySelector('header .logo, .app-header .logo-sm');
+  if (intest) intest.appendChild(badge());
+  else if (document.getElementById('schermo-radice')) { const s = badge(); s.classList.add('mango-stab-fisso'); document.body.appendChild(s); }
+
+  // Ufficio: «Cambia stabilimento» nel menu utente (serve l'utente anche nell'altro database).
+  const menu = document.querySelector('#pannello-profilo .profilo-menu');
+  if (menu && document.getElementById('user-chip')) {
+    const altri = Object.keys(STABILIMENTI).filter((k) => k !== STABILIMENTO);
+    altri.forEach((k) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = 'Cambia stabilimento: ' + STABILIMENTI[k].nome;
+      b.onclick = () => cambiaStabilimento(k);
+      menu.insertBefore(b, menu.firstChild);
+    });
+  }
+}
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', montaStabilimentoUi);
+  else montaStabilimentoUi();
+}
+
 // Configurazione pubblica del server (RPC config_pubblica, leggibile anche prima del login; es. l'ID app delle
 // notifiche push). Risposta in cache per la sessione della pagina; null se non raggiungibile.
 let _configPubblicaCache = null;
@@ -133,7 +280,7 @@ async function leggiConfigPubblica(client) {
 // Versione del client — da incrementare SEMPRE insieme a CACHE in sw.js (stesso valore,
 // stesso commit). Letta da responsabile.html per la guardia di versione sulle operazioni
 // distruttive (esportazione/archiviazione) — vedi Checklist-Sicurezza.md nel vault.
-const APP_VERSION = 'mango-v120';
+const APP_VERSION = 'mango-v121';
 
 // Guardia di versione per operatore.html e ufficio.html: se la versione minima richiesta dal server (config_pubblica) è
 // maggiore di questa, un client rimasto in cache non resta in uso. Prima prova da solo ad aggiornarsi (cancella cache e
@@ -203,7 +350,7 @@ function mostraBandaAmbienteTest() {
     const d = new Date(_SCELTA_AMBIENTE.scade);
     scadenza = ' — scade alle ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
   }
-  banda.textContent = `⚠ AMBIENTE DI ${AMBIENTE.toUpperCase()} — NON È PRODUZIONE${scadenza} ⚠`;
+  banda.textContent = `⚠ AMBIENTE DI ${AMBIENTE.toUpperCase()} (${NOME_STABILIMENTO}) — NON È PRODUZIONE${scadenza} ⚠`;
   banda.style.cssText = [
     'position:fixed', 'top:0', 'left:0', 'right:0', 'z-index:999999',
     'background:#B03A2E', 'color:#fff', 'font-family:sans-serif',

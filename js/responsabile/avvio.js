@@ -106,6 +106,7 @@ async function postLogin() {
   scheduleEndOfShiftRefresh();
   initOneSignalResp();
   if (currentUserRow?.ruolo === 'responsabile') { aggiornaBadgeRichieste(); aggiornaBadgeDispositivi(); avviaContatoriRichieste(); }
+  if (currentUserRow?.ruolo === 'responsabile') await loadSezioniNascoste();
   // Render in base al ruolo
   if (currentUserRow?.ruolo === 'sola_lettura') {
     // Nascondi nav e funzioni non pertinenti all'ufficio
